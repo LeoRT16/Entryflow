@@ -13,6 +13,7 @@ import {
 import StatusBadge from "@/components/status-badge";
 import Topbar from "@/components/topbar";
 import { useFeedback } from "@/components/premium-feedback";
+import { matchesText, normalizeText } from "@/utils/text";
 
 type EventOption = {
   name: string;
@@ -513,17 +514,6 @@ const quickFilters = [
   { key: "noInvitation", label: "Sin invitación enviada" },
   { key: "manual", label: "Ingreso manual" },
 ] as const;
-
-function normalizeText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function matchesText(value: string, query: string) {
-  return normalizeText(value).includes(normalizeText(query));
-}
 
 function statusTone(status: AdmissionStatus | DeliveryStatus | ReservationStatus | string) {
   if (status === "Ingresó" || status === "Enviada" || status === "Reenviada" || status === "Vista" || status === "Confirmada") {

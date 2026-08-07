@@ -1,4 +1,4 @@
-import ReservationFlow from "@/components/reservation-flow";
+import ReservationFlow from "@/features/reservations/components/reservation-flow";
 
 export default function ReservationsPage() {
   return <ReservationFlow />;
