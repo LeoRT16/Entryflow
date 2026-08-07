@@ -14,7 +14,6 @@ import ReservationWizardModal, {
 import { buildGuestList, createGuestDraft } from "@/features/reservations/domain/reservation-draft";
 import { reservationGuestPresets, reservationTableOptions } from "@/features/reservations/mock/reservations";
 import { clampGuestCount } from "@/features/reservations/utils/reservation-utils";
-import { recentReservations, summaryMetrics, todayEvent } from "@/lib/mock-data";
 import type {
   GuestDraft,
   PaymentMethod,
@@ -22,14 +21,16 @@ import type {
   ReservationType,
   WizardStep,
 } from "@/features/reservations/types";
+import { useCheckInStore } from "@/features/check-in/state/check-in-store";
 
 export default function ReservationFlow() {
   const { showToast } = useFeedback();
+  const { dashboard } = useCheckInStore();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>(1);
-  const [eventName, setEventName] = useState(todayEvent.name);
-  const [date, setDate] = useState(todayEvent.date);
-  const [time, setTime] = useState(todayEvent.startsAt);
+  const [eventName, setEventName] = useState(dashboard.todayEvent.name);
+  const [date, setDate] = useState(dashboard.todayEvent.date);
+  const [time, setTime] = useState(dashboard.todayEvent.startsAt);
   const [guestCount, setGuestCount] = useState(5);
   const [reservationType, setReservationType] = useState<ReservationType>("Mesa");
   const [observations, setObservations] = useState(
@@ -208,7 +209,7 @@ export default function ReservationFlow() {
               Crear reserva
             </button>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
-              Contexto activo: <span className="font-medium text-white">{todayEvent.name}</span>
+              Contexto activo: <span className="font-medium text-white">{dashboard.todayEvent.name}</span>
             </div>
           </div>
         </div>
@@ -218,7 +219,7 @@ export default function ReservationFlow() {
             Resumen operativo
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {summaryMetrics.map((metric) => (
+            {dashboard.summaryMetrics.map((metric) => (
               <MetricCard
                 key={metric.label}
                 label={metric.label}
@@ -232,7 +233,7 @@ export default function ReservationFlow() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.74fr]">
-        <RecentReservationsTable reservations={recentReservations} />
+        <RecentReservationsTable reservations={dashboard.recentReservations} />
 
         <aside className="space-y-4">
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
@@ -240,10 +241,10 @@ export default function ReservationFlow() {
               Evento de hoy
             </p>
             <div className="mt-4 space-y-4">
-              <LiveSummaryRow label="Evento" value={todayEvent.name} />
-              <LiveSummaryRow label="Fecha" value={todayEvent.date} />
-              <LiveSummaryRow label="Hora" value={todayEvent.startsAt} />
-              <LiveSummaryRow label="Reservas" value={`${todayEvent.reservations}`} />
+              <LiveSummaryRow label="Evento" value={dashboard.todayEvent.name} />
+              <LiveSummaryRow label="Fecha" value={dashboard.todayEvent.date} />
+              <LiveSummaryRow label="Hora" value={dashboard.todayEvent.startsAt} />
+              <LiveSummaryRow label="Reservas" value={`${dashboard.todayEvent.reservations}`} />
             </div>
           </section>
 

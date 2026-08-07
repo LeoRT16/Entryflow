@@ -1,12 +1,15 @@
+"use client";
+
 import Topbar from "@/components/topbar";
 import DashboardQuickActions from "@/components/dashboard-quick-actions";
 import MetricCard from "@/components/metric-card";
 import RecentReservationsTable from "@/components/recent-reservations-table";
-import { recentReservations, summaryMetrics, todayEvent } from "@/lib/mock-data";
+import { useCheckInStore } from "@/features/check-in/state/check-in-store";
 
 export default function Home() {
+  const { dashboard } = useCheckInStore();
   const checkInProgress = Math.round(
-    (todayEvent.checkedIn / todayEvent.expectedGuests) * 100,
+    (dashboard.todayEvent.checkedIn / Math.max(dashboard.todayEvent.expectedGuests, 1)) * 100,
   );
 
   return (
@@ -18,7 +21,7 @@ export default function Home() {
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {summaryMetrics.map((metric) => (
+        {dashboard.summaryMetrics.map((metric) => (
           <MetricCard key={metric.label} {...metric} />
         ))}
       </section>
@@ -30,10 +33,10 @@ export default function Home() {
               Evento de hoy
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-              {todayEvent.name}
+              {dashboard.todayEvent.name}
             </h2>
             <p className="mt-2 text-sm text-slate-400">
-              {todayEvent.date} · Inicia a las {todayEvent.startsAt}
+              {dashboard.todayEvent.date} · Inicia a las {dashboard.todayEvent.startsAt}
             </p>
           </div>
 
@@ -43,7 +46,7 @@ export default function Home() {
               Ingresos en curso
             </div>
             <p className="mt-2 text-xs uppercase tracking-[0.22em] text-slate-500">
-              {todayEvent.checkedIn} de {todayEvent.expectedGuests} invitados
+              {dashboard.todayEvent.checkedIn} de {dashboard.todayEvent.expectedGuests} invitados
             </p>
           </div>
         </div>
@@ -52,19 +55,19 @@ export default function Home() {
           <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4">
             <p className="text-sm text-slate-400">Reservas</p>
             <p className="mt-3 text-2xl font-semibold text-white">
-              {todayEvent.reservations}
+              {dashboard.todayEvent.reservations}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4">
             <p className="text-sm text-slate-400">Invitados esperados</p>
             <p className="mt-3 text-2xl font-semibold text-white">
-              {todayEvent.expectedGuests}
+              {dashboard.todayEvent.expectedGuests}
             </p>
           </div>
           <div className="rounded-2xl border border-blue-400/20 bg-blue-400/10 p-4">
             <p className="text-sm text-blue-200">Ingresados</p>
             <p className="mt-3 text-2xl font-semibold text-white">
-              {todayEvent.checkedIn}
+              {dashboard.todayEvent.checkedIn}
             </p>
           </div>
         </div>
@@ -87,7 +90,8 @@ export default function Home() {
         </div>
       </section>
 
-      <RecentReservationsTable reservations={recentReservations} />
+      <RecentReservationsTable reservations={dashboard.recentReservations} />
     </div>
   );
 }
+

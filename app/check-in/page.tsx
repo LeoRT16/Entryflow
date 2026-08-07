@@ -1,12 +1,6 @@
-import SectionPlaceholder from "@/components/section-placeholder";
+import CheckInFlow from "@/features/check-in/components/check-in-flow";
 
 export default function CheckInPage() {
-  return (
-    <SectionPlaceholder
-      title="Ingresos"
-      description="Espacio dedicado para confirmar invitados conforme llegan al acceso."
-      primaryAction={{ label: "Abrir directorio", href: "/customers" }}
-      secondaryAction={{ label: "Ver reservas", href: "/reservations" }}
-    />
-  );
+  return <CheckInFlow />;
 }
+
