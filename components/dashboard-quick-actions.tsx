@@ -1,53 +1,53 @@
 "use client";
 
-import Link from "next/link";
+import { useMemo } from "react";
 
-import { useFeedback } from "@/components/premium-feedback";
+import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
+import { useCheckInStore } from "@/services/workspace-service";
 
 export default function DashboardQuickActions() {
-  const { showToast } = useFeedback();
+  const { workspacePriority } = useCheckInStore();
+
+  const guidedActions = useMemo(() => {
+    const candidates = [
+      ...workspacePriority.criticalItems.slice(0, 2),
+      ...workspacePriority.attentionNow.slice(0, 2),
+      ...workspacePriority.nextBestActions.slice(0, 2),
+    ];
+    const seen = new Set<string>();
+
+    return candidates
+      .filter((item) => {
+        const signature = `${item.route}:${item.title}`;
+        if (seen.has(signature)) {
+          return false;
+        }
+
+        seen.add(signature);
+        return true;
+      })
+      .slice(0, 4)
+      .map((item) =>
+        buildGuidedActionItem(item, {
+          href: item.route,
+          impact:
+            item.priority === "critical"
+              ? "Abre la pantalla donde se resuelve el bloqueo."
+              : item.priority === "high"
+                ? "Reduce el ruido operativo y despeja la cola."
+                : item.priority === "medium"
+                  ? "Mantiene el flujo sin perder contexto."
+                  : "Ayuda a sostener la operación estable.",
+        }),
+      );
+  }, [workspacePriority]);
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      <Link
-        href="/reservations"
-        onClick={() =>
-          showToast({
-            title: "Reserva creada (modo demo)",
-            description: "Se abrió el flujo visual de creación.",
-            tone: "success",
-          })
-        }
-        className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10"
-      >
-        Crear reserva
-      </Link>
-      <Link
-        href="/check-in"
-        onClick={() =>
-          showToast({
-            title: "Escáner abierto (simulación)",
-            description: "El acceso operativo está listo para revisar invitados.",
-            tone: "info",
-          })
-        }
-        className="inline-flex h-12 items-center justify-center rounded-xl border border-blue-400/25 bg-blue-500 px-4 text-sm font-semibold text-white transition hover:bg-blue-400"
-      >
-        Abrir escáner
-      </Link>
-      <Link
-        href="/customers"
-        onClick={() =>
-          showToast({
-            title: "Búsqueda preparada",
-            description: "Se abrió el directorio de invitados.",
-            tone: "info",
-          })
-        }
-        className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10"
-      >
-        Buscar invitado
-      </Link>
-    </div>
+    <GuidedActionPanel
+      title="Acciones guiadas"
+      description="El sistema muestra primero lo que desbloquea la operación y oculta lo que todavía no hace falta."
+      items={guidedActions}
+      enableKeyboardShortcuts={false}
+    />
   );
 }

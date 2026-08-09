@@ -1,0 +1,320 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import StatusBadge from "@/components/status-badge";
+import { ContextualCard } from "@/components/quick-actions-menu";
+import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import type { TimelineEvent } from "@/features/timeline/types";
+
+function TimelineMark({ tone }: { tone: TimelineEvent["tone"] }) {
+  const toneClasses =
+    tone === "success"
+      ? "border-emerald-400/20 bg-emerald-400/15 text-emerald-300"
+      : tone === "warning"
+        ? "border-amber-400/20 bg-amber-400/15 text-amber-300"
+        : tone === "danger"
+          ? "border-rose-400/20 bg-rose-400/15 text-rose-300"
+          : "border-sky-400/20 bg-sky-400/15 text-sky-300";
+
+  return <span className={`inline-flex h-4 w-4 rounded-full border ${toneClasses}`} />;
+}
+
+function EventIcon({ icon }: { icon: TimelineEvent["icon"] }) {
+  const iconProps = {
+    className: "h-4 w-4",
+    fill: "none",
+    viewBox: "0 0 24 24",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (icon) {
+    case "reservation":
+      return (
+        <svg {...iconProps}>
+          <path d="M7 4.5v3" />
+          <path d="M17 4.5v3" />
+          <rect x="4.5" y="6.5" width="15" height="13" rx="2.5" />
+          <path d="M4.5 10h15" />
+        </svg>
+      );
+    case "guest":
+      return (
+        <svg {...iconProps}>
+          <path d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+          <path d="M4.5 19c.7-3 2.9-4.8 5.5-4.8s4.8 1.8 5.5 4.8" />
+        </svg>
+      );
+    case "table":
+      return (
+        <svg {...iconProps}>
+          <path d="M4.5 8h15" />
+          <path d="M8 8v11" />
+          <path d="M16 8v11" />
+          <path d="M5.5 14h13" />
+        </svg>
+      );
+    case "checkin":
+      return (
+        <svg {...iconProps}>
+          <path d="m8.5 12.2 2.4 2.4L16 9.5" />
+          <path d="M5 12a7 7 0 1 1 14 0 7 7 0 0 1-14 0Z" />
+        </svg>
+      );
+    case "alert":
+      return (
+        <svg {...iconProps}>
+          <path d="M12 8.2v4.3" />
+          <path d="M12 15.8h.01" />
+          <path d="M10 4.8h4l6.2 11a1.7 1.7 0 0 1-1.5 2.5H5.3a1.7 1.7 0 0 1-1.5-2.5L10 4.8Z" />
+        </svg>
+      );
+  }
+}
+
+export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
+  const router = useRouter();
+  const groupedEvents = useMemo(() => {
+    const groups = {
+      Critical: [] as TimelineEvent[],
+      Operational: [] as TimelineEvent[],
+      Informational: [] as TimelineEvent[],
+      System: [] as TimelineEvent[],
+    };
+
+    for (const event of events) {
+      const normalizedKind = event.kind.toLowerCase();
+
+      if (
+        event.tone === "danger" ||
+        normalizedKind.includes("invalid") ||
+        normalizedKind.includes("blocked") ||
+        normalizedKind.includes("closed")
+      ) {
+        groups.Critical.push(event);
+      } else if (normalizedKind.includes("reservation.updated") || normalizedKind.includes("system")) {
+        groups.System.push(event);
+      } else if (
+        event.tone === "warning" ||
+        normalizedKind.includes("checkin") ||
+        normalizedKind.includes("table") ||
+        normalizedKind.includes("guest")
+      ) {
+        groups.Operational.push(event);
+      } else {
+        groups.Informational.push(event);
+      }
+    }
+
+    return groups;
+  }, [events]);
+  const orderedEvents = useMemo(
+    () => [...groupedEvents.Critical, ...groupedEvents.Operational, ...groupedEvents.Informational, ...groupedEvents.System],
+    [groupedEvents],
+  );
+  const [selectedEventIndex, setSelectedEventIndex] = useState(0);
+
+  const selectedEventIndexClamped = orderedEvents.length
+    ? Math.min(selectedEventIndex, orderedEvents.length - 1)
+    : 0;
+  const selectedEvent = orderedEvents[selectedEventIndexClamped] ?? null;
+
+  useEffect(() => {
+    if (!selectedEvent) {
+      return;
+    }
+
+    const target = document.getElementById(selectedEvent.id);
+
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.focus({ preventScroll: true });
+  }, [selectedEvent]);
+
+  const moveSelection = useCallback((delta: number) => {
+    if (!orderedEvents.length) {
+      return;
+    }
+
+    setSelectedEventIndex((current) => {
+      const next = current + delta;
+      if (next < 0) {
+        return 0;
+      }
+
+      if (next >= orderedEvents.length) {
+        return orderedEvents.length - 1;
+      }
+
+      return next;
+    });
+  }, [orderedEvents.length]);
+
+  const jumpSelection = useCallback((index: number) => {
+    if (!orderedEvents.length) {
+      return;
+    }
+
+    const next = Math.max(0, Math.min(index, orderedEvents.length - 1));
+    setSelectedEventIndex(next);
+  }, [orderedEvents.length]);
+
+  const openSelectedEvent = useCallback(() => {
+    if (!selectedEvent) {
+      return;
+    }
+
+    if (selectedEvent.reservationId || selectedEvent.reservationCode || selectedEvent.reservationName) {
+      router.push("/reservations");
+      return;
+    }
+
+    if (selectedEvent.guestId || selectedEvent.guestName) {
+      router.push("/customers");
+      return;
+    }
+
+    if (selectedEvent.tableId || selectedEvent.tableName) {
+      router.push("/tables");
+      return;
+    }
+
+    router.push("/operations");
+  }, [router, selectedEvent]);
+
+  useKeyboardShortcuts(
+    useMemo(
+      () => [
+        { id: "timeline-next", shortcut: "j", priority: 50, handler: () => moveSelection(1) },
+        { id: "timeline-prev", shortcut: "k", priority: 50, handler: () => moveSelection(-1) },
+        { id: "timeline-first", shortcut: "home", priority: 45, handler: () => jumpSelection(0) },
+        { id: "timeline-last", shortcut: "end", priority: 45, handler: () => jumpSelection(orderedEvents.length - 1) },
+        { id: "timeline-pageup", shortcut: "pageup", priority: 45, handler: () => moveSelection(-4) },
+        { id: "timeline-pagedown", shortcut: "pagedown", priority: 45, handler: () => moveSelection(4) },
+        { id: "timeline-open", shortcut: "enter", priority: 55, handler: openSelectedEvent },
+      ],
+      [jumpSelection, moveSelection, openSelectedEvent, orderedEvents.length],
+    ),
+  );
+
+  if (!events.length) {
+    return (
+      <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+        <p className="text-sm text-slate-400">No hay actividad operativa todavía.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+            Actividad reciente
+          </p>
+          <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Cronología operativa</h2>
+        </div>
+        <StatusBadge variant="info">{events.length}</StatusBadge>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {(["Critical", "Operational", "Informational", "System"] as const).map((group) => {
+          const groupEvents = groupedEvents[group];
+          const description =
+            group === "Critical"
+              ? "Bloqueos, errores y atenciones urgentes."
+              : group === "Operational"
+                ? "Acciones que impactan el flujo del evento."
+                : group === "Informational"
+                  ? "Cambios de contexto y actividad útil."
+                  : "Eventos del sistema y sincronización.";
+
+          return (
+            <section key={group} className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{group}</p>
+                  <p className="mt-1 text-xs text-slate-500">{description}</p>
+                </div>
+                <StatusBadge variant={group === "Critical" ? "danger" : group === "Operational" ? "warning" : group === "Informational" ? "info" : "success"}>
+                  {groupEvents.length}
+                </StatusBadge>
+              </div>
+
+              {groupEvents.length ? (
+                groupEvents.slice(0, 4).map((event) => {
+                  const isSelected = selectedEvent?.id === event.id;
+
+                  return (
+                  <ContextualCard
+                    key={event.id}
+                    items={[
+                      {
+                        id: `${event.id}-reservation`,
+                        label: "Abrir reserva",
+                        description: "Ir al panel de Reservations.",
+                        tone: "info" as const,
+                        onSelect: () => router.push("/reservations"),
+                      },
+                      {
+                        id: `${event.id}-customer`,
+                        label: "Abrir cliente",
+                        description: "Ir al directorio de Customers.",
+                        tone: "info" as const,
+                        onSelect: () => router.push("/customers"),
+                      },
+                      {
+                        id: `${event.id}-table`,
+                        label: "Ir a la mesa",
+                        description: "Abrir el panel de Tables.",
+                        tone: "warning" as const,
+                        onSelect: () => router.push("/tables"),
+                      },
+                    ]}
+                    className={[
+                      "rounded-2xl border px-4 py-4",
+                      isSelected ? "border-cyan-400/40 bg-cyan-400/10" : "border-white/10 bg-[#0f151d]",
+                    ].join(" ")}
+                  >
+                    <article id={event.id} tabIndex={-1} className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
+                      <div className="flex items-center gap-3 sm:flex-col sm:items-center sm:gap-2">
+                        <TimelineMark tone={event.tone} />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/80">
+                          <EventIcon icon={event.icon} />
+                        </div>
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-white">{event.title}</p>
+                          <StatusBadge variant={event.tone}>{event.timestamp}</StatusBadge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">{event.description}</p>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {event.reservationCode ? <StatusBadge variant="info">{event.reservationCode}</StatusBadge> : null}
+                          {event.reservationName ? <StatusBadge variant={event.tone}>{event.reservationName}</StatusBadge> : null}
+                          {event.guestName ? <StatusBadge variant="warning">{event.guestName}</StatusBadge> : null}
+                          {event.tableName ? <StatusBadge variant="success">{event.tableName}</StatusBadge> : null}
+                        </div>
+                      </div>
+                    </article>
+                  </ContextualCard>
+                );
+                })
+              ) : (
+                <p className="text-sm text-slate-500">Sin eventos relevantes.</p>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

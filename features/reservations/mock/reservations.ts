@@ -1,4 +1,6 @@
-import type { GuestDraft, PaymentHistoryEntry, TableOption } from "@/features/reservations/types";
+import type { GuestDraft, PaymentHistoryEntry } from "@/features/reservations/types";
+import type { TableOption } from "@/features/tables/types";
+import { tableOptions } from "@/features/tables/mock/tables";
 
 export const reservationEventOptions = ["Noche Carlota", "Viernes Retro", "Fiesta Blanca"];
 
@@ -29,41 +31,7 @@ export const reservationGuestPresets: Array<Partial<GuestDraft>> = [
   },
 ];
 
-export const reservationTableOptions: TableOption[] = [
-  {
-    id: "mesa-12",
-    name: "Mesa 12",
-    capacity: 5,
-    location: "Sala principal",
-    status: "Reservada",
-    recommended: true,
-    tone: "success",
-  },
-  {
-    id: "vip-lounge",
-    name: "VIP Lounge",
-    capacity: 8,
-    location: "Nivel superior",
-    status: "Reservada",
-    tone: "info",
-  },
-  {
-    id: "terraza",
-    name: "Terraza",
-    capacity: 4,
-    location: "Patio lateral",
-    status: "Disponible",
-    tone: "warning",
-  },
-  {
-    id: "bar",
-    name: "Bar",
-    capacity: 3,
-    location: "Frente a pista",
-    status: "Disponible",
-    tone: "warning",
-  },
-];
+export const reservationTableOptions: TableOption[] = tableOptions;
 
 export const reservationPaymentHistory: PaymentHistoryEntry[] = [
   {

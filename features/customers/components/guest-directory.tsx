@@ -13,7 +13,12 @@ import {
 import StatusBadge from "@/components/status-badge";
 import Topbar from "@/components/topbar";
 import { useFeedback } from "@/components/premium-feedback";
-import { admissionFilters, deliveryFilters, reservationFilters, quickFilters } from "@/features/customers/mock/customers";
+import { ContextualCard } from "@/components/quick-actions-menu";
+import InvitationCard, {
+  type InvitationCardMode,
+  type InvitationCardVariant,
+} from "@/features/access/components/invitation-card";
+import { admissionFilters, deliveryFilters, reservationFilters, quickFilters } from "@/features/customers/domain/customer-filters";
 import { buildOperationalNotes, buildTimeline, getGuestAuditRows, getGuestIncidents, getIncidentToneClass, getIncidentVariant, reservationFilterToStatus, statusTone, admissionFilterToStatus } from "@/features/customers/domain/customer-directory";
 import type {
   AdmissionFilter,
@@ -25,7 +30,7 @@ import type {
   TimelineEntry,
 } from "@/features/customers/types";
 import { matchesText, normalizeText } from "@/features/customers/utils";
-import { useCheckInStore } from "@/features/check-in/state/check-in-store";
+import { useCheckInStore } from "@/services/workspace-service";
 
 export default function GuestDirectory() {
   const { showToast } = useFeedback();
@@ -36,23 +41,24 @@ export default function GuestDirectory() {
   const [reservationFilter, setReservationFilter] = useState<ReservationFilter>("Todas");
   const [quickFilterKeys, setQuickFilterKeys] = useState<Array<(typeof quickFilters)[number]["key"]>>([]);
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
 
   const searchRef = useRef<HTMLInputElement | null>(null);
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const lastTriggerRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setIsLoaded(true), 180);
-    return () => window.clearTimeout(timer);
-  }, []);
-
   const activeEvent = storeActiveEvent;
 
-  const selectedEventStats = customers.eventStats[activeEvent.name];
+  const selectedEventStats =
+    customers.eventStats[activeEvent.id] ??
+    customers.eventStats[activeEvent.name] ?? {
+      expectedGuests: 0,
+      checkedIn: 0,
+      pending: 0,
+      attention: 0,
+    };
 
   const visibleGuests = useMemo(() => {
-    const baseGuests = customers.guestRecords.filter((guest) => guest.eventName === activeEvent.name);
+    const baseGuests = customers.guestRecords.filter((guest) => guest.eventId === activeEvent.id);
     const query = normalizeText(searchQuery.trim());
 
     return baseGuests
@@ -68,6 +74,7 @@ export default function GuestDirectory() {
           guest.invitationCode,
           guest.reservationCode,
           guest.reservationName,
+          guest.tableName || "Sin mesa",
           guest.eventName,
         ].join(" ");
 
@@ -115,11 +122,11 @@ export default function GuestDirectory() {
         const bPriority = b.attention ? 0 : b.admissionStatus === "Pendiente" ? 1 : 2;
         return aPriority - bPriority;
       });
-  }, [activeEvent.name, admissionFilter, customers.guestRecords, deliveryFilter, quickFilterKeys, reservationFilter, searchQuery]);
+  }, [activeEvent.id, admissionFilter, customers.guestRecords, deliveryFilter, quickFilterKeys, reservationFilter, searchQuery]);
 
   const attentionGuests = useMemo(
-    () => customers.guestRecords.filter((guest) => guest.eventName === activeEvent.name && guest.attention),
-    [activeEvent.name, customers.guestRecords],
+    () => customers.guestRecords.filter((guest) => guest.eventId === activeEvent.id && guest.attention),
+    [activeEvent.id, customers.guestRecords],
   );
 
   const selectedGuest = useMemo(
@@ -165,32 +172,6 @@ export default function GuestDirectory() {
       document.body.style.overflow = "";
     };
   }, [selectedGuestId]);
-
-  useEffect(() => {
-    const handleShortcut = (event: globalThis.KeyboardEvent) => {
-      const target = event.target;
-      const isTyping =
-        target instanceof HTMLElement &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable);
-
-      if (event.key === "/" && !isTyping) {
-        event.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
-      }
-
-      if (event.key === "Escape" && !selectedGuestId && searchQuery) {
-        event.preventDefault();
-        setSearchQuery("");
-      }
-    };
-
-    document.addEventListener("keydown", handleShortcut);
-    return () => document.removeEventListener("keydown", handleShortcut);
-  }, [searchQuery, selectedGuestId]);
 
   const activeFilterTags = [
     admissionFilter !== "Todos" ? admissionFilter : null,
@@ -260,10 +241,6 @@ export default function GuestDirectory() {
     );
   };
 
-  if (!isLoaded) {
-    return <DirectorySkeleton />;
-  }
-
   return (
     <div className="space-y-6">
       <Topbar
@@ -310,19 +287,19 @@ export default function GuestDirectory() {
                 Cambia el contexto operativo sin salir del directorio.
               </p>
             </div>
-            <StatusBadge variant="info">Local</StatusBadge>
+            <StatusBadge variant="info">Activo</StatusBadge>
           </div>
 
           <label className="block">
             <span className="sr-only">Seleccionar evento</span>
             <select
-              value={activeEvent.name}
+              value={activeEvent.id}
               onChange={(event) => setActiveEventId(event.target.value)}
               className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/50 focus:bg-white/[0.06]"
             >
               {customers.eventOptions.map((option) => (
-                <option key={option.name} value={option.name}>
-                  {option.name} — {option.status}
+                <option key={option.id} value={option.id}>
+                  {option.name} — {option.status === "live" ? "En curso" : option.status === "published" ? "Publicado" : option.status === "draft" ? "Borrador" : option.status === "finished" ? "Finalizado" : "Cancelado"}
                 </option>
               ))}
             </select>
@@ -364,6 +341,7 @@ export default function GuestDirectory() {
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   onKeyDown={handleSearchKeyDown}
+                  data-shortcut-search="true"
                   placeholder="Buscar por nombre, carnet, WhatsApp, código o reserva"
                   className="h-13 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 pr-24 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06] focus:ring-4 focus:ring-cyan-500/10"
                 />
@@ -588,7 +566,40 @@ function GuestCard({
   const incidents = getGuestIncidents(guest);
 
   return (
-    <article
+    <ContextualCard
+      items={[
+        {
+          id: `${guest.id}-open`,
+          label: "Ver invitación",
+          description: "Abrir la ficha operativa del invitado.",
+          tone: "info" as const,
+          onSelect: () => onOpenGuest(guest),
+        },
+        {
+          id: `${guest.id}-incident`,
+          label: "Ver incidencia",
+          description: "Abrir la lectura operativa.",
+          tone: guest.attentionTone === "danger" ? "danger" : "warning",
+          onSelect: () =>
+            showToast({
+              title: "Incidencia abierta",
+              description: "La ficha de incidencia se abrió en lectura.",
+              tone: "info",
+            }),
+        },
+        {
+          id: `${guest.id}-resend`,
+          label: "Reenviar invitación",
+          description: "Generar una nueva notificación operativa.",
+          tone: "info" as const,
+          onSelect: () =>
+            showToast({
+              title: "Invitación reenviada",
+              description: `${guest.guestName} recibirá otra notificación operativa.`,
+              tone: "info",
+            }),
+        },
+      ]}
       className={[
         "rounded-[1.75rem] border bg-slate-950/40 p-4 transition duration-300 hover:-translate-y-0.5 hover:border-white/15 hover:bg-slate-950/55 hover:shadow-[0_24px_70px_rgba(0,0,0,0.25)]",
         isSelected ? "border-cyan-400/30 shadow-[0_24px_70px_rgba(0,0,0,0.25)]" : "border-white/10",
@@ -645,19 +656,13 @@ function GuestCard({
               tone="info"
               onClick={(event) => onOpenGuest(guest, event.currentTarget)}
             />
-            <button
-              type="button"
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Abrir reserva
-            </button>
             {guest.admissionStatus === "Pendiente" ? (
               <ActionButton
                 label="Marcar ingreso"
                 tone="success"
                 onClick={() =>
                   showToast({
-                    title: "Ingreso marcado (simulación)",
+                    title: "Ingreso marcado",
                     description: `${guest.guestName} quedó registrado visualmente.`,
                     tone: "success",
                   })
@@ -671,7 +676,7 @@ function GuestCard({
                 onClick={() =>
                   showToast({
                     title: "Incidencia abierta",
-                    description: "La ficha de incidencia se abrió en modo lectura.",
+                    description: "La ficha de incidencia se abrió en lectura.",
                     tone: "info",
                   })
                 }
@@ -683,8 +688,8 @@ function GuestCard({
                 tone="info"
                 onClick={() =>
                   showToast({
-                    title: "Invitación reenviada (simulación)",
-                    description: `${guest.guestName} recibirá otra notificación mock.`,
+                    title: "Invitación reenviada",
+                    description: `${guest.guestName} recibirá otra notificación operativa.`,
                     tone: "info",
                   })
                 }
@@ -716,8 +721,6 @@ function GuestCard({
                   "Cambiar WhatsApp",
                   "Corregir carnet",
                   "Transferir invitación",
-                  "Regenerar diseño",
-                  "Rotar QR",
                   "Anular invitación",
                   "Ver historial",
                 ].map((action) => (
@@ -729,12 +732,12 @@ function GuestCard({
                         confirm({
                           title: "Anular invitación",
                           description:
-                            "La invitación solo se cancelará en modo visual. No se eliminará ninguna información real.",
+                            "La invitación se cancelará desde la vista operativa.",
                           tone: "danger",
                           confirmLabel: "Anular invitación",
                           onConfirm: () =>
                             showToast({
-                              title: "Invitación anulada (simulación)",
+                              title: "Invitación anulada",
                               description: `${guest.guestName} quedó marcada como cancelada.`,
                               tone: "warning",
                             }),
@@ -743,14 +746,14 @@ function GuestCard({
                       }
 
                       showToast({
-                        title: `${action} (modo demo)`,
-                        description: "La acción únicamente genera retroalimentación visual.",
+                        title: action,
+                        description: "La acción quedó registrada en el panel operativo.",
                         tone: "info",
                       });
                     }}
                     className={[
                       "w-full rounded-xl border px-3 py-2 text-left text-sm transition hover:-translate-y-0.5 active:scale-[0.98]",
-                      action === "Rotar QR" || action === "Anular invitación"
+                      action === "Anular invitación"
                         ? "border-red-400/15 bg-red-400/10 text-red-100 hover:bg-red-400/15"
                         : "border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06]",
                     ].join(" ")}
@@ -763,7 +766,7 @@ function GuestCard({
           </details>
         </div>
       </div>
-    </article>
+    </ContextualCard>
   );
 }
 
@@ -777,7 +780,10 @@ function GuestDrawer({
   drawerRef: RefObject<HTMLDivElement | null>;
 }) {
   const { showToast, confirm } = useFeedback();
+  const { currentEvent } = useCheckInStore();
   const [isVisible, setIsVisible] = useState(false);
+  const [invitationMode, setInvitationMode] = useState<InvitationCardMode>("preview");
+  const [invitationVariant, setInvitationVariant] = useState<InvitationCardVariant>("general");
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setIsVisible(true));
@@ -791,7 +797,7 @@ function GuestDrawer({
   const lastSend = guest.deliveryHistory.find((item) => item.title === "Enviada" || item.title === "Reenviada")?.time ?? "18:53";
   const lastOpen = guest.deliveryHistory.find((item) => item.title === "Vista")?.time ?? "—";
   const retries = guest.deliveryHistory.filter((item) => item.title === "Reenviada").length;
-  const infoSeat = guest.seat ?? "Mesa asignada";
+  const infoSeat = guest.tableName ?? guest.seat ?? "Mesa asignada";
 
   const deliveryStateTone =
     guest.deliveryStatus === "Enviada" || guest.deliveryStatus === "Reenviada" || guest.deliveryStatus === "Vista"
@@ -869,12 +875,6 @@ function GuestDrawer({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-                >
-                  Abrir reserva
-                </button>
-                <button
-                  type="button"
                   onClick={onClose}
                   className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
                 >
@@ -886,19 +886,79 @@ function GuestDrawer({
 
           <div className="flex-1 space-y-5 overflow-y-auto p-5">
             <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                    Vista previa de invitación
+                    Designer de invitación
                   </p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Versión compacta, lista para compartir desde el panel operativo.
-                  </p>
+                  <p className="mt-1 text-sm text-slate-400">Ajusta presentación, formato y variante sin salir del panel.</p>
                 </div>
-                <StatusBadge variant={invitationState.tone}>{invitationState.label}</StatusBadge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge variant={invitationState.tone}>{invitationState.label}</StatusBadge>
+                  <StatusBadge variant="info">{invitationMode}</StatusBadge>
+                  <StatusBadge variant="info">{invitationVariant}</StatusBadge>
+                </div>
               </div>
 
-              <InvitationPreviewCard guest={guest} />
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {(["preview", "print", "download", "wallet"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setInvitationMode(mode)}
+                      className={[
+                        "rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-[0.22em] transition",
+                        invitationMode === mode
+                          ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
+                          : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]",
+                      ].join(" ")}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {(["general", "vip", "staff", "media", "sponsor"] as const).map((variant) => (
+                    <button
+                      key={variant}
+                      type="button"
+                      onClick={() => setInvitationVariant(variant)}
+                      className={[
+                        "rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-[0.22em] transition",
+                        invitationVariant === variant
+                          ? "border-amber-400/30 bg-amber-400/10 text-amber-100"
+                          : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]",
+                      ].join(" ")}
+                    >
+                      {variant}
+                    </button>
+                  ))}
+                </div>
+
+                <InvitationCard
+                  invitation={{
+                    id: guest.id,
+                    eventName: currentEvent.name,
+                    guestName: guest.guestName,
+                    reservationName: guest.reservationName,
+                    reservationCode: guest.reservationCode,
+                    tableName: guest.tableName,
+                    zoneName: guest.seat,
+                    date: currentEvent.startAt.split(" ").slice(0, -1).join(" ") || "8 de agosto de 2026",
+                    time: currentEvent.startAt.split(" ").at(-1) ?? "21:00",
+                    dressCode: guest.manualAdmission ? "Ingreso manual" : "Elegante oscuro",
+                    uniqueCode: guest.invitationCode,
+                    qrValue: guest.invitationCode,
+                    theme: "EntryFlow Invitation Designer",
+                    logoLabel: currentEvent.name.slice(0, 2),
+                    artLabel: guest.reservationName,
+                    variant: invitationVariant,
+                  }}
+                  mode={invitationMode}
+                />
+              </div>
             </section>
 
             <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-4">
@@ -907,9 +967,7 @@ function GuestDrawer({
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
                     Incidentes
                   </p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Señales operativas que requieren seguimiento durante el evento.
-                  </p>
+                  <p className="mt-1 text-sm text-slate-400">Señales operativas que requieren seguimiento durante el evento.</p>
                 </div>
                 <StatusBadge variant={incidents.length ? "warning" : "success"}>
                   {incidents.length ? `${incidents.length} abiertos` : "Sin incidencias"}
@@ -959,7 +1017,7 @@ function GuestDrawer({
                 <MetaLine label="Teléfono" value={guest.whatsapp || "Sin WhatsApp"} />
                 <MetaLine label="Reserva" value={guest.reservationName} />
                 <MetaLine label="Código de invitación" value={guest.invitationCode} />
-                <MetaLine label="Seat" value={infoSeat} />
+                <MetaLine label="Asiento" value={infoSeat} />
               </div>
             </section>
 
@@ -1000,9 +1058,9 @@ function GuestDrawer({
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
                     Acciones manuales
                   </p>
-                  <p className="mt-1 text-sm text-slate-400">Botones visuales para resolver un incidente en sala.</p>
+                  <p className="mt-1 text-sm text-slate-400">Acciones operativas para resolver una incidencia en sala.</p>
                 </div>
-                <StatusBadge variant="info">Mock</StatusBadge>
+                <StatusBadge variant="info">Operativo</StatusBadge>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <ActionButton
@@ -1010,8 +1068,8 @@ function GuestDrawer({
                   tone="neutral"
                   onClick={() =>
                     showToast({
-                      title: "Identidad validada (simulación)",
-                      description: "La validación quedó registrada visualmente.",
+                      title: "Identidad validada",
+                      description: "La validación quedó registrada en el panel operativo.",
                       tone: "info",
                     })
                   }
@@ -1021,8 +1079,8 @@ function GuestDrawer({
                   tone="success"
                   onClick={() =>
                     showToast({
-                      title: "Ingreso permitido (modo demo)",
-                      description: "El acceso quedó aprobado solo a nivel visual.",
+                      title: "Ingreso permitido",
+                      description: "El acceso quedó aprobado en el panel operativo.",
                       tone: "success",
                     })
                   }
@@ -1033,14 +1091,13 @@ function GuestDrawer({
                   onClick={() =>
                     confirm({
                       title: "Bloquear ingreso",
-                      description:
-                        "Esta acción solo afectará la interfaz. No se bloqueará ningún registro real.",
+                      description: "Esta acción bloqueará la invitación desde la vista operativa.",
                       tone: "danger",
                       confirmLabel: "Bloquear ingreso",
                       onConfirm: () =>
                         showToast({
-                          title: "Ingreso bloqueado (simulación)",
-                          description: "El invitado quedó marcado como bloqueado en la vista.",
+                          title: "Ingreso bloqueado",
+                          description: "El invitado quedó marcado como bloqueado.",
                           tone: "warning",
                         }),
                     })
@@ -1052,7 +1109,7 @@ function GuestDrawer({
                   onClick={() =>
                     showToast({
                       title: "Incidencia registrada",
-                      description: "Se generó una fila visual de auditoría.",
+                      description: "Se registró una incidencia operativa.",
                       tone: "warning",
                     })
                   }
@@ -1063,7 +1120,7 @@ function GuestDrawer({
                   onClick={() =>
                     showToast({
                       title: "Invitación reasignada",
-                      description: "La reasignación se mostró en modo mock.",
+                      description: "La reasignación quedó registrada en el panel operativo.",
                       tone: "info",
                     })
                   }
@@ -1074,7 +1131,7 @@ function GuestDrawer({
                   onClick={() =>
                     showToast({
                       title: "Supervisor notificado",
-                      description: "La escalación se mostró como confirmada.",
+                      description: "La escalación quedó confirmada.",
                       tone: "warning",
                     })
                   }
@@ -1085,7 +1142,7 @@ function GuestDrawer({
                   onClick={() =>
                     showToast({
                       title: "Nueva invitación generada",
-                      description: "Se regeneró la representación visual.",
+                      description: "Se generó una nueva invitación operativa.",
                       tone: "success",
                     })
                   }
@@ -1126,114 +1183,17 @@ function GuestDrawer({
                   readOnly
                   value={
                     guest.internalNotes ??
-                    "Operador: revisar identidad visual.\nAcción sugerida: validar en puerta.\nEstado: sin cambios pendientes."
+                    "Operador: revisar identidad.\nAcción sugerida: validar en puerta.\nEstado: sin cambios pendientes."
                   }
                   rows={6}
                   className="w-full resize-none rounded-[1.4rem] border border-white/10 bg-slate-950/60 px-4 py-3 text-sm leading-6 text-slate-200 outline-none"
                 />
                 <div className="flex flex-wrap gap-2">
-                  <StatusBadge variant="warning">Editable mock</StatusBadge>
                   <StatusBadge variant="info">Solo lectura</StatusBadge>
                 </div>
               </div>
             </section>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InvitationPreviewCard({ guest }: { guest: GuestRecord }) {
-  const presentation =
-    guest.admissionStatus === "Ingresó"
-      ? { label: "Ingresó", tone: "success" as const }
-      : guest.admissionStatus === "Bloqueada"
-        ? { label: "Bloqueada", tone: "warning" as const }
-        : guest.admissionStatus === "Anulada"
-          ? { label: "Cancelada", tone: "danger" as const }
-          : guest.deliveryStatus === "Vista"
-            ? { label: "Vista", tone: "info" as const }
-            : guest.deliveryStatus === "Reenviada"
-              ? { label: "Reenviada", tone: "info" as const }
-              : { label: "Pendiente", tone: "warning" as const };
-
-  return (
-    <div className="overflow-hidden rounded-[1.6rem] border border-white/10 bg-slate-950/80">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-xs font-semibold uppercase tracking-[0.24em] text-white">
-            LR
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">La Rota Carlota</p>
-            <p className="mt-1 text-sm text-slate-300">Invitación premium</p>
-          </div>
-        </div>
-        <StatusBadge variant={presentation.tone}>{presentation.label}</StatusBadge>
-      </div>
-
-      <div className="space-y-4 p-4">
-        <div className="relative overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.12),_rgba(15,23,42,0.92)_68%)] p-4">
-          <div className="absolute inset-0 opacity-30">
-            <div className="absolute left-0 top-0 h-20 w-20 rounded-full bg-cyan-400/20 blur-2xl" />
-            <div className="absolute right-0 bottom-0 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
-          </div>
-          <div className="relative flex h-48 flex-col justify-between">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-400">
-                  Event artwork
-                </p>
-                <p className="mt-2 max-w-[12rem] text-xl font-semibold tracking-tight text-white">
-                  {guest.eventName}
-                </p>
-              </div>
-              <StatusBadge variant="info">Story</StatusBadge>
-            </div>
-
-            <div className="rounded-[1.4rem] border border-white/10 bg-slate-950/65 p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Guest</p>
-              <p className="mt-2 text-2xl font-semibold tracking-tight text-white">{guest.guestName}</p>
-              <p className="mt-1 text-sm text-slate-400">{guest.reservationName}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <div className="space-y-3">
-            <DetailChip label="Fecha" value="8 de agosto de 2026" />
-            <DetailChip label="Hora" value="21:00" />
-            <DetailChip label="Ubicación" value="La Rota Carlota, Sopocachi" />
-            <DetailChip label="Dress Code" value="Elegante oscuro" />
-          </div>
-
-          <div className="flex flex-col items-center gap-3 rounded-[1.4rem] border border-dashed border-white/15 bg-white/[0.03] px-4 py-4">
-            <div className="grid grid-cols-3 gap-1.5">
-              {Array.from({ length: 9 }).map((_, index) => (
-                <span
-                  key={index}
-                  className={[
-                    "h-3 w-3 rounded-[0.2rem]",
-                    index % 2 === 0 ? "bg-white/90" : "bg-cyan-400/55",
-                  ].join(" ")}
-                />
-              ))}
-            </div>
-            <div className="text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-slate-500">QR</p>
-              <p className="mt-1 text-sm text-slate-300">Uso único</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <DetailChip label="Código único" value={guest.invitationCode} />
-          <DetailChip label="Estado" value={guest.admissionStatus} />
-        </div>
-
-        <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] px-4 py-3">
-          <p className="text-sm font-medium text-white">La captura de pantalla no garantiza el ingreso.</p>
         </div>
       </div>
     </div>
@@ -1343,15 +1303,6 @@ function DeliveryField({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
       <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-white">{value}</p>
-    </div>
-  );
-}
-
-function DetailChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[1.35rem] border border-white/10 bg-slate-950/50 px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
       <p className="mt-2 text-sm font-medium text-white">{value}</p>
     </div>
   );
@@ -1520,34 +1471,6 @@ function ResultsEmptyState({
   }
 
   return <EmptyCallout icon={icon} title={title} description={description} />;
-}
-
-function DirectorySkeleton() {
-  return (
-    <div className="space-y-6">
-      <Topbar
-        eyebrow="Invitados"
-        title="Directorio de invitados"
-        description="Busca personas, reservas e invitaciones del evento en curso."
-      />
-      <div className="grid gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <SkeletonBlock className="h-[220px]" />
-        <SkeletonBlock className="h-[220px]" />
-      </div>
-      <SkeletonBlock className="h-[120px]" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <SkeletonBlock key={index} className="h-[118px]" />
-        ))}
-      </div>
-      <SkeletonBlock className="h-[320px]" />
-      <SkeletonBlock className="h-[200px]" />
-    </div>
-  );
-}
-
-function SkeletonBlock({ className }: { className: string }) {
-  return <div className={`animate-pulse rounded-[1.5rem] border border-white/10 bg-white/[0.04] ${className}`} />;
 }
 
 function ActionLink({

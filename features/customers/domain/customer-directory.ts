@@ -8,20 +8,23 @@ import type {
   IncidentSeverity,
   OperationalNote,
   ReservationFilter,
-  ReservationStatus,
   TimelineEntry,
 } from "@/features/customers/types";
+import type { ReservationStatus } from "@/features/reservations/types";
+import { normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
 
 export function statusTone(status: AdmissionStatus | DeliveryStatus | ReservationStatus | string) {
-  if (status === "Ingresó" || status === "Enviada" || status === "Reenviada" || status === "Vista" || status === "Confirmada") {
+  const normalizedReservationStatus = normalizeReservationStatus(status);
+
+  if (status === "Ingresó" || status === "Enviada" || status === "Reenviada" || status === "Vista" || normalizedReservationStatus === "Confirmed" || normalizedReservationStatus === "Checked In" || normalizedReservationStatus === "Completed") {
     return "success" as const;
   }
 
-  if (status === "Pendiente" || status === "Pendiente de envío" || status === "Pendientes de pago" || status === "Pago parcial") {
+  if (status === "Pendiente" || status === "Pendiente de envío" || normalizedReservationStatus === "Pending" || normalizedReservationStatus === "Draft") {
     return "warning" as const;
   }
 
-  if (status === "Anulada" || status === "Bloqueada" || status === "Fallida" || status === "Cancelada") {
+  if (status === "Anulada" || status === "Bloqueada" || status === "Fallida" || normalizedReservationStatus === "Cancelled" || normalizedReservationStatus === "No Show") {
     return "danger" as const;
   }
 
@@ -50,19 +53,19 @@ export function admissionFilterToStatus(filter: AdmissionFilter): AdmissionStatu
 
 export function reservationFilterToStatus(filter: ReservationFilter): ReservationStatus | null {
   if (filter === "Confirmadas") {
-    return "Confirmada";
+    return "Confirmed";
   }
 
   if (filter === "Pendientes de pago") {
-    return "Pendientes de pago";
+    return "Pending";
   }
 
   if (filter === "Pago parcial") {
-    return "Pago parcial";
+    return "Pending";
   }
 
   if (filter === "Canceladas") {
-    return "Cancelada";
+    return "Cancelled";
   }
 
   return null;

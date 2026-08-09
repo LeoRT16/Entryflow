@@ -1,3 +1,5 @@
+import type { ReservationStatus } from "@/features/reservations/types";
+
 export type EventOption = {
   name: string;
   status: "En curso" | "Próximo";
@@ -5,7 +7,6 @@ export type EventOption = {
 
 export type DeliveryStatus = "Pendiente de envío" | "Enviada" | "Reenviada" | "Vista" | "Fallida";
 export type AdmissionStatus = "Pendiente" | "Ingresó" | "Anulada" | "Bloqueada";
-export type ReservationStatus = "Confirmada" | "Pendientes de pago" | "Pago parcial" | "Cancelada";
 export type AdmissionFilter = "Todos" | "Pendientes" | "Ingresaron" | "Anulados" | "Bloqueados";
 export type ReservationFilter = "Todas" | "Confirmadas" | "Pendientes de pago" | "Pago parcial" | "Canceladas";
 export type AttentionTone = "warning" | "danger" | "info";
@@ -59,6 +60,8 @@ export type GuestRecord = {
   reservationName: string;
   reservationCode: string;
   eventName: string;
+  tableId?: string;
+  tableName?: string;
   eventStatus: EventOption["status"];
   invitationSequence: string;
   invitationCode: string;

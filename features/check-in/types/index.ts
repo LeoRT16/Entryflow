@@ -1,8 +1,51 @@
+import type { ReservationStatus } from "@/features/reservations/types";
+
 export type EntryStatus = "Pendiente" | "Ingresó" | "Anulada" | "Bloqueada";
 
 export type CheckInMethod = "QR" | "Manual";
 
 export type QrStatus = "Válido" | "Usado" | "Anulado" | "Bloqueado" | "Inexistente";
+
+export type AccessType = "reservation" | "invitation" | "ticket" | "qr" | "staff" | "vip" | "list" | "manual";
+
+export type AccessStatus =
+  | "Pending"
+  | "Confirmed"
+  | "Checked In"
+  | "Checked Out"
+  | "Cancelled"
+  | "Rejected"
+  | "Blocked"
+  | "Expired"
+  | "Transferred"
+  | "Duplicate Attempt"
+  | "No Show";
+
+export type AccessAuditKind =
+  | "reservation.created"
+  | "invitation.sent"
+  | "access.confirmed"
+  | "access.checked_in"
+  | "access.checked_out"
+  | "access.manual_override"
+  | "access.duplicate_attempt"
+  | "access.rejected"
+  | "access.blocked"
+  | "access.cancelled"
+  | "access.transferred"
+  | "access.expired";
+
+export type AccessAuditEntry = {
+  id: string;
+  timestamp: string;
+  kind: AccessAuditKind;
+  title: string;
+  description: string;
+  tone: "success" | "warning" | "danger" | "info";
+  operator?: string;
+  gate?: string;
+  metadata?: Record<string, unknown>;
+};
 
 export type Event = {
   id: string;
@@ -33,11 +76,13 @@ export type Reservation = {
   name: string;
   eventId: string;
   eventName: string;
+  tableId?: string;
+  tableName?: string;
   guestIds: string[];
   guestCount: number;
   checkedInCount: number;
   pendingCount: number;
-  status: "Confirmada" | "Pendientes de pago" | "Pago parcial" | "Cancelada";
+  status: ReservationStatus;
   source: string;
   time: string;
   tone: "success" | "warning" | "danger" | "info";
@@ -51,6 +96,8 @@ export type Guest = {
   reservationId: string;
   eventId: string;
   eventName: string;
+  tableId?: string;
+  tableName?: string;
   eventStatus: "En curso" | "Próximo";
   invitationSequence: string;
   invitationCode: string;
@@ -99,19 +146,34 @@ export type Guest = {
   qrStatus: QrStatus;
 };
 
-export type CheckIn = {
+export type AccessRecord = {
   id: string;
+  accessGrantId?: string;
   guestId: string;
   reservationId: string;
   eventId: string;
+  accessType: AccessType;
   method: CheckInMethod;
   checkedInAt: string;
+  checkedOutAt?: string;
   operator: string;
-  status: EntryStatus;
+  gate?: string;
+  notes?: string;
+  auditTrail: AccessAuditEntry[];
+  reentryAllowed: boolean;
+  maxEntries: number;
+  reentryWindowMinutes?: number;
+  attemptCount: number;
+  lastAttemptAt?: string;
+  status: AccessStatus;
+  source?: string;
 };
+
+export type CheckIn = AccessRecord;
 
 export type CheckInAttempt = {
   id: string;
+  eventId: string;
   query: string;
   method: CheckInMethod;
   timestamp: string;
@@ -120,4 +182,3 @@ export type CheckInAttempt = {
   guestName?: string;
   note: string;
 };
-

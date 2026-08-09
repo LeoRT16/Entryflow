@@ -3,7 +3,7 @@ export type StatusTone = "success" | "warning" | "danger" | "info";
 export type NavigationItem = {
   label: string;
   href: string;
-  icon: "dashboard" | "events" | "reservations" | "checkin" | "guests" | "stats" | "settings";
+  icon: "dashboard" | "operations" | "events" | "reservations" | "tables" | "checkin" | "timeline" | "guests" | "stats" | "settings";
 };
 
 export type SummaryMetric = {

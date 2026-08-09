@@ -1,12 +1,197 @@
-import SectionPlaceholder from "@/components/section-placeholder";
+"use client";
+
+import Topbar from "@/components/topbar";
+import StatusBadge from "@/components/status-badge";
+import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
+import { useCheckInStore } from "@/services/workspace-service";
+
+function StatCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
+      <p className="mt-2 text-sm text-slate-400">{detail}</p>
+    </div>
+  );
+}
 
 export default function StatisticsPage() {
+  const { status, error, workspaceIntelligence, workspacePriority, tableSummaries } = useCheckInStore();
+
+  if (status === "loading") {
+    return (
+      <StateShell title="Cargando estadísticas" description="Estamos reuniendo las métricas del evento activo." />
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <StateShell title="No pudimos cargar estadísticas" description={error?.message ?? "Reintentá la carga desde Supabase."} />
+    );
+  }
+
+  const currentEventSummary = workspaceIntelligence.dashboard.currentEventSummary;
+  const tableInsight = workspaceIntelligence.tables;
+  const dashboard = workspaceIntelligence.dashboard;
+  const capacity = workspaceIntelligence.capacity;
+  const occupancy = tableInsight.occupancyPercent;
+  const statisticsInsights = workspacePriority.byModule.Statistics;
+  const health = workspaceIntelligence.health;
+  const activity = workspaceIntelligence.activity;
+  const prioritySummary = workspacePriority.summary;
+  const guidedActions = statisticsInsights.slice(0, 3).map((item) =>
+    buildGuidedActionItem(item, {
+      href: item.route,
+      impact: item.description,
+    }),
+  );
+
   return (
-    <SectionPlaceholder
-      title="Estadísticas"
-      description="Tendencias operativas, asistencia y rendimiento de reservas."
-      primaryAction={{ label: "Ir al centro", href: "/" }}
-      secondaryAction={{ label: "Ver eventos", href: "/events" }}
-    />
+    <div className="space-y-6">
+      <Topbar
+        eyebrow="Analytics"
+        title={`Estadísticas de ${dashboard.currentEvent.name}`}
+        description="Métricas operativas derivadas del mismo estado compartido que usan Reservations, Check-in, Customers y Dashboard."
+        primaryAction={{ label: "Ir al dashboard", href: "/" }}
+        secondaryAction={{ label: "Ver timeline", href: "/timeline" }}
+      />
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="¿Qué pasa?"
+          value={prioritySummary.message}
+          detail={health.title}
+        />
+        <StatCard
+          label="¿Qué requiere atención?"
+          value={`${prioritySummary.critical + prioritySummary.attention}`}
+          detail={prioritySummary.nextBestAction}
+        />
+        <StatCard
+          label="¿Qué cambió?"
+          value={activity.recentWindow}
+          detail={activity.lastActivity}
+        />
+        <StatCard
+          label="¿Qué puedo ignorar?"
+          value={prioritySummary.canIgnore}
+          detail={capacity.summary}
+        />
+      </section>
+
+      <GuidedActionPanel
+        title="Siguiente paso"
+        description="Las recomendaciones operativas se ordenan por el impacto inmediato que tienen sobre la operación."
+        items={guidedActions}
+      />
+
+      <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Lectura inteligente</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{prioritySummary.nextBestAction}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-300">{health.description}</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Atención</p>
+              <p className="mt-2 text-sm font-medium text-white">{prioritySummary.message}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Actividad</p>
+              <p className="mt-2 text-sm font-medium text-white">{activity.summary}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Recomendaciones</p>
+          <div className="mt-4 space-y-3">
+            {statisticsInsights.length ? (
+              statisticsInsights.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white">{item.title}</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-400">{item.description}</p>
+                        <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-slate-500">
+                          {item.module} · {item.route}
+                        </p>
+                    </div>
+                    <StatusBadge variant={item.tone}>{item.priority}</StatusBadge>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
+                No hay recomendaciones activas.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1.02fr_0.98fr]">
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Capacidad operativa</p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Distribución del evento</h2>
+            </div>
+            <StatusBadge variant="info">{occupancy}%</StatusBadge>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {tableSummaries.slice(0, 4).map((table) => (
+              <div key={table.id} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-sm font-medium text-white">{table.name}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-500">{table.status}</p>
+                <p className="mt-3 text-sm text-slate-300">
+                  {table.metrics.assignedGuests}/{table.capacity} ocupados
+                </p>
+                <p className="mt-1 text-xs text-slate-500">Restantes: {table.metrics.capacityRemaining}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Estado del dashboard</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Resumen operativo vivo</h2>
+
+          <div className="mt-5 space-y-3">
+            {[
+              ["Reservas", currentEventSummary.reservations],
+              ["Invitados", currentEventSummary.expectedGuests],
+              ["Ingresados", currentEventSummary.checkedIn],
+              ["Pendientes", currentEventSummary.pending],
+              ["Atención", workspaceIntelligence.dashboard.summaryMetrics.find((item) => item.label === "Atención")?.value ?? "0"],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <span className="text-sm text-slate-300">{label}</span>
+                <span className="text-sm font-semibold text-white">{String(value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function StateShell({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="space-y-6">
+      <Topbar eyebrow="Analytics" title={title} description={description} />
+      <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-8 text-center">
+        <p className="text-sm text-slate-300">{description}</p>
+      </section>
+    </div>
   );
 }

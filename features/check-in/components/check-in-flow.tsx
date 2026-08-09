@@ -1,30 +1,39 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { useFeedback } from "@/components/premium-feedback";
+import { ContextualCard, GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
 import StatusBadge from "@/components/status-badge";
 import Topbar from "@/components/topbar";
+import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { buildGuestSearchIndex } from "@/features/check-in/utils";
 import { getEntryTone } from "@/features/check-in/domain/check-in-domain";
-import { useCheckInStore } from "@/features/check-in/state/check-in-store";
+import { useCheckInStore } from "@/services/workspace-service";
 import type { Guest, CheckInMethod } from "@/features/check-in/types";
 
 export default function CheckInFlow() {
-  const { showToast, confirm } = useFeedback();
+  const { confirm, showToast } = useFeedback();
   const {
     activeEvent,
-    dashboard,
     events,
     guests,
     attempts,
-    reservations,
+    workspaceIntelligence,
+    workspacePriority,
     registerCheckIn,
     searchGuests,
     setActiveEventId,
   } = useCheckInStore();
+  const currentEventSummary = workspaceIntelligence.dashboard.currentEventSummary;
+  const attentionCount = workspaceIntelligence.customers.attentionGuests.length;
+  const checkInInsights = workspacePriority.byModule["Check-in"];
+  const prioritySummary = workspacePriority.summary;
+  const health = workspaceIntelligence.health;
+  const flow = workspaceIntelligence.flow;
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPendingIndex, setSelectedPendingIndex] = useState(0);
   const deferredQuery = useDeferredValue(searchQuery);
   const activeGuests = useMemo(
     () => guests.filter((guest) => guest.eventId === activeEvent.id),
@@ -43,66 +52,28 @@ export default function CheckInFlow() {
     [activeEvent.id, deferredQuery, searchGuests],
   );
   const pendingGuests = activeGuests.filter((guest) => guest.admissionStatus === "Pendiente");
-  const recentAttempts = attempts.filter((attempt) => attempt.guestId || attempt.result === "No encontrado").slice(0, 5);
-  const percent = Math.round((dashboard.todayEvent.checkedIn / Math.max(dashboard.todayEvent.expectedGuests, 1)) * 100);
+  const recentAttempts = attempts
+    .filter((attempt) => attempt.eventId === activeEvent.id)
+    .filter((attempt) => attempt.guestId || attempt.result === "No encontrado")
+    .slice(0, 5);
+  const percent = Math.round((currentEventSummary.checkedIn / Math.max(currentEventSummary.expectedGuests, 1)) * 100);
 
-  const openGuest = (guest: Guest, method: CheckInMethod = "QR") => {
-    const response = registerCheckIn({
-      query: buildGuestSearchIndex(guest),
-      method,
-      operator: method === "Manual" ? "Recepción" : "Escáner",
-    });
+  const selectedPendingIndexClamped = pendingGuests.length
+    ? Math.min(selectedPendingIndex, pendingGuests.length - 1)
+    : 0;
 
-    if (response.result === "Encontrado") {
-      showToast({
-        title: "Ingreso registrado",
-        description: `${guest.guestName} quedó marcado como ingresado.`,
-        tone: "success",
+  const openGuest = useCallback(
+    (guest: Guest, method: CheckInMethod = "QR") => {
+      registerCheckIn({
+        query: buildGuestSearchIndex(guest),
+        method,
+        operator: method === "Manual" ? "Recepción" : "Escáner",
       });
-      return;
-    }
+    },
+    [registerCheckIn],
+  );
 
-    if (response.result === "Usado") {
-      showToast({
-        title: "QR ya usado",
-        description: `${guest.guestName} ya ingresó anteriormente.`,
-        tone: "warning",
-      });
-      return;
-    }
-
-    showToast({
-      title: "Ingreso bloqueado",
-      description: response.note,
-      tone: response.result === "Bloqueado" || response.result === "Anulado" ? "error" : "warning",
-    });
-  };
-
-  const runScenario = (query: string, method: CheckInMethod) => {
-    const response = registerCheckIn({ query, method, operator: method === "Manual" ? "Recepción" : "Escáner" });
-
-    showToast({
-      title:
-        response.result === "Encontrado"
-          ? "Ingreso registrado"
-          : response.result === "No encontrado"
-            ? "QR inexistente"
-            : response.result === "Usado"
-              ? "QR usado"
-              : response.result === "Anulado"
-                ? "QR anulado"
-                : "QR bloqueado",
-      description: response.note,
-      tone:
-        response.result === "Encontrado"
-          ? "success"
-          : response.result === "No encontrado"
-            ? "warning"
-            : "error",
-    });
-  };
-
-  const executeManualCheckIn = () => {
+  const executeManualCheckIn = useCallback(() => {
     if (!searchQuery.trim()) {
       showToast({
         title: "Ingresa un criterio de búsqueda",
@@ -122,27 +93,116 @@ export default function CheckInFlow() {
       tone: "info",
       confirmLabel: "Registrar ingreso",
       onConfirm: () => {
-        const response = registerCheckIn({
+        registerCheckIn({
           query: candidate ? buildGuestSearchIndex(candidate) : searchQuery,
           method: "Manual",
           operator: "Recepción",
         });
-
-        showToast({
-          title: response.result === "Encontrado" ? "Ingreso manual registrado" : "Ingreso manual revisado",
-          description: response.note,
-          tone: response.result === "Encontrado" ? "success" : "warning",
-        });
       },
     });
-  };
+  }, [confirm, registerCheckIn, searchQuery, searchResults, showToast]);
+
+  const continueCheckIn = useCallback(() => {
+    const candidate = searchQuery.trim()
+      ? searchResults[0] ?? null
+      : pendingGuests[selectedPendingIndexClamped] ?? pendingGuests[0] ?? null;
+
+    if (!candidate) {
+      showToast({
+        title: "No hay invitados listos",
+        description: "Todavía no existe un invitado pendiente para continuar el flujo.",
+        tone: "warning",
+      });
+      return;
+    }
+
+    openGuest(candidate, "QR");
+  }, [openGuest, pendingGuests, searchQuery, searchResults, selectedPendingIndexClamped, showToast]);
+
+  const goToNextPendingGuest = useCallback(() => {
+    if (!pendingGuests.length) {
+      return;
+    }
+
+    setSelectedPendingIndex((current) => (current + 1) % pendingGuests.length);
+  }, [pendingGuests.length]);
+
+  useKeyboardShortcuts(
+    useMemo(
+      () => [
+        {
+          id: "check-in-continue",
+          shortcut: "enter",
+          priority: 50,
+          handler: continueCheckIn,
+        },
+        {
+          id: "check-in-next",
+          shortcut: "n",
+          priority: 40,
+          handler: goToNextPendingGuest,
+        },
+      ],
+      [continueCheckIn, goToNextPendingGuest],
+    ),
+  );
+
+  const guidedActions = useMemo(() => {
+    const actions = [
+      ...(pendingGuests[0]
+        ? [
+            {
+              id: `${pendingGuests[0].id}-continue`,
+              label: "Continuar check-in",
+              reason: `${pendingGuests[0].guestName} todavía espera ingreso.`,
+              impact: "Abre el flujo para registrar ese acceso sin perder contexto.",
+              priority: "critical" as const,
+              tone: "danger" as const,
+              onSelect: () => openGuest(pendingGuests[0], "QR"),
+            },
+          ]
+        : []),
+      ...(searchQuery.trim() && searchResults[0]
+        ? [
+            {
+              id: `${searchResults[0].id}-manual`,
+              label: "Ingreso manual",
+              reason: `${searchResults[0].guestName} coincide con la búsqueda actual.`,
+              impact: "Registra el mismo estado compartido sin volver al inicio.",
+              priority: "blocking" as const,
+              tone: "warning" as const,
+              onSelect: executeManualCheckIn,
+            },
+          ]
+        : []),
+      ...checkInInsights.slice(0, 2).map((item) =>
+        buildGuidedActionItem(item, {
+          href: item.route,
+          impact: item.description,
+        }),
+      ),
+    ];
+
+    const seen = new Set<string>();
+
+    return actions
+      .filter((item) => {
+        if (seen.has(item.id)) {
+          return false;
+        }
+
+        seen.add(item.id);
+        return true;
+      })
+      .slice(0, 3);
+  }, [checkInInsights, executeManualCheckIn, openGuest, pendingGuests, searchQuery, searchResults]);
 
   return (
     <div className="space-y-6">
       <Topbar
         eyebrow="Ingresos"
         title="Check-in operativo"
-        description="Escanea, revisa y confirma entradas desde un solo panel mock conectado al resto de la app."
+        description="Escanea, revisa y confirma entradas desde un solo panel conectado al resto de la app."
         primaryAction={{ label: "Ir a reservas", href: "/reservations" }}
         secondaryAction={{ label: "Abrir invitados", href: "/customers" }}
       />
@@ -152,7 +212,7 @@ export default function CheckInFlow() {
           <div className="flex flex-wrap items-center gap-3">
             <StatusBadge variant="info">Operativo</StatusBadge>
             <StatusBadge variant="success">{activeEvent.name}</StatusBadge>
-            <StatusBadge variant="warning">{pendingGuests.length} pendientes</StatusBadge>
+            <StatusBadge variant="warning">{currentEventSummary.pending} pendientes</StatusBadge>
           </div>
 
           <div className="space-y-3">
@@ -165,10 +225,10 @@ export default function CheckInFlow() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-4">
-            <StatCard label="Ingresados" value={dashboard.todayEvent.checkedIn} tone="success" />
-            <StatCard label="Pendientes" value={dashboard.todayEvent.pending} tone="warning" />
-            <StatCard label="Reservas" value={dashboard.todayEvent.reservations} tone="info" />
-            <StatCard label="Atención" value={dashboard.activeEvent.attention} tone="danger" />
+            <StatCard label="Ingresados" value={currentEventSummary.checkedIn} tone="success" />
+            <StatCard label="Pendientes" value={currentEventSummary.pending} tone="warning" />
+            <StatCard label="Reservas" value={currentEventSummary.reservations} tone="info" />
+            <StatCard label="Atención" value={attentionCount} tone="danger" />
           </div>
         </div>
 
@@ -182,7 +242,7 @@ export default function CheckInFlow() {
                 Cambia el contexto operativo sin salir del flujo.
               </p>
             </div>
-            <StatusBadge variant="info">Live mock</StatusBadge>
+            <StatusBadge variant="info">Live</StatusBadge>
           </div>
 
           <label className="block">
@@ -194,7 +254,7 @@ export default function CheckInFlow() {
             >
               {events.map((event) => (
                 <option key={event.id} value={event.id}>
-                  {event.name} — {event.status}
+                  {event.name} — {event.status === "live" ? "En curso" : event.status === "published" ? "Publicado" : event.status === "draft" ? "Borrador" : event.status === "finished" ? "Finalizado" : "Cancelado"}
                 </option>
               ))}
             </select>
@@ -219,6 +279,12 @@ export default function CheckInFlow() {
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
+          <GuidedActionPanel
+            title="Siguiente paso"
+            description="El panel prioriza el ingreso que más reduce la cola de atención."
+            items={guidedActions}
+          />
+
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -230,7 +296,7 @@ export default function CheckInFlow() {
                 </h2>
               </div>
               <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-400">
-                {Math.round((dashboard.todayEvent.checkedIn / Math.max(dashboard.todayEvent.expectedGuests, 1)) * 100)}% de avance
+                {percent}% de avance
               </div>
             </div>
 
@@ -238,13 +304,25 @@ export default function CheckInFlow() {
               <input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    continueCheckIn();
+                  }
+
+                  if (event.key === "Escape" && searchQuery) {
+                    event.preventDefault();
+                    setSearchQuery("");
+                  }
+                }}
+                data-shortcut-search="true"
                 placeholder="Escanear QR o buscar invitado"
                 className="h-13 w-full flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06] focus:ring-4 focus:ring-cyan-500/10"
               />
 
               <button
                 type="button"
-                onClick={() => runScenario(searchQuery || "QR inexistente", "QR")}
+                onClick={() => registerCheckIn({ query: searchQuery || "QR inexistente", method: "QR", operator: "Escáner" })}
                 className="inline-flex h-12 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
               >
                 Validar QR
@@ -257,14 +335,6 @@ export default function CheckInFlow() {
               >
                 Ingreso manual
               </button>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <ScenarioButton label="QR válido" tone="success" onClick={() => runScenario(searchQuery || searchResults[0]?.invitationCode || "INV-0084-01", "QR")} />
-              <ScenarioButton label="QR usado" tone="warning" onClick={() => runScenario(searchResults.find((guest) => guest.admissionStatus === "Ingresó")?.invitationCode || searchResults[0]?.invitationCode || "INV-0084-01", "QR")} />
-              <ScenarioButton label="QR anulado" tone="danger" onClick={() => runScenario(searchResults.find((guest) => guest.admissionStatus === "Anulada")?.invitationCode || "INV-0208-01", "QR")} />
-              <ScenarioButton label="QR bloqueado" tone="danger" onClick={() => runScenario(searchResults.find((guest) => guest.admissionStatus === "Bloqueada")?.invitationCode || "INV-0142-02", "QR")} />
-              <ScenarioButton label="QR inexistente" tone="info" onClick={() => runScenario("QR-INEXISTENTE", "QR")} />
             </div>
           </section>
 
@@ -316,17 +386,43 @@ export default function CheckInFlow() {
             </div>
 
             <div className="mt-4 grid gap-3">
-              {[
-                { label: "Ingresados", value: `${dashboard.todayEvent.checkedIn}`, tone: "success" as const },
-                { label: "Pendientes", value: `${dashboard.todayEvent.pending}`, tone: "warning" as const },
-                { label: "Reservas activas", value: `${reservations.length}`, tone: "info" as const },
-                { label: "Atención", value: `${dashboard.activeEvent.attention}`, tone: "danger" as const },
-              ].map((item) => (
+                {[
+                  { label: "Ingresados", value: `${currentEventSummary.checkedIn}`, tone: "success" as const },
+                  { label: "Pendientes", value: `${currentEventSummary.pending}`, tone: "warning" as const },
+                  { label: "Reservas activas", value: `${currentEventSummary.reservations}`, tone: "info" as const },
+                  { label: "Atención", value: `${attentionCount}`, tone: "danger" as const },
+                ].map((item) => (
                 <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-slate-500">{item.label}</p>
                   <p className={`mt-2 text-2xl font-semibold ${item.tone === "danger" ? "text-red-100" : item.tone === "warning" ? "text-amber-100" : item.tone === "success" ? "text-emerald-100" : "text-cyan-100"}`}>{item.value}</p>
                 </div>
               ))}
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Lectura inteligente</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{prioritySummary.message}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">{flow.summary}</p>
+            <p className="mt-2 text-xs uppercase tracking-[0.22em] text-slate-500">{health.title}</p>
+            <div className="mt-4 space-y-3">
+              {checkInInsights.length ? (
+                checkInInsights.slice(0, 3).map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">{item.title}</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-400">{item.description}</p>
+                      </div>
+                      <StatusBadge variant={item.tone}>{item.priority}</StatusBadge>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
+                  Sin recomendaciones activas.
+                </div>
+              )}
             </div>
           </section>
 
@@ -357,24 +453,32 @@ export default function CheckInFlow() {
 
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
                   Pendientes
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
                   Invitados por ingresar
                 </h2>
               </div>
-              <StatusBadge variant="warning">{pendingGuests.length}</StatusBadge>
+              <StatusBadge variant="warning">{currentEventSummary.pending}</StatusBadge>
             </div>
 
             <div className="mt-4 space-y-3">
-              {pendingGuests.slice(0, 4).map((guest) => (
+              {pendingGuests.slice(0, 4).map((guest, index) => (
                 <button
                   key={guest.id}
                   type="button"
-                  onClick={() => openGuest(guest, "QR")}
-                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-left transition hover:bg-slate-950/55"
+                  onClick={() => {
+                    setSelectedPendingIndex(index);
+                    openGuest(guest, "QR");
+                  }}
+                  className={[
+                    "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition",
+                    selectedPendingIndexClamped === index
+                      ? "border-cyan-400/40 bg-cyan-400/10"
+                      : "border-white/10 bg-slate-950/40 hover:bg-slate-950/55",
+                  ].join(" ")}
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-white">{guest.guestName}</p>
@@ -427,7 +531,34 @@ function GuestResultCard({
   onManual: () => void;
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4">
+    <ContextualCard
+      items={[
+        {
+          id: `${guest.id}-qr`,
+          label: "Registrar ingreso",
+          description: "Validar con QR usando el flujo real.",
+          tone: "success" as const,
+          onSelect: onCheckIn,
+        },
+        {
+          id: `${guest.id}-manual`,
+          label: "Ingreso manual",
+          description: "Registrar el mismo estado compartido.",
+          tone: "info" as const,
+          onSelect: onManual,
+        },
+        {
+          id: `${guest.id}-copy`,
+          label: "Copiar código",
+          description: "Copiar el código de invitación al portapapeles.",
+          tone: "warning" as const,
+          onSelect: async () => {
+            await navigator.clipboard.writeText(guest.invitationCode);
+          },
+        },
+      ]}
+      className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4"
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <h3 className="text-lg font-semibold tracking-tight text-white">{guest.guestName}</h3>
@@ -459,13 +590,26 @@ function GuestResultCard({
           </button>
         </div>
       </div>
-    </div>
+    </ContextualCard>
   );
 }
 
 function AttemptRow({ attempt }: { attempt: { timestamp: string; guestName?: string; result: string; note: string } }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+    <ContextualCard
+      items={[
+        {
+          id: `${attempt.timestamp}-copy-note`,
+          label: "Copiar nota",
+          description: "Copiar el mensaje del intento.",
+          tone: "info" as const,
+          onSelect: async () => {
+            await navigator.clipboard.writeText(attempt.note);
+          },
+        },
+      ]}
+      className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-white">{attempt.guestName ?? attempt.result}</p>
@@ -475,39 +619,7 @@ function AttemptRow({ attempt }: { attempt: { timestamp: string; guestName?: str
           {attempt.timestamp}
         </span>
       </div>
-    </div>
-  );
-}
-
-function ScenarioButton({
-  label,
-  tone,
-  onClick,
-}: {
-  label: string;
-  tone: "success" | "warning" | "danger" | "info";
-  onClick: () => void;
-}) {
-  const toneClass =
-    tone === "success"
-      ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-50 hover:bg-emerald-400/15"
-      : tone === "warning"
-        ? "border-amber-400/25 bg-amber-400/10 text-amber-50 hover:bg-amber-400/15"
-        : tone === "danger"
-          ? "border-red-400/20 bg-red-400/10 text-red-100 hover:bg-red-400/15"
-          : "border-cyan-400/25 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/15";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "inline-flex h-10 items-center justify-center rounded-full border px-3 text-xs font-medium transition hover:-translate-y-0.5 active:scale-[0.98]",
-        toneClass,
-      ].join(" ")}
-    >
-      {label}
-    </button>
+    </ContextualCard>
   );
 }
 

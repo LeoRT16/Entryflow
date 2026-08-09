@@ -1,6 +1,6 @@
 import StatusBadge from "@/components/status-badge";
 import { EmptyState } from "@/components/premium-feedback";
-import type { ReservationRow } from "@/lib/mock-data";
+import type { ReservationRow } from "@/types/dashboard";
 
 export default function RecentReservationsTable({
   reservations,

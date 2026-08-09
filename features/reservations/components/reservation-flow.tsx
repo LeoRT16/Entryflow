@@ -1,36 +1,119 @@
 "use client";
 
 import type * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import MetricCard from "@/components/metric-card";
-import RecentReservationsTable from "@/components/recent-reservations-table";
-import { useFeedback } from "@/components/premium-feedback";
 import Topbar from "@/components/topbar";
 import LiveSummaryRow from "@/features/reservations/components/live-summary-row";
 import ReservationWizardModal, {
   wizardSteps,
 } from "@/features/reservations/components/reservation-wizard-modal";
+import ReservationOperationsBoard from "@/features/reservations/components/reservation-operations-board";
 import { buildGuestList, createGuestDraft } from "@/features/reservations/domain/reservation-draft";
-import { reservationGuestPresets, reservationTableOptions } from "@/features/reservations/mock/reservations";
+import { reservationGuestPresets, reservationTableOptions } from "@/features/reservations/domain/reservation-presets";
 import { clampGuestCount } from "@/features/reservations/utils/reservation-utils";
 import type {
   GuestDraft,
   PaymentMethod,
   PaymentStatus,
+  ReservationCreationInput,
+  ReservationSummary,
   ReservationType,
   WizardStep,
 } from "@/features/reservations/types";
-import { useCheckInStore } from "@/features/check-in/state/check-in-store";
+import { useCheckInStore } from "@/services/workspace-service";
+import StatusBadge from "@/components/status-badge";
+import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
+import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
+
+type CheckInStore = ReturnType<typeof useCheckInStore>;
+
+type ReservationFlowWorkspaceProps = Pick<
+  CheckInStore,
+  | "currentOrganization"
+  | "currentEvent"
+  | "events"
+  | "workspaceIntelligence"
+  | "workspacePriority"
+  | "reservationSummaries"
+  | "createReservation"
+  | "addReservationGuest"
+  | "updateReservationGuest"
+  | "setReservationStatus"
+  | "registerCheckIn"
+>;
+
+function reservationPriorityWeight(statusTone: ReservationSummary["statusTone"]) {
+  if (statusTone === "danger") return 0;
+  if (statusTone === "warning") return 1;
+  if (statusTone === "info") return 2;
+  return 3;
+}
+
+function compareReservationPriority(a: ReservationSummary, b: ReservationSummary) {
+  const toneDelta = reservationPriorityWeight(a.statusTone) - reservationPriorityWeight(b.statusTone);
+
+  if (toneDelta !== 0) {
+    return toneDelta;
+  }
+
+  const pendingDelta = b.metrics.pendingGuests - a.metrics.pendingGuests;
+
+  if (pendingDelta !== 0) {
+    return pendingDelta;
+  }
+
+  const checkedInDelta = b.metrics.checkedInGuests - a.metrics.checkedInGuests;
+
+  if (checkedInDelta !== 0) {
+    return checkedInDelta;
+  }
+
+  return a.name.localeCompare(b.name);
+}
 
 export default function ReservationFlow() {
-  const { showToast } = useFeedback();
-  const { dashboard } = useCheckInStore();
+  const store = useCheckInStore();
+
+  return (
+    <ReservationFlowWorkspace
+      key={store.currentEvent.id}
+      currentOrganization={store.currentOrganization}
+      currentEvent={store.currentEvent}
+      events={store.events}
+      workspaceIntelligence={store.workspaceIntelligence}
+      workspacePriority={store.workspacePriority}
+      reservationSummaries={store.reservationSummaries}
+      createReservation={store.createReservation}
+      addReservationGuest={store.addReservationGuest}
+      updateReservationGuest={store.updateReservationGuest}
+      setReservationStatus={store.setReservationStatus}
+      registerCheckIn={store.registerCheckIn}
+    />
+  );
+}
+
+function ReservationFlowWorkspace({
+  currentOrganization,
+  currentEvent,
+  events,
+  workspaceIntelligence,
+  workspacePriority,
+  reservationSummaries,
+  createReservation,
+  addReservationGuest,
+  updateReservationGuest,
+  setReservationStatus,
+  registerCheckIn,
+}: ReservationFlowWorkspaceProps) {
+  const [eventDate, eventTime] = currentEvent.startAt.trim().split(/\s+(?=\d{1,2}:\d{2}$)/);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>(1);
-  const [eventName, setEventName] = useState(dashboard.todayEvent.name);
-  const [date, setDate] = useState(dashboard.todayEvent.date);
-  const [time, setTime] = useState(dashboard.todayEvent.startsAt);
+  const [eventName, setEventName] = useState(currentEvent.name);
+  const [date, setDate] = useState(eventDate ?? currentEvent.startAt);
+  const [time, setTime] = useState(eventTime ?? "");
   const [guestCount, setGuestCount] = useState(5);
   const [reservationType, setReservationType] = useState<ReservationType>("Mesa");
   const [observations, setObservations] = useState(
@@ -40,7 +123,7 @@ export default function ReservationFlow() {
   const [holderLastName, setHolderLastName] = useState("Rivas");
   const [documentValue, setDocumentValue] = useState("1234567");
   const [whatsapp, setWhatsapp] = useState("+591 70000011");
-  const [email, setEmail] = useState("sofia.rivas@mock.com");
+  const [email, setEmail] = useState("sofia.rivas@ejemplo.com");
   const [preferences, setPreferences] = useState("Mesa tranquila, música moderada");
   const [vip, setVip] = useState(true);
   const [frequent, setFrequent] = useState(false);
@@ -53,6 +136,22 @@ export default function ReservationFlow() {
   const [advance, setAdvance] = useState("300");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Transferencia");
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("Parcial");
+  const router = useRouter();
+  const prioritizedReservations = useMemo(
+    () => [...reservationSummaries].sort(compareReservationPriority),
+    [reservationSummaries],
+  );
+  const [activeReservationId, setActiveReservationId] = useState<string>(
+    () => prioritizedReservations[0]?.id ?? "",
+  );
+
+  const eventOptions = useMemo(
+    () =>
+      events
+        .filter((event) => event.organizationId === currentOrganization.id)
+        .map((event) => event.name),
+    [currentOrganization.id, events],
+  );
 
   const selectedTable = useMemo(
     () =>
@@ -72,6 +171,117 @@ export default function ReservationFlow() {
   const advanceNumber = Number(advance || 0);
   const pendingNumber = Math.max(amountNumber - advanceNumber, 0);
   const completion = step / wizardSteps.length;
+  const reservationTotals = workspaceIntelligence.statistics.cards;
+  const reservationInsights = workspacePriority.byModule.Reservations;
+  const prioritySummary = workspacePriority.summary;
+  const capacity = workspaceIntelligence.capacity;
+  const openWizard = useCallback(() => {
+    setIsWizardOpen(true);
+    setStep(1);
+  }, []);
+
+  const closeWizard = useCallback(() => setIsWizardOpen(false), []);
+
+  const activeReservation =
+    prioritizedReservations.find((reservation) => reservation.id === activeReservationId) ??
+    prioritizedReservations[0] ??
+    null;
+  const guidedActions = useMemo(() => {
+    const actions = [
+      ...(activeReservation && (activeReservation.status === "Draft" || activeReservation.status === "Pending")
+        ? [
+            {
+              id: `${activeReservation.id}-confirm`,
+              label: "Confirmar reserva",
+              reason: `${activeReservation.name} todavía no está confirmada.`,
+              impact: "Desbloquea invitados, mesa y check-in para esta reserva.",
+              priority: "critical" as const,
+              tone: "danger" as const,
+              onSelect: () => setReservationStatus(activeReservation.id, "Confirmed"),
+            },
+          ]
+        : []),
+      ...(activeReservation && (!activeReservation.tableName || activeReservation.tableName.toLowerCase().includes("sin mesa"))
+        ? [
+            {
+              id: `${activeReservation.id}-table`,
+              label: "Asignar mesa",
+              reason: `${activeReservation.name} todavía no tiene mesa asignada.`,
+              impact: "Reduce fricción y deja la reserva lista para operar.",
+              priority: "blocking" as const,
+              tone: "warning" as const,
+              href: "/tables",
+            },
+          ]
+        : []),
+      ...(activeReservation && activeReservation.metrics.pendingGuests > 0
+        ? [
+            {
+              id: `${activeReservation.id}-checkin`,
+              label: "Continuar check-in",
+              reason: `${activeReservation.metrics.pendingGuests} invitados siguen pendientes de ingreso.`,
+              impact: "Lleva el grupo al flujo de admisión sin perder contexto.",
+              priority: "quick" as const,
+              tone: "info" as const,
+              href: "/check-in",
+            },
+          ]
+        : []),
+      ...reservationInsights.slice(0, 2).map((item) =>
+        buildGuidedActionItem(item, {
+          href: item.route,
+          impact: item.description,
+        }),
+      ),
+    ];
+
+    const seen = new Set<string>();
+
+    return actions
+      .filter((item) => {
+        if (seen.has(item.id)) {
+          return false;
+        }
+
+        seen.add(item.id);
+        return true;
+      })
+      .slice(0, 3);
+  }, [activeReservation, reservationInsights, setReservationStatus]);
+
+  useKeyboardShortcuts(
+    useMemo(
+      () => [
+        {
+          id: "reservations-new",
+          shortcut: "n",
+          priority: 50,
+          handler: openWizard,
+        },
+        {
+          id: "reservations-assign-table",
+          shortcut: "a",
+          priority: 45,
+          handler: () => router.push("/tables"),
+        },
+        {
+          id: "reservations-confirm",
+          shortcut: "c",
+          priority: 55,
+          handler: () => {
+            if (!activeReservation) {
+              return;
+            }
+
+            if (activeReservation.status === "Draft" || activeReservation.status === "Pending") {
+              setReservationStatus(activeReservation.id, "Confirmed");
+            }
+          },
+        },
+      ],
+      [activeReservation, openWizard, router, setReservationStatus],
+    ),
+  );
 
   useEffect(() => {
     if (!isWizardOpen) {
@@ -155,19 +365,13 @@ export default function ReservationFlow() {
   const goPrevious = () =>
     setStep((currentStep) => Math.max(1, currentStep - 1) as WizardStep);
 
-  const openWizard = () => {
-    setIsWizardOpen(true);
-    setStep(1);
-  };
-
-  const closeWizard = () => setIsWizardOpen(false);
-
-  const completeReservation = () => {
-    showToast({
-      title: "Reserva creada (modo demo)",
-      description: "La reserva quedó registrada visualmente sin persistencia real.",
-      tone: "success",
+  const completeReservation = (input: Omit<ReservationCreationInput, "eventId">) => {
+    const reservation = createReservation({
+      ...input,
+      eventId: currentEvent.id,
+      eventName: currentEvent.name,
     });
+    setActiveReservationId(reservation.id);
     closeWizard();
   };
 
@@ -209,7 +413,7 @@ export default function ReservationFlow() {
               Crear reserva
             </button>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
-              Contexto activo: <span className="font-medium text-white">{dashboard.todayEvent.name}</span>
+              Contexto activo: <span className="font-medium text-white">{currentEvent.name}</span>
             </div>
           </div>
         </div>
@@ -219,7 +423,7 @@ export default function ReservationFlow() {
             Resumen operativo
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {dashboard.summaryMetrics.map((metric) => (
+            {workspaceIntelligence.dashboard.summaryMetrics.map((metric) => (
               <MetricCard
                 key={metric.label}
                 label={metric.label}
@@ -233,24 +437,64 @@ export default function ReservationFlow() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.74fr]">
-        <RecentReservationsTable reservations={dashboard.recentReservations} />
+        <div className="space-y-6">
+          <GuidedActionPanel
+            title="Siguiente paso"
+            description="El sistema muestra primero la acción que más desbloquea esta reserva."
+            items={guidedActions}
+          />
+
+          <ReservationOperationsBoard
+            reservations={prioritizedReservations}
+            activeReservationId={activeReservation?.id ?? ""}
+            onSelectReservation={setActiveReservationId}
+            onMarkConfirmed={(reservationId) => {
+              setReservationStatus(reservationId, "Confirmed");
+            }}
+            onAddGuest={(reservationId, guest) => {
+              addReservationGuest(reservationId, guest);
+            }}
+            onGuestAction={(params) => {
+              updateReservationGuest(params);
+            }}
+            onRegisterCheckIn={(reservationId, guestId) => {
+              const reservation = reservationSummaries.find((item) => item.id === reservationId);
+              const guest = reservation?.guests.find((item) => item.id === guestId);
+
+              if (!reservation || !guest) {
+                return;
+              }
+
+              registerCheckIn({
+                query: guest.invitationCode,
+                method: "Manual",
+                operator: "Recepción",
+              });
+            }}
+            onCancelReservation={(reservationId) => {
+              setReservationStatus(reservationId, "Cancelled");
+            }}
+          />
+        </div>
 
         <aside className="space-y-4">
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-              Evento de hoy
+              Estado general
             </p>
-            <div className="mt-4 space-y-4">
-              <LiveSummaryRow label="Evento" value={dashboard.todayEvent.name} />
-              <LiveSummaryRow label="Fecha" value={dashboard.todayEvent.date} />
-              <LiveSummaryRow label="Hora" value={dashboard.todayEvent.startsAt} />
-              <LiveSummaryRow label="Reservas" value={`${dashboard.todayEvent.reservations}`} />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <LiveSummaryRow label="Reservas activas" value={`${reservationTotals.activeReservations}`} />
+              <LiveSummaryRow label="Invitados" value={`${reservationTotals.expectedGuests}`} />
+              <LiveSummaryRow label="Confirmados" value={`${reservationTotals.confirmedReservations}`} />
+              <LiveSummaryRow label="Ingresados" value={`${reservationTotals.checkedInGuests}`} />
+              <LiveSummaryRow label="Pendientes" value={`${reservationTotals.pendingGuests}`} />
+              <LiveSummaryRow label="Capacidad restante" value={`${reservationTotals.capacityRemaining}`} />
             </div>
           </section>
 
           <section className="rounded-[2rem] border border-white/10 bg-slate-950/40 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-              Borrador activo
+              Reserva activa
             </p>
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -258,16 +502,43 @@ export default function ReservationFlow() {
                   Reserva
                 </p>
                 <p className="mt-2 text-lg font-semibold tracking-tight text-white">
-                  {reservationType} · {eventName}
+                  {activeReservation?.name ?? reservationType} · {activeReservation?.eventName ?? eventName}
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <LiveSummaryRow label="Invitados" value={`${guestCount}`} />
-                <LiveSummaryRow label="Registrados" value={`${registeredGuests}`} />
-                <LiveSummaryRow label="Mesa" value={selectedTable.name} />
-                <LiveSummaryRow label="Pago" value={paymentStatus} />
+                <LiveSummaryRow label="Invitados" value={`${activeReservation?.metrics.guestCount ?? guestCount}`} />
+                <LiveSummaryRow label="Registrados" value={`${activeReservation?.metrics.checkedInGuests ?? registeredGuests}`} />
+                <LiveSummaryRow label="Mesa" value={activeReservation?.tableName ?? selectedTable.name} />
+                <LiveSummaryRow label="Pago" value={activeReservation?.paymentStatus ?? paymentStatus} />
               </div>
             </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Prioridad operativa</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{prioritySummary.message}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">{prioritySummary.nextBestAction}</p>
+            <p className="mt-2 text-xs uppercase tracking-[0.22em] text-slate-500">{workspaceIntelligence.health.title}</p>
+            <div className="mt-4 space-y-3">
+              {reservationInsights.length ? (
+                reservationInsights.slice(0, 3).map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">{item.title}</p>
+                        <p className="mt-1 text-sm leading-6 text-slate-400">{item.description}</p>
+                      </div>
+                      <StatusBadge variant={item.tone}>{item.priority}</StatusBadge>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
+                  Sin recomendaciones activas.
+                </div>
+              )}
+            </div>
+            <p className="mt-4 text-xs text-slate-400">{capacity.summary}</p>
           </section>
         </aside>
       </section>
@@ -329,6 +600,7 @@ export default function ReservationFlow() {
           registeredGuests={registeredGuests}
           pendingGuests={pendingGuests}
           onCreateReservation={completeReservation}
+          eventOptions={eventOptions}
         />
       ) : null}
     </div>

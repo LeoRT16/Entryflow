@@ -5,16 +5,17 @@ import type { Dispatch, SetStateAction } from "react";
 import StatusBadge from "@/components/status-badge";
 import { formatCurrency } from "@/utils/currency";
 import LiveSummaryRow from "@/features/reservations/components/live-summary-row";
+import { formatTableStatus } from "@/features/tables/domain/table-domain";
 import {
-  reservationEventOptions,
   reservationPaymentHistory,
   reservationTableOptions,
-} from "@/features/reservations/mock/reservations";
+} from "@/features/reservations/domain/reservation-presets";
 import type {
   GuestDraft,
   PaymentHistoryEntry,
   PaymentMethod,
   PaymentStatus,
+  ReservationCreationInput,
   ReservationType,
   TableOption,
   WizardStep,
@@ -113,6 +114,7 @@ export default function ReservationWizardModal({
   registeredGuests,
   pendingGuests,
   onCreateReservation,
+  eventOptions,
 }: {
   step: WizardStep;
   setStep: Dispatch<SetStateAction<WizardStep>>;
@@ -168,7 +170,8 @@ export default function ReservationWizardModal({
   completion: number;
   registeredGuests: number;
   pendingGuests: number;
-  onCreateReservation: () => void;
+  onCreateReservation: (input: Omit<ReservationCreationInput, "eventId">) => void;
+  eventOptions: string[];
 }) {
   const currentStep = wizardSteps.find((item) => item.step === step) ?? wizardSteps[0];
 
@@ -236,6 +239,7 @@ export default function ReservationWizardModal({
                       <GeneralStep
                         eventName={eventName}
                         setEventName={setEventName}
+                        eventOptions={eventOptions}
                         date={date}
                         setDate={setDate}
                         time={time}
@@ -353,7 +357,30 @@ export default function ReservationWizardModal({
                       ) : (
                         <button
                           type="button"
-                          onClick={onCreateReservation}
+                          onClick={() =>
+                            onCreateReservation({
+                              eventName,
+                              date,
+                              time,
+                              reservationType,
+                              holderName,
+                              holderLastName,
+                              documentValue,
+                              whatsapp,
+                              email,
+                              preferences,
+                              vip,
+                              frequent,
+                              notes,
+                              guests,
+                              selectedTable,
+                              amount,
+                              advance,
+                              paymentMethod,
+                              paymentStatus,
+                              observations,
+                            })
+                          }
                           className="inline-flex h-12 items-center justify-center rounded-[1.25rem] bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
                         >
                           Crear reserva
@@ -564,9 +591,11 @@ function GeneralStep({
   setReservationType,
   observations,
   setObservations,
+  eventOptions,
 }: {
   eventName: string;
   setEventName: Dispatch<SetStateAction<string>>;
+  eventOptions: string[];
   date: string;
   setDate: Dispatch<SetStateAction<string>>;
   time: string;
@@ -581,13 +610,13 @@ function GeneralStep({
   return (
     <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
       <div className="grid gap-4 xl:grid-cols-2">
-        <Field label="Evento">
+      <Field label="Evento">
           <select
             value={eventName}
             onChange={(event) => setEventName(event.target.value)}
             className={selectClassName}
           >
-            {reservationEventOptions.map((option) => (
+            {eventOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
@@ -942,7 +971,7 @@ function TableStep({
                   <p className="text-xl font-semibold tracking-tight text-white">{table.name}</p>
                   <p className="mt-1 text-sm text-slate-400">{table.location}</p>
                 </div>
-                <StatusBadge variant={table.tone}>{table.status}</StatusBadge>
+                <StatusBadge variant={table.tone}>{formatTableStatus(table.status)}</StatusBadge>
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -1184,7 +1213,7 @@ function SummaryStep({
         ["Mesa", selectedTable.name],
         ["Ubicación", selectedTable.location],
         ["Capacidad", `${selectedTable.capacity}`],
-        ["Estado", selectedTable.status],
+        ["Estado", formatTableStatus(selectedTable.status)],
       ],
     },
     {
@@ -1209,8 +1238,8 @@ function SummaryStep({
           Reserva lista para crear.
         </h3>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-          Todo está agrupado por contexto operativo. El botón final es visual y no
-          persiste nada.
+          Todo está agrupado por contexto operativo. El botón final registra la reserva en
+          el estado compartido.
         </p>
       </div>
 

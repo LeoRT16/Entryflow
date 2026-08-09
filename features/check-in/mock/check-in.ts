@@ -1,5 +1,5 @@
 import { guestRecords as customerGuestRecords } from "@/features/customers/mock/customers";
-import { todayEvent } from "@/lib/mock-data";
+import { seedEvent } from "@/mock/dashboard";
 import type { Event, Guest, QrStatus } from "@/features/check-in/types";
 
 function toEventId(name: string) {
@@ -28,15 +28,15 @@ function toQrStatus(guest: (typeof customerGuestRecords)[number]): QrStatus {
 
 export const checkInEvents: Event[] = [
   {
-    id: toEventId(todayEvent.name),
-    name: todayEvent.name,
+    id: toEventId(seedEvent.name),
+    name: seedEvent.name,
     status: "En curso",
-    date: todayEvent.date,
-    startsAt: todayEvent.startsAt,
-    expectedGuests: todayEvent.expectedGuests,
-    checkedIn: todayEvent.checkedIn,
-    pending: Math.max(todayEvent.expectedGuests - todayEvent.checkedIn, 0),
-    reservations: todayEvent.reservations,
+    date: seedEvent.date,
+    startsAt: seedEvent.startsAt,
+    expectedGuests: seedEvent.expectedGuests,
+    checkedIn: seedEvent.checkedIn,
+    pending: Math.max(seedEvent.expectedGuests - seedEvent.checkedIn, 0),
+    reservations: seedEvent.reservations,
     attention: 6,
   },
   {
@@ -75,4 +75,3 @@ export const checkInGuests: Guest[] = customerGuestRecords.map((guest) => {
     qrStatus: toQrStatus(guest),
   };
 });
-
