@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import TimezoneSelect from "@/components/timezone-select";
 import { useFeedback } from "@/components/premium-feedback";
-import type { Event } from "@/features/domain/types";
+import type { Event, Venue } from "@/features/domain/types";
 import {
   buildEventFromDraft,
   buildEventDraft,
@@ -16,19 +17,32 @@ import {
   getOperationalModelLabel,
 } from "@/features/events/domain";
 import type { EventBlueprint, EventDraft } from "@/features/events/domain";
+import { getDefaultTimezone } from "@/lib/timezone";
 
 type EventCreationWizardProps = {
   open: boolean;
   onClose: () => void;
-  onCreate: (event: Event) => void;
+  onCreate: (event: Event) => Promise<Event>;
   organizationId: string;
+  organizationTimezone: string;
+  venues: Venue[];
 };
 
-export default function EventCreationWizard({ open, onClose, onCreate, organizationId }: EventCreationWizardProps) {
+export default function EventCreationWizard({
+  open,
+  onClose,
+  onCreate,
+  organizationId,
+  organizationTimezone,
+  venues,
+}: EventCreationWizardProps) {
   const { showToast } = useFeedback();
   const [step, setStep] = useState(1);
-  const [blueprint, setBlueprint] = useState<EventBlueprint>(() => getEventBlueprint("nightlife"));
-  const [draft, setDraft] = useState<EventDraft>(() => buildEventDraft(getEventBlueprint("nightlife")));
+  const [blueprint, setBlueprint] = useState<EventBlueprint>(() => getEventBlueprint("custom"));
+  const [draft, setDraft] = useState<EventDraft>(() => buildEventDraft(getEventBlueprint("custom")));
+  const preferredTimezone = getDefaultTimezone(organizationTimezone);
+  const venueOptions = useMemo(() => venues.filter((venue) => venue.organizationId === organizationId), [organizationId, venues]);
+  const defaultVenue = useMemo(() => venueOptions.find((venue) => venue.status === "active") ?? venueOptions[0] ?? null, [venueOptions]);
 
   useEffect(() => {
     if (!open) {
@@ -85,15 +99,28 @@ export default function EventCreationWizard({ open, onClose, onCreate, organizat
         ...nextDraft,
         name: "Evento personalizado",
         capacity: "",
+        venueId: defaultVenue?.id ?? "",
+        venue: defaultVenue?.name ?? nextDraft.venue,
         enabledModules: ["overview"],
         admissionMethods: ["manual", "list", "code"],
         resourceTypes: [],
+        timezone: preferredTimezone,
       });
       setStep(2);
       return;
     }
 
-    setDraft(nextDraft);
+    setDraft({
+      ...nextDraft,
+      timezone: preferredTimezone,
+    });
+    if (defaultVenue) {
+      setDraft((current) => ({
+        ...current,
+        venueId: defaultVenue.id,
+        venue: defaultVenue.name,
+      }));
+    }
     setStep(2);
   };
 
@@ -128,7 +155,7 @@ export default function EventCreationWizard({ open, onClose, onCreate, organizat
     }));
   };
 
-  const submitEvent = () => {
+  const submitEvent = async () => {
     const nextEvent = buildEventFromDraft({
       organizationId,
       blueprint,
@@ -136,13 +163,21 @@ export default function EventCreationWizard({ open, onClose, onCreate, organizat
       status: "published",
     });
 
-    onCreate(nextEvent);
-    showToast({
-      title: "Evento creado",
-      description: `${nextEvent.name} quedó disponible en la biblioteca de eventos.`,
-      tone: "success",
-    });
-    onClose();
+    try {
+      await onCreate(nextEvent);
+      showToast({
+        title: "Evento creado",
+        description: `${nextEvent.name} quedó disponible en la biblioteca de eventos.`,
+        tone: "success",
+      });
+      onClose();
+    } catch (error) {
+      showToast({
+        title: "No pudimos crear el evento",
+        description: error instanceof Error ? error.message : "Revisá la conexión con Supabase.",
+        tone: "error",
+      });
+    }
   };
 
   const nextStep = () => setStep((current) => Math.min(current + 1, 6));
@@ -162,11 +197,9 @@ export default function EventCreationWizard({ open, onClose, onCreate, organizat
       <div className="flex max-h-[min(92vh,960px)] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#08111f] shadow-[0_40px_140px_rgba(0,0,0,0.55)]">
         <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-6">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
-              Event Creation Wizard
-            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">Asistente de eventos</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-              Crear evento desde un blueprint
+              Crear evento desde una plantilla
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
               La plataforma sigue funcionando igual, pero ahora podemos crear eventos con configuraciones diferentes para validar la nueva arquitectura conceptual.
@@ -195,7 +228,7 @@ export default function EventCreationWizard({ open, onClose, onCreate, organizat
                     <h3 className="mt-2 text-xl font-semibold text-white">Selecciona el tipo de evento</h3>
                   </div>
                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-400">
-                    {eventBlueprints.length} presets
+                    {eventBlueprints.length} formatos
                   </span>
                 </div>
 
@@ -247,20 +280,46 @@ export default function EventCreationWizard({ open, onClose, onCreate, organizat
                     value={draft.name}
                     onChange={(value) => updateDraft((current) => ({ ...current, name: value }))}
                   />
-                  <Field
-                    label="Venue / ubicación"
-                    value={draft.venue}
-                    onChange={(value) => updateDraft((current) => ({ ...current, venue: value }))}
-                  />
+                  {venueOptions.length ? (
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-medium text-slate-300">Lugar / ubicación</span>
+                      <select
+                        value={draft.venueId}
+                        onChange={(event) => {
+                          const selectedVenue = venueOptions.find((venue) => venue.id === event.target.value);
+                          updateDraft((current) => ({
+                            ...current,
+                            venueId: selectedVenue?.id ?? "",
+                            venue: selectedVenue?.name ?? current.venue,
+                          }));
+                        }}
+                        className="h-12 w-full rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/60 focus:bg-white/[0.06]"
+                      >
+                        {venueOptions.map((venue) => (
+                          <option key={venue.id} value={venue.id}>
+                            {venue.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <Field
+                      label="Lugar / ubicación"
+                      value={draft.venue}
+                      onChange={(value) => updateDraft((current) => ({ ...current, venue: value }))}
+                    />
+                  )}
                   <Field
                     label="Fecha"
                     value={draft.date}
                     onChange={(value) => updateDraft((current) => ({ ...current, date: value }))}
                   />
-                  <Field
-                    label="Timezone"
+                  <TimezoneSelect
+                    label="Zona horaria"
                     value={draft.timezone}
                     onChange={(value) => updateDraft((current) => ({ ...current, timezone: value }))}
+                    preferredTimezone={preferredTimezone}
+                    helperText="Se ajusta sola según tu equipo, pero puedes cambiarla si el evento opera en otra franja horaria."
                   />
                   <Field
                     label="Hora inicio"
@@ -296,7 +355,7 @@ export default function EventCreationWizard({ open, onClose, onCreate, organizat
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Paso 3</p>
                   <h3 className="mt-2 text-xl font-semibold text-white">Modelo operativo</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
-                    El blueprint limita las opciones para mantener coherencia operativa.
+                    La plantilla limita las opciones para mantener coherencia operativa.
                   </p>
                 </div>
 
@@ -405,7 +464,7 @@ export default function EventCreationWizard({ open, onClose, onCreate, organizat
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Próximamente</p>
-                          <p className="mt-2 text-sm text-slate-400">Estos módulos quedan fuera del alcance del preset actual.</p>
+                          <p className="mt-2 text-sm text-slate-400">Estos módulos quedan fuera del alcance de la plantilla actual.</p>
                         </div>
                         <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-slate-400">
                           {blueprint.futureModules.length} módulos
@@ -624,7 +683,7 @@ export default function EventCreationWizard({ open, onClose, onCreate, organizat
               <div className="rounded-[1.5rem] border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-50">
                 <p className="font-medium">La Rota Carlota permanece intacta.</p>
                 <p className="mt-2 leading-6 text-cyan-50/75">
-                  Este wizard solo agrega eventos a la biblioteca. No altera Reservations, Customers, Check-in, Tables, Timeline u Operations.
+                  Este asistente solo agrega eventos a la biblioteca. No altera Reservations, Customers, Check-in, Tables, Timeline u Operations.
                 </p>
               </div>
             </div>

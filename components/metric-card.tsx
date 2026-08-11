@@ -23,9 +23,9 @@ export default function MetricCard({
   }[tone];
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+    <section className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+      <div className="flex min-w-0 items-start justify-between gap-4">
+        <div className="min-w-0">
           <p className="text-sm font-medium text-slate-400">{label}</p>
           <p className="mt-3 text-3xl font-semibold tracking-tight text-white">
             {value}
@@ -34,7 +34,7 @@ export default function MetricCard({
 
         <span
           className={[
-            "inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]",
+            "inline-flex shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]",
             toneClasses,
           ].join(" ")}
         >

@@ -202,15 +202,14 @@ function AppShellContent({
   setMobileNavOpen: (value: boolean) => void;
   setCommandPaletteOpen: (value: boolean) => void;
 }) {
-  const { currentOrganization, currentEvent, workspaceIntelligence } = useWorkspaceData();
-  const operator = workspaceIntelligence.statistics.cards.activeOperators[0] ?? "Recepción";
+  const { currentOrganization, currentEvent, currentAccount } = useWorkspaceData();
 
   return (
     <div className="min-h-screen bg-[color:var(--background)] text-[color:var(--foreground)]">
       <div className="flex min-h-screen">
         <Sidebar mobileNavOpen={mobileNavOpen} onCloseMobileNav={() => setMobileNavOpen(false)} />
 
-        <div className="flex min-h-screen flex-1 flex-col md:pl-72">
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col md:pl-72">
           <header className="sticky top-0 z-20 border-b border-white/10 bg-[color:var(--background)]/95 px-4 py-3 backdrop-blur md:hidden">
             <div className="flex items-start justify-between gap-3">
               <button
@@ -236,7 +235,8 @@ function AppShellContent({
                   <StatusBadge variant={currentEvent.status === "live" ? "success" : currentEvent.status === "published" ? "info" : currentEvent.status === "draft" ? "warning" : "danger"}>
                     {currentEvent.status === "live" ? "En curso" : currentEvent.status === "published" ? "Publicado" : currentEvent.status === "draft" ? "Borrador" : currentEvent.status === "finished" ? "Finalizado" : "Archivado"}
                   </StatusBadge>
-                  <StatusBadge variant="info">Operador: {operator}</StatusBadge>
+                  <StatusBadge variant="info">Cuenta: {currentAccount.displayName}</StatusBadge>
+                  <StatusBadge variant="info">Rol: {currentAccount.roleName}</StatusBadge>
                   <StatusBadge variant="info">Hora: {currentEvent.startAt.trim().split(/\s+/).at(-1) ?? "--:--"}</StatusBadge>
                 </div>
               </div>

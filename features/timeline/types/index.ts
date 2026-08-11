@@ -25,6 +25,7 @@ export type TimelineKind =
 
 export type TimelineEvent = {
   id: string;
+  eventId?: string;
   timestamp: string;
   kind: TimelineKind;
   icon: TimelineIcon;

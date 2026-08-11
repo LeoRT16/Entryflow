@@ -155,30 +155,30 @@ function inferAccessGrantStatus(status?: string): AccessGrantStatus {
 
 function inferResourceStatus(status?: string, closed?: boolean): ResourceStatus {
   if (closed) {
-    return "closed";
+    return "Closed";
   }
 
   if (status === "Over Capacity") {
-    return "occupied";
+    return "Over Capacity";
   }
 
   if (status === "Full") {
-    return "full";
+    return "Full";
   }
 
   if (status === "Partially Occupied") {
-    return "partial";
+    return "Partially Occupied";
   }
 
   if (status === "Reserved") {
-    return "reserved";
+    return "Reserved";
   }
 
   if (status === "Available") {
-    return "available";
+    return "Available";
   }
 
-  return "available";
+  return "Available";
 }
 
 function inferAdmissionStatus(status?: string, manualAdmission?: boolean): AdmissionStatus {
@@ -409,15 +409,21 @@ export function mapLegacyGuestToAttendee(guest: LegacyGuestLike): Attendee {
 }
 
 export function mapLegacyTableToResource(table: LegacyTableLike): Resource {
+  const timestamp = typeof table.metadata?.createdAt === "string" ? table.metadata.createdAt : new Date().toISOString();
+
   return {
     id: table.id,
-    eventId: table.eventId ?? "legacy-event",
+    venueId: typeof table.metadata?.venueId === "string" ? table.metadata.venueId : table.eventId ?? "legacy-venue",
+    sectorId: typeof table.metadata?.sectorId === "string" ? table.metadata.sectorId : undefined,
     type: "table",
     name: table.name,
     capacity: table.capacity,
     status: inferResourceStatus(table.status, table.closed),
-    parentResourceId: table.parentResourceId,
+    order: typeof table.metadata?.order === "number" ? table.metadata.order : 0,
+    notes: typeof table.metadata?.notes === "string" ? table.metadata.notes : undefined,
     metadata: table.metadata,
+    createdAt: timestamp,
+    updatedAt: typeof table.metadata?.updatedAt === "string" ? table.metadata.updatedAt : timestamp,
   };
 }
 

@@ -37,8 +37,7 @@ export default function Topbar({
     href: string;
   };
 }) {
-  const { currentOrganization, currentEvent, workspaceIntelligence } = useCheckInStore();
-  const operator = workspaceIntelligence.statistics.cards.activeOperators[0] ?? "Recepción";
+  const { currentOrganization, currentEvent, currentAccount } = useCheckInStore();
 
   return (
     <header className="flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-4 shadow-[0_1px_0_rgba(255,255,255,0.04)] sm:p-5">
@@ -58,6 +57,8 @@ export default function Topbar({
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge variant="info">Evento: {currentEvent.name}</StatusBadge>
           <StatusBadge variant="warning">Organización: {currentOrganization.name}</StatusBadge>
+          <StatusBadge variant="info">Cuenta: {currentAccount.displayName}</StatusBadge>
+          <StatusBadge variant="info">Rol: {currentAccount.roleName}</StatusBadge>
           <StatusBadge
             variant={
               currentEvent.status === "live"
@@ -71,7 +72,6 @@ export default function Topbar({
           >
             Estado: {formatStatus(currentEvent.status)}
           </StatusBadge>
-          <StatusBadge variant="info">Operador: {operator}</StatusBadge>
           <StatusBadge variant="info">Hora: {getEventTime(currentEvent.startAt)}</StatusBadge>
         </div>
       </div>

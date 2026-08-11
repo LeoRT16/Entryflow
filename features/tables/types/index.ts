@@ -1,9 +1,12 @@
+import type { Resource } from "@/features/domain/types";
+
 export type TableStatus =
   | "Available"
   | "Partially Occupied"
   | "Full"
   | "Over Capacity"
   | "Reserved"
+  | "Blocked"
   | "Closed";
 
 export type TableTone = "success" | "warning" | "danger" | "info";
@@ -16,6 +19,17 @@ export type TableOption = {
   capacity: TableCapacity;
   location: string;
   status: TableStatus;
+  assignedGuests?: number;
+  activeReservations?: number;
+  overCapacity?: number;
+  venueId?: string;
+  sectorId?: string;
+  venueLayoutId?: string;
+  venueLayoutSectorId?: string;
+  venueLayoutResourceId?: string;
+  eventLayoutId?: string;
+  eventLayoutSectorId?: string;
+  eventLayoutResourceId?: string;
   recommended?: boolean;
   tone: TableTone;
 };
@@ -37,17 +51,14 @@ export type SeatAssignment = {
   checkedIn: boolean;
 };
 
-export type TableRecord = {
-  id: string;
-  name: string;
-  capacity: TableCapacity;
+export type TableRecord = Resource & {
+  eventId?: string;
+  eventLayoutId?: string;
+  eventLayoutResourceId?: string;
   location: string;
-  status: TableStatus;
-  eventId: string;
   reservationIds: string[];
   guestIds: string[];
   closed: boolean;
-  notes?: string;
 };
 
 export type TableMetrics = {

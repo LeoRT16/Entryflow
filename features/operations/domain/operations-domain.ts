@@ -1,4 +1,5 @@
 import type { CheckIn, CheckInAttempt, Guest } from "@/features/check-in/types";
+import { buildAccessGrantFromGuest } from "@/features/access/domain/access-ledger";
 import type { ReservationRecord, ReservationSummary } from "@/features/reservations/types";
 import { buildTimelineEvents } from "@/features/timeline/domain/timeline-domain";
 import type { TimelineEvent } from "@/features/timeline/types";
@@ -113,6 +114,7 @@ export function buildOperationsSnapshot({
   tableSummaries,
   attempts,
   checkIns,
+  timelineEvents,
 }: {
   eventId?: string;
   reservations: ReservationRecord[];
@@ -121,6 +123,7 @@ export function buildOperationsSnapshot({
   tableSummaries: TableSummary[];
   attempts: CheckInAttempt[];
   checkIns: CheckIn[];
+  timelineEvents?: TimelineEvent[];
 }) {
   const filteredReservations = eventId ? reservations.filter((reservation) => reservation.eventId === eventId) : reservations;
   const filteredReservationSummaries = eventId
@@ -131,6 +134,15 @@ export function buildOperationsSnapshot({
     ? tableSummaries.filter((table) => table.reservationIds.some((reservationId) => filteredReservations.some((item) => item.id === reservationId)))
     : tableSummaries;
   const filteredAttempts = eventId ? attempts.filter((attempt) => attempt.eventId === eventId) : attempts;
+  const filteredCheckIns = eventId ? checkIns.filter((checkIn) => checkIn.eventId === eventId) : checkIns;
+  const accessGrants = filteredGuests.map((guest) => {
+    const reservation = filteredReservations.find((item) => item.id === guest.reservationId) ?? null;
+    return buildAccessGrantFromGuest(guest, reservation);
+  });
+  const activeAccessGrants = accessGrants.filter((grant) => grant.status === "active").length;
+  const rejectedAccessAttempts = filteredCheckIns.filter(
+    (checkIn) => checkIn.status === "Rejected" || checkIn.status === "Blocked" || checkIn.status === "Expired" || checkIn.status === "Cancelled" || checkIn.status === "No Show",
+  ).length;
 
   const confirmedGuests = filteredGuests.filter(
     (guest) => normalizeReservationStatus(guest.reservationStatus) === "Confirmed" || guest.admissionStatus === "Ingresó",
@@ -149,13 +161,16 @@ export function buildOperationsSnapshot({
   const totalCapacity = filteredTableSummaries.reduce((sum, table) => sum + table.capacity, 0);
   const capacityRemaining = filteredTableSummaries.reduce((sum, table) => sum + table.metrics.capacityRemaining, 0);
   const occupancyPercent = Math.round((totalAssignedGuests / Math.max(totalCapacity, 1)) * 100);
-  const recentActivity = buildTimelineEvents({
-    eventId,
-    reservations,
-    guests,
-    checkIns,
-    attempts,
-  }).slice(0, 8);
+  const recentActivity = (timelineEvents?.length
+    ? (eventId ? timelineEvents.filter((entry) => entry.eventId === eventId || !entry.eventId) : timelineEvents)
+    : buildTimelineEvents({
+        eventId,
+        reservations,
+        guests,
+        checkIns,
+        attempts,
+      })
+  ).slice(0, 8);
 
   const upcomingReservations = [...filteredReservationSummaries]
     .filter((reservation) => normalizeReservationStatus(reservation.status) !== "Cancelled" && normalizeReservationStatus(reservation.status) !== "No Show")
@@ -279,6 +294,18 @@ export function buildOperationsSnapshot({
       }
     });
 
+  if (rejectedAccessAttempts > 0) {
+    alerts.push(
+      buildAlert(
+        "access-rejected",
+        "Accesos rechazados",
+        `${rejectedAccessAttempts} intentos de acceso quedaron bloqueados o rechazados.`,
+        "warning",
+        "Check-in",
+      ),
+    );
+  }
+
   const dedupedAlerts = Array.from(
     new Map(alerts.map((alert) => [alert.title + alert.description + (alert.reservationName ?? "") + (alert.tableName ?? ""), alert])).values(),
   ).slice(0, 10);
@@ -292,19 +319,21 @@ export function buildOperationsSnapshot({
   return {
     metrics: [
       buildMetric("Reservas", `${reservationsCount}`, "Reservas activas en la sesión", "info"),
-      buildMetric("Invitados", `${guestsCount}`, "Población total del evento", "warning"),
-      buildMetric("Confirmados", `${confirmedGuests}`, "Invitados con reserva validada", "success"),
-      buildMetric("Check-in", `${checkedInGuests}`, "Ingresos ya registrados", "success"),
-      buildMetric("Ocupación", `${occupancyPercent}%`, "Promedio sobre mesas activas", "info"),
-      buildMetric("Capacidad restante", `${capacityRemaining}`, "Asientos libres en mesas abiertas", "warning"),
-    ],
-    quickSummary: [
-      { label: "Reservas", value: `${reservationsCount}`, tone: "info" as OperationsAlertTone },
-      { label: "Invitados", value: `${guestsCount}`, tone: "warning" as OperationsAlertTone },
-      { label: "Ingresados", value: `${checkedInGuests}`, tone: "success" as OperationsAlertTone },
-      { label: "Pendientes", value: `${pendingGuests}`, tone: "warning" as OperationsAlertTone },
-      { label: "Cancelados", value: `${cancelledGuests}`, tone: "danger" as OperationsAlertTone },
-    ],
+    buildMetric("Invitados", `${guestsCount}`, "Población total del evento", "warning"),
+    buildMetric("Confirmados", `${confirmedGuests}`, "Invitados con reserva validada", "success"),
+    buildMetric("Access", `${activeAccessGrants}`, "Grants activos para el evento", "info"),
+    buildMetric("Check-in", `${checkedInGuests}`, "Ingresos ya registrados", "success"),
+    buildMetric("Ocupación", `${occupancyPercent}%`, "Promedio sobre mesas activas", "info"),
+    buildMetric("Capacidad restante", `${capacityRemaining}`, "Asientos libres en mesas abiertas", "warning"),
+  ],
+  quickSummary: [
+    { label: "Reservas", value: `${reservationsCount}`, tone: "info" as OperationsAlertTone },
+    { label: "Invitados", value: `${guestsCount}`, tone: "warning" as OperationsAlertTone },
+    { label: "Access", value: `${activeAccessGrants}`, tone: activeAccessGrants > 0 ? "success" as OperationsAlertTone : "info" as OperationsAlertTone },
+    { label: "Ingresados", value: `${checkedInGuests}`, tone: "success" as OperationsAlertTone },
+    { label: "Pendientes", value: `${pendingGuests}`, tone: "warning" as OperationsAlertTone },
+    { label: "Cancelados", value: `${cancelledGuests}`, tone: "danger" as OperationsAlertTone },
+  ],
     upcomingReservations,
     alerts: dedupedAlerts,
     criticalTables,

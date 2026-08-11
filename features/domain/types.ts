@@ -1,5 +1,36 @@
 export type OrganizationStatus = "active" | "paused" | "archived";
 
+export type VenueStatus = "active" | "inactive";
+
+export type Venue = {
+  id: string;
+  organizationId: string;
+  name: string;
+  description?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  status: VenueStatus;
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type SectorStatus = "active" | "inactive";
+
+export type Sector = {
+  id: string;
+  venueId: string;
+  name: string;
+  description?: string;
+  capacity?: number;
+  order: number;
+  status: SectorStatus;
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, unknown>;
+};
+
 export type OrganizationBranding = {
   logoUrl?: string;
   primaryColor?: string;
@@ -130,6 +161,7 @@ export type Event = {
   startAt: string;
   endAt?: string;
   timezone: string;
+  venueId?: string;
   venue: string;
   capacity: number;
   enabledModules: EventModule[];
@@ -159,6 +191,8 @@ export type AccessGrant = {
   id: string;
   eventId: string;
   attendeeId?: string;
+  code?: string;
+  qrToken?: string;
   type: AccessGrantType;
   status: AccessGrantStatus;
   validFrom?: string;
@@ -171,19 +205,116 @@ export type AccessGrant = {
   metadata?: Record<string, unknown>;
 };
 
-export type ResourceType = "table" | "seat" | "zone" | "box" | "room" | "booth" | "area";
+export type ResourceType = "table" | "lounge" | "box" | "seat" | "zone" | "booth" | "room" | "gate" | "area";
 
-export type ResourceStatus = "available" | "reserved" | "assigned" | "occupied" | "partial" | "full" | "closed" | "inactive";
+export type ResourceStatus = "Available" | "Partially Occupied" | "Full" | "Over Capacity" | "Reserved" | "Blocked" | "Closed";
 
 export type Resource = {
   id: string;
-  eventId: string;
+  venueId: string;
+  sectorId?: string;
   type: ResourceType;
   name: string;
   capacity: number;
   status: ResourceStatus;
-  parentResourceId?: string;
+  order: number;
+  notes?: string;
   metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VenueLayoutStatus = "active" | "archived";
+
+export type VenueLayoutSectorStatus = "active" | "inactive" | "archived";
+
+export type VenueLayoutResourceStatus = "active" | "inactive" | "archived";
+
+export type EventLayoutStatus = "active" | "archived";
+
+export type VenueLayout = {
+  id: string;
+  venueId: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  status: VenueLayoutStatus;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VenueLayoutSector = {
+  id: string;
+  venueLayoutId: string;
+  sourceSectorId?: string;
+  name: string;
+  description?: string;
+  capacity?: number;
+  order: number;
+  status: VenueLayoutSectorStatus;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VenueLayoutResource = {
+  id: string;
+  venueLayoutId: string;
+  venueLayoutSectorId?: string;
+  sourceResourceId?: string;
+  type: ResourceType;
+  name: string;
+  capacity: number;
+  status: VenueLayoutResourceStatus;
+  order: number;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EventLayout = {
+  id: string;
+  eventId: string;
+  venueId: string;
+  sourceVenueLayoutId?: string;
+  name: string;
+  description?: string;
+  status: EventLayoutStatus;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EventLayoutSector = {
+  id: string;
+  eventLayoutId: string;
+  sourceVenueLayoutSectorId?: string;
+  name: string;
+  description?: string;
+  capacity?: number;
+  order: number;
+  status: VenueLayoutSectorStatus;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EventLayoutResource = {
+  id: string;
+  eventLayoutId: string;
+  eventLayoutSectorId?: string;
+  sourceVenueLayoutResourceId?: string;
+  type: ResourceType;
+  name: string;
+  capacity: number;
+  status: VenueLayoutResourceStatus;
+  order: number;
+  notes?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ActivityColor = "neutral" | "info" | "success" | "warning" | "danger";

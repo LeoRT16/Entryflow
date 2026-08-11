@@ -1,7 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { CheckIn, CheckInAttempt, Guest } from "@/features/check-in/types";
-import type { Event as PlatformEvent, Organization } from "@/features/domain/types";
+import type { AccountRolePreset, AccountUser, OrganizationMembership } from "@/features/accounts/types";
+import type {
+  Event as PlatformEvent,
+  EventLayout,
+  EventLayoutResource,
+  EventLayoutSector,
+  Organization,
+  Resource,
+  Sector,
+  Venue,
+  VenueLayout,
+  VenueLayoutResource,
+  VenueLayoutSector,
+} from "@/features/domain/types";
 import type { ReservationGuestAction, ReservationGuestInput, ReservationRecord, ReservationStatus } from "@/features/reservations/types";
 import type { TableRecord } from "@/features/tables/types";
 import type { TimelineEvent } from "@/features/timeline/types";
@@ -15,20 +28,64 @@ import {
 import {
   mapCheckInRowToDomain,
   mapCheckInToRow,
+  mapEventLayoutResourceRowToDomain,
+  mapEventLayoutResourceToRow,
+  mapEventLayoutRowToDomain,
+  mapEventLayoutSectorRowToDomain,
+  mapEventLayoutSectorToRow,
+  mapEventLayoutToRow,
   mapEventRowToDomain,
   mapEventToRow,
   mapGuestRowToDomain,
   mapGuestToRow,
   mapOrganizationRowToDomain,
   mapOrganizationToRow,
+  mapProfileRowToDomain,
+  mapProfileToRow,
+  mapRoleRowToDomain,
+  mapRoleToRow,
+  mapUserRowToDomain,
+  mapUserToRow,
+  mapVenueLayoutResourceRowToDomain,
+  mapVenueLayoutResourceToRow,
+  mapVenueLayoutRowToDomain,
+  mapVenueLayoutSectorRowToDomain,
+  mapVenueLayoutSectorToRow,
+  mapVenueLayoutToRow,
+  mapResourceRowToDomain,
+  mapResourceToRow,
   mapReservationRowToDomain,
   mapReservationToRow,
+  mapSectorRowToDomain,
+  mapSectorToRow,
   mapTableRowToDomain,
   mapTableToRow,
   mapTimelineRowToDomain,
   mapTimelineToRow,
+  mapVenueRowToDomain,
+  mapVenueToRow,
 } from "@/lib/supabase/mappers";
-import type { CheckInRow, EventRow, GuestRow, OrganizationRow, ReservationRow, TableRow, TimelineRow } from "@/lib/supabase/types";
+import type {
+  CheckInRow,
+  EventLayoutResourceRow,
+  EventLayoutRow,
+  EventLayoutSectorRow,
+  EventRow,
+  GuestRow,
+  OrganizationRow,
+  ProfileRow,
+  ResourceRow,
+  ReservationRow,
+  RoleRow,
+  SectorRow,
+  TableRow,
+  TimelineRow,
+  VenueLayoutResourceRow,
+  VenueLayoutRow,
+  VenueLayoutSectorRow,
+  VenueRow,
+  UserRow,
+} from "@/lib/supabase/types";
 
 type AnyTable = keyof Database["public"]["Tables"];
 
@@ -42,35 +99,72 @@ type SupabaseCrudRepository<TEntity> = {
   delete(id: string): Promise<boolean>;
 };
 
+type VenueLayoutRepository = SupabaseCrudRepository<VenueLayout> & {
+  getByVenue(venueId: string): Promise<VenueLayout[]>;
+  getDefaultByVenue(venueId: string): Promise<VenueLayout | undefined>;
+};
+
+type VenueLayoutSectorRepository = SupabaseCrudRepository<VenueLayoutSector> & {
+  getByVenueLayout(venueLayoutId: string): Promise<VenueLayoutSector[]>;
+};
+
+type VenueLayoutResourceRepository = SupabaseCrudRepository<VenueLayoutResource> & {
+  getByVenueLayout(venueLayoutId: string): Promise<VenueLayoutResource[]>;
+};
+
+type EventLayoutRepository = SupabaseCrudRepository<EventLayout> & {
+  getByEvent(eventId: string): Promise<EventLayout[]>;
+  getByVenue(venueId: string): Promise<EventLayout[]>;
+};
+
+type EventLayoutSectorRepository = SupabaseCrudRepository<EventLayoutSector> & {
+  getByEventLayout(eventLayoutId: string): Promise<EventLayoutSector[]>;
+};
+
+type EventLayoutResourceRepository = SupabaseCrudRepository<EventLayoutResource> & {
+  getByEventLayout(eventLayoutId: string): Promise<EventLayoutResource[]>;
+};
+
 function createNoopCrudRepository<TEntity>(): SupabaseCrudRepository<TEntity> {
+  const unavailable = async () => {
+    throw new Error("Supabase client is unavailable.");
+  };
+
   return {
-    async list() {
-      return [];
-    },
-    async findById() {
-      return undefined;
-    },
-    async getById() {
-      return undefined;
-    },
-    async create(input: Partial<TEntity>) {
-      return input as TEntity;
-    },
-    async upsert(input: Partial<TEntity>) {
-      return input as TEntity;
-    },
-    async update() {
-      return undefined;
-    },
-    async delete() {
-      return false;
-    },
+    list: unavailable,
+    findById: unavailable,
+    getById: unavailable,
+    create: unavailable,
+    upsert: unavailable,
+    update: unavailable,
+    delete: unavailable,
   };
 }
 
 type SupabaseWorkspaceRepositories = {
+  users: SupabaseCrudRepository<AccountUser> & {
+    getByEmail(email: string): Promise<AccountUser | undefined>;
+  };
+  roles: SupabaseCrudRepository<AccountRolePreset> & {
+    getBySlug(slug: string): Promise<AccountRolePreset | undefined>;
+  };
+  profiles: SupabaseCrudRepository<OrganizationMembership> & {
+    getByOrganization(organizationId: string): Promise<OrganizationMembership[]>;
+    getByUser(userId: string): Promise<OrganizationMembership[]>;
+    getByOrganizationAndUser(organizationId: string, userId: string): Promise<OrganizationMembership | undefined>;
+  };
   organizations: SupabaseCrudRepository<Organization> & {
     setActive(organizationId: string): Promise<void>;
+  };
+  venues: SupabaseCrudRepository<Venue> & {
+    setStatus(venueId: string, status: Venue["status"]): Promise<void>;
+  };
+  sectors: SupabaseCrudRepository<Sector> & {
+    setStatus(sectorId: string, status: Sector["status"]): Promise<void>;
+  };
+  resources: SupabaseCrudRepository<Resource> & {
+    setStatus(resourceId: string, status: Resource["status"]): Promise<void>;
+    moveToSector(resourceId: string, sectorId: string): Promise<void>;
   };
   events: SupabaseCrudRepository<PlatformEvent> & {
     setActive(eventId: string): Promise<void>;
@@ -92,11 +186,16 @@ type SupabaseWorkspaceRepositories = {
     release(tableId: string): Promise<void>;
     close(tableId: string): Promise<void>;
   };
+  venueLayouts: VenueLayoutRepository;
+  venueLayoutSectors: VenueLayoutSectorRepository;
+  venueLayoutResources: VenueLayoutResourceRepository;
+  eventLayouts: EventLayoutRepository;
+  eventLayoutSectors: EventLayoutSectorRepository;
+  eventLayoutResources: EventLayoutResourceRepository;
   checkIns: SupabaseCrudRepository<CheckIn> & {
     register(query: string, method: "QR" | "Manual", operator?: string): Promise<CheckInAttempt | null>;
   };
   timeline: SupabaseCrudRepository<TimelineEvent>;
-  operations: SupabaseCrudRepository<TimelineEvent>;
 };
 
 function buildCrudRepository<TEntity extends { id: string }, TRow extends { id: string; deleted_at: string | null }>({
@@ -138,7 +237,6 @@ function buildCrudRepository<TEntity extends { id: string }, TRow extends { id: 
 
   const create = async (input: Partial<TEntity>) => {
     const row = withTimestamps({
-      ...input,
       ...toRow(input as TEntity),
       id: (input as { id?: string }).id ?? createUuid(),
     } as Record<string, unknown>, true) as Omit<TRow, "created_at" | "updated_at" | "deleted_at"> & { created_at: string; updated_at: string; deleted_at: string | null };
@@ -154,7 +252,6 @@ function buildCrudRepository<TEntity extends { id: string }, TRow extends { id: 
 
   const upsert = async (input: Partial<TEntity>) => {
     const row = withTimestamps({
-      ...input,
       ...toRow(input as TEntity),
       id: (input as { id?: string }).id ?? createUuid(),
     } as Record<string, unknown>, true) as Omit<TRow, "created_at" | "updated_at" | "deleted_at"> & { created_at: string; updated_at: string; deleted_at: string | null };
@@ -206,12 +303,408 @@ function buildCrudRepository<TEntity extends { id: string }, TRow extends { id: 
   return { list, findById, getById: findById, create, upsert, update, delete: del };
 }
 
+function buildUsersRepository(client: SupabaseClient<Database> | null) {
+  const base = buildCrudRepository<AccountUser, UserRow>({
+    client,
+    table: "users",
+    fromRow: mapUserRowToDomain,
+    toRow: mapUserToRow,
+  });
+
+  if (!client) {
+    return {
+      ...base,
+      async getByEmail() {
+        return undefined;
+      },
+    };
+  }
+
+  return {
+    ...base,
+    async getByEmail(email: string) {
+      const { data, error } = await client.from("users").select("*").eq("email", email).is("deleted_at", null).maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapUserRowToDomain(data as UserRow) : undefined;
+    },
+  };
+}
+
+function buildRolesRepository(client: SupabaseClient<Database> | null) {
+  const base = buildCrudRepository<AccountRolePreset, RoleRow>({
+    client,
+    table: "roles",
+    fromRow: mapRoleRowToDomain,
+    toRow: mapRoleToRow,
+  });
+
+  if (!client) {
+    return {
+      ...base,
+      async getBySlug() {
+        return undefined;
+      },
+    };
+  }
+
+  return {
+    ...base,
+    async getBySlug(slug: string) {
+      const { data, error } = await client.from("roles").select("*").eq("slug", slug).is("deleted_at", null).maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapRoleRowToDomain(data as RoleRow) : undefined;
+    },
+  };
+}
+
+function buildProfilesRepository(client: SupabaseClient<Database> | null) {
+  const base = buildCrudRepository<OrganizationMembership, ProfileRow>({
+    client,
+    table: "profiles",
+    fromRow: mapProfileRowToDomain,
+    toRow: mapProfileToRow,
+  });
+
+  if (!client) {
+    return {
+      ...base,
+      async getByOrganization() {
+        return [];
+      },
+      async getByUser() {
+        return [];
+      },
+      async getByOrganizationAndUser() {
+        return undefined;
+      },
+    };
+  }
+
+  const listByOrganization = async (organizationId: string) => {
+    const { data, error } = await client.from("profiles").select("*").eq("organization_id", organizationId);
+
+    if (error) {
+      throw error;
+    }
+
+    return sortByCreatedAt(softDeleteFilter((data ?? []) as ProfileRow[]).map(mapProfileRowToDomain));
+  };
+
+  const listByUser = async (userId: string) => {
+    const { data, error } = await client.from("profiles").select("*").eq("user_id", userId);
+
+    if (error) {
+      throw error;
+    }
+
+    return sortByCreatedAt(softDeleteFilter((data ?? []) as ProfileRow[]).map(mapProfileRowToDomain));
+  };
+
+  return {
+    ...base,
+    getByOrganization: listByOrganization,
+    getByUser: listByUser,
+    async getByOrganizationAndUser(organizationId: string, userId: string) {
+      const { data, error } = await client
+        .from("profiles")
+        .select("*")
+        .eq("organization_id", organizationId)
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapProfileRowToDomain(data as ProfileRow) : undefined;
+    },
+  };
+}
+
+function sortByDisplayOrder<T extends { id: string; order: number; createdAt: string }>(items: T[]) {
+  return [...items].sort((a, b) => {
+    if (a.order !== b.order) {
+      return a.order - b.order;
+    }
+
+    if (a.createdAt !== b.createdAt) {
+      return a.createdAt < b.createdAt ? -1 : 1;
+    }
+
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function sortByCreatedAt<T extends { id: string; createdAt: string }>(items: T[]) {
+  return [...items].sort((a, b) => {
+    if (a.createdAt !== b.createdAt) {
+      return a.createdAt < b.createdAt ? -1 : 1;
+    }
+
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function buildVenueLayoutRepository(client: SupabaseClient<Database> | null): VenueLayoutRepository {
+  const base = buildCrudRepository<VenueLayout, VenueLayoutRow>({
+    client,
+    table: "venue_layouts",
+    fromRow: mapVenueLayoutRowToDomain,
+    toRow: mapVenueLayoutToRow,
+  });
+
+  if (!client) {
+    return {
+      ...base,
+      async getByVenue() {
+        return [];
+      },
+      async getDefaultByVenue() {
+        return undefined;
+      },
+    };
+  }
+
+  const listByVenue = async (venueId: string) => {
+    const { data, error } = await client.from("venue_layouts").select("*").eq("venue_id", venueId).is("deleted_at", null);
+
+    if (error) {
+      throw error;
+    }
+
+    const layouts = softDeleteFilter((data ?? []) as VenueLayoutRow[]).map(mapVenueLayoutRowToDomain);
+
+    return sortByCreatedAt(layouts).sort((a, b) => Number(b.isDefault) - Number(a.isDefault));
+  };
+
+  return {
+    ...base,
+    getByVenue: listByVenue,
+    async getDefaultByVenue(venueId: string) {
+      return (await listByVenue(venueId)).find((layout) => layout.isDefault);
+    },
+  };
+}
+
+function buildVenueLayoutSectorRepository(client: SupabaseClient<Database> | null): VenueLayoutSectorRepository {
+  const base = buildCrudRepository<VenueLayoutSector, VenueLayoutSectorRow>({
+    client,
+    table: "venue_layout_sectors",
+    fromRow: mapVenueLayoutSectorRowToDomain,
+    toRow: mapVenueLayoutSectorToRow,
+  });
+
+  if (!client) {
+    return {
+      ...base,
+      async getByVenueLayout() {
+        return [];
+      },
+    };
+  }
+
+  const listByVenueLayout = async (venueLayoutId: string) => {
+    const { data, error } = await client.from("venue_layout_sectors").select("*").eq("venue_layout_id", venueLayoutId).is("deleted_at", null);
+
+    if (error) {
+      throw error;
+    }
+
+    return sortByDisplayOrder(softDeleteFilter((data ?? []) as VenueLayoutSectorRow[]).map(mapVenueLayoutSectorRowToDomain));
+  };
+
+  return {
+    ...base,
+    getByVenueLayout: listByVenueLayout,
+  };
+}
+
+function buildVenueLayoutResourceRepository(client: SupabaseClient<Database> | null): VenueLayoutResourceRepository {
+  const base = buildCrudRepository<VenueLayoutResource, VenueLayoutResourceRow>({
+    client,
+    table: "venue_layout_resources",
+    fromRow: mapVenueLayoutResourceRowToDomain,
+    toRow: mapVenueLayoutResourceToRow,
+  });
+
+  if (!client) {
+    return {
+      ...base,
+      async getByVenueLayout() {
+        return [];
+      },
+    };
+  }
+
+  const listByVenueLayout = async (venueLayoutId: string) => {
+    const { data, error } = await client.from("venue_layout_resources").select("*").eq("venue_layout_id", venueLayoutId).is("deleted_at", null);
+
+    if (error) {
+      throw error;
+    }
+
+    return sortByDisplayOrder(softDeleteFilter((data ?? []) as VenueLayoutResourceRow[]).map(mapVenueLayoutResourceRowToDomain));
+  };
+
+  return {
+    ...base,
+    getByVenueLayout: listByVenueLayout,
+  };
+}
+
+function buildEventLayoutRepository(client: SupabaseClient<Database> | null): EventLayoutRepository {
+  const base = buildCrudRepository<EventLayout, EventLayoutRow>({
+    client,
+    table: "event_layouts",
+    fromRow: mapEventLayoutRowToDomain,
+    toRow: mapEventLayoutToRow,
+  });
+
+  if (!client) {
+    return {
+      ...base,
+      async getByEvent() {
+        return [];
+      },
+      async getByVenue() {
+        return [];
+      },
+    };
+  }
+
+  const listByEvent = async (eventId: string) => {
+    const { data, error } = await client.from("event_layouts").select("*").eq("event_id", eventId).is("deleted_at", null);
+
+    if (error) {
+      throw error;
+    }
+
+    return sortByCreatedAt(softDeleteFilter((data ?? []) as EventLayoutRow[]).map(mapEventLayoutRowToDomain));
+  };
+
+  const listByVenue = async (venueId: string) => {
+    const { data, error } = await client.from("event_layouts").select("*").eq("venue_id", venueId).is("deleted_at", null);
+
+    if (error) {
+      throw error;
+    }
+
+    return sortByCreatedAt(softDeleteFilter((data ?? []) as EventLayoutRow[]).map(mapEventLayoutRowToDomain));
+  };
+
+  return {
+    ...base,
+    getByEvent: listByEvent,
+    getByVenue: listByVenue,
+  };
+}
+
+function buildEventLayoutSectorRepository(client: SupabaseClient<Database> | null): EventLayoutSectorRepository {
+  const base = buildCrudRepository<EventLayoutSector, EventLayoutSectorRow>({
+    client,
+    table: "event_layout_sectors",
+    fromRow: mapEventLayoutSectorRowToDomain,
+    toRow: mapEventLayoutSectorToRow,
+  });
+
+  if (!client) {
+    return {
+      ...base,
+      async getByEventLayout() {
+        return [];
+      },
+    };
+  }
+
+  const listByEventLayout = async (eventLayoutId: string) => {
+    const { data, error } = await client.from("event_layout_sectors").select("*").eq("event_layout_id", eventLayoutId).is("deleted_at", null);
+
+    if (error) {
+      throw error;
+    }
+
+    return sortByDisplayOrder(softDeleteFilter((data ?? []) as EventLayoutSectorRow[]).map(mapEventLayoutSectorRowToDomain));
+  };
+
+  return {
+    ...base,
+    getByEventLayout: listByEventLayout,
+  };
+}
+
+function buildEventLayoutResourceRepository(client: SupabaseClient<Database> | null): EventLayoutResourceRepository {
+  const base = buildCrudRepository<EventLayoutResource, EventLayoutResourceRow>({
+    client,
+    table: "event_layout_resources",
+    fromRow: mapEventLayoutResourceRowToDomain,
+    toRow: mapEventLayoutResourceToRow,
+  });
+
+  if (!client) {
+    return {
+      ...base,
+      async getByEventLayout() {
+        return [];
+      },
+    };
+  }
+
+  const listByEventLayout = async (eventLayoutId: string) => {
+    const { data, error } = await client.from("event_layout_resources").select("*").eq("event_layout_id", eventLayoutId).is("deleted_at", null);
+
+    if (error) {
+      throw error;
+    }
+
+    return sortByDisplayOrder(softDeleteFilter((data ?? []) as EventLayoutResourceRow[]).map(mapEventLayoutResourceRowToDomain));
+  };
+
+  return {
+    ...base,
+    getByEventLayout: listByEventLayout,
+  };
+}
+
 export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Database> | null): SupabaseWorkspaceRepositories {
+  const users = buildUsersRepository(client);
+  const roles = buildRolesRepository(client);
+  const profiles = buildProfilesRepository(client);
+
   const organizations = buildCrudRepository<Organization, OrganizationRow>({
     client,
     table: "organizations",
     fromRow: mapOrganizationRowToDomain,
     toRow: mapOrganizationToRow,
+  });
+
+  const venues = buildCrudRepository<Venue, VenueRow>({
+    client,
+    table: "venues",
+    fromRow: mapVenueRowToDomain,
+    toRow: mapVenueToRow,
+  });
+
+  const sectors = buildCrudRepository<Sector, SectorRow>({
+    client,
+    table: "sectors",
+    fromRow: mapSectorRowToDomain,
+    toRow: mapSectorToRow,
+  });
+
+  const resources = buildCrudRepository<Resource, ResourceRow>({
+    client,
+    table: "resources",
+    fromRow: mapResourceRowToDomain,
+    toRow: mapResourceToRow,
   });
 
   const events = buildCrudRepository<PlatformEvent, EventRow>({
@@ -253,17 +746,20 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     client,
     table: "timeline_events",
     fromRow: mapTimelineRowToDomain,
-    toRow: (event) => mapTimelineToRow(event, event.reservationId ?? event.tableId ?? event.guestId ?? event.id),
+    toRow: (event) => mapTimelineToRow(event, event.eventId ?? event.reservationId ?? event.tableId ?? event.guestId ?? event.id),
   });
 
-  const operations = buildCrudRepository<TimelineEvent, TimelineRow>({
-    client,
-    table: "operations",
-    fromRow: mapTimelineRowToDomain,
-    toRow: (event) => mapTimelineToRow(event, event.reservationId ?? event.tableId ?? event.guestId ?? event.id),
-  });
+  const venueLayouts = buildVenueLayoutRepository(client);
+  const venueLayoutSectors = buildVenueLayoutSectorRepository(client);
+  const venueLayoutResources = buildVenueLayoutResourceRepository(client);
+  const eventLayouts = buildEventLayoutRepository(client);
+  const eventLayoutSectors = buildEventLayoutSectorRepository(client);
+  const eventLayoutResources = buildEventLayoutResourceRepository(client);
 
   return {
+    users,
+    roles,
+    profiles,
     organizations: {
       ...organizations,
       async setActive(organizationId: string) {
@@ -272,6 +768,43 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
         }
 
         await client.from("organizations").update({ updated_at: nowIso() } as never).eq("id", organizationId).select("id");
+      },
+    },
+    venues: {
+      ...venues,
+      async setStatus(venueId: string, status: Venue["status"]) {
+        if (!client) {
+          return;
+        }
+
+        await client.from("venues").update({ status, updated_at: nowIso() } as never).eq("id", venueId).select("id");
+      },
+    },
+    sectors: {
+      ...sectors,
+      async setStatus(sectorId: string, status: Sector["status"]) {
+        if (!client) {
+          return;
+        }
+
+        await client.from("sectors").update({ status, updated_at: nowIso() } as never).eq("id", sectorId).select("id");
+      },
+    },
+    resources: {
+      ...resources,
+      async setStatus(resourceId: string, status: Resource["status"]) {
+        if (!client) {
+          return;
+        }
+
+        await client.from("resources").update({ status, updated_at: nowIso() } as never).eq("id", resourceId).select("id");
+      },
+      async moveToSector(resourceId: string, sectorId: string) {
+        if (!client) {
+          return;
+        }
+
+        await client.from("resources").update({ sector_id: sectorId, updated_at: nowIso() } as never).eq("id", resourceId).select("id");
       },
     },
     events: {
@@ -421,7 +954,7 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
       async checkIn(query: string) {
         const allGuests = await guests.list();
         const found = allGuests.find((guest) =>
-          [guest.guestName, guest.reservationName, guest.reservationCode, guest.invitationCode, guest.carnet, guest.whatsapp]
+          [guest.guestName, guest.reservationName, guest.reservationCode, guest.invitationCode, guest.accessCode ?? "", guest.qrToken ?? "", guest.carnet, guest.whatsapp]
             .join(" ")
             .toLowerCase()
             .includes(query.toLowerCase()),
@@ -457,12 +990,18 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
         await tables.update(tableId, { status: "Closed", closed: true } as never);
       },
     },
+    venueLayouts,
+    venueLayoutSectors,
+    venueLayoutResources,
+    eventLayouts,
+    eventLayoutSectors,
+    eventLayoutResources,
     checkIns: {
       ...checkIns,
       async register(query: string, method: "QR" | "Manual", operator = method === "Manual" ? "Recepción" : "Escáner") {
         const allGuests = await guests.list();
         const found = allGuests.find((guest) =>
-          [guest.guestName, guest.reservationName, guest.reservationCode, guest.invitationCode, guest.carnet, guest.whatsapp]
+          [guest.guestName, guest.reservationName, guest.reservationCode, guest.invitationCode, guest.accessCode ?? "", guest.qrToken ?? "", guest.carnet, guest.whatsapp]
             .join(" ")
             .toLowerCase()
             .includes(query.toLowerCase()),
@@ -483,11 +1022,11 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
 
         const checkIn: CheckIn = {
           id: createUuid(),
-          accessType: "qr",
+          accessType: found.manualAdmission ? "manual" : "invitation",
           guestId: found.id,
           reservationId: found.reservationId,
           eventId: found.eventId,
-          accessGrantId: found.reservationId,
+          accessGrantId: found.accessGrantId ?? found.id,
           method,
           checkedInAt: nowIso().slice(11, 16),
           checkedOutAt: undefined,
@@ -543,7 +1082,6 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
       },
     },
     timeline,
-    operations,
   };
 }
 

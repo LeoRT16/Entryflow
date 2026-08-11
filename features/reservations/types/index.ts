@@ -28,6 +28,7 @@ export type GuestDraft = {
   whatsapp: string;
   document: string;
   invitationState: GuestInvitationState;
+  /** Legacy metadata tag only; no access or permission effect. */
   vip: boolean;
   transferBadge: string;
 };
@@ -59,16 +60,23 @@ export type ReservationCreationInput = {
   whatsapp: string;
   email: string;
   preferences: string;
+  /** Informative metadata tag; derive the operational meaning elsewhere. */
   vip: boolean;
+  /** Legacy compatibility bridge; derive from reservation history in UI. */
   frequent: boolean;
   notes: string;
   guests: GuestDraft[];
-  selectedTable: TableOption;
+  selectedResource?: TableOption;
+  selectedTable?: TableOption;
   amount: string;
   advance: string;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   observations: string;
+};
+
+export type ReservationUpdateInput = ReservationCreationInput & {
+  reservationId: string;
 };
 
 export type ReservationRecord = {
@@ -79,6 +87,13 @@ export type ReservationRecord = {
   eventName: string;
   date: string;
   time: string;
+  eventLayoutId?: string;
+  eventLayoutResourceId?: string;
+  resourceId?: string;
+  resourceName?: string;
+  sectorId?: string;
+  sectorName?: string;
+  venueId?: string;
   tableName: string;
   tableId?: string;
   tableCapacity: number;

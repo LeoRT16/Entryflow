@@ -194,6 +194,16 @@ function getAlertRoute(source: string) {
   return "/operations";
 }
 
+function getSourceLabel(source: string) {
+  if (source === "Tables") return "Recursos";
+  if (source === "Check-in") return "Ingreso";
+  if (source === "Reservations") return "Reservas";
+  if (source === "Timeline") return "Actividad";
+  if (source === "Operations") return "Operaciones";
+  if (source === "Analytics") return "Analítica";
+  return source;
+}
+
 function priorityForAttention(title: string) {
   if (title === "Mesa sobreocupada") return 0;
   if (title === "Mesa llena") return 1;
@@ -254,7 +264,6 @@ function buildAttentionItems(
 
 function buildModuleHealth(params: {
   event: PlatformEvent;
-  reservationsCount: number;
   guestsCount: number;
   checkedInCount: number;
   pendingCount: number;
@@ -264,12 +273,13 @@ function buildModuleHealth(params: {
   resourcesAlertCount: number;
   recentActivityCount: number;
   analyticsEnabled: boolean;
+  accessGrants: number;
   accessWarnings: number;
+  accessSummary: string;
   upcomingCount: number;
 }): ModuleHealth[] {
   const {
     event,
-    reservationsCount,
     guestsCount,
     checkedInCount,
     pendingCount,
@@ -279,7 +289,9 @@ function buildModuleHealth(params: {
     resourcesAlertCount,
     recentActivityCount,
     analyticsEnabled,
+    accessGrants,
     accessWarnings,
+    accessSummary,
     upcomingCount,
   } = params;
 
@@ -346,23 +358,21 @@ function buildModuleHealth(params: {
 
   return [
     {
-      label: "Access",
-      value: !isModuleEnabled(event, "access") ? "No activo" : `${reservationsCount}`,
+      label: "Acceso",
+      value: !isModuleEnabled(event, "access") ? "No activo" : `${accessGrants}`,
       state: accessState,
       summary: !isModuleEnabled(event, "access")
         ? "No forma parte de este evento."
-        : accessWarnings > 0
-          ? "Hay reservas que requieren atención."
-          : "Accesos sin incidencias visibles.",
+        : accessSummary,
       signal: !isModuleEnabled(event, "access")
         ? "Módulo desactivado"
         : accessWarnings > 0
           ? `${accessWarnings} alertas`
-          : "Sin incidencias",
+          : `${accessGrants} grants activos`,
       tone: accessTone,
     },
     {
-      label: "Attendees",
+      label: "Asistentes",
       value: `${guestsCount}`,
       state: attendeesState,
       summary: blockedCount > 0
@@ -378,7 +388,7 @@ function buildModuleHealth(params: {
       tone: attendeesTone,
     },
     {
-      label: "Resources",
+      label: "Recursos",
       value: !isModuleEnabled(event, "resources") ? "No activo" : occupancyPercent !== undefined ? `${occupancyPercent}%` : "Sin datos",
       state: resourcesState,
       summary: !isModuleEnabled(event, "resources")
@@ -394,7 +404,7 @@ function buildModuleHealth(params: {
       tone: resourcesTone,
     },
     {
-      label: "Admission",
+      label: "Ingreso",
       value: `${checkedInCount}/${guestsCount}`,
       state: admissionState,
       summary: blockedCount > 0
@@ -410,7 +420,7 @@ function buildModuleHealth(params: {
       tone: admissionTone,
     },
     {
-      label: "Operations",
+      label: "Operaciones",
       value: `${alertsCount}`,
       state: operationsState,
       summary: alertsCount > 0 ? "Existen alertas activas." : "No hay alertas abiertas.",
@@ -418,7 +428,7 @@ function buildModuleHealth(params: {
       tone: operationsTone,
     },
     {
-      label: "Analytics",
+      label: "Analítica",
       value: analyticsEnabled ? "Activo" : "Próx.",
       state: analyticsState,
       summary: analyticsEnabled
@@ -605,11 +615,11 @@ export default function EventCommandCenter() {
   const blockedCount = workspaceIntelligence.customers.blockedGuests;
   const occupancyPercent = workspaceIntelligence.tables.occupancyPercent;
   const capacityRemaining = workspaceIntelligence.tables.capacityRemaining;
-  const accessWarnings = snapshot.alerts.filter((alert) => alert.title === "Reserva sin mesa").length;
+  const accessInsight = workspaceIntelligence.access;
+  const accessWarnings = accessInsight.rejectedAttempts + accessInsight.duplicateAttempts + accessInsight.blockedGrants;
   const resourcesAlertCount = snapshot.alerts.filter((alert) => alert.source === "Tables").length;
   const recentActivity = priority.recentChanges.slice(0, 6);
   const actionCount = priority.summary.critical + priority.summary.attention;
-  const reservationsCount = workspaceIntelligence.statistics.cards.activeReservations;
   const guestsCount = workspaceIntelligence.reservations.expectedGuests;
   const smartRecommendations = priority.nextBestActions.slice(0, 4);
   const health = workspaceIntelligence.health;
@@ -642,7 +652,6 @@ export default function EventCommandCenter() {
     () =>
       buildModuleHealth({
         event: currentEvent,
-        reservationsCount,
         guestsCount,
         checkedInCount,
         pendingCount,
@@ -652,11 +661,15 @@ export default function EventCommandCenter() {
         resourcesAlertCount,
         recentActivityCount: recentActivity.length,
         analyticsEnabled: isModuleEnabled(currentEvent, "analytics"),
+        accessGrants: accessInsight.activeGrants,
         accessWarnings,
+        accessSummary: accessInsight.summary,
         upcomingCount: workspaceIntelligence.statistics.cards.pendingReservations,
       }),
     [
       accessWarnings,
+      accessInsight.activeGrants,
+      accessInsight.summary,
       actionCount,
       blockedCount,
       checkedInCount,
@@ -666,7 +679,6 @@ export default function EventCommandCenter() {
       pendingCount,
       recentActivity.length,
       resourcesAlertCount,
-      reservationsCount,
       workspaceIntelligence.statistics.cards.pendingReservations,
     ],
   );
@@ -708,7 +720,7 @@ export default function EventCommandCenter() {
             <div className="mt-4 flex flex-wrap gap-2">
               <StatusBadge variant={statusTone(currentEvent.status)}>{formatStatusLabel(currentEvent.status)}</StatusBadge>
               {isModuleEnabled(currentEvent, "resources") ? <StatusBadge variant="warning">Recursos activos</StatusBadge> : null}
-              {isModuleEnabled(currentEvent, "analytics") ? <StatusBadge variant="info">Analytics listo</StatusBadge> : null}
+              {isModuleEnabled(currentEvent, "analytics") ? <StatusBadge variant="info">Analítica lista</StatusBadge> : null}
             </div>
           </div>
 
@@ -739,28 +751,28 @@ export default function EventCommandCenter() {
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatBar
-            label="Critical"
+            label="Críticos"
             value={`${priority.summary.critical}`}
             detail={priority.summary.message}
             tone={priority.summary.critical > 0 ? "danger" : "success"}
             id="dashboard-critical"
           />
           <StatBar
-            label="Attention"
+            label="Atención"
             value={`${priority.summary.attention}`}
             detail={priority.summary.nextBestAction}
             tone={priority.summary.attention > 0 ? "warning" : "success"}
             id="dashboard-attention"
           />
           <StatBar
-            label="Recent"
+            label="Recientes"
             value={recentActivity[0]?.timestamp ?? "--:--"}
             detail={recentActivity[0]?.title ?? "Sin actividad reciente"}
             tone="info"
             id="dashboard-recent"
           />
           <StatBar
-            label="Healthy"
+            label="Saludables"
             value={`${priority.summary.healthy}`}
             detail={priority.summary.canIgnore}
             tone="success"
@@ -772,7 +784,7 @@ export default function EventCommandCenter() {
           <div className={`rounded-2xl border p-4 ${sectionCardTone(health.state === "blocked" ? "danger" : health.state === "watch" ? "warning" : "success")}`}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Smart Operations</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Operación inteligente</p>
                 <p className="mt-2 text-sm font-semibold text-white">{health.title}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-300">{health.description}</p>
               </div>
@@ -856,11 +868,11 @@ export default function EventCommandCenter() {
 
       <section className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-          <SectionHeader
-            eyebrow="Attention Center"
-            title="Prioridades operativas"
-            description="Reservas pendientes, recursos bloqueados, operaciones abiertas y capacidad alta."
-          />
+            <SectionHeader
+              eyebrow="Centro de atención"
+              title="Prioridades operativas"
+              description="Reservas pendientes, recursos bloqueados, operaciones abiertas y capacidad alta."
+            />
 
           <div className="mt-5 space-y-3">
             {attentionItems.length ? (
@@ -890,7 +902,7 @@ export default function EventCommandCenter() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <StatusBadge variant={item.tone}>{toneLabel(item.tone)}</StatusBadge>
-                          <StatusBadge variant="info">{item.source}</StatusBadge>
+                          <StatusBadge variant="info">{getSourceLabel(item.source)}</StatusBadge>
                         </div>
                         <p className="mt-3 text-sm font-semibold text-white">{item.title}</p>
                         <p className="mt-2 text-sm leading-6 text-slate-400">{item.description}</p>
@@ -921,7 +933,7 @@ export default function EventCommandCenter() {
         <div className="space-y-4">
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
             <SectionHeader
-              eyebrow="Operations"
+              eyebrow="Operaciones"
               title="Estado operativo"
               description="Alertas activas y foco inmediato."
             />
@@ -977,7 +989,7 @@ export default function EventCommandCenter() {
 
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
             <SectionHeader
-              eyebrow="Attendees"
+              eyebrow="Asistentes"
               title="Asistentes"
               description="Confirmados, pendientes y bloqueados."
             />
@@ -1014,7 +1026,7 @@ export default function EventCommandCenter() {
 
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
             <SectionHeader
-              eyebrow="Resources"
+              eyebrow="Recursos"
               title="Recursos"
               description="Ocupación y mesas críticas."
             />
@@ -1055,7 +1067,7 @@ export default function EventCommandCenter() {
 
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
             <SectionHeader
-              eyebrow="Live Activity"
+              eyebrow="Actividad en vivo"
               title="Actividad reciente"
               description="Últimos eventos del timeline compartido."
               action={
@@ -1097,7 +1109,7 @@ export default function EventCommandCenter() {
 
       <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
         <SectionHeader
-          eyebrow="Module Health"
+          eyebrow="Salud de módulos"
           title="Salud de módulos"
           description="Estado visual de las capacidades críticas del evento."
         />

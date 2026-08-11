@@ -1,0 +1,53 @@
+{
+  "target": {
+    "guestId": "d93ac532-3488-41ad-be84-639be21a34be",
+    "reservationId": "93a5a2f3-009a-4b1b-a669-8db2ad6bc45a",
+    "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+    "grantId": "d93ac532-3488-41ad-be84-639be21a34be",
+    "code": "RES-33205508-02",
+    "qrToken": "qr_0681bf9e7eb9e9c8"
+  },
+  "resolutionByQr": {
+    "status": "found",
+    "grantId": "d93ac532-3488-41ad-be84-639be21a34be",
+    "guestId": "d93ac532-3488-41ad-be84-639be21a34be"
+  },
+  "resolutionByCode": {
+    "status": "found",
+    "grantId": "d93ac532-3488-41ad-be84-639be21a34be",
+    "guestId": "d93ac532-3488-41ad-be84-639be21a34be"
+  },
+  "resolutionWrongEvent": {
+    "status": "not-found",
+    "matches": 0
+  },
+  "resolutionMissing": {
+    "status": "not-found",
+    "matches": 0
+  },
+  "revocation": {
+    "grantStatus": "cancelled",
+    "evaluationResult": "Cancelled"
+  },
+  "regeneration": {
+    "oldResolution": "not-found",
+    "newGrantToken": "qr_8e797003a406aa79",
+    "newResolution": "found"
+  },
+  "persistence": {
+    "checkinsForGrant": 1,
+    "timelineForCheckin": 1,
+    "guestCheckInTime": "03:57",
+    "secondAttemptResult": "Already Checked In"
+  },
+  "concurrency": {
+    "settled": [
+      "fulfilled",
+      "fulfilled"
+    ],
+    "checkinsForGrantAfterConcurrency": 1
+  },
+  "summary": {
+    "pass": true
+  }
+}

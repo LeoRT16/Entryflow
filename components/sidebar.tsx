@@ -152,8 +152,7 @@ export default function Sidebar({
   onCloseMobileNav: () => void;
 }) {
   const pathname = usePathname();
-  const { currentOrganization, currentEvent, workspaceIntelligence } = useCheckInStore();
-  const operator = workspaceIntelligence.statistics.cards.activeOperators[0] ?? "Recepción";
+  const { currentOrganization, currentEvent, currentAccount, can } = useCheckInStore();
   const eventNavigation = useMemo(() => getEventNavigation(currentEvent), [currentEvent]);
   const moduleLinks = useMemo(
     () =>
@@ -167,9 +166,17 @@ export default function Sidebar({
     [eventNavigation],
   );
   const platformLinks = [
-    { href: "/events", label: "Eventos", icon: "events" },
-    { href: "/settings", label: "Ajustes", icon: "settings" },
-  ];
+    { href: "/", label: "Resumen", icon: "dashboard", permission: "dashboard.view" as const },
+    { href: "/operations", label: "Operaciones", icon: "operations", permission: "operations.view" as const },
+    { href: "/reservations", label: "Reservas", icon: "reservations", permission: "reservation.view" as const },
+    { href: "/customers", label: "Invitados", icon: "customers", permission: "guest.view" as const },
+    { href: "/check-in", label: "Ingreso", icon: "checkin", permission: "checkin.view" as const },
+    { href: "/tables", label: "Recursos", icon: "tables", permission: "resource.view" as const },
+    { href: "/timeline", label: "Actividad", icon: "timeline", permission: "timeline.view" as const },
+    { href: "/statistics", label: "Estadísticas", icon: "analytics", permission: "statistics.view" as const },
+    { href: "/events", label: "Eventos", icon: "events", permission: "event.view" as const },
+    { href: "/settings", label: "Ajustes", icon: "settings", permission: "settings.view" as const },
+  ].filter((item) => can(item.permission));
 
   return (
     <>
@@ -192,6 +199,7 @@ export default function Sidebar({
           </h1>
           <div className="mt-3 flex flex-wrap gap-2">
             <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
+            <StatusBadge variant="info">{currentAccount.displayName}</StatusBadge>
             <StatusBadge variant={currentEvent.status === "live" ? "success" : currentEvent.status === "published" ? "info" : currentEvent.status === "draft" ? "warning" : "danger"}>
               {currentEvent.status === "live" ? "En curso" : currentEvent.status === "published" ? "Publicado" : currentEvent.status === "draft" ? "Borrador" : currentEvent.status === "finished" ? "Finalizado" : "Archivado"}
             </StatusBadge>
@@ -199,7 +207,7 @@ export default function Sidebar({
           <p className="mt-3 text-xs text-slate-500">
             {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
           </p>
-          <p className="mt-1 text-xs text-slate-500">Operador: {operator}</p>
+          <p className="mt-1 text-xs text-slate-500">Rol: {currentAccount.roleName}</p>
         </div>
 
         <nav className="flex-1 px-3 py-4">
@@ -282,6 +290,7 @@ export default function Sidebar({
             </h2>
             <div className="mt-3 flex flex-wrap gap-2">
               <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
+              <StatusBadge variant="info">{currentAccount.displayName}</StatusBadge>
               <StatusBadge variant={currentEvent.status === "live" ? "success" : currentEvent.status === "published" ? "info" : currentEvent.status === "draft" ? "warning" : "danger"}>
                 {currentEvent.status === "live" ? "En curso" : currentEvent.status === "published" ? "Publicado" : currentEvent.status === "draft" ? "Borrador" : currentEvent.status === "finished" ? "Finalizado" : "Archivado"}
               </StatusBadge>
@@ -289,7 +298,7 @@ export default function Sidebar({
             <p className="mt-3 text-xs text-slate-400">
               {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
             </p>
-            <p className="mt-1 text-xs text-slate-500">Operador: {operator}</p>
+            <p className="mt-1 text-xs text-slate-500">Rol: {currentAccount.roleName}</p>
           </div>
 
           <button

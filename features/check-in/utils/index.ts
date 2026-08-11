@@ -14,6 +14,8 @@ export function buildGuestSearchIndex(guest: Guest) {
     guest.reservationName,
     guest.reservationCode,
     guest.invitationCode,
+    guest.accessCode ?? "",
+    guest.qrToken ?? "",
     guest.carnet,
     guest.whatsapp || "Sin WhatsApp",
     guest.eventName,

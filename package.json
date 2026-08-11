@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "backfill:phase4": "node scripts/backfill-phase4.mjs dry-run",
+    "backfill:phase4:apply": "node scripts/backfill-phase4.mjs apply",
+    "backfill:phase4:rollback": "node scripts/backfill-phase4.mjs rollback",
+    "backfill:access-grants": "node scripts/backfill-access-grants.mjs dry-run",
+    "backfill:access-grants:apply": "node scripts/backfill-access-grants.mjs apply",
+    "backfill:access-grants:rollback": "node scripts/backfill-access-grants.mjs rollback"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.2",

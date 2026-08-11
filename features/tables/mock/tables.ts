@@ -7,6 +7,8 @@ export const tableOptions: TableOption[] = [
     capacity: 4,
     location: "Sala principal",
     status: "Reserved",
+    venueId: "venue-la-rota-carlota",
+    sectorId: "sector-planta-baja",
     recommended: true,
     tone: "warning",
   },
@@ -16,6 +18,8 @@ export const tableOptions: TableOption[] = [
     capacity: 8,
     location: "Sala principal",
     status: "Available",
+    venueId: "venue-la-rota-carlota",
+    sectorId: "sector-planta-baja",
     tone: "success",
   },
   {
@@ -24,6 +28,8 @@ export const tableOptions: TableOption[] = [
     capacity: 2,
     location: "Nivel superior",
     status: "Reserved",
+    venueId: "venue-la-rota-carlota",
+    sectorId: "sector-planta-alta",
     tone: "info",
   },
   {
@@ -32,6 +38,8 @@ export const tableOptions: TableOption[] = [
     capacity: 6,
     location: "Patio lateral",
     status: "Available",
+    venueId: "venue-la-rota-carlota",
+    sectorId: "sector-patio-a",
     tone: "success",
   },
   {
@@ -40,6 +48,8 @@ export const tableOptions: TableOption[] = [
     capacity: 3,
     location: "Frente a pista",
     status: "Closed",
+    venueId: "venue-la-rota-carlota",
+    sectorId: "sector-patio-b",
     tone: "danger",
   },
 ];

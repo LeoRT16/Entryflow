@@ -1,17 +1,43 @@
 import type { CheckIn, Guest, Invitation } from "@/features/check-in/types";
-import type { Event as PlatformEvent, Organization } from "@/features/domain/types";
+import type { AccountRolePreset, AccountUser, OrganizationMembership } from "@/features/accounts/types";
+import type {
+  Event as PlatformEvent,
+  EventLayout,
+  EventLayoutResource,
+  EventLayoutSector,
+  Organization,
+  Resource,
+  Sector,
+  Venue,
+  VenueLayout,
+  VenueLayoutResource,
+  VenueLayoutSector,
+} from "@/features/domain/types";
 import type { ReservationRecord } from "@/features/reservations/types";
 import type { TableRecord } from "@/features/tables/types";
 import type { TimelineEvent } from "@/features/timeline/types";
+import { buildAccessGrantFromGuest } from "@/features/access/domain/access-ledger";
 import type {
   CheckInRow,
+  EventLayoutResourceRow,
+  EventLayoutRow,
+  EventLayoutSectorRow,
   EventRow,
   GuestRow,
   OperationRow,
   OrganizationRow,
+  ResourceRow,
   ReservationRow,
+  VenueLayoutResourceRow,
+  VenueLayoutRow,
+  VenueLayoutSectorRow,
+  SectorRow,
   TableRow,
   TimelineRow,
+  VenueRow,
+  ProfileRow,
+  RoleRow,
+  UserRow,
   Json,
 } from "@/lib/supabase/types";
 
@@ -73,6 +99,88 @@ export function mapOrganizationToRow(organization: Organization): Omit<Organizat
   };
 }
 
+export function mapUserRowToDomain(row: UserRow): AccountUser {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url ?? undefined,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+  };
+}
+
+export function mapUserToRow(user: AccountUser): Omit<UserRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: user.id,
+    email: user.email,
+    display_name: user.displayName,
+    avatar_url: user.avatarUrl ?? null,
+    metadata: user.metadata ? (user.metadata as Json) : null,
+  };
+}
+
+export function mapRoleRowToDomain(row: RoleRow): AccountRolePreset {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description ?? undefined,
+    permissions: row.permissions as AccountRolePreset["permissions"],
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+  };
+}
+
+export function mapRoleToRow(role: AccountRolePreset): Omit<RoleRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: role.id,
+    name: role.name,
+    slug: role.slug,
+    description: role.description ?? null,
+    permissions: role.permissions,
+    metadata: role.metadata ? (role.metadata as Json) : null,
+  };
+}
+
+export function mapProfileRowToDomain(row: ProfileRow): OrganizationMembership {
+  const metadata = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined;
+  const attributes = metadata?.attributes && typeof metadata.attributes === "object" && !Array.isArray(metadata.attributes)
+    ? (metadata.attributes as OrganizationMembership["attributes"])
+    : {};
+
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    userId: row.user_id,
+    roleId: row.role_id,
+    displayName: row.display_name,
+    attributes,
+    status: (attributes.status as OrganizationMembership["status"]) ?? "active",
+    metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+  };
+}
+
+export function mapProfileToRow(profile: OrganizationMembership): Omit<ProfileRow, "created_at" | "updated_at" | "deleted_at"> {
+  const metadata = {
+    ...(profile.metadata ?? {}),
+    attributes: profile.attributes,
+  };
+
+  return {
+    id: profile.id,
+    user_id: profile.userId,
+    organization_id: profile.organizationId,
+    role_id: profile.roleId,
+    display_name: profile.displayName,
+    metadata: Object.keys(metadata).length ? (metadata as Json) : null,
+  };
+}
+
 export function mapEventRowToDomain(row: EventRow): PlatformEvent {
   const metadata = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined;
 
@@ -86,6 +194,7 @@ export function mapEventRowToDomain(row: EventRow): PlatformEvent {
     startAt: row.start_at,
     endAt: row.end_at ?? undefined,
     timezone: row.timezone,
+    venueId: row.venue_id ?? (typeof metadata?.venueId === "string" ? metadata.venueId : undefined),
     venue: row.venue,
     capacity: row.capacity,
     enabledModules: row.enabled_modules,
@@ -98,6 +207,12 @@ export function mapEventRowToDomain(row: EventRow): PlatformEvent {
 }
 
 export function mapEventToRow(event: PlatformEvent): Omit<EventRow, "created_at" | "updated_at" | "deleted_at"> {
+  const metadata = event.metadata && typeof event.metadata === "object" ? { ...(event.metadata as Record<string, unknown>) } : {};
+
+  if (event.venueId) {
+    metadata.venueId = event.venueId;
+  }
+
   return {
     id: event.id,
     organization_id: event.organizationId,
@@ -108,6 +223,7 @@ export function mapEventToRow(event: PlatformEvent): Omit<EventRow, "created_at"
     start_at: event.startAt,
     end_at: event.endAt ?? null,
     timezone: event.timezone,
+    venue_id: event.venueId ?? null,
     venue: event.venue,
     capacity: event.capacity,
     enabled_modules: event.enabledModules,
@@ -115,7 +231,279 @@ export function mapEventToRow(event: PlatformEvent): Omit<EventRow, "created_at"
     admission_methods: event.admissionMethods,
     resource_types: event.resourceTypes,
     icon: event.icon ?? null,
-    metadata: event.metadata ? (event.metadata as Json) : null,
+    metadata: Object.keys(metadata).length ? (metadata as Json) : null,
+  };
+}
+
+export function mapVenueRowToDomain(row: VenueRow): Venue {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    name: row.name,
+    description: row.description ?? undefined,
+    address: row.address ?? undefined,
+    city: row.city ?? undefined,
+    country: row.country ?? undefined,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+  };
+}
+
+export function mapVenueToRow(venue: Venue): Omit<VenueRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: venue.id,
+    organization_id: venue.organizationId,
+    name: venue.name,
+    description: venue.description ?? null,
+    address: venue.address ?? null,
+    city: venue.city ?? null,
+    country: venue.country ?? null,
+    status: venue.status,
+    metadata: venue.metadata ? (venue.metadata as Json) : null,
+  };
+}
+
+export function mapSectorRowToDomain(row: SectorRow): Sector {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    name: row.name,
+    description: row.description ?? undefined,
+    capacity: row.capacity ?? undefined,
+    order: row.display_order,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+  };
+}
+
+export function mapSectorToRow(sector: Sector): Omit<SectorRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: sector.id,
+    venue_id: sector.venueId,
+    name: sector.name,
+    description: sector.description ?? null,
+    capacity: sector.capacity ?? null,
+    display_order: sector.order,
+    status: sector.status,
+    metadata: sector.metadata ? (sector.metadata as Json) : null,
+  };
+}
+
+export function mapResourceRowToDomain(row: ResourceRow): Resource {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    sectorId: row.sector_id ?? undefined,
+    type: row.type,
+    name: row.name,
+    capacity: row.capacity,
+    status: row.status,
+    order: row.display_order,
+    notes: row.notes ?? undefined,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapResourceToRow(resource: Resource): Omit<ResourceRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: resource.id,
+    venue_id: resource.venueId,
+    sector_id: resource.sectorId ?? null,
+    type: resource.type,
+    name: resource.name,
+    capacity: resource.capacity,
+    status: resource.status,
+    display_order: resource.order,
+    notes: resource.notes ?? null,
+    metadata: resource.metadata ? (resource.metadata as Json) : null,
+  };
+}
+
+export function mapVenueLayoutRowToDomain(row: VenueLayoutRow): VenueLayout {
+  return {
+    id: row.id,
+    venueId: row.venue_id,
+    name: row.name,
+    description: row.description ?? undefined,
+    isDefault: row.is_default,
+    status: row.status,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapVenueLayoutToRow(layout: VenueLayout): Omit<VenueLayoutRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: layout.id,
+    venue_id: layout.venueId,
+    name: layout.name,
+    description: layout.description ?? null,
+    is_default: layout.isDefault,
+    status: layout.status,
+    metadata: layout.metadata ? (layout.metadata as Json) : null,
+  };
+}
+
+export function mapVenueLayoutSectorRowToDomain(row: VenueLayoutSectorRow): VenueLayoutSector {
+  return {
+    id: row.id,
+    venueLayoutId: row.venue_layout_id,
+    sourceSectorId: row.source_sector_id ?? undefined,
+    name: row.name,
+    description: row.description ?? undefined,
+    capacity: row.capacity ?? undefined,
+    order: row.display_order,
+    status: row.status,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapVenueLayoutSectorToRow(layout: VenueLayoutSector): Omit<VenueLayoutSectorRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: layout.id,
+    venue_layout_id: layout.venueLayoutId,
+    source_sector_id: layout.sourceSectorId ?? null,
+    name: layout.name,
+    description: layout.description ?? null,
+    capacity: layout.capacity ?? null,
+    display_order: layout.order,
+    status: layout.status,
+    metadata: layout.metadata ? (layout.metadata as Json) : null,
+  };
+}
+
+export function mapVenueLayoutResourceRowToDomain(row: VenueLayoutResourceRow): VenueLayoutResource {
+  return {
+    id: row.id,
+    venueLayoutId: row.venue_layout_id,
+    venueLayoutSectorId: row.venue_layout_sector_id ?? undefined,
+    sourceResourceId: row.source_resource_id ?? undefined,
+    type: row.type,
+    name: row.name,
+    capacity: row.capacity,
+    status: row.status,
+    order: row.display_order,
+    notes: row.notes ?? undefined,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapVenueLayoutResourceToRow(layout: VenueLayoutResource): Omit<VenueLayoutResourceRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: layout.id,
+    venue_layout_id: layout.venueLayoutId,
+    venue_layout_sector_id: layout.venueLayoutSectorId ?? null,
+    source_resource_id: layout.sourceResourceId ?? null,
+    type: layout.type,
+    name: layout.name,
+    capacity: layout.capacity,
+    status: layout.status,
+    display_order: layout.order,
+    notes: layout.notes ?? null,
+    metadata: layout.metadata ? (layout.metadata as Json) : null,
+  };
+}
+
+export function mapEventLayoutRowToDomain(row: EventLayoutRow): EventLayout {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    venueId: row.venue_id,
+    sourceVenueLayoutId: row.source_venue_layout_id ?? undefined,
+    name: row.name,
+    description: row.description ?? undefined,
+    status: row.status,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapEventLayoutToRow(layout: EventLayout): Omit<EventLayoutRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: layout.id,
+    event_id: layout.eventId,
+    venue_id: layout.venueId,
+    source_venue_layout_id: layout.sourceVenueLayoutId ?? null,
+    name: layout.name,
+    description: layout.description ?? null,
+    status: layout.status,
+    metadata: layout.metadata ? (layout.metadata as Json) : null,
+  };
+}
+
+export function mapEventLayoutSectorRowToDomain(row: EventLayoutSectorRow): EventLayoutSector {
+  return {
+    id: row.id,
+    eventLayoutId: row.event_layout_id,
+    sourceVenueLayoutSectorId: row.source_venue_layout_sector_id ?? undefined,
+    name: row.name,
+    description: row.description ?? undefined,
+    capacity: row.capacity ?? undefined,
+    order: row.display_order,
+    status: row.status,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapEventLayoutSectorToRow(layout: EventLayoutSector): Omit<EventLayoutSectorRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: layout.id,
+    event_layout_id: layout.eventLayoutId,
+    source_venue_layout_sector_id: layout.sourceVenueLayoutSectorId ?? null,
+    name: layout.name,
+    description: layout.description ?? null,
+    capacity: layout.capacity ?? null,
+    display_order: layout.order,
+    status: layout.status,
+    metadata: layout.metadata ? (layout.metadata as Json) : null,
+  };
+}
+
+export function mapEventLayoutResourceRowToDomain(row: EventLayoutResourceRow): EventLayoutResource {
+  return {
+    id: row.id,
+    eventLayoutId: row.event_layout_id,
+    eventLayoutSectorId: row.event_layout_sector_id ?? undefined,
+    sourceVenueLayoutResourceId: row.source_venue_layout_resource_id ?? undefined,
+    type: row.type,
+    name: row.name,
+    capacity: row.capacity,
+    status: row.status,
+    order: row.display_order,
+    notes: row.notes ?? undefined,
+    metadata: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapEventLayoutResourceToRow(layout: EventLayoutResource): Omit<EventLayoutResourceRow, "created_at" | "updated_at" | "deleted_at"> {
+  return {
+    id: layout.id,
+    event_layout_id: layout.eventLayoutId,
+    event_layout_sector_id: layout.eventLayoutSectorId ?? null,
+    source_venue_layout_resource_id: layout.sourceVenueLayoutResourceId ?? null,
+    type: layout.type,
+    name: layout.name,
+    capacity: layout.capacity,
+    status: layout.status,
+    display_order: layout.order,
+    notes: layout.notes ?? null,
+    metadata: layout.metadata ? (layout.metadata as Json) : null,
   };
 }
 
@@ -124,7 +512,7 @@ function mapInvitationState(row: GuestRow): Invitation["deliveryStatus"] {
 }
 
 export function mapGuestRowToDomain(row: GuestRow): Guest {
-  return {
+  const guestBase: Guest = {
     id: row.id,
     guestName: row.guest_name,
     reservationName: row.reservation_name,
@@ -159,6 +547,16 @@ export function mapGuestRowToDomain(row: GuestRow): Guest {
     operatorActivity: row.operator_activity,
     internalNotes: row.internal_notes ?? undefined,
     qrStatus: row.qr_status,
+  };
+  const accessGrant = buildAccessGrantFromGuest(guestBase);
+
+  return {
+    ...guestBase,
+    accessGrantId: accessGrant.id,
+    accessCode: accessGrant.code,
+    qrToken: accessGrant.qrToken,
+    tableId: row.table_id ?? undefined,
+    tableName: row.table_name ?? undefined,
   };
 }
 
@@ -210,6 +608,13 @@ export function mapReservationRowToDomain(row: ReservationRow): ReservationRecor
     eventName: row.event_name,
     date: row.date,
     time: row.time,
+    eventLayoutId: row.event_layout_id ?? undefined,
+    eventLayoutResourceId: row.event_layout_resource_id ?? undefined,
+    resourceId: row.resource_id ?? row.table_id ?? undefined,
+    resourceName: row.resource_name ?? row.table_name ?? undefined,
+    sectorId: row.sector_id ?? undefined,
+    sectorName: row.sector_name ?? undefined,
+    venueId: row.venue_id ?? undefined,
     tableName: row.table_name,
     tableId: row.table_id ?? undefined,
     tableCapacity: row.table_capacity,
@@ -239,8 +644,10 @@ export function mapReservationToRow(reservation: ReservationRecord): Omit<Reserv
     event_name: reservation.eventName,
     date: reservation.date,
     time: reservation.time,
+    event_layout_id: reservation.eventLayoutId ?? null,
+    event_layout_resource_id: reservation.eventLayoutResourceId ?? null,
     table_name: reservation.tableName,
-    table_id: reservation.tableId ?? null,
+    table_id: reservation.tableId ?? reservation.resourceId ?? null,
     table_capacity: reservation.tableCapacity,
     holder_name: reservation.holderName,
     holder_document: reservation.holderDocument,
@@ -258,17 +665,26 @@ export function mapReservationToRow(reservation: ReservationRecord): Omit<Reserv
 }
 
 export function mapTableRowToDomain(row: TableRow): TableRecord {
+  const metadata = row.notes ? { notes: row.notes } : undefined;
+
   return {
     id: row.id,
     name: row.name,
     capacity: row.capacity,
     location: row.location,
     status: row.status,
-    eventId: row.event_id,
+    venueId: row.venue_id ?? row.event_id ?? "",
+    sectorId: row.sector_id ?? undefined,
+    type: (row.type as TableRecord["type"]) ?? "table",
+    order: row.order ?? 0,
+    notes: row.notes ?? undefined,
+    metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    eventId: row.event_id ?? undefined,
     reservationIds: row.reservation_ids,
     guestIds: row.guest_ids,
     closed: row.closed,
-    notes: row.notes ?? undefined,
   };
 }
 
@@ -279,7 +695,11 @@ export function mapTableToRow(table: TableRecord): Omit<TableRow, "created_at" |
     capacity: table.capacity,
     location: table.location,
     status: table.status,
-    event_id: table.eventId,
+    event_id: table.eventId ?? null,
+    venue_id: table.venueId,
+    sector_id: table.sectorId ?? null,
+    type: table.type,
+    order: table.order,
     reservation_ids: table.reservationIds,
     guest_ids: table.guestIds,
     closed: table.closed,
@@ -340,6 +760,7 @@ export function mapCheckInToRow(checkIn: CheckIn): Omit<CheckInRow, "created_at"
 export function mapTimelineRowToDomain(row: TimelineRow): TimelineEvent {
   return {
     id: row.id,
+    eventId: row.event_id,
     timestamp: row.timestamp,
     kind: row.kind,
     icon: row.icon,
@@ -360,7 +781,7 @@ export function mapTimelineRowToDomain(row: TimelineRow): TimelineEvent {
 export function mapTimelineToRow(event: TimelineEvent, eventId: string): Omit<TimelineRow, "created_at" | "updated_at" | "deleted_at"> {
   return {
     id: event.id,
-    event_id: eventId,
+    event_id: event.eventId ?? eventId,
     timestamp: event.timestamp,
     kind: event.kind,
     icon: event.icon,

@@ -87,6 +87,8 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
 
     for (const event of events) {
       const normalizedKind = event.kind.toLowerCase();
+      const normalizedTitle = event.title.toLowerCase();
+      const entryType = typeof event.metadata?.entryType === "string" ? event.metadata.entryType.toLowerCase() : "";
 
       if (
         event.tone === "danger" ||
@@ -95,13 +97,14 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
         normalizedKind.includes("closed")
       ) {
         groups.Critical.push(event);
-      } else if (normalizedKind.includes("reservation.updated") || normalizedKind.includes("system")) {
+      } else if (normalizedKind.includes("reservation.updated") || normalizedKind.includes("system") || entryType === "access.grant") {
         groups.System.push(event);
       } else if (
         event.tone === "warning" ||
         normalizedKind.includes("checkin") ||
         normalizedKind.includes("table") ||
-        normalizedKind.includes("guest")
+        normalizedKind.includes("guest") ||
+        normalizedTitle.includes("acceso generado")
       ) {
         groups.Operational.push(event);
       } else {
@@ -235,11 +238,20 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                   ? "Cambios de contexto y actividad útil."
                   : "Eventos del sistema y sincronización.";
 
+          const label =
+            group === "Critical"
+              ? "Crítico"
+              : group === "Operational"
+                ? "Operativo"
+                : group === "Informational"
+                  ? "Informativo"
+                  : "Sistema";
+
           return (
             <section key={group} className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{group}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
                   <p className="mt-1 text-xs text-slate-500">{description}</p>
                 </div>
                 <StatusBadge variant={group === "Critical" ? "danger" : group === "Operational" ? "warning" : group === "Informational" ? "info" : "success"}>
@@ -258,21 +270,21 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                       {
                         id: `${event.id}-reservation`,
                         label: "Abrir reserva",
-                        description: "Ir al panel de Reservations.",
+                        description: "Ir al panel de Reservas.",
                         tone: "info" as const,
                         onSelect: () => router.push("/reservations"),
                       },
                       {
                         id: `${event.id}-customer`,
                         label: "Abrir cliente",
-                        description: "Ir al directorio de Customers.",
+                        description: "Ir al directorio de Invitados.",
                         tone: "info" as const,
                         onSelect: () => router.push("/customers"),
                       },
                       {
                         id: `${event.id}-table`,
                         label: "Ir a la mesa",
-                        description: "Abrir el panel de Tables.",
+                        description: "Abrir el panel de Recursos.",
                         tone: "warning" as const,
                         onSelect: () => router.push("/tables"),
                       },

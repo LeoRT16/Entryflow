@@ -24,6 +24,7 @@ export default function EventLibrary() {
   const {
     events,
     organizations,
+    venues,
     currentEventId,
     currentEvent,
     currentOrganization,
@@ -75,11 +76,12 @@ export default function EventLibrary() {
     setWizardOpen(true);
   };
 
-  const handleCreateOrganization = (nextOrganization: Parameters<typeof createOrganization>[0]) => {
-    createOrganization(nextOrganization);
+  const handleCreateOrganization = async (nextOrganization: Parameters<typeof createOrganization>[0]) => {
+    await createOrganization(nextOrganization);
     setWizardOrganizationId(nextOrganization.id);
     setOrganizationOpen(false);
     setWizardOpen(true);
+    return nextOrganization;
   };
 
   const currentEventAction =
@@ -102,7 +104,7 @@ export default function EventLibrary() {
       <Topbar
         eyebrow="Eventos"
         title="Biblioteca de eventos"
-        description="La plataforma permite preparar conciertos, conferencias, teatros y eventos privados con contratos distintos sin salir del workspace."
+        description="La plataforma permite preparar conciertos, conferencias, teatros y eventos privados con contratos distintos sin salir del espacio de trabajo."
         primaryAction={{ label: "Ir a operaciones", href: "/operations" }}
         secondaryAction={{ label: "Centro de operaciones", href: "/" }}
       />
@@ -121,7 +123,7 @@ export default function EventLibrary() {
               Crea y explora distintos tipos de evento.
             </h1>
             <p className="max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
-              El wizard genera eventos con blueprints oficiales, módulos sugeridos, métodos de admisión y navegación conceptual para cada formato.
+              El asistente genera eventos con plantillas oficiales, módulos sugeridos, métodos de admisión y navegación conceptual para cada formato.
             </p>
           </div>
 
@@ -152,9 +154,7 @@ export default function EventLibrary() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
                   Organización
                 </p>
-                <p className="mt-2 text-sm text-slate-400">
-                  Crea o cambia el workspace operativo antes de abrir el wizard.
-                </p>
+                <p className="mt-2 text-sm text-slate-400">Crea o cambia el espacio operativo antes de abrir el asistente.</p>
               </div>
               <button
                 type="button"
@@ -195,7 +195,7 @@ export default function EventLibrary() {
             </h2>
             <div className="mt-3 flex flex-wrap gap-2">
               <StatusBadge variant="success">{currentEvent ? getEventTypeLabel(currentEvent.eventType) : "Sin tipo"}</StatusBadge>
-              <StatusBadge variant="info">{currentEvent ? currentEvent.venue : "Sin venue"}</StatusBadge>
+              <StatusBadge variant="info">{currentEvent ? currentEvent.venue : "Sin ubicación"}</StatusBadge>
               <StatusBadge variant="warning">{currentEvent ? currentEvent.capacity : 0} cupos</StatusBadge>
             </div>
 
@@ -240,7 +240,7 @@ export default function EventLibrary() {
       <section className="space-y-5">
         <LibrarySection
           title="Eventos activos"
-          description="Operando ahora mismo en la plataforma conectada al workspace activo."
+          description="Operando ahora mismo en la plataforma conectada al espacio de trabajo activo."
           events={groupedEvents.live}
           accent="success"
           currentEventId={currentEventId}
@@ -333,6 +333,8 @@ export default function EventLibrary() {
           onClose={() => setWizardOpen(false)}
           onCreate={createEvent}
           organizationId={wizardOrganizationId}
+          organizationTimezone={currentOrganization.timezone}
+          venues={venues}
         />
       ) : null}
 
@@ -421,7 +423,7 @@ function EventCard({ event, current }: { event: Event; current: boolean }) {
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <MiniStat label="Modelo" value={getOperationalModelLabel(event.operationalModel)} />
         <MiniStat label="Capacidad" value={`${event.capacity}`} />
-        <MiniStat label="Venue" value={event.venue} />
+        <MiniStat label="Ubicación" value={event.venue} />
         <MiniStat label="Módulos" value={`${event.enabledModules.length}`} />
       </div>
 
@@ -484,7 +486,7 @@ function EventCard({ event, current }: { event: Event; current: boolean }) {
       ) : null}
 
       <div className="mt-4 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-        {blueprint.icon} · blueprint {blueprint.eventType}
+        {blueprint.icon} · plantilla {blueprint.eventType}
       </div>
     </article>
   );

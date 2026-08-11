@@ -2,11 +2,17 @@ import type {
   ActivityColor,
   AdmissionMethod,
   EventModule,
+  EventLayoutStatus,
   EventStatus,
   EventType,
   OperationalModel,
   Organization,
   ResourceType,
+  VenueLayoutResourceStatus,
+  VenueLayoutSectorStatus,
+  VenueLayoutStatus,
+  SectorStatus,
+  VenueStatus,
 } from "@/features/domain/types";
 import type { AccessAuditEntry, AccessStatus, AccessType, CheckInMethod, EntryStatus, Guest, Invitation, QrStatus } from "@/features/check-in/types";
 import type {
@@ -46,6 +52,7 @@ export type EventRow = SupabaseRowBase & {
   start_at: string;
   end_at: string | null;
   timezone: string;
+  venue_id: string | null;
   venue: string;
   capacity: number;
   enabled_modules: EventModule[];
@@ -53,6 +60,106 @@ export type EventRow = SupabaseRowBase & {
   admission_methods: AdmissionMethod[];
   resource_types: ResourceType[];
   icon: string | null;
+  metadata: Json | null;
+};
+
+export type VenueRow = SupabaseRowBase & {
+  organization_id: string;
+  name: string;
+  description: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  status: VenueStatus;
+  metadata: Json | null;
+};
+
+export type SectorRow = SupabaseRowBase & {
+  venue_id: string;
+  name: string;
+  description: string | null;
+  capacity: number | null;
+  display_order: number;
+  status: SectorStatus;
+  metadata: Json | null;
+};
+
+export type ResourceRow = SupabaseRowBase & {
+  venue_id: string;
+  sector_id: string | null;
+  type: ResourceType;
+  name: string;
+  capacity: number;
+  status: "Available" | "Partially Occupied" | "Full" | "Over Capacity" | "Reserved" | "Blocked" | "Closed";
+  display_order: number;
+  notes: string | null;
+  metadata: Json | null;
+};
+
+export type VenueLayoutRow = SupabaseRowBase & {
+  venue_id: string;
+  name: string;
+  description: string | null;
+  is_default: boolean;
+  status: VenueLayoutStatus;
+  metadata: Json | null;
+};
+
+export type VenueLayoutSectorRow = SupabaseRowBase & {
+  venue_layout_id: string;
+  source_sector_id: string | null;
+  name: string;
+  description: string | null;
+  capacity: number | null;
+  display_order: number;
+  status: VenueLayoutSectorStatus;
+  metadata: Json | null;
+};
+
+export type VenueLayoutResourceRow = SupabaseRowBase & {
+  venue_layout_id: string;
+  venue_layout_sector_id: string | null;
+  source_resource_id: string | null;
+  type: ResourceType;
+  name: string;
+  capacity: number;
+  status: VenueLayoutResourceStatus;
+  display_order: number;
+  notes: string | null;
+  metadata: Json | null;
+};
+
+export type EventLayoutRow = SupabaseRowBase & {
+  event_id: string;
+  venue_id: string;
+  source_venue_layout_id: string | null;
+  name: string;
+  description: string | null;
+  status: EventLayoutStatus;
+  metadata: Json | null;
+};
+
+export type EventLayoutSectorRow = SupabaseRowBase & {
+  event_layout_id: string;
+  source_venue_layout_sector_id: string | null;
+  name: string;
+  description: string | null;
+  capacity: number | null;
+  display_order: number;
+  status: VenueLayoutSectorStatus;
+  metadata: Json | null;
+};
+
+export type EventLayoutResourceRow = SupabaseRowBase & {
+  event_layout_id: string;
+  event_layout_sector_id: string | null;
+  source_venue_layout_resource_id: string | null;
+  type: ResourceType;
+  name: string;
+  capacity: number;
+  status: VenueLayoutResourceStatus;
+  display_order: number;
+  notes: string | null;
   metadata: Json | null;
 };
 
@@ -99,6 +206,13 @@ export type ReservationRow = SupabaseRowBase & {
   event_name: string;
   date: string;
   time: string;
+  event_layout_id: string | null;
+  event_layout_resource_id: string | null;
+  resource_id?: string | null;
+  resource_name?: string | null;
+  sector_id?: string | null;
+  sector_name?: string | null;
+  venue_id?: string | null;
   table_name: string;
   table_id: string | null;
   table_capacity: number;
@@ -121,7 +235,11 @@ export type TableRow = SupabaseRowBase & {
   capacity: number;
   location: string;
   status: TableStatus;
-  event_id: string;
+  event_id: string | null;
+  venue_id: string | null;
+  sector_id: string | null;
+  type: string | null;
+  order: number | null;
   reservation_ids: string[];
   guest_ids: string[];
   closed: boolean;
@@ -217,6 +335,51 @@ export type Database = {
         Row: EventRow;
         Insert: Omit<EventRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<EventRow, "created_at" | "updated_at" | "deleted_at">>;
         Update: Partial<EventRow>;
+      };
+      venues: {
+        Row: VenueRow;
+        Insert: Omit<VenueRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<VenueRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<VenueRow>;
+      };
+      sectors: {
+        Row: SectorRow;
+        Insert: Omit<SectorRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<SectorRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<SectorRow>;
+      };
+      resources: {
+        Row: ResourceRow;
+        Insert: Omit<ResourceRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<ResourceRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<ResourceRow>;
+      };
+      venue_layouts: {
+        Row: VenueLayoutRow;
+        Insert: Omit<VenueLayoutRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<VenueLayoutRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<VenueLayoutRow>;
+      };
+      venue_layout_sectors: {
+        Row: VenueLayoutSectorRow;
+        Insert: Omit<VenueLayoutSectorRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<VenueLayoutSectorRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<VenueLayoutSectorRow>;
+      };
+      venue_layout_resources: {
+        Row: VenueLayoutResourceRow;
+        Insert: Omit<VenueLayoutResourceRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<VenueLayoutResourceRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<VenueLayoutResourceRow>;
+      };
+      event_layouts: {
+        Row: EventLayoutRow;
+        Insert: Omit<EventLayoutRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<EventLayoutRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<EventLayoutRow>;
+      };
+      event_layout_sectors: {
+        Row: EventLayoutSectorRow;
+        Insert: Omit<EventLayoutSectorRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<EventLayoutSectorRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<EventLayoutSectorRow>;
+      };
+      event_layout_resources: {
+        Row: EventLayoutResourceRow;
+        Insert: Omit<EventLayoutResourceRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<EventLayoutResourceRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<EventLayoutResourceRow>;
       };
       guests: {
         Row: GuestRow;

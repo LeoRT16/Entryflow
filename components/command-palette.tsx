@@ -10,6 +10,7 @@ import { buildGuestSearchIndex, normalizeCheckInText } from "@/features/check-in
 import { formatReservationStatus } from "@/features/reservations/domain/reservation-domain";
 import { formatTableStatus } from "@/features/tables/domain/table-domain";
 import { getEventTypeLabel } from "@/features/events/domain";
+import type { AccountPermissionKey } from "@/features/accounts/types";
 
 type PaletteSection =
   | "Acciones críticas"
@@ -30,6 +31,7 @@ type PaletteItem = {
   searchText: string;
   onSelect: () => void;
   order: number;
+  permission?: AccountPermissionKey;
 };
 
 const sectionOrder: Record<PaletteSection, number> = {
@@ -103,12 +105,14 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
     organizations,
     currentOrganization,
     currentEvent,
+    currentAccount,
     events,
     guests,
     reservationSummaries,
     tableSummaries,
     workspaceIntelligence,
     workspacePriority,
+    can,
     setCurrentOrganizationId,
     setCurrentEventId,
   } = useCheckInStore();
@@ -123,7 +127,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
     inputRef.current?.select();
   }, []);
 
-  const operator = workspaceIntelligence.statistics.cards.activeOperators[0] ?? "Recepción";
+  const operator = currentAccount.displayName || workspaceIntelligence.statistics.cards.activeOperators[0] || "Recepción";
   const currentState = workspacePriority.summary.message;
   const snapshotSummary = workspaceIntelligence.dashboard.currentEventSummary;
 
@@ -213,7 +217,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       title: `Cambiar organización · ${organization.name}`,
       description: organization.id === currentOrganization.id
         ? "Organización activa."
-        : `Cambiar el workspace hacia ${organization.name}.`,
+        : `Cambiar el espacio de trabajo hacia ${organization.name}.`,
       badge: organization.status,
       shortcut: organization.id === currentOrganization.id ? "Actual" : "↩",
       icon: iconForSection("Workspace"),
@@ -264,7 +268,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         },
       }));
 
-    const items: PaletteItem[] = [
+    const items = ([
       {
         id: "workspace-snapshot",
         section: "Workspace",
@@ -294,7 +298,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         id: "workspace-operator",
         section: "Workspace",
         title: "Ver operador",
-        description: `Operador activo: ${operator}`,
+        description: `Cuenta activa: ${operator}`,
         badge: "Operador",
         shortcut: "⌥O",
         icon: iconForSection("Workspace"),
@@ -322,27 +326,27 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       },
       ...organizationItems,
       ...eventItems,
-    ];
+    ] as PaletteItem[]).filter((item) => !item.permission || can(item.permission));
 
     return items;
-  }, [currentEvent.id, currentEvent.name, currentEvent.status, currentOrganization.id, currentOrganization.name, currentState, events, onClose, operator, organizations, router, setCurrentEventId, setCurrentOrganizationId, snapshotSummary.checkedIn, snapshotSummary.expectedGuests]);
+  }, [can, currentEvent.id, currentEvent.name, currentEvent.status, currentOrganization.id, currentOrganization.name, currentState, events, onClose, operator, organizations, router, setCurrentEventId, setCurrentOrganizationId, snapshotSummary.checkedIn, snapshotSummary.expectedGuests]);
 
   const navigationActions = useMemo(() => {
-    const items: PaletteItem[] = [
-      { id: "nav-dashboard", section: "Navegación", title: "Ir a Dashboard", description: "Centro de operaciones principal.", badge: "/", shortcut: "⌘1", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("dashboard inicio home"), order: 0, onSelect: () => { router.push("/"); onClose(); } },
-      { id: "nav-reservations", section: "Navegación", title: "Ir a Reservations", description: "Flujo de reservas y detalle operativo.", badge: "/reservations", shortcut: "⌘2", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("reservations reservas reserva"), order: 1, onSelect: () => { router.push("/reservations"); onClose(); } },
-      { id: "nav-customers", section: "Navegación", title: "Ir a Customers", description: "Directorio de invitados y atención.", badge: "/customers", shortcut: "⌘3", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("customers clientes invitados"), order: 2, onSelect: () => { router.push("/customers"); onClose(); } },
-      { id: "nav-checkin", section: "Navegación", title: "Ir a Check-in", description: "Validación y registro de ingresos.", badge: "/check-in", shortcut: "⌘4", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("checkin check-in ingreso admision"), order: 3, onSelect: () => { router.push("/check-in"); onClose(); } },
-      { id: "nav-operations", section: "Navegación", title: "Ir a Operations", description: "Centro de control del evento.", badge: "/operations", shortcut: "⌘5", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("operations operaciones control"), order: 4, onSelect: () => { router.push("/operations"); onClose(); } },
-      { id: "nav-timeline", section: "Navegación", title: "Ir a Timeline", description: "Actividad reciente sincronizada.", badge: "/timeline", shortcut: "⌘6", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("timeline actividad log"), order: 5, onSelect: () => { router.push("/timeline"); onClose(); } },
-      { id: "nav-tables", section: "Navegación", title: "Ir a Tables", description: "Estado y ocupación de mesas.", badge: "/tables", shortcut: "⌘7", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("tables mesas capacidad"), order: 6, onSelect: () => { router.push("/tables"); onClose(); } },
-      { id: "nav-statistics", section: "Navegación", title: "Ir a Statistics", description: "Snapshot analítico del workspace.", badge: "/statistics", shortcut: "⌘8", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("statistics analytics metricas"), order: 7, onSelect: () => { router.push("/statistics"); onClose(); } },
-      { id: "nav-settings", section: "Navegación", title: "Ir a Settings", description: "Configuración operativa y del workspace.", badge: "/settings", shortcut: "⌘9", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("settings ajustes configuracion"), order: 8, onSelect: () => { router.push("/settings"); onClose(); } },
-      { id: "nav-events", section: "Navegación", title: "Ir a Events", description: "Biblioteca y gestión de eventos.", badge: "/events", shortcut: "⌘0", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("events eventos biblioteca"), order: 9, onSelect: () => { router.push("/events"); onClose(); } },
-    ];
+    const items = ([
+      { id: "nav-dashboard", section: "Navegación", title: "Ir al resumen", description: "Centro de control principal.", badge: "/", shortcut: "⌘1", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("dashboard inicio home"), order: 0, onSelect: () => { router.push("/"); onClose(); }, permission: "dashboard.view" },
+      { id: "nav-reservations", section: "Navegación", title: "Ir a reservas", description: "Flujo de reservas y detalle operativo.", badge: "/reservations", shortcut: "⌘2", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("reservations reservas reserva"), order: 1, onSelect: () => { router.push("/reservations"); onClose(); }, permission: "reservation.view" },
+      { id: "nav-customers", section: "Navegación", title: "Ir a invitados", description: "Directorio de invitados y atención.", badge: "/customers", shortcut: "⌘3", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("customers clientes invitados"), order: 2, onSelect: () => { router.push("/customers"); onClose(); }, permission: "guest.view" },
+      { id: "nav-checkin", section: "Navegación", title: "Ir al ingreso", description: "Validación y registro de ingresos.", badge: "/check-in", shortcut: "⌘4", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("checkin check-in ingreso admision"), order: 3, onSelect: () => { router.push("/check-in"); onClose(); }, permission: "checkin.view" },
+      { id: "nav-operations", section: "Navegación", title: "Ir a operaciones", description: "Centro de control del evento.", badge: "/operations", shortcut: "⌘5", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("operations operaciones control"), order: 4, onSelect: () => { router.push("/operations"); onClose(); }, permission: "operations.view" },
+      { id: "nav-timeline", section: "Navegación", title: "Ir a actividad", description: "Actividad reciente sincronizada.", badge: "/timeline", shortcut: "⌘6", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("timeline actividad log"), order: 5, onSelect: () => { router.push("/timeline"); onClose(); }, permission: "timeline.view" },
+      { id: "nav-tables", section: "Navegación", title: "Ir a recursos", description: "Estado y ocupación de recursos físicos.", badge: "/tables", shortcut: "⌘7", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("tables mesas capacidad"), order: 6, onSelect: () => { router.push("/tables"); onClose(); }, permission: "resource.view" },
+      { id: "nav-statistics", section: "Navegación", title: "Ir a estadísticas", description: "Vista analítica del espacio de trabajo.", badge: "/statistics", shortcut: "⌘8", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("statistics analytics metricas"), order: 7, onSelect: () => { router.push("/statistics"); onClose(); }, permission: "statistics.view" },
+      { id: "nav-settings", section: "Navegación", title: "Ir a Ajustes", description: "Configuración operativa y del espacio de trabajo.", badge: "/settings", shortcut: "⌘9", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("settings ajustes configuracion"), order: 8, onSelect: () => { router.push("/settings"); onClose(); }, permission: "settings.view" },
+      { id: "nav-events", section: "Navegación", title: "Ir a eventos", description: "Biblioteca y gestión de eventos.", badge: "/events", shortcut: "⌘0", icon: iconForSection("Navegación"), searchText: normalizeCheckInText("events eventos biblioteca"), order: 9, onSelect: () => { router.push("/events"); onClose(); }, permission: "event.view" },
+    ] as PaletteItem[]).filter((item) => (item.permission ? can(item.permission) : true));
 
     return items;
-  }, [onClose, router]);
+  }, [can, onClose, router]);
 
   const searchActions = useMemo(() => {
     if (!normalizedQuery) {
@@ -353,7 +357,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       id: `operator-${index}`,
       section: "Búsqueda",
       title: `Operador ${value}`,
-      description: "Operador activo del workspace.",
+      description: "Operador activo del espacio de trabajo.",
       badge: "Operador",
       shortcut: "↩",
       icon: iconForSection("Búsqueda"),

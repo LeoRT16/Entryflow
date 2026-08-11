@@ -1,5 +1,6 @@
 import type { Event as PlatformEvent } from "@/features/domain/types";
 import { buildOperationsSnapshot, type OperationsSnapshot } from "@/features/operations/domain/operations-domain";
+import { buildAccessGrantFromGuest } from "@/features/access/domain/access-ledger";
 import { normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
 import type { ReservationRecord, ReservationSummary } from "@/features/reservations/types";
 import type { TableSummary } from "@/features/tables/types";
@@ -136,6 +137,20 @@ type WorkspaceTableInsight = {
   operationalState: "healthy" | "watch" | "critical";
 };
 
+type WorkspaceAccessInsight = {
+  totalGrants: number;
+  activeGrants: number;
+  usedGrants: number;
+  revokedGrants: number;
+  expiredGrants: number;
+  blockedGrants: number;
+  duplicateAttempts: number;
+  rejectedAttempts: number;
+  recentAccessEvents: number;
+  state: WorkspaceInsightState;
+  summary: string;
+};
+
 type WorkspaceTimelineInsight = {
   events: TimelineEvent[];
   summary: ReturnType<typeof buildTimelineSummary> & {
@@ -184,6 +199,7 @@ type WorkspaceIntelligence = {
   dashboard: ReturnType<typeof buildDashboardSnapshot>;
   reservations: WorkspaceReservationInsight;
   tables: WorkspaceTableInsight;
+  access: WorkspaceAccessInsight;
   customers: WorkspaceCustomersInsight;
   statistics: WorkspaceStatisticsInsight;
   timeline: WorkspaceTimelineInsight;
@@ -940,6 +956,10 @@ export function buildWorkspaceIntelligence({
   const eventGuests = guests.filter((guest) => guest.eventId === event.id);
   const eventTables = tableSummaries.filter((table) => table.reservationIds.some((reservationId) => eventReservations.some((item) => item.id === reservationId)));
   const eventCheckIns = checkIns.filter((checkIn) => checkIn.eventId === event.id);
+  const eventAccessGrants = eventGuests.map((guest) => {
+    const reservation = eventReservations.find((item) => item.id === guest.reservationId) ?? null;
+    return buildAccessGrantFromGuest(guest, reservation);
+  });
   const eventTimeline = timelineEvents.filter((entry) => entry.reservationId ? eventReservations.some((reservation) => reservation.id === entry.reservationId) : entry.guestId ? eventGuests.some((guest) => guest.id === entry.guestId) : true);
 
   const checkedInGuests = eventGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
@@ -960,6 +980,14 @@ export function buildWorkspaceIntelligence({
   const fullTables = eventTables.filter((table) => table.status === "Full").length;
   const overCapacityTables = eventTables.filter((table) => table.status === "Over Capacity").length;
   const rotationPercent = Math.round((checkedInGuests / Math.max(expectedGuests, 1)) * 100);
+  const activeAccessGrants = eventAccessGrants.filter((grant) => grant.status === "active").length;
+  const usedAccessGrants = eventAccessGrants.filter((grant) => grant.status === "used").length;
+  const revokedAccessGrants = eventAccessGrants.filter((grant) => grant.status === "cancelled").length;
+  const expiredAccessGrants = eventAccessGrants.filter((grant) => grant.status === "expired").length;
+  const blockedAccessGrants = eventAccessGrants.filter((grant) => grant.status === "blocked").length;
+  const duplicateAccessAttempts = eventCheckIns.filter((checkIn) => checkIn.status === "Duplicate Attempt").length;
+  const rejectedAccessAttempts = eventCheckIns.filter((checkIn) => checkIn.status === "Rejected" || checkIn.status === "Blocked" || checkIn.status === "Expired" || checkIn.status === "Cancelled" || checkIn.status === "No Show").length;
+  const recentAccessEvents = eventTimeline.filter((entry) => entry.metadata?.entryType === "access.grant" || entry.kind.startsWith("checkin.")).length;
 
   const rate = buildTimelineRates(eventCheckIns);
   const activeOperators = countActiveOperators(eventTimeline, eventGuests, eventCheckIns);
@@ -1020,6 +1048,31 @@ export function buildWorkspaceIntelligence({
     operationalState: overCapacityTables > 0 || occupancyPercent >= 90 ? "critical" : fullTables > 0 || occupancyPercent >= 70 ? "watch" : "healthy",
   };
 
+  const access: WorkspaceAccessInsight = {
+    totalGrants: eventAccessGrants.length,
+    activeGrants: activeAccessGrants,
+    usedGrants: usedAccessGrants,
+    revokedGrants: revokedAccessGrants,
+    expiredGrants: expiredAccessGrants,
+    blockedGrants: blockedAccessGrants,
+    duplicateAttempts: duplicateAccessAttempts,
+    rejectedAttempts: rejectedAccessAttempts,
+    recentAccessEvents,
+    state: rejectedAccessAttempts > 0 || duplicateAccessAttempts > 0 || blockedAccessGrants > 0
+      ? "watch"
+      : activeAccessGrants > 0
+        ? "stable"
+        : "open",
+    summary:
+      rejectedAccessAttempts > 0
+        ? `${rejectedAccessAttempts} accesos rechazados o bloqueados requieren revisión.`
+        : duplicateAccessAttempts > 0
+          ? `${duplicateAccessAttempts} intentos duplicados siguen registrados.`
+          : activeAccessGrants > 0
+            ? `${activeAccessGrants} grants activos sostienen el ingreso.`
+            : "No hay access grants activos en este evento.",
+  };
+
   const timeline: WorkspaceTimelineInsight = {
     events: eventTimeline,
     summary: {
@@ -1046,6 +1099,7 @@ export function buildWorkspaceIntelligence({
     tableSummaries,
     attempts,
     checkIns,
+    timelineEvents,
   });
 
   const alerts = buildWorkspaceAlerts({
@@ -1135,6 +1189,7 @@ export function buildWorkspaceIntelligence({
     dashboard,
     reservations: reservationsInsight,
     tables: tablesInsight,
+    access,
     customers,
     statistics,
     timeline,

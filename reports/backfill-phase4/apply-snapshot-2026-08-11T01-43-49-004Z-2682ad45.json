@@ -1,0 +1,2843 @@
+{
+  "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+  "approvedReportPath": "reports/backfill-phase4/dry-run-2026-08-11T01-12-18-551Z.json",
+  "approvedReportDigest": "2682ad45a6d8f26a1f1b327d64c3d87a434655df3d2a0ea762259ff7fd9484a5",
+  "generatedAt": "2026-08-11T01:43:49.006Z",
+  "expected": {
+    "venues": 1,
+    "events": 4,
+    "resolvedEvents": 4,
+    "venueLayouts": 1,
+    "venueLayoutSectors": 3,
+    "venueLayoutResources": 16,
+    "eventLayouts": 4,
+    "eventLayoutSectors": 12,
+    "eventLayoutResources": 64,
+    "reservations": 10,
+    "reservationsMapped": 10,
+    "ambiguousReservations": 0,
+    "unmappedReservations": 0,
+    "conflictClusters": 5
+  },
+  "affected": {
+    "events": [
+      {
+        "id": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+        "previous": {
+          "venue_id": null
+        },
+        "next": {
+          "venue_id": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+        }
+      },
+      {
+        "id": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+        "previous": {
+          "venue_id": null
+        },
+        "next": {
+          "venue_id": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+        }
+      },
+      {
+        "id": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+        "previous": {
+          "venue_id": null
+        },
+        "next": {
+          "venue_id": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+        }
+      },
+      {
+        "id": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "previous": {
+          "venue_id": null
+        },
+        "next": {
+          "venue_id": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+        }
+      }
+    ],
+    "reservations": [
+      {
+        "id": "93a5a2f3-009a-4b1b-a669-8db2ad6bc45a",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "496bf190-20b3-5ea8-a6d1-9ccd37eac60c"
+        }
+      },
+      {
+        "id": "49720f3b-c547-4c0a-a74c-4e23ac16e96d",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "496bf190-20b3-5ea8-a6d1-9ccd37eac60c"
+        }
+      },
+      {
+        "id": "5712a356-fcb4-42d2-bb3f-09745ae96e0d",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "ad7b444a-30b5-56f1-bddc-7e5c09784559"
+        }
+      },
+      {
+        "id": "8cf3c8f4-471e-40d5-9e67-5df0264bb0fc",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "ad7b444a-30b5-56f1-bddc-7e5c09784559"
+        }
+      },
+      {
+        "id": "6c42e578-72c4-4643-88be-34e65cc6636d",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "714d3d5c-c978-4707-a6e4-246eb064cb49"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "2c737d34-6d38-5022-b4b9-314dadab25c7"
+        }
+      },
+      {
+        "id": "4f1970be-7105-4d26-8342-608bc729743d",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "714d3d5c-c978-4707-a6e4-246eb064cb49"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "2c737d34-6d38-5022-b4b9-314dadab25c7"
+        }
+      },
+      {
+        "id": "e1830059-39fd-4766-bea9-02228363af00",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "a594c456-5e99-59b1-a5db-01eaa3459a07"
+        }
+      },
+      {
+        "id": "1e1eebe8-74a6-4e7a-8db2-fa7adf24b356",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "a594c456-5e99-59b1-a5db-01eaa3459a07"
+        }
+      },
+      {
+        "id": "9611467d-53c8-486f-8431-046f2ab398ab",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "e032a4a6-7314-451f-8568-7c302eb8b57b"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "de1c1b64-6aef-5082-9ce7-d3e5730bf119"
+        }
+      },
+      {
+        "id": "ef6f4f07-08aa-4faa-a269-500f59374298",
+        "previous": {
+          "event_layout_id": null,
+          "event_layout_resource_id": null,
+          "table_id": "e032a4a6-7314-451f-8568-7c302eb8b57b"
+        },
+        "next": {
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_resource_id": "de1c1b64-6aef-5082-9ce7-d3e5730bf119"
+        }
+      }
+    ],
+    "venueLayoutRows": [
+      {
+        "id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+        "created": true,
+        "row": {
+          "id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_id": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+          "name": "La Rota Carlota",
+          "description": null,
+          "is_default": true,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout",
+              "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+            }
+          }
+        }
+      }
+    ],
+    "venueLayoutSectorRows": [
+      {
+        "id": "b052021a-b31d-544c-896b-7dcaded03939",
+        "created": true,
+        "row": {
+          "id": "b052021a-b31d-544c-896b-7dcaded03939",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "source_sector_id": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+          "name": "Planta Baja",
+          "description": null,
+          "capacity": 30,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_sector",
+              "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b"
+            }
+          }
+        }
+      },
+      {
+        "id": "d98b2e45-7be4-58d2-ae04-4656a7bdd6ef",
+        "created": true,
+        "row": {
+          "id": "d98b2e45-7be4-58d2-ae04-4656a7bdd6ef",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "source_sector_id": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+          "name": "Sin nombre",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "inactive",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_sector",
+              "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b"
+            }
+          }
+        }
+      },
+      {
+        "id": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5",
+        "created": true,
+        "row": {
+          "id": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "source_sector_id": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+          "name": "Patio B",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_sector",
+              "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b"
+            }
+          }
+        }
+      }
+    ],
+    "venueLayoutResourceRows": [
+      {
+        "id": "e1fbae0a-e751-5479-85c8-d6561e877c49",
+        "created": true,
+        "row": {
+          "id": "e1fbae0a-e751-5479-85c8-d6561e877c49",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": null,
+          "source_resource_id": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "915dfedd-6c23-592c-8e92-08cd19def2a0",
+        "created": true,
+        "row": {
+          "id": "915dfedd-6c23-592c-8e92-08cd19def2a0",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": null,
+          "source_resource_id": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "1efbb28f-97e8-5a73-8c99-11eaff94388d",
+        "created": true,
+        "row": {
+          "id": "1efbb28f-97e8-5a73-8c99-11eaff94388d",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": null,
+          "source_resource_id": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "c331d7c7-599f-5793-bc4c-8f3a37903dc4",
+        "created": true,
+        "row": {
+          "id": "c331d7c7-599f-5793-bc4c-8f3a37903dc4",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": null,
+          "source_resource_id": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "96306d97-8b91-5455-abde-21c94c7e8bad",
+        "created": true,
+        "row": {
+          "id": "96306d97-8b91-5455-abde-21c94c7e8bad",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": null,
+          "source_resource_id": "31093c86-e111-4860-a728-a356f6cc2035",
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "91cea845-a875-5fba-a293-bde14eac0777",
+        "created": true,
+        "row": {
+          "id": "91cea845-a875-5fba-a293-bde14eac0777",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": null,
+          "source_resource_id": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "e0523c95-be8e-53c9-87e1-09585aff207a",
+        "created": true,
+        "row": {
+          "id": "e0523c95-be8e-53c9-87e1-09585aff207a",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": null,
+          "source_resource_id": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "d4061c85-7f65-55d5-b6a3-835d5d2b0a88",
+        "created": true,
+        "row": {
+          "id": "d4061c85-7f65-55d5-b6a3-835d5d2b0a88",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": null,
+          "source_resource_id": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "27fc9b9b-ea58-56eb-b865-4835b5fc4995",
+        "created": true,
+        "row": {
+          "id": "27fc9b9b-ea58-56eb-b865-4835b5fc4995",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5",
+          "source_resource_id": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+          "type": "table",
+          "name": "Mesa 3",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5"
+            }
+          }
+        }
+      },
+      {
+        "id": "6526ae72-ebaa-5f7e-adb8-b947882065bb",
+        "created": true,
+        "row": {
+          "id": "6526ae72-ebaa-5f7e-adb8-b947882065bb",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": "b052021a-b31d-544c-896b-7dcaded03939",
+          "source_resource_id": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+          "type": "table",
+          "name": "Mesa 4",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": "b052021a-b31d-544c-896b-7dcaded03939"
+            }
+          }
+        }
+      },
+      {
+        "id": "898397a5-b5b7-583a-a4a4-7f442539ffc9",
+        "created": true,
+        "row": {
+          "id": "898397a5-b5b7-583a-a4a4-7f442539ffc9",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5",
+          "source_resource_id": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 11,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5"
+            }
+          }
+        }
+      },
+      {
+        "id": "4211c222-af0f-5c57-8c0b-57fbe5bfe9e7",
+        "created": true,
+        "row": {
+          "id": "4211c222-af0f-5c57-8c0b-57fbe5bfe9e7",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5",
+          "source_resource_id": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+          "type": "table",
+          "name": "mesa 5",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5"
+            }
+          }
+        }
+      },
+      {
+        "id": "be74a5a8-85a8-5d65-a61b-add2bff67d3d",
+        "created": true,
+        "row": {
+          "id": "be74a5a8-85a8-5d65-a61b-add2bff67d3d",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": "b052021a-b31d-544c-896b-7dcaded03939",
+          "source_resource_id": "858c37ee-a366-45e8-a050-1b64985559b3",
+          "type": "table",
+          "name": "mesa2",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 2,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": "b052021a-b31d-544c-896b-7dcaded03939"
+            }
+          }
+        }
+      },
+      {
+        "id": "b0169982-2fb1-5458-9748-121731242918",
+        "created": true,
+        "row": {
+          "id": "b0169982-2fb1-5458-9748-121731242918",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": null,
+          "source_resource_id": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 5,
+          "status": "active",
+          "display_order": 4,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "9f13de33-455d-534b-919c-3482954d5d1c",
+        "created": true,
+        "row": {
+          "id": "9f13de33-455d-534b-919c-3482954d5d1c",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5",
+          "source_resource_id": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+          "type": "table",
+          "name": "mesa 6",
+          "capacity": 7,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5"
+            }
+          }
+        }
+      },
+      {
+        "id": "efe3168c-d7ba-594d-b469-06dc1da36efb",
+        "created": true,
+        "row": {
+          "id": "efe3168c-d7ba-594d-b469-06dc1da36efb",
+          "venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "venue_layout_sector_id": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5",
+          "source_resource_id": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+          "type": "table",
+          "name": "meesa 7",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "venue_layout_resource",
+              "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+              "venueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+              "venueLayoutSectorId": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5"
+            }
+          }
+        }
+      }
+    ],
+    "eventLayoutRows": [
+      {
+        "id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+        "created": true,
+        "row": {
+          "id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_id": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+          "venue_id": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+          "source_venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "name": "Boliche",
+          "description": null,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout",
+              "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+              "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+            }
+          }
+        }
+      },
+      {
+        "id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+        "created": true,
+        "row": {
+          "id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_id": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+          "venue_id": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+          "source_venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "name": "Boliche - anon test",
+          "description": null,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout",
+              "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+              "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+            }
+          }
+        }
+      },
+      {
+        "id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+        "created": true,
+        "row": {
+          "id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_id": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+          "venue_id": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+          "source_venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "name": "Boliche - fixed payload test",
+          "description": null,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout",
+              "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+              "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+            }
+          }
+        }
+      },
+      {
+        "id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "created": true,
+        "row": {
+          "id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_id": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+          "venue_id": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+          "source_venue_layout_id": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+          "name": "Bolichefesttt",
+          "description": "Operación centrada en reservas, recursos, ingreso y control en tiempo real.",
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout",
+              "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+              "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+            }
+          }
+        }
+      }
+    ],
+    "eventLayoutSectorRows": [
+      {
+        "id": "12a41610-a625-59f9-99c3-cb08dd852fdd",
+        "created": true,
+        "row": {
+          "id": "12a41610-a625-59f9-99c3-cb08dd852fdd",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "source_venue_layout_sector_id": null,
+          "name": "Planta Baja",
+          "description": null,
+          "capacity": 30,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6"
+            }
+          }
+        }
+      },
+      {
+        "id": "dc0f4a07-27c8-5098-9902-cb2bd6f4be3e",
+        "created": true,
+        "row": {
+          "id": "dc0f4a07-27c8-5098-9902-cb2bd6f4be3e",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "source_venue_layout_sector_id": null,
+          "name": "Sin nombre",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "inactive",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6"
+            }
+          }
+        }
+      },
+      {
+        "id": "bb356325-63f7-52e3-8ebf-bfabde37943c",
+        "created": true,
+        "row": {
+          "id": "bb356325-63f7-52e3-8ebf-bfabde37943c",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "source_venue_layout_sector_id": null,
+          "name": "Patio B",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6"
+            }
+          }
+        }
+      },
+      {
+        "id": "8f273af1-e27a-546a-938b-9914c42b644f",
+        "created": true,
+        "row": {
+          "id": "8f273af1-e27a-546a-938b-9914c42b644f",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "source_venue_layout_sector_id": null,
+          "name": "Planta Baja",
+          "description": null,
+          "capacity": 30,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b"
+            }
+          }
+        }
+      },
+      {
+        "id": "1e397092-acf1-5bb4-ab25-6e28bbbcc6e6",
+        "created": true,
+        "row": {
+          "id": "1e397092-acf1-5bb4-ab25-6e28bbbcc6e6",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "source_venue_layout_sector_id": null,
+          "name": "Sin nombre",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "inactive",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b"
+            }
+          }
+        }
+      },
+      {
+        "id": "09b611bf-fb57-547c-8e0b-62fa5f42cf88",
+        "created": true,
+        "row": {
+          "id": "09b611bf-fb57-547c-8e0b-62fa5f42cf88",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "source_venue_layout_sector_id": null,
+          "name": "Patio B",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b"
+            }
+          }
+        }
+      },
+      {
+        "id": "70eac94b-f3a0-584a-a48a-4f24057a88b2",
+        "created": true,
+        "row": {
+          "id": "70eac94b-f3a0-584a-a48a-4f24057a88b2",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "source_venue_layout_sector_id": null,
+          "name": "Planta Baja",
+          "description": null,
+          "capacity": 30,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03"
+            }
+          }
+        }
+      },
+      {
+        "id": "61cf8b57-df31-5192-83c8-ec358993c811",
+        "created": true,
+        "row": {
+          "id": "61cf8b57-df31-5192-83c8-ec358993c811",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "source_venue_layout_sector_id": null,
+          "name": "Sin nombre",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "inactive",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03"
+            }
+          }
+        }
+      },
+      {
+        "id": "3848baab-9085-5caa-8a81-1be26d0aba22",
+        "created": true,
+        "row": {
+          "id": "3848baab-9085-5caa-8a81-1be26d0aba22",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "source_venue_layout_sector_id": null,
+          "name": "Patio B",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03"
+            }
+          }
+        }
+      },
+      {
+        "id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+        "created": true,
+        "row": {
+          "id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "source_venue_layout_sector_id": null,
+          "name": "Planta Baja",
+          "description": null,
+          "capacity": 30,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b"
+            }
+          }
+        }
+      },
+      {
+        "id": "8eef7d8e-bd9f-58d9-be13-5d11d8ba44a4",
+        "created": true,
+        "row": {
+          "id": "8eef7d8e-bd9f-58d9-be13-5d11d8ba44a4",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "source_venue_layout_sector_id": null,
+          "name": "Sin nombre",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "inactive",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b"
+            }
+          }
+        }
+      },
+      {
+        "id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+        "created": true,
+        "row": {
+          "id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "source_venue_layout_sector_id": null,
+          "name": "Patio B",
+          "description": null,
+          "capacity": null,
+          "display_order": 1,
+          "status": "active",
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_sector",
+              "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b"
+            }
+          }
+        }
+      }
+    ],
+    "eventLayoutResourceRows": [
+      {
+        "id": "f9162521-4fe8-51e8-aebd-44490a6cd7d7",
+        "created": true,
+        "row": {
+          "id": "f9162521-4fe8-51e8-aebd-44490a6cd7d7",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "efc4ebc3-52fa-5362-af4d-60b953e5e3da",
+        "created": true,
+        "row": {
+          "id": "efc4ebc3-52fa-5362-af4d-60b953e5e3da",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "fc73a33f-c585-59ad-9017-f078d6662f5c",
+        "created": true,
+        "row": {
+          "id": "fc73a33f-c585-59ad-9017-f078d6662f5c",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "615dbf9f-4d1d-5809-8a8c-28ff75e39c5c",
+        "created": true,
+        "row": {
+          "id": "615dbf9f-4d1d-5809-8a8c-28ff75e39c5c",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "15e5da2f-b903-55fe-a8a7-191bc09d0ace",
+        "created": true,
+        "row": {
+          "id": "15e5da2f-b903-55fe-a8a7-191bc09d0ace",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "a223ed04-5acc-51be-85ae-fbc31be540c0",
+        "created": true,
+        "row": {
+          "id": "a223ed04-5acc-51be-85ae-fbc31be540c0",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "a2fa802d-be8c-51fd-bcba-5560c3dd77c3",
+        "created": true,
+        "row": {
+          "id": "a2fa802d-be8c-51fd-bcba-5560c3dd77c3",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "b358c7a5-6804-5f7f-9b1e-ba25d42db0ab",
+        "created": true,
+        "row": {
+          "id": "b358c7a5-6804-5f7f-9b1e-ba25d42db0ab",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "3d4126bf-55a7-5429-bad4-9a4de14294f4",
+        "created": true,
+        "row": {
+          "id": "3d4126bf-55a7-5429-bad4-9a4de14294f4",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Mesa 3",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "b3aa7fca-1aa8-50ab-abdb-89289b7a6809",
+        "created": true,
+        "row": {
+          "id": "b3aa7fca-1aa8-50ab-abdb-89289b7a6809",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Mesa 4",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": "9bc461ff-5f46-5475-90c6-ea160a1e710d"
+            }
+          }
+        }
+      },
+      {
+        "id": "b6a29da4-e0c4-50cf-a96b-808b1f10dddb",
+        "created": true,
+        "row": {
+          "id": "b6a29da4-e0c4-50cf-a96b-808b1f10dddb",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 11,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "7b751f7a-df62-5964-8971-ee156ad8b04e",
+        "created": true,
+        "row": {
+          "id": "7b751f7a-df62-5964-8971-ee156ad8b04e",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 5",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "7967e72a-6dfb-56b3-8256-5a10d2837e04",
+        "created": true,
+        "row": {
+          "id": "7967e72a-6dfb-56b3-8256-5a10d2837e04",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa2",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 2,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": "9bc461ff-5f46-5475-90c6-ea160a1e710d"
+            }
+          }
+        }
+      },
+      {
+        "id": "9bc8ef6f-f9f2-5eb4-b3b6-f67448307fe1",
+        "created": true,
+        "row": {
+          "id": "9bc8ef6f-f9f2-5eb4-b3b6-f67448307fe1",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 5,
+          "status": "active",
+          "display_order": 4,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "f76c9c02-b625-5af3-8dd0-1c4994e54b50",
+        "created": true,
+        "row": {
+          "id": "f76c9c02-b625-5af3-8dd0-1c4994e54b50",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 6",
+          "capacity": 7,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "6dd0beb8-5d60-596e-9bca-b95e3bbf50b8",
+        "created": true,
+        "row": {
+          "id": "6dd0beb8-5d60-596e-9bca-b95e3bbf50b8",
+          "event_layout_id": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "meesa 7",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+              "eventLayoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "c246e178-d73a-5a6b-871b-d25c944bf29c",
+        "created": true,
+        "row": {
+          "id": "c246e178-d73a-5a6b-871b-d25c944bf29c",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "7a936845-c911-59a1-b4e7-ea0701c6c243",
+        "created": true,
+        "row": {
+          "id": "7a936845-c911-59a1-b4e7-ea0701c6c243",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "a56cd055-60ce-5ab9-b426-8905e826cf68",
+        "created": true,
+        "row": {
+          "id": "a56cd055-60ce-5ab9-b426-8905e826cf68",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "05e9a392-c580-5169-9e78-4c953d53ebb2",
+        "created": true,
+        "row": {
+          "id": "05e9a392-c580-5169-9e78-4c953d53ebb2",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "9758dc00-fe49-54ec-8858-2d70fe3fca86",
+        "created": true,
+        "row": {
+          "id": "9758dc00-fe49-54ec-8858-2d70fe3fca86",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "95e98d9e-648a-52c6-a223-8ef059e8b363",
+        "created": true,
+        "row": {
+          "id": "95e98d9e-648a-52c6-a223-8ef059e8b363",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "75005dfa-8093-53c2-a89b-941604373646",
+        "created": true,
+        "row": {
+          "id": "75005dfa-8093-53c2-a89b-941604373646",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "886615de-5913-51c1-a2a8-d72e1ab744d3",
+        "created": true,
+        "row": {
+          "id": "886615de-5913-51c1-a2a8-d72e1ab744d3",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "e50a1885-e7e7-5262-9a71-15d3de450b69",
+        "created": true,
+        "row": {
+          "id": "e50a1885-e7e7-5262-9a71-15d3de450b69",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Mesa 3",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "e4c492ae-2e08-5534-88d0-49f20c4c5018",
+        "created": true,
+        "row": {
+          "id": "e4c492ae-2e08-5534-88d0-49f20c4c5018",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Mesa 4",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": "9bc461ff-5f46-5475-90c6-ea160a1e710d"
+            }
+          }
+        }
+      },
+      {
+        "id": "475cd22b-57a4-5a8d-9273-5abff8f7f5eb",
+        "created": true,
+        "row": {
+          "id": "475cd22b-57a4-5a8d-9273-5abff8f7f5eb",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 11,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "657fe068-f8b2-5969-a528-770d120cf85f",
+        "created": true,
+        "row": {
+          "id": "657fe068-f8b2-5969-a528-770d120cf85f",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 5",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "3013bc80-c2c5-52f4-941e-674196098538",
+        "created": true,
+        "row": {
+          "id": "3013bc80-c2c5-52f4-941e-674196098538",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa2",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 2,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": "9bc461ff-5f46-5475-90c6-ea160a1e710d"
+            }
+          }
+        }
+      },
+      {
+        "id": "f7d29bf6-19e7-5fcb-a340-5ef39a6562fc",
+        "created": true,
+        "row": {
+          "id": "f7d29bf6-19e7-5fcb-a340-5ef39a6562fc",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 5,
+          "status": "active",
+          "display_order": 4,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "5c8cd7fa-12f3-520f-82a6-68db5422c654",
+        "created": true,
+        "row": {
+          "id": "5c8cd7fa-12f3-520f-82a6-68db5422c654",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 6",
+          "capacity": 7,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "9a39868e-ba81-592a-81b0-a38cdcc3385b",
+        "created": true,
+        "row": {
+          "id": "9a39868e-ba81-592a-81b0-a38cdcc3385b",
+          "event_layout_id": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "meesa 7",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+              "eventLayoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "c93aa168-cdc7-5e29-a1cf-ea3dcf09828e",
+        "created": true,
+        "row": {
+          "id": "c93aa168-cdc7-5e29-a1cf-ea3dcf09828e",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "8fed1161-d1ca-503b-b901-5d5bc3d5515b",
+        "created": true,
+        "row": {
+          "id": "8fed1161-d1ca-503b-b901-5d5bc3d5515b",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "15d2d60e-12d2-54ad-a763-1ef88f57578e",
+        "created": true,
+        "row": {
+          "id": "15d2d60e-12d2-54ad-a763-1ef88f57578e",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "af51fa76-3b61-50d5-a30a-6672c084e10c",
+        "created": true,
+        "row": {
+          "id": "af51fa76-3b61-50d5-a30a-6672c084e10c",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "cb00faed-0030-5b6c-b0da-a56c26e02f27",
+        "created": true,
+        "row": {
+          "id": "cb00faed-0030-5b6c-b0da-a56c26e02f27",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "a3f8211e-1dd4-539d-b06c-60a4a153b732",
+        "created": true,
+        "row": {
+          "id": "a3f8211e-1dd4-539d-b06c-60a4a153b732",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "98d9d831-49f3-54c0-9b57-f7c363f376a5",
+        "created": true,
+        "row": {
+          "id": "98d9d831-49f3-54c0-9b57-f7c363f376a5",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "e0ea4add-7d58-5c79-a9d4-6653eea22d78",
+        "created": true,
+        "row": {
+          "id": "e0ea4add-7d58-5c79-a9d4-6653eea22d78",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "b7d646d7-606d-575b-aa5b-ede3be02eb55",
+        "created": true,
+        "row": {
+          "id": "b7d646d7-606d-575b-aa5b-ede3be02eb55",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Mesa 3",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "ec322024-9033-596a-8fb2-2f76612aee34",
+        "created": true,
+        "row": {
+          "id": "ec322024-9033-596a-8fb2-2f76612aee34",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Mesa 4",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": "9bc461ff-5f46-5475-90c6-ea160a1e710d"
+            }
+          }
+        }
+      },
+      {
+        "id": "085d2258-d56b-59ef-8245-55e1d67e952a",
+        "created": true,
+        "row": {
+          "id": "085d2258-d56b-59ef-8245-55e1d67e952a",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 11,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "894f41a4-ebe3-51ef-9daf-bb0ce52d7ba5",
+        "created": true,
+        "row": {
+          "id": "894f41a4-ebe3-51ef-9daf-bb0ce52d7ba5",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 5",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "769e282d-33e9-5852-8121-62d7d140b94b",
+        "created": true,
+        "row": {
+          "id": "769e282d-33e9-5852-8121-62d7d140b94b",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa2",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 2,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": "9bc461ff-5f46-5475-90c6-ea160a1e710d"
+            }
+          }
+        }
+      },
+      {
+        "id": "f530b74c-eea0-5863-bd47-b88add19acc4",
+        "created": true,
+        "row": {
+          "id": "f530b74c-eea0-5863-bd47-b88add19acc4",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 5,
+          "status": "active",
+          "display_order": 4,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "68a91779-2165-54a3-9763-ac35e3e98ee9",
+        "created": true,
+        "row": {
+          "id": "68a91779-2165-54a3-9763-ac35e3e98ee9",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 6",
+          "capacity": 7,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "dea38fce-032e-5c67-8abd-a7abcbb72b54",
+        "created": true,
+        "row": {
+          "id": "dea38fce-032e-5c67-8abd-a7abcbb72b54",
+          "event_layout_id": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "meesa 7",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+              "eventLayoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "afa0eba8-6bdb-5ae7-a801-9bb9712999dc",
+        "created": true,
+        "row": {
+          "id": "afa0eba8-6bdb-5ae7-a801-9bb9712999dc",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "5f101c34-6e27-5062-9c4f-751633c8b6f5",
+        "created": true,
+        "row": {
+          "id": "5f101c34-6e27-5062-9c4f-751633c8b6f5",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "d0594ff1-0bec-58bd-aa82-69e4525ffd5b",
+        "created": true,
+        "row": {
+          "id": "d0594ff1-0bec-58bd-aa82-69e4525ffd5b",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "6e437c0c-2fc8-5ed5-83c7-4aab31e714ae",
+        "created": true,
+        "row": {
+          "id": "6e437c0c-2fc8-5ed5-83c7-4aab31e714ae",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "f7580505-45fd-543e-87cb-aeebb07e5a74",
+        "created": true,
+        "row": {
+          "id": "f7580505-45fd-543e-87cb-aeebb07e5a74",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "2e55c43d-4ea8-5c8c-8c35-26d32d501c48",
+        "created": true,
+        "row": {
+          "id": "2e55c43d-4ea8-5c8c-8c35-26d32d501c48",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "7cf1f1be-1d42-5e27-af81-e4266391d4c6",
+        "created": true,
+        "row": {
+          "id": "7cf1f1be-1d42-5e27-af81-e4266391d4c6",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "1130c503-042e-5e2b-8b0d-525773694107",
+        "created": true,
+        "row": {
+          "id": "1130c503-042e-5e2b-8b0d-525773694107",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Sin nombre",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "c7b3a764-425e-5c47-99ff-090945e3f648",
+        "created": true,
+        "row": {
+          "id": "c7b3a764-425e-5c47-99ff-090945e3f648",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Mesa 3",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "496bf190-20b3-5ea8-a6d1-9ccd37eac60c",
+        "created": true,
+        "row": {
+          "id": "496bf190-20b3-5ea8-a6d1-9ccd37eac60c",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "Mesa 4",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": "9bc461ff-5f46-5475-90c6-ea160a1e710d"
+            }
+          }
+        }
+      },
+      {
+        "id": "ad7b444a-30b5-56f1-bddc-7e5c09784559",
+        "created": true,
+        "row": {
+          "id": "ad7b444a-30b5-56f1-bddc-7e5c09784559",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 11,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "2c737d34-6d38-5022-b4b9-314dadab25c7",
+        "created": true,
+        "row": {
+          "id": "2c737d34-6d38-5022-b4b9-314dadab25c7",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 5",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 1,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "3e941ed5-c70e-5b2e-b04f-62a7c6d02d09",
+        "created": true,
+        "row": {
+          "id": "3e941ed5-c70e-5b2e-b04f-62a7c6d02d09",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa2",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 2,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": "9bc461ff-5f46-5475-90c6-ea160a1e710d"
+            }
+          }
+        }
+      },
+      {
+        "id": "238ea55c-565a-5898-a2d1-9deab6fc7601",
+        "created": true,
+        "row": {
+          "id": "238ea55c-565a-5898-a2d1-9deab6fc7601",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": null,
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 4",
+          "capacity": 5,
+          "status": "active",
+          "display_order": 4,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": null
+            }
+          }
+        }
+      },
+      {
+        "id": "a594c456-5e99-59b1-a5db-01eaa3459a07",
+        "created": true,
+        "row": {
+          "id": "a594c456-5e99-59b1-a5db-01eaa3459a07",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "mesa 6",
+          "capacity": 7,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      },
+      {
+        "id": "de1c1b64-6aef-5082-9ce7-d3e5730bf119",
+        "created": true,
+        "row": {
+          "id": "de1c1b64-6aef-5082-9ce7-d3e5730bf119",
+          "event_layout_id": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+          "event_layout_sector_id": "f628923d-eff9-53ce-b364-aef23ae95f61",
+          "source_venue_layout_resource_id": null,
+          "type": "table",
+          "name": "meesa 7",
+          "capacity": 6,
+          "status": "active",
+          "display_order": 7,
+          "notes": null,
+          "metadata": {
+            "backfill": {
+              "batchId": "2026-08-11T01-43-49-004Z-2682ad45",
+              "source": "phase4",
+              "kind": "event_layout_resource",
+              "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+              "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+              "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "createdIds": {
+    "venueLayouts": [
+      "28dc1435-ec6f-593d-b23c-6f4e6ca0447b"
+    ],
+    "venueLayoutSectors": [
+      "b052021a-b31d-544c-896b-7dcaded03939",
+      "d98b2e45-7be4-58d2-ae04-4656a7bdd6ef",
+      "603ef846-0fa7-5333-9b9b-4ae212dfc2a5"
+    ],
+    "venueLayoutResources": [
+      "e1fbae0a-e751-5479-85c8-d6561e877c49",
+      "915dfedd-6c23-592c-8e92-08cd19def2a0",
+      "1efbb28f-97e8-5a73-8c99-11eaff94388d",
+      "c331d7c7-599f-5793-bc4c-8f3a37903dc4",
+      "96306d97-8b91-5455-abde-21c94c7e8bad",
+      "91cea845-a875-5fba-a293-bde14eac0777",
+      "e0523c95-be8e-53c9-87e1-09585aff207a",
+      "d4061c85-7f65-55d5-b6a3-835d5d2b0a88",
+      "27fc9b9b-ea58-56eb-b865-4835b5fc4995",
+      "6526ae72-ebaa-5f7e-adb8-b947882065bb",
+      "898397a5-b5b7-583a-a4a4-7f442539ffc9",
+      "4211c222-af0f-5c57-8c0b-57fbe5bfe9e7",
+      "be74a5a8-85a8-5d65-a61b-add2bff67d3d",
+      "b0169982-2fb1-5458-9748-121731242918",
+      "9f13de33-455d-534b-919c-3482954d5d1c",
+      "efe3168c-d7ba-594d-b469-06dc1da36efb"
+    ],
+    "eventLayouts": [
+      "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "d85619ca-7130-54b0-8b29-8661a4b8790b"
+    ],
+    "eventLayoutSectors": [
+      "12a41610-a625-59f9-99c3-cb08dd852fdd",
+      "dc0f4a07-27c8-5098-9902-cb2bd6f4be3e",
+      "bb356325-63f7-52e3-8ebf-bfabde37943c",
+      "8f273af1-e27a-546a-938b-9914c42b644f",
+      "1e397092-acf1-5bb4-ab25-6e28bbbcc6e6",
+      "09b611bf-fb57-547c-8e0b-62fa5f42cf88",
+      "70eac94b-f3a0-584a-a48a-4f24057a88b2",
+      "61cf8b57-df31-5192-83c8-ec358993c811",
+      "3848baab-9085-5caa-8a81-1be26d0aba22",
+      "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+      "8eef7d8e-bd9f-58d9-be13-5d11d8ba44a4",
+      "f628923d-eff9-53ce-b364-aef23ae95f61"
+    ],
+    "eventLayoutResources": [
+      "f9162521-4fe8-51e8-aebd-44490a6cd7d7",
+      "efc4ebc3-52fa-5362-af4d-60b953e5e3da",
+      "fc73a33f-c585-59ad-9017-f078d6662f5c",
+      "615dbf9f-4d1d-5809-8a8c-28ff75e39c5c",
+      "15e5da2f-b903-55fe-a8a7-191bc09d0ace",
+      "a223ed04-5acc-51be-85ae-fbc31be540c0",
+      "a2fa802d-be8c-51fd-bcba-5560c3dd77c3",
+      "b358c7a5-6804-5f7f-9b1e-ba25d42db0ab",
+      "3d4126bf-55a7-5429-bad4-9a4de14294f4",
+      "b3aa7fca-1aa8-50ab-abdb-89289b7a6809",
+      "b6a29da4-e0c4-50cf-a96b-808b1f10dddb",
+      "7b751f7a-df62-5964-8971-ee156ad8b04e",
+      "7967e72a-6dfb-56b3-8256-5a10d2837e04",
+      "9bc8ef6f-f9f2-5eb4-b3b6-f67448307fe1",
+      "f76c9c02-b625-5af3-8dd0-1c4994e54b50",
+      "6dd0beb8-5d60-596e-9bca-b95e3bbf50b8",
+      "c246e178-d73a-5a6b-871b-d25c944bf29c",
+      "7a936845-c911-59a1-b4e7-ea0701c6c243",
+      "a56cd055-60ce-5ab9-b426-8905e826cf68",
+      "05e9a392-c580-5169-9e78-4c953d53ebb2",
+      "9758dc00-fe49-54ec-8858-2d70fe3fca86",
+      "95e98d9e-648a-52c6-a223-8ef059e8b363",
+      "75005dfa-8093-53c2-a89b-941604373646",
+      "886615de-5913-51c1-a2a8-d72e1ab744d3",
+      "e50a1885-e7e7-5262-9a71-15d3de450b69",
+      "e4c492ae-2e08-5534-88d0-49f20c4c5018",
+      "475cd22b-57a4-5a8d-9273-5abff8f7f5eb",
+      "657fe068-f8b2-5969-a528-770d120cf85f",
+      "3013bc80-c2c5-52f4-941e-674196098538",
+      "f7d29bf6-19e7-5fcb-a340-5ef39a6562fc",
+      "5c8cd7fa-12f3-520f-82a6-68db5422c654",
+      "9a39868e-ba81-592a-81b0-a38cdcc3385b",
+      "c93aa168-cdc7-5e29-a1cf-ea3dcf09828e",
+      "8fed1161-d1ca-503b-b901-5d5bc3d5515b",
+      "15d2d60e-12d2-54ad-a763-1ef88f57578e",
+      "af51fa76-3b61-50d5-a30a-6672c084e10c",
+      "cb00faed-0030-5b6c-b0da-a56c26e02f27",
+      "a3f8211e-1dd4-539d-b06c-60a4a153b732",
+      "98d9d831-49f3-54c0-9b57-f7c363f376a5",
+      "e0ea4add-7d58-5c79-a9d4-6653eea22d78",
+      "b7d646d7-606d-575b-aa5b-ede3be02eb55",
+      "ec322024-9033-596a-8fb2-2f76612aee34",
+      "085d2258-d56b-59ef-8245-55e1d67e952a",
+      "894f41a4-ebe3-51ef-9daf-bb0ce52d7ba5",
+      "769e282d-33e9-5852-8121-62d7d140b94b",
+      "f530b74c-eea0-5863-bd47-b88add19acc4",
+      "68a91779-2165-54a3-9763-ac35e3e98ee9",
+      "dea38fce-032e-5c67-8abd-a7abcbb72b54",
+      "afa0eba8-6bdb-5ae7-a801-9bb9712999dc",
+      "5f101c34-6e27-5062-9c4f-751633c8b6f5",
+      "d0594ff1-0bec-58bd-aa82-69e4525ffd5b",
+      "6e437c0c-2fc8-5ed5-83c7-4aab31e714ae",
+      "f7580505-45fd-543e-87cb-aeebb07e5a74",
+      "2e55c43d-4ea8-5c8c-8c35-26d32d501c48",
+      "7cf1f1be-1d42-5e27-af81-e4266391d4c6",
+      "1130c503-042e-5e2b-8b0d-525773694107",
+      "c7b3a764-425e-5c47-99ff-090945e3f648",
+      "496bf190-20b3-5ea8-a6d1-9ccd37eac60c",
+      "ad7b444a-30b5-56f1-bddc-7e5c09784559",
+      "2c737d34-6d38-5022-b4b9-314dadab25c7",
+      "3e941ed5-c70e-5b2e-b04f-62a7c6d02d09",
+      "238ea55c-565a-5898-a2d1-9deab6fc7601",
+      "a594c456-5e99-59b1-a5db-01eaa3459a07",
+      "de1c1b64-6aef-5082-9ce7-d3e5730bf119"
+    ]
+  }
+}

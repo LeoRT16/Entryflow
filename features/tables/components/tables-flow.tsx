@@ -1,53 +1,66 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 import StatusBadge from "@/components/status-badge";
+import { useFeedback } from "@/components/premium-feedback";
 import Topbar from "@/components/topbar";
-import { ContextualCard, GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
-import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import LiveSummaryRow from "@/features/reservations/components/live-summary-row";
-import { formatReservationStatus } from "@/features/reservations/domain/reservation-domain";
-import { formatTableStatus } from "@/features/tables/domain/table-domain";
-import type { TableSummary } from "@/features/tables/types";
+import ResourceReservationModal from "@/features/tables/components/resource-reservation-modal";
+import { getPrimaryActiveTableReservation } from "@/features/tables/domain/table-domain";
+import { canPersistResourceName } from "@/features/tables/domain/resource-validation";
+import type { Resource, ResourceType, Sector } from "@/features/domain/types";
+import { createUuid, nowIso } from "@/lib/supabase/helpers";
 import { useCheckInStore } from "@/services/workspace-service";
 
-function tablePriorityWeight(status: TableSummary["status"]) {
-  if (status === "Over Capacity") return 0;
-  if (status === "Full") return 1;
-  if (status === "Reserved") return 2;
-  if (status === "Partially Occupied") return 3;
-  if (status === "Available") return 4;
-  return 5;
-}
+const resourceTypeLabels: Record<ResourceType, string> = {
+  table: "Mesa",
+  lounge: "Lounge",
+  box: "Box",
+  seat: "Asiento",
+  zone: "Zona",
+  booth: "Cabina",
+  room: "Sala",
+  gate: "Acceso",
+  area: "Area",
+};
 
-function compareTablePriority(a: TableSummary, b: TableSummary) {
-  const statusDelta = tablePriorityWeight(a.status) - tablePriorityWeight(b.status);
+type SectorFormState = {
+  name: string;
+  description: string;
+  capacity: string;
+  order: string;
+  status: Sector["status"];
+};
 
-  if (statusDelta !== 0) {
-    return statusDelta;
-  }
+type ResourceFormState = {
+  name: string;
+  type: ResourceType;
+  capacity: string;
+  sectorId: string;
+  order: string;
+  status: Resource["status"];
+  notes: string;
+};
 
-  const overCapacityDelta = b.metrics.overCapacity - a.metrics.overCapacity;
+const emptySectorForm: SectorFormState = {
+  name: "",
+  description: "",
+  capacity: "",
+  order: "1",
+  status: "active",
+};
 
-  if (overCapacityDelta !== 0) {
-    return overCapacityDelta;
-  }
-
-  const occupancyDelta = b.metrics.occupancyPercent - a.metrics.occupancyPercent;
-
-  if (occupancyDelta !== 0) {
-    return occupancyDelta;
-  }
-
-  const assignedDelta = b.metrics.assignedGuests - a.metrics.assignedGuests;
-
-  if (assignedDelta !== 0) {
-    return assignedDelta;
-  }
-
-  return a.name.localeCompare(b.name);
-}
+const emptyResourceForm: ResourceFormState = {
+  name: "",
+  type: "table",
+  capacity: "6",
+  sectorId: "",
+  order: "1",
+  status: "Available",
+  notes: "",
+};
 
 export default function TablesFlow() {
   const store = useCheckInStore();
@@ -56,173 +69,249 @@ export default function TablesFlow() {
 }
 
 function TablesFlowWorkspace() {
+  const { showToast } = useFeedback();
   const {
-    tableSummaries,
+    currentOrganization,
+    currentEvent,
+    currentVenue,
+    currentVenueSectors,
+    currentVenueResources,
     reservations,
-    workspaceIntelligence,
-    workspacePriority,
-    assignReservationToTable,
-    moveGuestToTable,
-    releaseTable,
-    closeTable,
+    guests,
+    tableSummaries,
+    venues,
+    sectors,
+    resources,
+    createSector,
+    updateSector,
+    setSectorStatus,
+    createResource,
+    updateResource,
+    setResourceStatus,
+    moveResourceToSector,
   } = useCheckInStore();
-  const prioritizedTables = useMemo(
-    () => [...tableSummaries].sort(compareTablePriority),
-    [tableSummaries],
-  );
-  const [activeTableId, setActiveTableId] = useState<string>(prioritizedTables[0]?.id ?? "");
-  const [reservationId, setReservationId] = useState<string>(
-    reservations.find((reservation) => reservation.tableId !== prioritizedTables[0]?.id)?.id ?? "",
-  );
-  const [guestId, setGuestId] = useState<string>(prioritizedTables[0]?.guests[0]?.id ?? "");
-  const [targetTableId, setTargetTableId] = useState<string>(
-    prioritizedTables.find((table) => table.id !== prioritizedTables[0]?.id)?.id ?? "",
-  );
+  const router = useRouter();
 
-  const activeTable = useMemo(
-    () => prioritizedTables.find((table) => table.id === activeTableId) ?? prioritizedTables[0] ?? null,
-    [activeTableId, prioritizedTables],
-  );
+  const [selectedSectorId, setSelectedSectorId] = useState(currentVenueSectors[0]?.id ?? "");
+  const [selectedResourceId, setSelectedResourceId] = useState(currentVenueResources[0]?.id ?? "");
+  const [editingSectorId, setEditingSectorId] = useState<string | null>(null);
+  const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
+  const [selectedReservationResourceId, setSelectedReservationResourceId] = useState<string | null>(null);
+  const [sectorForm, setSectorForm] = useState<SectorFormState>(emptySectorForm);
+  const [resourceForm, setResourceForm] = useState<ResourceFormState>(emptyResourceForm);
 
-  const activeReservationOptions = useMemo(
-    () =>
-      reservations
-        .filter((reservation) => reservation.tableId !== activeTable?.id)
-        .map((reservation) => ({
-          id: reservation.id,
-          label: `${reservation.code} · ${reservation.name}`,
-          status: reservation.status,
-          tableName: reservation.tableName,
-        })),
-    [activeTable?.id, reservations],
-  );
+  const venue = currentVenue ?? venues[0] ?? null;
+  const venueSectors = currentVenueSectors.length
+    ? currentVenueSectors
+    : sectors.filter((sector) => !venue || sector.venueId === venue.id);
+  const venueResources = currentVenueResources.length
+    ? currentVenueResources
+    : resources.filter((resource) => !venue || resource.venueId === venue.id);
 
-  const tableInsight = workspaceIntelligence.tables;
-  const activeTables = tableInsight.activeTables;
-  const fullTables = tableInsight.fullTables;
-  const availableTables = tableInsight.freeTables;
-  const overCapacityTables = tableInsight.overCapacityTables;
-  const occupancyPercent = `${tableInsight.occupancyPercent}%`;
-  const tableInsights = workspacePriority.byModule.Tables;
-  const prioritySummary = workspacePriority.summary;
-  const health = workspaceIntelligence.health;
+  const sectorMetrics = useMemo(() => {
+    return venueSectors.map((sector) => {
+      const sectorResources = venueResources.filter((resource) => resource.sectorId === sector.id);
+      const derivedCapacity = sectorResources.reduce((total, resource) => total + resource.capacity, 0);
+      const summaryCount = sectorResources.length;
 
-  const handleAssignReservation = useCallback(() => {
-    if (!reservationId) {
+      return {
+        sector,
+        summaryCount,
+        derivedCapacity,
+      };
+    });
+  }, [venueResources, venueSectors]);
+
+  const resourceSummaryMap = useMemo(() => {
+    return new Map(tableSummaries.map((summary) => [summary.id, summary]));
+  }, [tableSummaries]);
+
+  const selectedSector = venueSectors.find((sector) => sector.id === selectedSectorId) ?? venueSectors[0] ?? null;
+  const selectedResources = venueResources.filter((resource) => resource.sectorId === selectedSector?.id);
+  const selectedResource = venueResources.find((resource) => resource.id === selectedResourceId) ?? selectedResources[0] ?? venueResources[0] ?? null;
+  const selectedReservationResource = selectedReservationResourceId
+    ? venueResources.find((resource) => resource.id === selectedReservationResourceId) ?? null
+    : null;
+  const selectedReservation = selectedReservationResource
+    ? getPrimaryActiveTableReservation(
+        {
+          ...selectedReservationResource,
+          location:
+            venueSectors.find((sector) => sector.id === selectedReservationResource.sectorId)?.name ??
+            venue?.name ??
+            "Sin sector",
+          eventId: currentEvent.id,
+          reservationIds: [],
+          guestIds: [],
+          closed: selectedReservationResource.status === "Closed" || selectedReservationResource.status === "Blocked",
+        },
+        reservations,
+      )
+    : null;
+  const selectedReservationGuests = selectedReservation
+    ? guests.filter((guest) => guest.reservationId === selectedReservation.id).sort((a, b) => a.id.localeCompare(b.id))
+    : [];
+  const selectedReservationConflictCount = selectedReservationResource
+    ? resourceSummaryMap.get(selectedReservationResource.id)?.reservationIds.length ?? 0
+    : 0;
+
+  const totalResources = venueResources.length;
+  const activeResources = venueResources.filter((resource) => resource.status !== "Closed" && resource.status !== "Blocked").length;
+  const totalDerivedCapacity = sectorMetrics.reduce((total, metric) => total + metric.derivedCapacity, 0);
+
+  const startCreateSector = () => {
+    setEditingSectorId(null);
+    setSectorForm(emptySectorForm);
+  };
+
+  const startEditSector = (sector: Sector) => {
+    setEditingSectorId(sector.id);
+    setSectorForm({
+      name: sector.name,
+      description: sector.description ?? "",
+      capacity: sector.capacity ? String(sector.capacity) : "",
+      order: String(sector.order ?? 1),
+      status: sector.status,
+    });
+  };
+
+  const startCreateResource = (sectorId = selectedSector?.id ?? "") => {
+    setEditingResourceId(null);
+    setResourceForm({
+      ...emptyResourceForm,
+      sectorId,
+    });
+  };
+
+  const startEditResource = (resource: Resource) => {
+    setEditingResourceId(resource.id);
+    setResourceForm({
+      name: resource.name,
+      type: resource.type,
+      capacity: String(resource.capacity),
+      sectorId: resource.sectorId ?? "",
+      order: String(resource.order ?? 1),
+      status: resource.status,
+      notes: resource.notes ?? "",
+    });
+  };
+
+  const saveSector = async () => {
+    if (!venue) {
       return;
     }
 
-    assignReservationToTable(reservationId, activeTable?.id ?? "");
-  }, [activeTable?.id, assignReservationToTable, reservationId]);
+    const timestamp = nowIso();
+    const payload: Sector = {
+      id: editingSectorId ?? createUuid(),
+      venueId: venue.id,
+      name: sectorForm.name.trim() || "Sin nombre",
+      description: sectorForm.description.trim() || undefined,
+      capacity: sectorForm.capacity.trim() ? Number(sectorForm.capacity) : undefined,
+      order: Number(sectorForm.order || 1),
+      status: sectorForm.status,
+      createdAt: editingSectorId ? (sectors.find((item) => item.id === editingSectorId)?.createdAt ?? timestamp) : timestamp,
+      updatedAt: timestamp,
+      metadata: {},
+    };
 
-  const handleMoveGuest = useCallback(() => {
-    if (!guestId || !targetTableId) {
+    if (editingSectorId) {
+      await updateSector(payload);
+    } else {
+      await createSector(payload);
+      setSelectedSectorId(payload.id);
+    }
+
+    setEditingSectorId(null);
+    setSectorForm(emptySectorForm);
+  };
+
+  const saveResource = async () => {
+    if (!venue) {
       return;
     }
 
-    moveGuestToTable(guestId, targetTableId);
-  }, [guestId, moveGuestToTable, targetTableId]);
+    const resourceName = resourceForm.name.trim();
 
-  useKeyboardShortcuts(
-    useMemo(
-      () => [
-        {
-          id: "tables-move",
-          shortcut: "m",
-          priority: 50,
-          handler: handleMoveGuest,
-        },
-        {
-          id: "tables-release",
-          shortcut: "l",
-          priority: 45,
-          handler: () => {
-            if (!activeTable) {
-              return;
-            }
-
-            releaseTable(activeTable.id);
-          },
-        },
-      ],
-      [activeTable, handleMoveGuest, releaseTable],
-    ),
-  );
-
-  const guidedActions = useMemo(() => {
-    if (!activeTable) {
-      return [];
+    if (!canPersistResourceName(resourceForm.name)) {
+      showToast({
+        title: "Nombre requerido",
+        description: "El recurso físico necesita un nombre válido antes de guardarse.",
+        tone: "warning",
+      });
+      return;
     }
 
-    const actions = [
-      ...(activeTable.metrics.overCapacity > 0
-        ? [
-            {
-              id: `${activeTable.id}-release`,
-              label: "Liberar mesa",
-              reason: `${activeTable.name} supera la capacidad disponible.`,
-              impact: "Libera espacio para normalizar la operación de la mesa.",
-              priority: "critical" as const,
-              tone: "danger" as const,
-              onSelect: () => releaseTable(activeTable.id),
-            },
-          ]
-        : []),
-      ...(activeReservationOptions.length
-        ? [
-            {
-              id: `${activeTable.id}-assign`,
-              label: "Asignar reserva sugerida",
-              reason: `Hay reservas listas para vincular a ${activeTable.name}.`,
-              impact: "Une la mesa con la reserva que necesita atención ahora.",
-              priority: "blocking" as const,
-              tone: "warning" as const,
-              onSelect: handleAssignReservation,
-            },
-          ]
-        : []),
-      ...(activeTable.guests.length
-        ? [
-            {
-              id: `${activeTable.id}-move-guest`,
-              label: "Mover invitados",
-              reason: `${activeTable.guests.length} invitados siguen asignados a esta mesa.`,
-              impact: "Reubica personas sin perder el contexto operativo.",
-              priority: "quick" as const,
-              tone: "info" as const,
-              onSelect: handleMoveGuest,
-            },
-          ]
-        : []),
-      ...tableInsights.slice(0, 2).map((item) =>
-        buildGuidedActionItem(item, {
-          href: item.route,
-          impact: item.description,
-        }),
-      ),
-    ];
+    const timestamp = nowIso();
+    const payload: Resource = {
+      id: editingResourceId ?? createUuid(),
+      venueId: venue.id,
+      sectorId: resourceForm.sectorId || undefined,
+      type: resourceForm.type,
+      name: resourceName,
+      capacity: Math.max(Number(resourceForm.capacity || 0), 0),
+      status: resourceForm.status,
+      order: Number(resourceForm.order || 1),
+      notes: resourceForm.notes.trim() || undefined,
+      metadata: {},
+      createdAt: editingResourceId ? (resources.find((item) => item.id === editingResourceId)?.createdAt ?? timestamp) : timestamp,
+      updatedAt: timestamp,
+    };
 
-    const seen = new Set<string>();
+    if (editingResourceId) {
+      await updateResource(payload);
+    } else {
+      await createResource(payload);
+      setSelectedResourceId(payload.id);
+    }
 
-    return actions
-      .filter((item) => {
-        if (seen.has(item.id)) {
-          return false;
-        }
+    if (payload.sectorId) {
+      await moveResourceToSector(payload.id, payload.sectorId);
+    }
 
-        seen.add(item.id);
-        return true;
-      })
-      .slice(0, 3);
-  }, [activeReservationOptions.length, activeTable, handleAssignReservation, handleMoveGuest, releaseTable, tableInsights]);
+    setEditingResourceId(null);
+    setResourceForm(emptyResourceForm);
+  };
 
-  if (!activeTable) {
+  const formatAvailability = (status: string) => {
+    if (status === "Available") return "Disponible";
+    if (status === "Reserved") return "Reservado";
+    if (status === "Partially Occupied" || status === "Full") return "Ocupado";
+    if (status === "Over Capacity") return "Sobrecapacidad";
+    if (status === "Blocked") return "Bloqueado";
+    return "No disponible";
+  };
+
+  const resourceTone = (status: string) => {
+    if (status === "Available") return "success" as const;
+    if (status === "Reserved") return "info" as const;
+    if (status === "Partially Occupied" || status === "Full") return "warning" as const;
+    return "danger" as const;
+  };
+
+  const activateCardSelection = (onSelect: () => void) => (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect();
+    }
+  };
+
+  const openReservationEditor = (reservationId: string, action: "edit" | "append" = "edit") => {
+    const params = new URLSearchParams({
+      editReservationId: reservationId,
+      action,
+    });
+
+    router.push(`/reservations?${params.toString()}`);
+  };
+
+  if (!venue) {
     return (
       <div className="space-y-6">
         <Topbar
-          eyebrow="Mesas"
-          title="Operación de mesas"
-          description="No hay mesas disponibles para operar en este momento."
+          eyebrow="Recursos"
+          title="Gestión de recursos"
+          description="No hay venue activo para administrar sectores y recursos."
         />
       </div>
     );
@@ -231,385 +320,485 @@ function TablesFlowWorkspace() {
   return (
     <div className="space-y-6">
       <Topbar
-        eyebrow="Mesas"
-        title="Operación de mesas"
-        description="Administra capacidad, ocupación, reservas e invitados con el mismo estado compartido."
+        eyebrow="Recursos"
+        title={venue.name}
+        description={`Venue activo para ${currentOrganization.name}. Sectores y recursos físicos se administran desde esta vista.`}
       />
 
-      <section className="grid gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] xl:grid-cols-5">
-        <MetricPanel label="Mesas activas" value={`${activeTables}`} tone="info" />
-        <MetricPanel label="Mesas completas" value={`${fullTables}`} tone="warning" />
-        <MetricPanel label="Con capacidad" value={`${availableTables}`} tone="success" />
-        <MetricPanel label="Sobrecargadas" value={`${overCapacityTables}`} tone="danger" />
-        <MetricPanel label="Ocupación general" value={occupancyPercent} tone="info" />
+      <section className="grid gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] xl:grid-cols-4">
+        <LiveSummaryRow label="Sectores" value={`${venueSectors.length}`} />
+        <LiveSummaryRow label="Recursos" value={`${totalResources}`} />
+        <LiveSummaryRow label="Activos" value={`${activeResources}`} />
+        <LiveSummaryRow label="Capacidad derivada" value={`${totalDerivedCapacity}`} />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-        <div className="space-y-4">
-          <GuidedActionPanel
-            title="Siguiente paso"
-            description="La mesa activa propone la acción que más reduce fricción operativa."
-            items={guidedActions}
-          />
-
+      <section className="grid gap-6 xl:grid-cols-[1.02fr_0.98fr]">
+        <div className="space-y-6">
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Mesas operativas
+                  Venue activo
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{venue.name}</h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  {currentEvent.name}
+                </p>
+              </div>
+              <StatusBadge variant="info">{venueSectors.length} sectores</StatusBadge>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                  Sectores
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                  Selecciona una mesa para operar.
+                  {selectedSector?.name ?? "Sin sector"}
                 </h2>
               </div>
-              <StatusBadge variant="info">{prioritizedTables.length}</StatusBadge>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={startCreateSector}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
+                >
+                  Nuevo sector
+                </button>
+              </div>
             </div>
 
-            <div className="mt-5 space-y-3">
-              {prioritizedTables.map((table) => {
-                const isActive = table.id === activeTable.id;
-                const tableActions = [
-                  {
-                    id: `${table.id}-open`,
-                    label: "Abrir",
-                    description: "Seleccionar esta mesa.",
-                    tone: "info" as const,
-                    onSelect: () => {
-                      setActiveTableId(table.id);
-                      setReservationId(reservations.find((reservation) => reservation.tableId !== table.id)?.id ?? "");
-                      setGuestId(table.guests[0]?.id ?? "");
-                      setTargetTableId(prioritizedTables.find((candidate) => candidate.id !== table.id)?.id ?? "");
-                    },
-                  },
-                  {
-                    id: `${table.id}-assign`,
-                    label: "Asignar reserva",
-                    description: "Vincular la reserva activa a la mesa.",
-                    tone: "success" as const,
-                    onSelect: handleAssignReservation,
-                  },
-                  {
-                    id: `${table.id}-move`,
-                    label: "Mover invitados",
-                    description: "Reasignar un invitado a otra mesa.",
-                    tone: "warning" as const,
-                    onSelect: handleMoveGuest,
-                  },
-                  {
-                    id: `${table.id}-release`,
-                    label: "Liberar",
-                    description: "Dejar la mesa disponible.",
-                    tone: "info" as const,
-                    onSelect: () => releaseTable(table.id),
-                  },
-                  {
-                    id: `${table.id}-close`,
-                    label: "Cerrar",
-                    description: "Marcar la mesa como cerrada.",
-                    tone: "danger" as const,
-                    onSelect: () => closeTable(table.id),
-                  },
-                ];
-
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {sectorMetrics.map(({ sector, summaryCount, derivedCapacity }) => {
+                const selected = sector.id === selectedSector?.id;
                 return (
-                  <ContextualCard
-                    key={table.id}
-                    items={tableActions}
+                  <article
+                    key={sector.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      setSelectedSectorId(sector.id);
+                      setSelectedResourceId(venueResources.find((resource) => resource.sectorId === sector.id)?.id ?? "");
+                    }}
+                    onKeyDown={activateCardSelection(() => {
+                      setSelectedSectorId(sector.id);
+                      setSelectedResourceId(venueResources.find((resource) => resource.sectorId === sector.id)?.id ?? "");
+                    })}
                     className={[
-                      "rounded-[1.45rem] border",
-                      isActive
-                        ? "border-cyan-400/30 bg-cyan-400/10"
-                        : "border-white/10 bg-slate-950/40 hover:bg-slate-950/55",
+                      "rounded-[1.5rem] border p-4 text-left transition hover:-translate-y-0.5",
+                      selected
+                        ? "border-cyan-400/35 bg-cyan-400/10 shadow-[0_20px_60px_rgba(0,0,0,0.24)]"
+                        : "border-white/10 bg-slate-950/40 hover:border-white/15 hover:bg-slate-950/55",
                     ].join(" ")}
                   >
-                    <button
-                      type="button"
-                    onClick={() => {
-                      setActiveTableId(table.id);
-                      setReservationId(reservations.find((reservation) => reservation.tableId !== table.id)?.id ?? "");
-                      setGuestId(table.guests[0]?.id ?? "");
-                      setTargetTableId(prioritizedTables.find((candidate) => candidate.id !== table.id)?.id ?? "");
-                    }}
-                    className="w-full rounded-[1.45rem] p-4 text-left transition"
-                  >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-white">{table.name}</p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-500">
-                            {table.location}
-                          </p>
-                        </div>
-                        <StatusBadge variant={table.statusTone}>{formatTableStatus(table.status)}</StatusBadge>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-semibold tracking-tight text-white">{sector.name}</p>
+                        <p className="mt-1 text-sm text-slate-400">
+                          {summaryCount} recursos · capacidad {derivedCapacity}
+                        </p>
                       </div>
+                      <StatusBadge variant={sector.status === "active" ? "success" : "warning"}>
+                        {sector.status === "active" ? "Activo" : "Inactivo"}
+                      </StatusBadge>
+                    </div>
 
-                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                        <MiniStat label="Invitados" value={`${table.metrics.assignedGuests}`} />
-                        <MiniStat label="Ingresados" value={`${table.metrics.checkedInGuests}`} />
-                        <MiniStat label="Pendientes" value={`${table.metrics.pendingGuests}`} />
-                        <MiniStat label="Último estado" value={table.status} />
-                      </div>
-                    </button>
-                  </ContextualCard>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          startEditSector(sector);
+                        }}
+                        className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void setSectorStatus(sector.id, sector.status === "active" ? "inactive" : "active");
+                        }}
+                        className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white"
+                        >
+                        {sector.status === "active" ? "Desactivar" : "Activar"}
+                      </button>
+                    </div>
+                  </article>
                 );
               })}
             </div>
           </section>
 
-          <section className="grid gap-3 rounded-[2rem] border border-white/10 bg-slate-950/40 p-5 sm:grid-cols-2">
-            <LiveSummaryRow label="Capacidad" value={`${activeTable.capacity}`} />
-            <LiveSummaryRow label="Asignados" value={`${activeTable.metrics.assignedGuests}`} />
-            <LiveSummaryRow label="Disponibles" value={`${activeTable.metrics.capacityRemaining}`} />
-            <LiveSummaryRow label="Sobrecapacidad" value={`${activeTable.metrics.overCapacity}`} />
+          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                  Formulario sector
+                </p>
+                <h3 className="mt-2 text-xl font-semibold tracking-tight text-white">
+                  {editingSectorId ? "Editar sector" : "Crear sector"}
+                </h3>
+              </div>
+              <StatusBadge variant="info">{editingSectorId ? "Edición" : "Nuevo"}</StatusBadge>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <Field label="Nombre">
+                <input
+                  value={sectorForm.name}
+                  onChange={(event) => setSectorForm((current) => ({ ...current, name: event.target.value }))}
+                  className={inputClassName}
+                  placeholder="Planta Baja"
+                />
+              </Field>
+              <Field label="Orden">
+                <input
+                  value={sectorForm.order}
+                  onChange={(event) => setSectorForm((current) => ({ ...current, order: event.target.value }))}
+                  className={inputClassName}
+                  placeholder="1"
+                  type="number"
+                />
+              </Field>
+              <Field label="Capacidad opcional">
+                <input
+                  value={sectorForm.capacity}
+                  onChange={(event) => setSectorForm((current) => ({ ...current, capacity: event.target.value }))}
+                  className={inputClassName}
+                  placeholder="30"
+                  type="number"
+                />
+              </Field>
+              <Field label="Estado">
+                <select
+                  value={sectorForm.status}
+                  onChange={(event) => setSectorForm((current) => ({ ...current, status: event.target.value as Sector["status"] }))}
+                  className={selectClassName}
+                >
+                  <option value="active">Activo</option>
+                  <option value="inactive">Inactivo</option>
+                </select>
+              </Field>
+              <label className="md:col-span-2">
+                <span className="mb-2 block text-sm font-medium text-slate-200">Descripción</span>
+                <textarea
+                  value={sectorForm.description}
+                  onChange={(event) => setSectorForm((current) => ({ ...current, description: event.target.value }))}
+                  className={`${inputClassName} min-h-[96px]`}
+                  placeholder="Sector principal cerca de la pista"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void saveSector()}
+                className="inline-flex h-11 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+              >
+                Guardar sector
+              </button>
+              <button
+                type="button"
+                onClick={startCreateSector}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+              >
+                Limpiar
+              </button>
+            </div>
           </section>
         </div>
 
-        <section className="space-y-5 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                Detalle de mesa
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                {activeTable.name}
-              </h2>
-              <p className="mt-2 text-sm text-slate-400">{activeTable.location}</p>
-            </div>
-            <StatusBadge variant={activeTable.statusTone}>{formatTableStatus(activeTable.status)}</StatusBadge>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <LiveSummaryRow label="Reservas" value={`${activeTable.reservations.length}`} />
-            <LiveSummaryRow label="Invitados" value={`${activeTable.metrics.assignedGuests}`} />
-            <LiveSummaryRow label="Ingresados" value={`${activeTable.metrics.checkedInGuests}`} />
-            <LiveSummaryRow label="Pendientes" value={`${activeTable.metrics.pendingGuests}`} />
-            <LiveSummaryRow label="Ocupación" value={`${activeTable.metrics.occupancyPercent}%`} />
-            <LiveSummaryRow label="Estado" value={formatTableStatus(activeTable.status)} />
-          </div>
-
-          <section className="rounded-[1.6rem] border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-              Reservas asociadas
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {activeTable.reservations.length ? (
-                activeTable.reservations.map((reservation) => (
-                  <StatusBadge key={reservation.id} variant="info">
-                    {reservation.code} · {reservation.name}
-                  </StatusBadge>
-                ))
-              ) : (
-                <StatusBadge variant="warning">Sin reservas</StatusBadge>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-[1.6rem] border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-              Invitados asignados
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {activeTable.guests.length ? (
-                activeTable.guests.map((guest) => (
-                  <StatusBadge key={guest.id} variant={guest.admissionStatus === "Ingresó" ? "success" : guest.admissionStatus === "Anulada" ? "danger" : "warning"}>
-                    {guest.name}
-                  </StatusBadge>
-                ))
-              ) : (
-                <StatusBadge variant="warning">Sin invitados</StatusBadge>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-[1.6rem] border border-white/10 bg-slate-950/40 p-4">
-            <div className="flex items-center justify-between gap-3">
+        <div className="space-y-6">
+          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Asignar reserva
+                  Resources
                 </p>
-                <h3 className="mt-2 text-lg font-semibold tracking-tight text-white">
-                  Vincula una reserva a esta mesa.
-                </h3>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                  {selectedSector?.name ?? "Sin sector"}
+                </h2>
               </div>
-              <StatusBadge variant="info">{activeReservationOptions.length}</StatusBadge>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-              <label className="block">
-                <span className="sr-only">Seleccionar reserva</span>
-                <select
-                  value={reservationId}
-                  onChange={(event) => setReservationId(event.target.value)}
-                  className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/50 focus:bg-white/[0.06]"
-                >
-                  {activeReservationOptions.map((reservation) => (
-                    <option key={reservation.id} value={reservation.id}>
-                      {reservation.label} · {formatReservationStatus(reservation.status)}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <button
                 type="button"
-                onClick={handleAssignReservation}
+                onClick={() => startCreateResource(selectedSector?.id ?? "")}
                 className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
               >
-                Asignar
+                Nuevo recurso
               </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {selectedResources.map((resource) => {
+                const summary = resourceSummaryMap.get(resource.id);
+                const overCapacity = summary ? Math.max(summary.metrics.assignedGuests - resource.capacity, 0) : 0;
+                const selected = resource.id === selectedResource?.id;
+                const availability = summary ? formatAvailability(summary.status) : resource.status === "Closed" ? "No disponible" : "Disponible";
+                const activeReservation = getPrimaryActiveTableReservation(
+                  {
+                    ...resource,
+                    location: venueSectors.find((sector) => sector.id === resource.sectorId)?.name ?? venue?.name ?? "Sin sector",
+                    eventId: currentEvent.id,
+                    reservationIds: [],
+                    guestIds: [],
+                    closed: resource.status === "Closed" || resource.status === "Blocked",
+                  },
+                  reservations,
+                );
+                const hasActiveReservation = Boolean(activeReservation);
+
+                return (
+                  <article
+                    key={resource.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedResourceId(resource.id)}
+                    onKeyDown={activateCardSelection(() => setSelectedResourceId(resource.id))}
+                    className={[
+                      "w-full rounded-[1.45rem] border p-4 text-left transition hover:-translate-y-0.5",
+                      selected
+                        ? "border-cyan-400/35 bg-cyan-400/10 shadow-[0_20px_60px_rgba(0,0,0,0.24)]"
+                        : "border-white/10 bg-slate-950/40 hover:border-white/15 hover:bg-slate-950/55",
+                    ].join(" ")}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-semibold tracking-tight text-white">{resource.name}</p>
+                        <p className="mt-1 text-sm text-slate-400">
+                          {resourceTypeLabels[resource.type]} · {resource.capacity} personas
+                        </p>
+                      </div>
+                      <StatusBadge variant={resourceTone(summary?.status ?? resource.status)}>
+                        {availability}
+                      </StatusBadge>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <LiveSummaryRow label="Sector" value={venueSectors.find((sector) => sector.id === resource.sectorId)?.name ?? "Sin sector"} />
+                      <LiveSummaryRow label="Ocupación" value={summary ? `${summary.metrics.assignedGuests}/${resource.capacity}` : `0/${resource.capacity}`} />
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {overCapacity > 0 ? <StatusBadge variant="danger">Sobrecapacidad +{overCapacity}</StatusBadge> : null}
+                      {hasActiveReservation ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedReservationResourceId(resource.id);
+                            }}
+                            className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-medium text-cyan-50"
+                          >
+                            Ver reserva
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openReservationEditor(activeReservation.id, "edit");
+                            }}
+                            className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-medium text-cyan-50"
+                          >
+                            Editar reserva
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          startEditResource(resource);
+                        }}
+                        className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void setResourceStatus(resource.id, resource.status === "Closed" ? "Available" : "Closed");
+                        }}
+                        className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white"
+                        >
+                        {resource.status === "Closed" ? "Activar" : "Desactivar"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </section>
 
-          <section className="rounded-[1.6rem] border border-white/10 bg-slate-950/40 p-4">
-            <div className="flex items-center justify-between gap-3">
+          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Mover invitado
+                  Formulario recurso
                 </p>
-                <h3 className="mt-2 text-lg font-semibold tracking-tight text-white">
-                  Reasigna un invitado entre mesas.
+                <h3 className="mt-2 text-xl font-semibold tracking-tight text-white">
+                  {editingResourceId ? "Editar recurso" : "Crear recurso"}
                 </h3>
               </div>
-              <StatusBadge variant="info">{activeTable.guests.length}</StatusBadge>
+              <StatusBadge variant="info">{editingResourceId ? "Edición" : "Nuevo"}</StatusBadge>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <label className="block">
-                <span className="sr-only">Seleccionar invitado</span>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <Field label="Nombre">
+                <input
+                  value={resourceForm.name}
+                  onChange={(event) => setResourceForm((current) => ({ ...current, name: event.target.value }))}
+                  className={inputClassName}
+                  placeholder="Mesa 1"
+                />
+              </Field>
+              <Field label="Tipo">
                 <select
-                  value={guestId}
-                  onChange={(event) => setGuestId(event.target.value)}
-                  className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/50 focus:bg-white/[0.06]"
+                  value={resourceForm.type}
+                  onChange={(event) => setResourceForm((current) => ({ ...current, type: event.target.value as ResourceType }))}
+                  className={selectClassName}
                 >
-                  {activeTable.guests.map((guest) => (
-                    <option key={guest.id} value={guest.id}>
-                      {guest.name} · {guest.tableName ?? activeTable.name}
+                  {Object.entries(resourceTypeLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
                     </option>
                   ))}
                 </select>
-              </label>
-
-              <label className="block">
-                <span className="sr-only">Mesa destino</span>
+              </Field>
+              <Field label="Capacidad">
+                <input
+                  value={resourceForm.capacity}
+                  onChange={(event) => setResourceForm((current) => ({ ...current, capacity: event.target.value }))}
+                  className={inputClassName}
+                  placeholder="6"
+                  type="number"
+                />
+              </Field>
+              <Field label="Orden">
+                <input
+                  value={resourceForm.order}
+                  onChange={(event) => setResourceForm((current) => ({ ...current, order: event.target.value }))}
+                  className={inputClassName}
+                  placeholder="1"
+                  type="number"
+                />
+              </Field>
+              <Field label="Sector">
                 <select
-                  value={targetTableId}
-                  onChange={(event) => setTargetTableId(event.target.value)}
-                  className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/50 focus:bg-white/[0.06]"
+                  value={resourceForm.sectorId}
+                  onChange={(event) => setResourceForm((current) => ({ ...current, sectorId: event.target.value }))}
+                  className={selectClassName}
                 >
-                  {tableSummaries
-                    .filter((table) => table.id !== activeTable.id)
-                    .map((table) => (
-                      <option key={table.id} value={table.id}>
-                        {table.name} · {formatTableStatus(table.status)}
-                      </option>
-                    ))}
+                  <option value="">Sin sector</option>
+                  {venueSectors.map((sector) => (
+                    <option key={sector.id} value={sector.id}>
+                      {sector.name}
+                    </option>
+                  ))}
                 </select>
+              </Field>
+              <Field label="Estado">
+                <select
+                  value={resourceForm.status}
+                  onChange={(event) => setResourceForm((current) => ({ ...current, status: event.target.value as Resource["status"] }))}
+                  className={selectClassName}
+                >
+                  <option value="Available">Disponible</option>
+                  <option value="Reserved">Reservado</option>
+                  <option value="Partially Occupied">Ocupado parcial</option>
+                  <option value="Full">Completo</option>
+                  <option value="Over Capacity">Sobrecapacidad</option>
+                  <option value="Blocked">Bloqueado</option>
+                  <option value="Closed">No disponible</option>
+                </select>
+              </Field>
+              <label className="md:col-span-2">
+                <span className="mb-2 block text-sm font-medium text-slate-200">Notas</span>
+                <textarea
+                  value={resourceForm.notes}
+                  onChange={(event) => setResourceForm((current) => ({ ...current, notes: event.target.value }))}
+                  className={`${inputClassName} min-h-[96px]`}
+                  placeholder="Observaciones operativas del recurso"
+                />
               </label>
+            </div>
 
+            <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={handleMoveGuest}
+                onClick={() => void saveResource()}
+                disabled={!resourceForm.name.trim()}
+                className="inline-flex h-11 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Guardar recurso
+              </button>
+              <button
+                type="button"
+                onClick={() => startCreateResource(selectedSector?.id ?? "")}
                 className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
               >
-                Mover invitado
+                Limpiar
               </button>
             </div>
           </section>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => releaseTable(activeTable.id)}
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Liberar mesa
-            </button>
-            <button
-              type="button"
-              onClick={() => closeTable(activeTable.id)}
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 text-sm font-medium text-rose-50 transition hover:bg-rose-400/15"
-            >
-              Cerrar mesa
-            </button>
-          </div>
-
-          <section className="rounded-[1.6rem] border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-              Resumen operativo
-            </p>
-            <div className="mt-4 space-y-3">
-              <LiveSummaryRow label="Capacidad restante" value={`${activeTable.metrics.capacityRemaining}`} />
-              <LiveSummaryRow label="Sobrecapacidad" value={`${activeTable.metrics.overCapacity}`} />
-              <LiveSummaryRow label="Reservas asociadas" value={`${activeTable.reservations.length}`} />
-              <LiveSummaryRow label="Estado" value={formatTableStatus(activeTable.status)} />
-            </div>
-          </section>
-
-          <section className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Lectura inteligente</p>
-            <h3 className="mt-2 text-lg font-semibold tracking-tight text-white">{prioritySummary.message}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-400">{health.description}</p>
-            <div className="mt-4 space-y-2">
-              {tableInsights.length ? (
-                tableInsights.slice(0, 3).map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-white">{item.title}</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-400">{item.description}</p>
-                      </div>
-                      <StatusBadge variant={item.tone}>{item.priority}</StatusBadge>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-400">
-                  Sin recomendaciones activas.
-                </div>
-              )}
-            </div>
-          </section>
-        </section>
+        </div>
       </section>
+
+      <ResourceReservationModal
+        isOpen={Boolean(selectedReservationResourceId && selectedReservation)}
+        resource={selectedReservationResource}
+        reservation={selectedReservation}
+        guests={selectedReservationGuests}
+        summary={selectedReservationResource ? resourceSummaryMap.get(selectedReservationResource.id) ?? null : null}
+        sectorName={
+          selectedReservationResource
+            ? venueSectors.find((sector) => sector.id === selectedReservationResource.sectorId)?.name ?? "Sin sector"
+            : "Sin sector"
+        }
+        conflictCount={selectedReservationConflictCount}
+        onClose={() => setSelectedReservationResourceId(null)}
+        onAddManillas={() => {
+          if (!selectedReservation) {
+            return;
+          }
+
+          openReservationEditor(selectedReservation.id, "append");
+        }}
+        onEditReservation={() => {
+          if (!selectedReservation) {
+            return;
+          }
+
+          openReservationEditor(selectedReservation.id, "edit");
+        }}
+      />
     </div>
   );
 }
 
-function MetricPanel({
+function Field({
   label,
-  value,
-  tone,
+  children,
 }: {
   label: string;
-  value: string;
-  tone: "success" | "warning" | "danger" | "info";
+  children: ReactNode;
 }) {
-  const toneClass =
-    tone === "success"
-      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-      : tone === "warning"
-        ? "border-amber-400/20 bg-amber-400/10 text-amber-100"
-        : tone === "danger"
-          ? "border-rose-400/20 bg-rose-400/10 text-rose-100"
-          : "border-cyan-400/20 bg-cyan-400/10 text-cyan-100";
-
   return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
-      <p className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xl font-semibold ${toneClass}`}>{value}</p>
-    </div>
+    <label className="block">
+      <span className="mb-2 block text-sm font-medium text-slate-200">{label}</span>
+      {children}
+    </label>
   );
 }
 
-function MiniStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-white">{value}</p>
-    </div>
-  );
-}
+const inputClassName =
+  "h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06]";
+
+const selectClassName =
+  "h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/50 focus:bg-white/[0.06]";

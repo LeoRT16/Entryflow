@@ -11,9 +11,14 @@ import type {
 
 function createTableTone(status: TableStatus): TableTone {
   if (status === "Full") return "warning";
-  if (status === "Over Capacity" || status === "Closed") return "danger";
+  if (status === "Over Capacity" || status === "Blocked" || status === "Closed") return "danger";
   if (status === "Reserved") return "info";
   return "success";
+}
+
+function isActiveReservation(reservation: ReservationRecord) {
+  const normalized = normalizeReservationStatus(reservation.status);
+  return normalized !== "Cancelled" && normalized !== "No Show";
 }
 
 export function normalizeTableStatus(status: string): TableStatus {
@@ -23,6 +28,7 @@ export function normalizeTableStatus(status: string): TableStatus {
     status === "Full" ||
     status === "Over Capacity" ||
     status === "Reserved" ||
+    status === "Blocked" ||
     status === "Closed"
   ) {
     return status;
@@ -47,21 +53,75 @@ export function formatTableStatus(status: TableStatus | string) {
   if (normalized === "Full") return "Completa";
   if (normalized === "Over Capacity") return "Sobrecapacidad";
   if (normalized === "Reserved") return "Reservada";
+  if (normalized === "Blocked") return "Bloqueada";
   return "Cerrada";
 }
 
 function getTableReservations(table: TableRecord, reservations: ReservationRecord[]) {
-  return reservations.filter((reservation) => reservation.tableId === table.id);
+  return reservations.filter((reservation) => {
+    if (table.eventLayoutResourceId && reservation.eventLayoutResourceId === table.eventLayoutResourceId) {
+      return true;
+    }
+
+    if (table.eventLayoutId && reservation.eventLayoutId === table.eventLayoutId) {
+      return reservation.tableId === table.id || reservation.resourceId === table.id;
+    }
+
+    return reservation.resourceId === table.id || reservation.tableId === table.id;
+  });
+}
+
+function getActiveTableReservations(table: TableRecord, reservations: ReservationRecord[]) {
+  return getTableReservations(table, reservations).filter(isActiveReservation);
+}
+
+function sortReservationsByRecency(a: ReservationRecord, b: ReservationRecord) {
+  if (a.updatedAt !== b.updatedAt) {
+    return a.updatedAt < b.updatedAt ? 1 : -1;
+  }
+
+  if (a.createdAt !== b.createdAt) {
+    return a.createdAt < b.createdAt ? 1 : -1;
+  }
+
+  return a.id.localeCompare(b.id);
+}
+
+function getPrimaryTableReservation(table: TableRecord, reservations: ReservationRecord[]) {
+  return [...getActiveTableReservations(table, reservations)].sort(sortReservationsByRecency)[0] ?? null;
+}
+
+export function getPrimaryActiveTableReservation(table: TableRecord, reservations: ReservationRecord[]) {
+  return getPrimaryTableReservation(table, reservations);
+}
+
+function dedupeGuestsById(guests: Guest[]) {
+  return Array.from(new Map(guests.map((guest) => [guest.id, guest])).values());
 }
 
 function getTableGuests(table: TableRecord, reservations: ReservationRecord[], guests: Guest[]) {
-  const reservationIds = new Set(getTableReservations(table, reservations).map((reservation) => reservation.id));
+  const activeReservations = getActiveTableReservations(table, reservations);
+  const primaryReservation = getPrimaryTableReservation(table, reservations);
 
-  return guests.filter(
-    (guest) =>
-      guest.tableId === table.id ||
-      (reservationIds.has(guest.reservationId) && !guest.tableId),
+  if (!primaryReservation) {
+    return [];
+  }
+
+  const reservationGuestIds = new Set((primaryReservation.guestIds ?? []).filter(Boolean));
+  const reservationGuests = guests.filter(
+    (guest) => guest.reservationId === primaryReservation.id || reservationGuestIds.has(guest.id),
   );
+
+  if (reservationGuests.length > 0) {
+    return dedupeGuestsById(reservationGuests);
+  }
+
+  if (activeReservations.length === 1) {
+    // Legacy fallback: if the reservation has no guest rows yet, use the table-linked guests only when there is a single active reservation.
+    return dedupeGuestsById(guests.filter((guest) => guest.tableId === table.id));
+  }
+
+  return [];
 }
 
 function deriveTableStatus(
@@ -73,7 +133,11 @@ function deriveTableStatus(
     return "Closed" as const;
   }
 
-  const tableReservations = getTableReservations(table, reservations);
+  if (table.status === "Blocked") {
+    return "Blocked" as const;
+  }
+
+  const tableReservations = getActiveTableReservations(table, reservations);
   const tableGuests = getTableGuests(table, reservations, guests);
   const assignedGuests = tableGuests.length;
 
@@ -106,7 +170,7 @@ export function buildTableMetrics(
   guests: Guest[],
   checkIns: CheckIn[],
 ): TableMetrics {
-  const tableReservations = getTableReservations(table, reservations);
+  const tableReservations = getActiveTableReservations(table, reservations);
   const tableGuests = getTableGuests(table, reservations, guests);
   const assignedGuests = tableGuests.length;
   const checkedInGuests = tableGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
@@ -114,11 +178,7 @@ export function buildTableMetrics(
   const capacityRemaining = Math.max(table.capacity - assignedGuests, 0);
   const occupancyPercent = Math.round((assignedGuests / Math.max(table.capacity, 1)) * 100);
   const overCapacity = Math.max(assignedGuests - table.capacity, 0);
-  const activeReservations = tableReservations.filter(
-    (reservation) =>
-      normalizeReservationStatus(reservation.status) !== "Cancelled" &&
-      normalizeReservationStatus(reservation.status) !== "No Show",
-  ).length;
+  const activeReservations = tableReservations.length;
 
   void checkIns;
 

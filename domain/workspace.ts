@@ -55,11 +55,11 @@ export type WorkspaceMutations = {
     method: CheckInMethod;
     operator?: string;
     manual?: boolean;
-  }) => {
+  }) => Promise<{
     result: CheckInAttempt["result"];
     guest?: Guest;
     note: string;
-  };
+  }>;
   createReservation: (input: ReservationCreationInput) => ReservationRecord;
   createOrganization: (organization: Organization) => Organization;
   createEvent: (event: PlatformEvent) => void;

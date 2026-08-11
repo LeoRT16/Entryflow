@@ -33,7 +33,7 @@ export type ReservationRepository = CrudRepository<ReservationRecord, Reservatio
 
 export type GuestRepository = CrudRepository<Guest> & {
   moveToTable(guestId: string, tableId: string): void;
-  checkIn(query: string): CheckInAttempt | null;
+  checkIn(query: string): Promise<CheckInAttempt | null>;
 };
 
 export type TableRepository = CrudRepository<TableRecord> & {
@@ -44,7 +44,7 @@ export type TableRepository = CrudRepository<TableRecord> & {
 };
 
 export type CheckInRepository = CrudRepository<CheckIn> & {
-  register(query: string, method: "QR" | "Manual", operator?: string): CheckInAttempt | null;
+  register(query: string, method: "QR" | "Manual", operator?: string): Promise<CheckInAttempt | null>;
 };
 
 export type TimelineRepository = {
@@ -188,13 +188,16 @@ export function createMemoryWorkspaceRepositories(adapter: WorkspaceMemoryAdapte
   reservations.setStatus = adapter.setReservationStatus;
   reservations.assignToTable = adapter.assignReservationToTable;
   guests.moveToTable = adapter.moveGuestToTable;
-  guests.checkIn = (query: string) => adapter.registerCheckIn({ query, method: "QR" }).result ? adapter.attempts.find((attempt) => attempt.query === query) ?? null : null;
+  guests.checkIn = async (query: string) => {
+    const result = await adapter.registerCheckIn({ query, method: "QR" });
+    return result.result ? adapter.attempts.find((attempt) => attempt.query === query) ?? null : null;
+  };
   tables.assignReservation = adapter.assignReservationToTable;
   tables.moveGuest = adapter.moveGuestToTable;
   tables.release = adapter.releaseTable;
   tables.close = adapter.closeTable;
-  checkIns.register = (query: string, method: "QR" | "Manual", operator = method === "Manual" ? "Recepción" : "Escáner") => {
-    adapter.registerCheckIn({ query, method, operator });
+  checkIns.register = async (query: string, method: "QR" | "Manual", operator = method === "Manual" ? "Recepción" : "Escáner") => {
+    await adapter.registerCheckIn({ query, method, operator });
     return adapter.attempts.find((attempt) => attempt.query === query && attempt.method === method) ?? null;
   };
 

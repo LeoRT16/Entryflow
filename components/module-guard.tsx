@@ -16,11 +16,31 @@ export default function ModuleGuard({
   children: ReactNode;
   fallbackHref?: string;
 }) {
-  const { currentEvent } = useCheckInStore();
+  const { currentEvent, status } = useCheckInStore();
+
+  if (status === "loading") {
+    return (
+      <section className="flex min-h-[55vh] items-center justify-center rounded-[2rem] border border-white/10 bg-white/[0.03] p-8">
+        <div className="max-w-2xl text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
+            Cargando contexto
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Estamos reconstruyendo el workspace activo.
+          </h1>
+          <p className="mt-4 text-sm leading-6 text-slate-400">
+            Recuperando organización, evento y recursos antes de abrir {getEventModuleLabel(module).toLowerCase()}.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   if (isModuleEnabled(currentEvent, module)) {
     return children;
   }
+
+  const eventName = currentEvent.name || "este evento";
 
   return (
     <section className="flex min-h-[55vh] items-center justify-center rounded-[2rem] border border-white/10 bg-white/[0.03] p-8">
@@ -32,7 +52,7 @@ export default function ModuleGuard({
           Este módulo no está habilitado para este evento.
         </h1>
         <p className="mt-4 text-sm leading-6 text-slate-400">
-          {getEventModuleLabel(module)} no forma parte de la configuración actual de {currentEvent.name}.
+          {getEventModuleLabel(module)} no forma parte de la configuración actual de {eventName}.
         </p>
 
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">

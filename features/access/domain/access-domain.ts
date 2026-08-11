@@ -88,6 +88,7 @@ export type Ticket = {
 export type InvitationDesign = {
   id: string;
   eventName: string;
+  venueName?: string;
   guestName: string;
   reservationName: string;
   reservationCode: string;
@@ -98,6 +99,7 @@ export type InvitationDesign = {
   dressCode?: string;
   uniqueCode: string;
   qrValue: string;
+  message?: string;
   theme?: string;
   logoLabel?: string;
   artLabel?: string;
@@ -578,6 +580,7 @@ export function createAdmissionTimelineEntry(result: AdmissionEngineOutput, tick
 
   return {
     id: result.audit.id,
+    eventId: ticket?.eventId,
     timestamp: result.audit.timestamp,
     kind,
     icon: result.result === "Valid" ? "checkin" : "alert",

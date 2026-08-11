@@ -47,6 +47,51 @@ create table if not exists public.events (
   deleted_at timestamptz
 );
 
+create table if not exists public.venues (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  description text,
+  address text,
+  city text,
+  country text,
+  status text not null,
+  metadata jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create table if not exists public.sectors (
+  id uuid primary key default gen_random_uuid(),
+  venue_id uuid not null references public.venues(id) on delete cascade,
+  name text not null,
+  description text,
+  capacity integer,
+  display_order integer not null default 0,
+  status text not null,
+  metadata jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create table if not exists public.resources (
+  id uuid primary key default gen_random_uuid(),
+  venue_id uuid not null references public.venues(id) on delete cascade,
+  sector_id uuid references public.sectors(id) on delete set null,
+  type text not null,
+  name text not null,
+  capacity integer not null default 0,
+  status text not null,
+  display_order integer not null default 0,
+  notes text,
+  metadata jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 create table if not exists public.guests (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events(id) on delete cascade,
@@ -238,6 +283,9 @@ create table if not exists public.profiles (
 
 create trigger set_updated_at_organizations before update on public.organizations for each row execute function public.set_updated_at();
 create trigger set_updated_at_events before update on public.events for each row execute function public.set_updated_at();
+create trigger set_updated_at_venues before update on public.venues for each row execute function public.set_updated_at();
+create trigger set_updated_at_sectors before update on public.sectors for each row execute function public.set_updated_at();
+create trigger set_updated_at_resources before update on public.resources for each row execute function public.set_updated_at();
 create trigger set_updated_at_guests before update on public.guests for each row execute function public.set_updated_at();
 create trigger set_updated_at_reservations before update on public.reservations for each row execute function public.set_updated_at();
 create trigger set_updated_at_tables before update on public.tables for each row execute function public.set_updated_at();
@@ -250,6 +298,9 @@ create trigger set_updated_at_profiles before update on public.profiles for each
 
 alter table public.organizations enable row level security;
 alter table public.events enable row level security;
+alter table public.venues enable row level security;
+alter table public.sectors enable row level security;
+alter table public.resources enable row level security;
 alter table public.guests enable row level security;
 alter table public.reservations enable row level security;
 alter table public.tables enable row level security;
@@ -262,6 +313,9 @@ alter table public.profiles enable row level security;
 
 create policy if not exists "Allow all access" on public.organizations for all using (true) with check (true);
 create policy if not exists "Allow all access" on public.events for all using (true) with check (true);
+create policy if not exists "Allow all access" on public.venues for all using (true) with check (true);
+create policy if not exists "Allow all access" on public.sectors for all using (true) with check (true);
+create policy if not exists "Allow all access" on public.resources for all using (true) with check (true);
 create policy if not exists "Allow all access" on public.guests for all using (true) with check (true);
 create policy if not exists "Allow all access" on public.reservations for all using (true) with check (true);
 create policy if not exists "Allow all access" on public.tables for all using (true) with check (true);

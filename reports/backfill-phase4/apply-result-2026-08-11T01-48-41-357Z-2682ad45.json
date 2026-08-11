@@ -1,0 +1,15 @@
+{
+  "batchId": "2026-08-11T01-48-41-357Z-2682ad45",
+  "snapshotPath": "/Users/leorodriguez/Documents/Projects/rota-carlota/reports/backfill-phase4/apply-snapshot-2026-08-11T01-48-41-357Z-2682ad45.json",
+  "approvedReportPath": "reports/backfill-phase4/dry-run-2026-08-11T01-12-18-551Z.json",
+  "appliedAt": "2026-08-11T01:48:47.989Z",
+  "postValidation": {
+    "eventsWithVenueId": 4,
+    "reservationsWithEventLayoutId": 10,
+    "reservationsWithEventLayoutResourceId": 10,
+    "reservationsPreservedTableId": true,
+    "ambiguousReservations": 0,
+    "unmappedReservations": 0,
+    "conflicts": 5
+  }
+}

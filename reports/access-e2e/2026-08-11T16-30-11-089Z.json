@@ -1,0 +1,77 @@
+{
+  "initialState": {
+    "checkins": 2,
+    "timelineEvents": 55
+  },
+  "target": {
+    "guestId": "c8de6fa4-6ca2-4727-b871-82705452bfbc",
+    "reservationId": "93a5a2f3-009a-4b1b-a669-8db2ad6bc45a",
+    "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+    "grantId": "c8de6fa4-6ca2-4727-b871-82705452bfbc",
+    "code": "RES-33205508-05",
+    "qrToken": "qr_68293a0b7c358061"
+  },
+  "resolutionByQr": {
+    "status": "found",
+    "grantId": "c8de6fa4-6ca2-4727-b871-82705452bfbc",
+    "guestId": "c8de6fa4-6ca2-4727-b871-82705452bfbc"
+  },
+  "resolutionByCode": {
+    "status": "found",
+    "grantId": "c8de6fa4-6ca2-4727-b871-82705452bfbc",
+    "guestId": "c8de6fa4-6ca2-4727-b871-82705452bfbc"
+  },
+  "resolutionWrongEvent": {
+    "status": "not-found",
+    "matches": 0
+  },
+  "resolutionMissing": {
+    "status": "not-found",
+    "matches": 0
+  },
+  "revocation": {
+    "grantStatus": "cancelled",
+    "evaluationResult": "Cancelled"
+  },
+  "admission": {
+    "result": "Valid",
+    "title": "Check-in exitoso",
+    "reason": "QR validado correctamente.",
+    "status": "Checked In",
+    "tone": "success",
+    "note": "QR validado correctamente.",
+    "shouldPersist": true,
+    "audit": {
+      "query": "qr_68293a0b7c358061",
+      "method": "qr",
+      "operator": "Escáner",
+      "gate": "Principal",
+      "timestamp": "2026-08-11T16:30:09.272Z"
+    }
+  },
+  "regeneration": {
+    "oldResolution": "not-found",
+    "newGrantToken": "qr_6a9b006f0826dced",
+    "newResolution": "found"
+  },
+  "duplicateGuestPreview": {
+    "status": "used",
+    "checkInTime": "16:30"
+  },
+  "persistence": {
+    "checkinsForGrant": 1,
+    "timelineForCheckin": 1,
+    "guestCheckInTime": "16:30",
+    "secondAttemptResult": "Already Checked In"
+  },
+  "concurrency": {
+    "settled": [
+      "fulfilled",
+      "fulfilled"
+    ],
+    "checkinsForGrantAfterConcurrency": 1
+  },
+  "summary": {
+    "pass": true
+  }
+}

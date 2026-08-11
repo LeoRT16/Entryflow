@@ -2,29 +2,21 @@
 
 import { useEffect, useState } from "react";
 
+import TimezoneSelect from "@/components/timezone-select";
 import { useFeedback } from "@/components/premium-feedback";
 import type { Organization } from "@/features/domain/types";
+import { buildSlugFromName } from "@/lib/slug";
+import { getDefaultTimezone } from "@/lib/timezone";
 
 type OrganizationCreationModalProps = {
   open: boolean;
   onClose: () => void;
-  onCreate: (organization: Organization) => void;
+  onCreate: (organization: Organization) => Promise<Organization>;
   templateOrganization: Organization;
 };
 
-function normalizeSlug(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-}
-
-function buildOrganizationId(slug: string) {
-  const suffix = globalThis.crypto?.randomUUID?.().slice(0, 8) ?? Math.random().toString(36).slice(2, 8);
-  return `org-${slug || "alpha"}-${suffix}`;
+function buildOrganizationId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export default function OrganizationCreationModal({
@@ -35,8 +27,8 @@ export default function OrganizationCreationModal({
 }: OrganizationCreationModalProps) {
   const { showToast } = useFeedback();
   const [name, setName] = useState("Nueva organización");
-  const [slug, setSlug] = useState("nueva-organizacion");
-  const [timezone, setTimezone] = useState(templateOrganization.timezone);
+  const [timezone, setTimezone] = useState(() => getDefaultTimezone(templateOrganization.timezone));
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -59,17 +51,18 @@ export default function OrganizationCreationModal({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, onClose, templateOrganization.timezone]);
+  }, [open, onClose]);
 
   if (!open) {
     return null;
   }
 
-  const submit = () => {
-    const normalizedSlug = normalizeSlug(slug || name);
+  const submit = async () => {
+    setIsSaving(true);
+    const normalizedSlug = buildSlugFromName(name);
     const nextOrganization: Organization = {
       ...templateOrganization,
-      id: buildOrganizationId(normalizedSlug),
+      id: buildOrganizationId(),
       name: name.trim() || "Nueva organización",
       slug: normalizedSlug || "nueva-organizacion",
       timezone,
@@ -83,13 +76,23 @@ export default function OrganizationCreationModal({
       },
     };
 
-    onCreate(nextOrganization);
-    showToast({
-      title: "Organización creada",
-      description: `${nextOrganization.name} quedó lista para crear su primer evento.`,
-      tone: "success",
-    });
-    onClose();
+    try {
+      await onCreate(nextOrganization);
+      showToast({
+        title: "Organización creada",
+        description: `${nextOrganization.name} quedó lista para crear su primer evento.`,
+        tone: "success",
+      });
+      onClose();
+    } catch (error) {
+      showToast({
+        title: "No pudimos crear la organización",
+        description: error instanceof Error ? error.message : "Revisá la conexión con Supabase.",
+        tone: "error",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -104,14 +107,12 @@ export default function OrganizationCreationModal({
       <div className="w-full max-w-2xl rounded-[2rem] border border-white/10 bg-[#08111f] p-5 shadow-[0_40px_140px_rgba(0,0,0,0.55)] sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
-              Organization Setup
-            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">Organización</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
               Crear organización
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Define el espacio de trabajo antes de crear el evento. Todo seguirá operando en memoria.
+              Define el espacio de trabajo antes de crear el evento. La configuración quedará lista para operar de inmediato.
             </p>
           </div>
 
@@ -127,14 +128,20 @@ export default function OrganizationCreationModal({
 
         <div className="mt-6 grid gap-4">
           <Field label="Nombre" value={name} onChange={setName} placeholder="Grupo, sala o empresa" />
-          <Field label="Slug" value={slug} onChange={(value) => setSlug(normalizeSlug(value))} placeholder="nueva-organizacion" />
-          <Field label="Timezone" value={timezone} onChange={setTimezone} placeholder="America/La_Paz" />
+          <TimezoneSelect
+            label="Zona horaria"
+            value={timezone}
+            onChange={setTimezone}
+            preferredTimezone={templateOrganization.timezone}
+            helperText="Se detecta automáticamente en tu equipo y puedes ajustarla si hace falta."
+          />
         </div>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onClose}
+            disabled={isSaving}
             className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
           >
             Cancelar
@@ -142,9 +149,10 @@ export default function OrganizationCreationModal({
           <button
             type="button"
             onClick={submit}
+            disabled={isSaving}
             className="inline-flex h-11 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
           >
-            Crear organización
+            {isSaving ? "Creando..." : "Crear organización"}
           </button>
         </div>
       </div>

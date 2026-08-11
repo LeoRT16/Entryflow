@@ -1,8 +1,8 @@
 "use client";
 
 import type * as React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import MetricCard from "@/components/metric-card";
 import Topbar from "@/components/topbar";
@@ -11,8 +11,21 @@ import ReservationWizardModal, {
   wizardSteps,
 } from "@/features/reservations/components/reservation-wizard-modal";
 import ReservationOperationsBoard from "@/features/reservations/components/reservation-operations-board";
-import { buildGuestList, createGuestDraft } from "@/features/reservations/domain/reservation-draft";
-import { reservationGuestPresets, reservationTableOptions } from "@/features/reservations/domain/reservation-presets";
+import { buildGuestDraftsFromGuests, createGuestDraft } from "@/features/reservations/domain/reservation-draft";
+import {
+  deriveFrequentCustomerFromHistory,
+  normalizeReservationStatus,
+} from "@/features/reservations/domain/reservation-domain";
+import {
+  countDraftPendingGuests,
+  countDraftRegisteredGuests,
+  createReservationWizardDefaults,
+  createReservationSubmissionGate,
+  resolveInitialReservationResourceId,
+  resolveReservationCapacityViolation,
+  runReservationSubmission,
+} from "@/features/reservations/domain/reservation-wizard";
+import { reservationGuestPresets } from "@/features/reservations/domain/reservation-presets";
 import { clampGuestCount } from "@/features/reservations/utils/reservation-utils";
 import type {
   GuestDraft,
@@ -21,9 +34,11 @@ import type {
   ReservationCreationInput,
   ReservationSummary,
   ReservationType,
+  TableOption,
   WizardStep,
 } from "@/features/reservations/types";
 import { useCheckInStore } from "@/services/workspace-service";
+import { resolveCurrentEventLayout, resolveCurrentEventLayoutResource } from "@/services/workspace-layout-resolution";
 import StatusBadge from "@/components/status-badge";
 import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
@@ -34,11 +49,25 @@ type ReservationFlowWorkspaceProps = Pick<
   CheckInStore,
   | "currentOrganization"
   | "currentEvent"
+  | "venues"
+  | "sectors"
+  | "resources"
+  | "currentVenue"
+  | "currentVenueSectors"
+  | "currentVenueResources"
+  | "venueLayoutResources"
+  | "eventLayoutResources"
+  | "eventLayouts"
   | "events"
+  | "guests"
+  | "reservations"
+  | "tableSummaries"
   | "workspaceIntelligence"
   | "workspacePriority"
   | "reservationSummaries"
   | "createReservation"
+  | "updateReservation"
+  | "appendReservationGuests"
   | "addReservationGuest"
   | "updateReservationGuest"
   | "setReservationStatus"
@@ -82,11 +111,25 @@ export default function ReservationFlow() {
       key={store.currentEvent.id}
       currentOrganization={store.currentOrganization}
       currentEvent={store.currentEvent}
+      venues={store.venues}
+      sectors={store.sectors}
+      resources={store.resources}
+      currentVenue={store.currentVenue}
+      currentVenueSectors={store.currentVenueSectors}
+      currentVenueResources={store.currentVenueResources}
+      venueLayoutResources={store.venueLayoutResources}
+      eventLayoutResources={store.eventLayoutResources}
+      eventLayouts={store.eventLayouts}
       events={store.events}
+      guests={store.guests}
+      reservations={store.reservations}
+      tableSummaries={store.tableSummaries}
       workspaceIntelligence={store.workspaceIntelligence}
       workspacePriority={store.workspacePriority}
       reservationSummaries={store.reservationSummaries}
       createReservation={store.createReservation}
+      updateReservation={store.updateReservation}
+      appendReservationGuests={store.appendReservationGuests}
       addReservationGuest={store.addReservationGuest}
       updateReservationGuest={store.updateReservationGuest}
       setReservationStatus={store.setReservationStatus}
@@ -98,45 +141,60 @@ export default function ReservationFlow() {
 function ReservationFlowWorkspace({
   currentOrganization,
   currentEvent,
+  venues,
+  sectors,
+  resources,
+  currentVenue,
+  currentVenueSectors,
+  currentVenueResources,
+  venueLayoutResources,
+  eventLayoutResources,
+  eventLayouts,
   events,
+  guests: reservationGuests,
+  reservations,
+  tableSummaries,
   workspaceIntelligence,
   workspacePriority,
   reservationSummaries,
   createReservation,
+  updateReservation,
+  appendReservationGuests,
   addReservationGuest,
   updateReservationGuest,
   setReservationStatus,
   registerCheckIn,
 }: ReservationFlowWorkspaceProps) {
-  const [eventDate, eventTime] = currentEvent.startAt.trim().split(/\s+(?=\d{1,2}:\d{2}$)/);
+  const wizardDefaults = useMemo(
+    () => createReservationWizardDefaults(currentEvent),
+    [currentEvent],
+  );
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>(1);
-  const [eventName, setEventName] = useState(currentEvent.name);
-  const [date, setDate] = useState(eventDate ?? currentEvent.startAt);
-  const [time, setTime] = useState(eventTime ?? "");
-  const [guestCount, setGuestCount] = useState(5);
-  const [reservationType, setReservationType] = useState<ReservationType>("Mesa");
-  const [observations, setObservations] = useState(
-    "Mesa cerca de pista, acceso preferente y confirmación por WhatsApp.",
-  );
-  const [holderName, setHolderName] = useState("Sofía");
-  const [holderLastName, setHolderLastName] = useState("Rivas");
-  const [documentValue, setDocumentValue] = useState("1234567");
-  const [whatsapp, setWhatsapp] = useState("+591 70000011");
-  const [email, setEmail] = useState("sofia.rivas@ejemplo.com");
-  const [preferences, setPreferences] = useState("Mesa tranquila, música moderada");
-  const [vip, setVip] = useState(true);
-  const [frequent, setFrequent] = useState(false);
-  const [notes, setNotes] = useState("Celebración de cumpleaños con grupo cerrado.");
-  const [guests, setGuests] = useState<GuestDraft[]>(() =>
-    buildGuestList(5, reservationGuestPresets),
-  );
-  const [selectedTableId, setSelectedTableId] = useState(reservationTableOptions[0].id);
-  const [amount, setAmount] = useState("850");
-  const [advance, setAdvance] = useState("300");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Transferencia");
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("Parcial");
+  const [eventName, setEventName] = useState(wizardDefaults.eventName);
+  const [date, setDate] = useState(wizardDefaults.date);
+  const [time, setTime] = useState(wizardDefaults.time);
+  const [guestCount, setGuestCount] = useState(wizardDefaults.guestCount);
+  const [reservationType, setReservationType] = useState<ReservationType>(wizardDefaults.reservationType);
+  const [observations, setObservations] = useState(wizardDefaults.observations);
+  const [holderName, setHolderName] = useState(wizardDefaults.holderName);
+  const [holderLastName, setHolderLastName] = useState(wizardDefaults.holderLastName);
+  const [documentValue, setDocumentValue] = useState(wizardDefaults.documentValue);
+  const [whatsapp, setWhatsapp] = useState(wizardDefaults.whatsapp);
+  const [email, setEmail] = useState(wizardDefaults.email);
+  const [preferences, setPreferences] = useState(wizardDefaults.preferences);
+  const [vip, setVip] = useState(wizardDefaults.vip);
+  const [notes, setNotes] = useState(wizardDefaults.notes);
+  const [guestDrafts, setGuestDrafts] = useState<GuestDraft[]>(() => wizardDefaults.guestDrafts);
+  const [selectedResourceId, setSelectedResourceId] = useState(wizardDefaults.selectedResourceId);
+  const [amount, setAmount] = useState(wizardDefaults.amount);
+  const [advance, setAdvance] = useState(wizardDefaults.advance);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(wizardDefaults.paymentMethod);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(wizardDefaults.paymentStatus);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const prioritizedReservations = useMemo(
     () => [...reservationSummaries].sort(compareReservationPriority),
     [reservationSummaries],
@@ -144,6 +202,13 @@ function ReservationFlowWorkspace({
   const [activeReservationId, setActiveReservationId] = useState<string>(
     () => prioritizedReservations[0]?.id ?? "",
   );
+  const [wizardMode, setWizardMode] = useState<"create" | "edit" | "append">("create");
+  const [editingReservationId, setEditingReservationId] = useState<string | null>(null);
+  const editHydratedRef = useRef<string | null>(null);
+  const suppressEditHydrationRef = useRef(false);
+  const reservationSubmissionGateRef = useRef(createReservationSubmissionGate());
+  const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
+  const [submissionActionLabel, setSubmissionActionLabel] = useState("Creando reserva…");
 
   const eventOptions = useMemo(
     () =>
@@ -153,19 +218,263 @@ function ReservationFlowWorkspace({
     [currentOrganization.id, events],
   );
 
-  const selectedTable = useMemo(
+  const frequentCustomer = useMemo(
     () =>
-      reservationTableOptions.find((table) => table.id === selectedTableId) ??
-      reservationTableOptions[0],
-    [selectedTableId],
+      deriveFrequentCustomerFromHistory(reservations, {
+        holderName: `${holderName} ${holderLastName}`.trim(),
+        holderDocument: documentValue,
+        holderWhatsapp: whatsapp,
+        eventId: currentEvent.id,
+      }),
+    [currentEvent.id, documentValue, holderLastName, holderName, reservations, whatsapp],
   );
 
-  const registeredGuests = useMemo(
-    () => guests.filter((guest) => guest.name.trim().length > 0).length,
-    [guests],
+  const selectedResourceContext = useMemo(() => {
+    const venue = currentVenue ?? venues.find((item) => item.id === currentEvent.venueId) ?? null;
+    const venueSectors = currentVenueSectors.length
+      ? currentVenueSectors
+      : sectors.filter((sector) => !venue || sector.venueId === venue.id);
+    const venueResources = currentVenueResources.length
+      ? currentVenueResources
+      : resources.filter((resource) => !venue || resource.venueId === venue.id);
+
+    const resource = selectedResourceId ? venueResources.find((item) => item.id === selectedResourceId) ?? null : null;
+    const currentEventLayout = resolveCurrentEventLayout({
+      currentEventId: currentEvent.id,
+      currentVenueId: currentVenue?.id ?? currentEvent.venueId,
+      eventLayouts,
+    });
+    const currentEventLayoutResource = resource
+      ? resolveCurrentEventLayoutResource({
+          currentEventLayout,
+          resourceId: resource.id,
+          venueLayoutResources,
+          eventLayoutResources,
+        })
+      : null;
+    const summary = resource ? tableSummaries.find((item) => item.id === resource.id) ?? null : null;
+
+    return {
+      resource: resource
+        ? {
+            id: resource.id,
+            name: resource.name,
+            capacity: resource.capacity,
+            location: venueSectors.find((sector) => sector.id === resource.sectorId)?.name ?? venue?.name ?? "Sin sector",
+            status: (summary?.status ?? resource.status) as TableOption["status"],
+            venueId: resource.venueId,
+            sectorId: resource.sectorId,
+            tone: summary?.statusTone ?? (resource.status === "Closed" || resource.status === "Over Capacity" ? "danger" : resource.status === "Reserved" ? "info" : resource.status === "Full" ? "warning" : "success"),
+            assignedGuests: summary?.metrics.assignedGuests,
+            activeReservations: summary?.reservationIds.length,
+            overCapacity: summary?.metrics.overCapacity,
+            eventLayoutResourceId: currentEventLayoutResource?.id,
+            eventLayoutId: currentEventLayoutResource?.eventLayoutId,
+          }
+        : null,
+      summary,
+    };
+  }, [currentEvent.id, currentEvent.venueId, currentVenue, currentVenueResources, currentVenueSectors, eventLayoutResources, eventLayouts, resources, sectors, selectedResourceId, tableSummaries, venueLayoutResources, venues]);
+
+  const selectedResource = selectedResourceContext.resource;
+  const selectedResourceSummary = selectedResourceContext.summary;
+  const selectedResourceEventLayoutResourceId = selectedResource?.eventLayoutResourceId ?? "";
+  const selectedResourceReservations = useMemo(
+    () =>
+      selectedResource
+        ? reservations
+            .filter((reservation) => {
+              if (selectedResourceEventLayoutResourceId && reservation.eventLayoutResourceId === selectedResourceEventLayoutResourceId) {
+                return true;
+              }
+
+              return (reservation.tableId ?? reservation.resourceId) === selectedResource.id;
+            })
+            .filter((reservation) => {
+              const status = normalizeReservationStatus(reservation.status);
+              return status !== "Cancelled" && status !== "No Show";
+            })
+            .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+        : [],
+    [reservations, selectedResource, selectedResourceEventLayoutResourceId],
+  );
+  const selectedActiveReservation = selectedResourceReservations[0] ?? null;
+  const selectedReservationConflictCount = selectedResourceReservations.length;
+  const editReservationId = searchParams.get("editReservationId") ?? "";
+  const editAction = searchParams.get("action");
+  const editingReservation = editReservationId
+    ? reservations.find((reservation) => reservation.id === editReservationId) ?? null
+    : null;
+  const wizardReservation = editingReservation ?? selectedActiveReservation;
+  const editingReservationGuests = useMemo(
+    () =>
+      editingReservation
+        ? reservationGuests.filter((guest) => guest.reservationId === editingReservation.id).sort((a, b) => a.id.localeCompare(b.id))
+        : [],
+    [editingReservation, reservationGuests],
   );
 
-  const pendingGuests = Math.max(guestCount - registeredGuests, 0);
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!editingReservationId) {
+      editHydratedRef.current = null;
+      return;
+    }
+
+    if (!editingReservation || editHydratedRef.current === editingReservationId) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+
+      setEventName(editingReservation.eventName);
+      setDate(editingReservation.date);
+      setTime(editingReservation.time);
+      setGuestCount(Math.max(editingReservationGuests.length, 1));
+      setReservationType(editingReservation.reservationType);
+      setObservations(editingReservation.notes);
+      setHolderName(editingReservation.holderName.split(" ")[0] ?? editingReservation.holderName);
+      setHolderLastName(editingReservation.holderName.split(" ").slice(1).join(" "));
+      setDocumentValue(editingReservation.holderDocument);
+      setWhatsapp(editingReservation.holderWhatsapp);
+      setEmail(editingReservation.holderEmail);
+      setPreferences("");
+      setVip(false);
+      setNotes(editingReservation.notes);
+      setGuestDrafts(buildGuestDraftsFromGuests(editingReservationGuests));
+      setSelectedResourceId(
+        resolveInitialReservationResourceId({
+          currentVenueResources,
+          resourceId: editingReservation.resourceId,
+          tableId: editingReservation.tableId,
+        }),
+      );
+      setAmount(editingReservation.amount);
+      setAdvance(editingReservation.advance);
+      setPaymentStatus(editingReservation.paymentStatus);
+      setWizardMode(editAction === "append" ? "append" : "edit");
+      setIsWizardOpen(true);
+      setStep(editAction === "append" ? 3 : 1);
+      editHydratedRef.current = editingReservationId;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentVenueResources, editAction, editingReservation, editingReservationGuests, editingReservationId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!editReservationId) {
+      suppressEditHydrationRef.current = false;
+      return;
+    }
+
+    if (suppressEditHydrationRef.current) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setEditingReservationId(editReservationId);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editReservationId]);
+
+  const resetWizardState = useCallback(() => {
+    setEditingReservationId(null);
+    editHydratedRef.current = null;
+    setWizardMode("create");
+    setEventName(wizardDefaults.eventName);
+    setDate(wizardDefaults.date);
+    setTime(wizardDefaults.time);
+    setGuestCount(wizardDefaults.guestCount);
+    setReservationType(wizardDefaults.reservationType);
+    setObservations(wizardDefaults.observations);
+    setHolderName(wizardDefaults.holderName);
+    setHolderLastName(wizardDefaults.holderLastName);
+    setDocumentValue(wizardDefaults.documentValue);
+    setWhatsapp(wizardDefaults.whatsapp);
+    setEmail(wizardDefaults.email);
+    setPreferences(wizardDefaults.preferences);
+    setVip(wizardDefaults.vip);
+    setNotes(wizardDefaults.notes);
+    setGuestDrafts([...wizardDefaults.guestDrafts]);
+    setSelectedResourceId(wizardDefaults.selectedResourceId);
+    setAmount(wizardDefaults.amount);
+    setAdvance(wizardDefaults.advance);
+    setPaymentMethod(wizardDefaults.paymentMethod);
+    setPaymentStatus(wizardDefaults.paymentStatus);
+    setSubmissionError(null);
+    setIsSubmittingReservation(false);
+    setSubmissionActionLabel("Creando reserva…");
+  }, [wizardDefaults]);
+
+  const clearWizardQuery = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("editReservationId");
+    nextParams.delete("action");
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const resourceOptions = useMemo<TableOption[]>(
+    () => {
+      const venue = currentVenue ?? venues.find((item) => item.id === currentEvent.venueId) ?? null;
+      const venueSectors = currentVenueSectors.length
+        ? currentVenueSectors
+        : sectors.filter((sector) => !venue || sector.venueId === venue.id);
+      const venueResources = currentVenueResources.length
+        ? currentVenueResources
+        : resources.filter((resource) => !venue || resource.venueId === venue.id);
+      const currentEventLayout = resolveCurrentEventLayout({
+        currentEventId: currentEvent.id,
+        currentVenueId: currentVenue?.id ?? currentEvent.venueId,
+        eventLayouts,
+      });
+
+      return venueResources.map((resource) => {
+        const summary = tableSummaries.find((item) => item.id === resource.id);
+        const eventLayoutResource = resolveCurrentEventLayoutResource({
+          currentEventLayout,
+          resourceId: resource.id,
+          venueLayoutResources,
+          eventLayoutResources,
+        });
+
+        return {
+          id: resource.id,
+          name: resource.name,
+          capacity: resource.capacity,
+          location: venueSectors.find((sector) => sector.id === resource.sectorId)?.name ?? venue?.name ?? "Sin sector",
+          status: (summary?.status ?? resource.status) as TableOption["status"],
+          venueId: resource.venueId,
+          sectorId: resource.sectorId,
+          eventLayoutId: eventLayoutResource?.eventLayoutId,
+          eventLayoutResourceId: eventLayoutResource?.id,
+          tone: summary?.statusTone ?? (resource.status === "Closed" || resource.status === "Over Capacity" ? "danger" : resource.status === "Reserved" ? "info" : resource.status === "Full" ? "warning" : "success"),
+          assignedGuests: summary?.metrics.assignedGuests,
+          activeReservations: summary?.reservationIds.length,
+          overCapacity: summary?.metrics.overCapacity,
+        };
+      });
+    },
+    [currentEvent.id, currentEvent.venueId, currentVenue, currentVenueResources, currentVenueSectors, eventLayoutResources, eventLayouts, resources, sectors, tableSummaries, venueLayoutResources, venues],
+  );
+
+  const registeredGuests = useMemo(() => countDraftRegisteredGuests(guestDrafts), [guestDrafts]);
+
+  const pendingGuests = countDraftPendingGuests(guestCount, registeredGuests);
 
   const amountNumber = Number(amount || 0);
   const advanceNumber = Number(advance || 0);
@@ -175,12 +484,34 @@ function ReservationFlowWorkspace({
   const reservationInsights = workspacePriority.byModule.Reservations;
   const prioritySummary = workspacePriority.summary;
   const capacity = workspaceIntelligence.capacity;
-  const openWizard = useCallback(() => {
+  const openReservationWizard = useCallback(() => {
+    if (reservationSubmissionGateRef.current.isLocked()) {
+      return;
+    }
+
+    suppressEditHydrationRef.current = true;
+    clearWizardQuery();
+    resetWizardState();
     setIsWizardOpen(true);
     setStep(1);
-  }, []);
+  }, [clearWizardQuery, resetWizardState]);
+  const closeWizard = useCallback(() => {
+    if (reservationSubmissionGateRef.current.isLocked()) {
+      return;
+    }
 
-  const closeWizard = useCallback(() => setIsWizardOpen(false), []);
+    suppressEditHydrationRef.current = true;
+    setIsWizardOpen(false);
+    clearWizardQuery();
+    resetWizardState();
+  }, [clearWizardQuery, resetWizardState]);
+
+  const finalizeWizardClose = useCallback(() => {
+    suppressEditHydrationRef.current = true;
+    setIsWizardOpen(false);
+    clearWizardQuery();
+    resetWizardState();
+  }, [clearWizardQuery, resetWizardState]);
 
   const activeReservation =
     prioritizedReservations.find((reservation) => reservation.id === activeReservationId) ??
@@ -256,7 +587,7 @@ function ReservationFlowWorkspace({
           id: "reservations-new",
           shortcut: "n",
           priority: 50,
-          handler: openWizard,
+          handler: openReservationWizard,
         },
         {
           id: "reservations-assign-table",
@@ -279,7 +610,7 @@ function ReservationFlowWorkspace({
           },
         },
       ],
-      [activeReservation, openWizard, router, setReservationStatus],
+      [activeReservation, openReservationWizard, router, setReservationStatus],
     ),
   );
 
@@ -293,7 +624,7 @@ function ReservationFlowWorkspace({
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
-        setIsWizardOpen(false);
+        closeWizard();
       }
     };
 
@@ -303,12 +634,12 @@ function ReservationFlowWorkspace({
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [isWizardOpen]);
+  }, [closeWizard, isWizardOpen]);
 
   const updateGuestCount = (nextCount: number) => {
     const sanitizedCount = clampGuestCount(nextCount);
     setGuestCount(sanitizedCount);
-    setGuests((currentGuests) => {
+    setGuestDrafts((currentGuests) => {
       if (sanitizedCount === currentGuests.length) {
         return currentGuests;
       }
@@ -331,7 +662,7 @@ function ReservationFlowWorkspace({
     field: keyof GuestDraft,
     value: string | boolean,
   ) => {
-    setGuests((currentGuests) =>
+    setGuestDrafts((currentGuests) =>
       currentGuests.map((guest, guestIndex) =>
         guestIndex === index ? { ...guest, [field]: value } : guest,
       ),
@@ -345,18 +676,18 @@ function ReservationFlowWorkspace({
 
     const nextCount = guestCount + 1;
     setGuestCount(nextCount);
-    setGuests((currentGuests) => [
+    setGuestDrafts((currentGuests) => [
       ...currentGuests,
       createGuestDraft(currentGuests.length, reservationGuestPresets),
     ]);
   };
 
   const removeGuest = (index: number) => {
-    if (guests.length <= 1) {
+    if (guestDrafts.length <= 1) {
       return;
     }
 
-    setGuests((currentGuests) => currentGuests.filter((_, guestIndex) => guestIndex !== index));
+    setGuestDrafts((currentGuests) => currentGuests.filter((_, guestIndex) => guestIndex !== index));
     setGuestCount((currentCount) => clampGuestCount(currentCount - 1));
   };
 
@@ -365,14 +696,137 @@ function ReservationFlowWorkspace({
   const goPrevious = () =>
     setStep((currentStep) => Math.max(1, currentStep - 1) as WizardStep);
 
-  const completeReservation = (input: Omit<ReservationCreationInput, "eventId">) => {
-    const reservation = createReservation({
-      ...input,
-      eventId: currentEvent.id,
-      eventName: currentEvent.name,
-    });
-    setActiveReservationId(reservation.id);
-    closeWizard();
+  const runReservationSubmit = useCallback(
+    async (submissionLabel: string, task: () => Promise<void>) => {
+      const result = await runReservationSubmission(reservationSubmissionGateRef.current, async () => {
+        setIsSubmittingReservation(true);
+        setSubmissionActionLabel(submissionLabel);
+
+        try {
+          return await task();
+        } finally {
+          setIsSubmittingReservation(false);
+        }
+      });
+
+      return result;
+    },
+    [],
+  );
+
+  const completeReservation = async (input: Omit<ReservationCreationInput, "eventId">) => {
+    try {
+      await runReservationSubmit("Creando reserva…", async () => {
+        setSubmissionError(null);
+        const payload = {
+          ...input,
+          eventId: currentEvent.id,
+          eventName: currentEvent.name,
+        };
+
+        const selectedResource = payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
+        const capacityViolation = resolveReservationCapacityViolation({
+          resourceCapacity: selectedResource?.capacity,
+          guestCount: payload.guests.length,
+          resourceName: selectedResource?.name,
+        });
+
+        if (capacityViolation) {
+          setSubmissionError(capacityViolation);
+          return;
+        }
+
+        const reservation = await createReservation(payload);
+
+        if (reservation) {
+          setActiveReservationId(reservation.id);
+        }
+
+        finalizeWizardClose();
+      });
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "No se pudo crear la reserva. Intenta nuevamente.");
+      console.error("Failed to create reservation:", error);
+    }
+  };
+
+  const completeEditedReservation = async (input: Omit<ReservationCreationInput, "eventId"> & { reservationId: string }) => {
+    try {
+      await runReservationSubmit("Guardando cambios…", async () => {
+        setSubmissionError(null);
+        const payload = {
+          ...input,
+          eventId: currentEvent.id,
+          eventName: currentEvent.name,
+        };
+        const selectedResource = payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
+        const capacityViolation = resolveReservationCapacityViolation({
+          resourceCapacity: selectedResource?.capacity,
+          guestCount: payload.guests.length,
+          resourceName: selectedResource?.name,
+        });
+
+        if (capacityViolation) {
+          setSubmissionError(capacityViolation);
+          return;
+        }
+
+        await updateReservation(payload);
+        finalizeWizardClose();
+      });
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "No se pudo guardar la reserva. Intenta nuevamente.");
+      console.error("Failed to update reservation:", error);
+    }
+  };
+
+  const completeAppendReservation = async (input: Omit<ReservationCreationInput, "eventId">) => {
+    try {
+      await runReservationSubmit("Agregando manillas…", async () => {
+        setSubmissionError(null);
+
+        if (!selectedActiveReservation) {
+          setSubmissionError("No se encontró una reserva activa para agregar manillas.");
+          return;
+        }
+
+        const payload = {
+          ...input,
+          eventId: currentEvent.id,
+          eventName: currentEvent.name,
+        };
+        const selectedResource = payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
+        const capacityViolation = resolveReservationCapacityViolation({
+          resourceCapacity: selectedResource?.capacity,
+          guestCount: payload.guests.length,
+          existingGuestCount: selectedActiveReservation.guestIds.length,
+          resourceName: selectedResource?.name,
+        });
+
+        if (capacityViolation) {
+          setSubmissionError(capacityViolation);
+          return;
+        }
+
+        const reservation = await appendReservationGuests(
+          selectedActiveReservation.id,
+          payload.guests.map((guest) => ({
+            guestName: guest.name.trim() || "Invitado",
+            carnet: guest.document,
+            whatsapp: guest.whatsapp,
+          })),
+        );
+
+        if (reservation) {
+          setActiveReservationId(reservation.id);
+        }
+
+        finalizeWizardClose();
+      });
+    } catch (error) {
+      setSubmissionError(error instanceof Error ? error.message : "No se pudieron agregar las manillas. Intenta nuevamente.");
+      console.error("Failed to append reservation guests:", error);
+    }
   };
 
   return (
@@ -384,7 +838,7 @@ function ReservationFlowWorkspace({
       />
 
       <section className="grid gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100">
               Borrador
@@ -404,21 +858,21 @@ function ReservationFlowWorkspace({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
-              onClick={openWizard}
-              className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+              onClick={openReservationWizard}
+              className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 sm:w-auto"
             >
               Crear reserva
             </button>
-            <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+            <div className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300 sm:w-auto">
               Contexto activo: <span className="font-medium text-white">{currentEvent.name}</span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-5">
+        <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
             Resumen operativo
           </p>
@@ -437,7 +891,7 @@ function ReservationFlowWorkspace({
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.74fr]">
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <GuidedActionPanel
             title="Siguiente paso"
             description="El sistema muestra primero la acción que más desbloquea esta reserva."
@@ -477,7 +931,7 @@ function ReservationFlowWorkspace({
           />
         </div>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
               Estado general
@@ -508,7 +962,7 @@ function ReservationFlowWorkspace({
               <div className="grid gap-3 sm:grid-cols-2">
                 <LiveSummaryRow label="Invitados" value={`${activeReservation?.metrics.guestCount ?? guestCount}`} />
                 <LiveSummaryRow label="Registrados" value={`${activeReservation?.metrics.checkedInGuests ?? registeredGuests}`} />
-                <LiveSummaryRow label="Mesa" value={activeReservation?.tableName ?? selectedTable.name} />
+                <LiveSummaryRow label="Recurso" value={activeReservation?.tableName ?? selectedResource?.name ?? "Sin recurso"} />
                 <LiveSummaryRow label="Pago" value={activeReservation?.paymentStatus ?? paymentStatus} />
               </div>
             </div>
@@ -576,17 +1030,21 @@ function ReservationFlowWorkspace({
           setPreferences={setPreferences}
           vip={vip}
           setVip={setVip}
-          frequent={frequent}
-          setFrequent={setFrequent}
+          frequent={frequentCustomer.frequent}
           notes={notes}
           setNotes={setNotes}
-          guests={guests}
+          guests={guestDrafts}
           addGuest={addGuest}
           removeGuest={removeGuest}
           updateGuest={updateGuest}
-          selectedTable={selectedTable}
-          selectedTableId={selectedTableId}
-          setSelectedTableId={setSelectedTableId}
+          selectedResource={selectedResource}
+          selectedResourceSummary={selectedResourceSummary}
+          selectedActiveReservation={wizardReservation}
+          selectedReservationConflictCount={selectedReservationConflictCount}
+          wizardMode={wizardMode}
+          selectedResourceId={selectedResourceId}
+          setSelectedResourceId={setSelectedResourceId}
+          resourceOptions={resourceOptions}
           amount={amount}
           setAmount={setAmount}
           advance={advance}
@@ -599,8 +1057,13 @@ function ReservationFlowWorkspace({
           completion={completion}
           registeredGuests={registeredGuests}
           pendingGuests={pendingGuests}
+          isSubmitting={isSubmittingReservation}
+          submissionActionLabel={submissionActionLabel}
           onCreateReservation={completeReservation}
+          onUpdateReservation={completeEditedReservation}
+          onAddManillas={completeAppendReservation}
           eventOptions={eventOptions}
+          submissionError={submissionError}
         />
       ) : null}
     </div>

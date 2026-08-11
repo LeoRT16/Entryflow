@@ -10,12 +10,22 @@ type BuildTableStateInput = {
 };
 
 function cloneTables(activeEventId: string) {
-  return tableOptions.map<TableRecord>((table) => ({
+  const timestamp = new Date().toISOString();
+
+  return tableOptions.map<TableRecord>((table, index) => ({
     id: table.id,
     name: table.name,
     capacity: table.capacity,
     location: table.location,
     status: table.status,
+    venueId: table.venueId ?? "venue-la-rota-carlota",
+    sectorId: table.sectorId ?? undefined,
+    type: "table",
+    order: index + 1,
+    notes: undefined,
+    metadata: {},
+    createdAt: timestamp,
+    updatedAt: timestamp,
     eventId: activeEventId,
     reservationIds: [],
     guestIds: [],

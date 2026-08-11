@@ -11,7 +11,13 @@ export function getAttendeesForEvent(eventId: string, attendees: Guest[]) {
   return attendees.filter((attendee) => attendee.eventId === eventId);
 }
 
-export function getResourcesForEvent(eventId: string, resources: TableRecord[]) {
+export function getResourcesForEvent(eventId: string, resources: TableRecord[], venueId?: string) {
+  const venueResources = venueId ? resources.filter((resource) => resource.venueId === venueId) : [];
+
+  if (venueResources.length) {
+    return venueResources;
+  }
+
   return resources.filter((resource) => resource.eventId === eventId);
 }
 
@@ -40,4 +46,3 @@ export function getActivityForEvent({
     attempts,
   });
 }
-

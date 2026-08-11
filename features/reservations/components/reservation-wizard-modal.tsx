@@ -6,17 +6,17 @@ import StatusBadge from "@/components/status-badge";
 import { formatCurrency } from "@/utils/currency";
 import LiveSummaryRow from "@/features/reservations/components/live-summary-row";
 import { formatTableStatus } from "@/features/tables/domain/table-domain";
-import {
-  reservationPaymentHistory,
-  reservationTableOptions,
-} from "@/features/reservations/domain/reservation-presets";
+import type { TableSummary } from "@/features/tables/types";
+import { reservationPaymentHistory } from "@/features/reservations/domain/reservation-presets";
 import type {
   GuestDraft,
   PaymentHistoryEntry,
   PaymentMethod,
   PaymentStatus,
   ReservationCreationInput,
+  ReservationRecord,
   ReservationType,
+  ReservationUpdateInput,
   TableOption,
   WizardStep,
 } from "@/features/reservations/types";
@@ -39,8 +39,8 @@ export const wizardSteps: Array<{ step: WizardStep; title: string; subtitle: str
   },
   {
     step: 4,
-    title: "Mesa",
-    subtitle: "Selección visual de mesa o área recomendada.",
+    title: "Recurso",
+    subtitle: "Selección visual de recurso físico recomendado.",
   },
   {
     step: 5,
@@ -91,16 +91,20 @@ export default function ReservationWizardModal({
   vip,
   setVip,
   frequent,
-  setFrequent,
   notes,
   setNotes,
   guests,
   addGuest,
   removeGuest,
   updateGuest,
-  selectedTable,
-  selectedTableId,
-  setSelectedTableId,
+  selectedResource,
+  selectedResourceSummary,
+  selectedActiveReservation,
+  selectedReservationConflictCount,
+  wizardMode,
+  selectedResourceId,
+  setSelectedResourceId,
+  resourceOptions,
   amount,
   setAmount,
   advance,
@@ -113,7 +117,12 @@ export default function ReservationWizardModal({
   completion,
   registeredGuests,
   pendingGuests,
+  isSubmitting,
+  submissionActionLabel,
+  submissionError,
   onCreateReservation,
+  onUpdateReservation,
+  onAddManillas,
   eventOptions,
 }: {
   step: WizardStep;
@@ -148,16 +157,20 @@ export default function ReservationWizardModal({
   vip: boolean;
   setVip: Dispatch<SetStateAction<boolean>>;
   frequent: boolean;
-  setFrequent: Dispatch<SetStateAction<boolean>>;
   notes: string;
   setNotes: Dispatch<SetStateAction<string>>;
   guests: GuestDraft[];
   addGuest: () => void;
   removeGuest: (index: number) => void;
   updateGuest: (index: number, field: keyof GuestDraft, value: string | boolean) => void;
-  selectedTable: TableOption;
-  selectedTableId: string;
-  setSelectedTableId: Dispatch<SetStateAction<string>>;
+  selectedResource: TableOption | null;
+  selectedResourceSummary: TableSummary | null;
+  selectedActiveReservation: ReservationRecord | null;
+  selectedReservationConflictCount: number;
+  wizardMode: "create" | "edit" | "append";
+  selectedResourceId: string;
+  setSelectedResourceId: Dispatch<SetStateAction<string>>;
+  resourceOptions: TableOption[];
   amount: string;
   setAmount: Dispatch<SetStateAction<string>>;
   advance: string;
@@ -170,7 +183,12 @@ export default function ReservationWizardModal({
   completion: number;
   registeredGuests: number;
   pendingGuests: number;
-  onCreateReservation: (input: Omit<ReservationCreationInput, "eventId">) => void;
+  isSubmitting: boolean;
+  submissionActionLabel: string;
+  submissionError: string | null;
+  onCreateReservation: (input: Omit<ReservationCreationInput, "eventId">) => Promise<void>;
+  onUpdateReservation: (input: Omit<ReservationUpdateInput, "eventId">) => Promise<void>;
+  onAddManillas: (input: Omit<ReservationCreationInput, "eventId">) => Promise<void>;
   eventOptions: string[];
 }) {
   const currentStep = wizardSteps.find((item) => item.step === step) ?? wizardSteps[0];
@@ -178,7 +196,7 @@ export default function ReservationWizardModal({
   const liveSummary = [
     { label: "Código", value: "RES-0108-DB" },
     { label: "Invitados", value: `${guestCount}` },
-    { label: "Mesa", value: selectedTable.name },
+    { label: "Recurso", value: selectedResource?.name ?? "Sin recurso" },
     { label: "Monto", value: formatCurrency(amount) },
     { label: "Pago", value: paymentStatus },
   ];
@@ -189,12 +207,14 @@ export default function ReservationWizardModal({
         type="button"
         aria-label="Cerrar modal"
         onClick={closeWizard}
+        disabled={isSubmitting}
         className="absolute inset-0"
       />
 
       <div className="relative mx-auto flex h-full w-full max-w-[1700px] items-stretch p-0 lg:p-4">
         <div
           className="relative flex h-full w-full flex-col overflow-hidden border border-white/10 bg-[#0b0f14] shadow-[0_32px_120px_rgba(0,0,0,0.45)] lg:rounded-[2rem]"
+          aria-busy={isSubmitting}
           style={{ animation: "wizardShellIn 220ms ease" }}
         >
           <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-5 sm:px-6">
@@ -217,7 +237,8 @@ export default function ReservationWizardModal({
               <button
                 type="button"
                 onClick={closeWizard}
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                disabled={isSubmitting}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cerrar
               </button>
@@ -270,7 +291,6 @@ export default function ReservationWizardModal({
                         vip={vip}
                         setVip={setVip}
                         frequent={frequent}
-                        setFrequent={setFrequent}
                         notes={notes}
                         setNotes={setNotes}
                       />
@@ -290,8 +310,9 @@ export default function ReservationWizardModal({
 
                     {step === 4 ? (
                       <TableStep
-                        selectedTableId={selectedTableId}
-                        setSelectedTableId={setSelectedTableId}
+                        selectedResourceId={selectedResourceId}
+                        setSelectedResourceId={setSelectedResourceId}
+                        resourceOptions={resourceOptions}
                       />
                     ) : null}
 
@@ -327,13 +348,23 @@ export default function ReservationWizardModal({
                         frequent={frequent}
                         notes={notes}
                         guests={guests}
-                        selectedTable={selectedTable}
+                        selectedResource={selectedResource}
+                        selectedResourceSummary={selectedResourceSummary}
+                        selectedActiveReservation={selectedActiveReservation}
+                        selectedReservationConflictCount={selectedReservationConflictCount}
+                        wizardMode={wizardMode}
                         amount={amount}
                         advance={advance}
                         pendingNumber={pendingNumber}
                         paymentMethod={paymentMethod}
                         paymentStatus={paymentStatus}
                       />
+                    ) : null}
+
+                    {submissionError ? (
+                      <div className="rounded-[1.5rem] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-50">
+                        {submissionError}
+                      </div>
                     ) : null}
 
                     <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
@@ -357,8 +388,12 @@ export default function ReservationWizardModal({
                       ) : (
                         <button
                           type="button"
-                          onClick={() =>
-                            onCreateReservation({
+                          onClick={() => {
+                            if (isSubmitting) {
+                              return;
+                            }
+
+                            const payload = {
                               eventName,
                               date,
                               time,
@@ -373,17 +408,33 @@ export default function ReservationWizardModal({
                               frequent,
                               notes,
                               guests,
-                              selectedTable,
+                              selectedResource: selectedResource ?? undefined,
                               amount,
                               advance,
                               paymentMethod,
                               paymentStatus,
                               observations,
-                            })
-                          }
-                          className="inline-flex h-12 items-center justify-center rounded-[1.25rem] bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+                            };
+                            const isAppendFlow = wizardMode === "append" || (wizardMode === "create" && Boolean(selectedActiveReservation));
+
+                            void (
+                              wizardMode === "edit"
+                                ? onUpdateReservation({ ...payload, reservationId: selectedActiveReservation?.id ?? "" })
+                                : isAppendFlow
+                                    ? onAddManillas(payload)
+                                    : onCreateReservation(payload)
+                            );
+                          }}
+                          disabled={isSubmitting}
+                          className="inline-flex h-12 items-center justify-center rounded-[1.25rem] bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Crear reserva
+                          {isSubmitting
+                            ? submissionActionLabel
+                            : wizardMode === "edit"
+                            ? "Guardar cambios"
+                            : wizardMode === "append" || selectedActiveReservation
+                              ? "Agregar manillas"
+                              : "Crear reserva"}
                         </button>
                       )}
                     </div>
@@ -445,7 +496,7 @@ export default function ReservationWizardModal({
                     </p>
                     <div className="mt-4 grid gap-3">
                       <LiveSummaryRow label="Estado de pago" value={paymentStatus} />
-                      <LiveSummaryRow label="Mesa" value={selectedTable.name} />
+                      <LiveSummaryRow label="Recurso" value={selectedResource?.name ?? "Sin recurso"} />
                       <LiveSummaryRow
                         label="Invitados"
                         value={`${registeredGuests} / ${guestCount}`}
@@ -693,7 +744,6 @@ function HolderStep({
   vip,
   setVip,
   frequent,
-  setFrequent,
   notes,
   setNotes,
 }: {
@@ -712,7 +762,6 @@ function HolderStep({
   vip: boolean;
   setVip: Dispatch<SetStateAction<boolean>>;
   frequent: boolean;
-  setFrequent: Dispatch<SetStateAction<boolean>>;
   notes: string;
   setNotes: Dispatch<SetStateAction<string>>;
 }) {
@@ -775,12 +824,25 @@ function HolderStep({
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
-        <ToggleField label="Activar VIP" active={vip} onToggle={() => setVip((current) => !current)} />
         <ToggleField
-          label="Cliente frecuente"
-          active={frequent}
-          onToggle={() => setFrequent((current) => !current)}
+          label="Marca VIP"
+          active={vip}
+          onToggle={() => setVip((current) => !current)}
         />
+        <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+            Cliente frecuente
+          </p>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-white">
+              {frequent ? "Sí, por historial" : "No detectado en historial"}
+            </p>
+            <StatusBadge variant={frequent ? "success" : "info"}>{frequent ? "Derivado" : "Nuevo"}</StatusBadge>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            Calculado automáticamente desde reservas y asistencias previas; no se edita manualmente.
+          </p>
+        </div>
       </div>
 
       <Field label="Notas" className="mt-5">
@@ -930,61 +992,91 @@ function GuestsStep({
 }
 
 function TableStep({
-  selectedTableId,
-  setSelectedTableId,
+  selectedResourceId,
+  setSelectedResourceId,
+  resourceOptions,
 }: {
-  selectedTableId: string;
-  setSelectedTableId: Dispatch<SetStateAction<string>>;
+  selectedResourceId: string;
+  setSelectedResourceId: Dispatch<SetStateAction<string>>;
+  resourceOptions: TableOption[];
 }) {
   return (
     <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-            Mesa
+            Recurso
           </p>
           <p className="mt-2 text-sm text-slate-400">
-            Selecciona una mesa o zona con tarjetas visuales.
+            Selecciona un recurso físico con tarjetas visuales.
           </p>
         </div>
         <StatusBadge variant="info">Selector visual</StatusBadge>
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {reservationTableOptions.map((table) => {
-          const selected = table.id === selectedTableId;
+        {resourceOptions.map((table) => {
+          const selected = table.id === selectedResourceId;
+          const assignedGuests = table.assignedGuests ?? 0;
+          const overCapacity = table.overCapacity ?? Math.max(assignedGuests - table.capacity, 0);
+          const hasReservation = (table.activeReservations ?? 0) > 0;
 
           return (
             <button
               key={table.id}
               type="button"
-              onClick={() => setSelectedTableId(table.id)}
+              onClick={() => setSelectedResourceId(table.id)}
               className={[
                 "rounded-[1.5rem] border p-5 text-left transition hover:-translate-y-0.5",
                 selected
                   ? "border-cyan-400/35 bg-cyan-400/10 shadow-[0_20px_60px_rgba(0,0,0,0.24)]"
                   : "border-white/10 bg-slate-950/40 hover:border-white/15 hover:bg-slate-950/55",
               ].join(" ")}
-            >
+              >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xl font-semibold tracking-tight text-white">{table.name}</p>
                   <p className="mt-1 text-sm text-slate-400">{table.location}</p>
                 </div>
-                <StatusBadge variant={table.tone}>{formatTableStatus(table.status)}</StatusBadge>
+                <div className="flex flex-col items-end gap-2">
+                  <StatusBadge variant={table.tone}>{formatTableStatus(table.status)}</StatusBadge>
+                  {hasReservation ? (
+                    <StatusBadge
+                      variant={
+                        table.status === "Over Capacity"
+                          ? "danger"
+                          : table.status === "Full" || table.status === "Partially Occupied"
+                            ? "warning"
+                            : "info"
+                      }
+                    >
+                      {table.status === "Over Capacity"
+                        ? "Sobrecapacidad"
+                        : table.status === "Full" || table.status === "Partially Occupied"
+                          ? "Ocupada"
+                          : "Reserva activa"}
+                    </StatusBadge>
+                  ) : null}
+                </div>
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <DetailBadge label="Capacidad" value={`${table.capacity} personas`} />
-                <DetailBadge label="Ubicación" value={table.location} />
+                <DetailBadge label="Sector" value={table.location} />
+                <DetailBadge label="Ocupación" value={`${assignedGuests}/${table.capacity}`} />
+                <DetailBadge label="Estado real" value={hasReservation ? formatTableStatus(table.status) : "Disponible"} />
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                {table.recommended ? <StatusBadge variant="success">Recomendada</StatusBadge> : null}
-                <StatusBadge variant={selected ? "info" : "warning"}>
-                  {selected ? "Seleccionada" : "Disponible"}
-                </StatusBadge>
+                {table.recommended ? <StatusBadge variant="success">Recomendado</StatusBadge> : null}
+                {selected ? <StatusBadge variant="info">Seleccionada</StatusBadge> : null}
+                {overCapacity > 0 ? <StatusBadge variant="danger">Sobrecapacidad +{overCapacity}</StatusBadge> : null}
               </div>
+              {hasReservation ? (
+                <p className="mt-3 text-sm text-amber-100">
+                  Esta mesa ya tiene una reserva activa.
+                </p>
+              ) : null}
             </button>
           );
         })}
@@ -1146,7 +1238,11 @@ function SummaryStep({
   frequent,
   notes,
   guests,
-  selectedTable,
+  selectedResource,
+  selectedResourceSummary,
+  selectedActiveReservation,
+  selectedReservationConflictCount,
+  wizardMode,
   amount,
   advance,
   pendingNumber,
@@ -1169,7 +1265,11 @@ function SummaryStep({
   frequent: boolean;
   notes: string;
   guests: GuestDraft[];
-  selectedTable: TableOption;
+  selectedResource: TableOption | null;
+  selectedResourceSummary: TableSummary | null;
+  selectedActiveReservation: ReservationRecord | null;
+  selectedReservationConflictCount: number;
+  wizardMode: "create" | "edit" | "append";
   amount: string;
   advance: string;
   pendingNumber: number;
@@ -1203,17 +1303,17 @@ function SummaryStep({
         ["Cantidad", `${guestCount}`],
         ["Registrados", `${guests.filter((guest) => guest.name.trim()).length}`],
         ["VIP", vip ? "Sí" : "No"],
-        ["Frecuente", frequent ? "Sí" : "No"],
+        ["Historial frecuente", frequent ? "Sí" : "No"],
         ["Notas", notes || "Sin notas"],
       ],
     },
     {
-      title: "Mesa",
+      title: "Recurso",
       rows: [
-        ["Mesa", selectedTable.name],
-        ["Ubicación", selectedTable.location],
-        ["Capacidad", `${selectedTable.capacity}`],
-        ["Estado", formatTableStatus(selectedTable.status)],
+        ["Recurso", selectedResource?.name ?? "Sin recurso"],
+        ["Sector", selectedResource?.location ?? "Sin sector"],
+        ["Capacidad", `${selectedResource?.capacity ?? 0}`],
+        ["Estado", selectedResource ? formatTableStatus(selectedResource.status) : "Sin estado"],
       ],
     },
     {
@@ -1242,6 +1342,44 @@ function SummaryStep({
           el estado compartido.
         </p>
       </div>
+
+      {selectedActiveReservation && wizardMode === "create" ? (
+        <div className="mt-4 rounded-[1.5rem] border border-amber-400/20 bg-amber-400/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-100">
+            Mesa con reserva activa
+          </p>
+          <h4 className="mt-2 text-lg font-semibold text-white">
+            Esta mesa ya tiene una reserva activa.
+          </h4>
+          <p className="mt-2 text-sm leading-6 text-amber-50/90">
+            Se reutilizará la reserva <span className="font-semibold text-white">{selectedActiveReservation.name}</span>.
+            {selectedReservationConflictCount > 1 ? (
+              <>
+                {" "}
+                Conflicto histórico detectado: hay {selectedReservationConflictCount} reservas activas asociadas a esta mesa.
+              </>
+            ) : null}
+          </p>
+          <p className="mt-2 text-sm text-amber-50/90">
+            Se agregarán <span className="font-semibold text-white">{guestCount}</span> manillas a la reserva existente.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <DetailBadge
+              label="Invitados actuales"
+              value={`${selectedResourceSummary?.metrics.assignedGuests ?? selectedActiveReservation.guestIds.length}`}
+            />
+            <DetailBadge label="Capacidad" value={`${selectedResource?.capacity ?? 0}`} />
+            <DetailBadge
+              label="Sobrecapacidad"
+              value={`+${Math.max(
+                (selectedResourceSummary?.metrics.assignedGuests ?? selectedActiveReservation.guestIds.length) -
+                  (selectedResource?.capacity ?? 0),
+                0,
+              )}`}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4">
         {summaryCards.map((section) => (

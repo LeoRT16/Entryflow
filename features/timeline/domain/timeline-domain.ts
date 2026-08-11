@@ -70,6 +70,7 @@ function reservationTimelineToEvent(
 
   return {
     id: `reservation-${reservation.id}-${entry.id}`,
+    eventId: reservation.eventId,
     timestamp: entry.time,
     kind: meta.kind,
     icon: meta.icon,
@@ -96,6 +97,7 @@ function checkInToEvent(guest: Guest, checkIn: CheckIn): TimelineEvent {
       description:
         checkIn.notes ??
         `${guest.guestName} salió por ${checkIn.gate ?? guest.gate ?? "principal"}.`,
+      eventId: guest.eventId,
       reservationId: guest.reservationId,
       reservationCode: guest.reservationCode,
       reservationName: guest.reservationName,
@@ -120,6 +122,7 @@ function checkInToEvent(guest: Guest, checkIn: CheckIn): TimelineEvent {
 
   return {
     id: `checkin-${checkIn.id}`,
+    eventId: guest.eventId,
     timestamp: checkIn.checkedInAt,
     kind,
     icon: "checkin",
@@ -161,6 +164,7 @@ function attemptToEvent(guest: Guest | undefined, attempt: CheckInAttempt): Time
   if (attempt.result === "No encontrado") {
     return {
       id: `attempt-${attempt.id}`,
+      eventId: guest?.eventId ?? attempt.eventId,
       timestamp: attempt.timestamp,
       kind: "checkin.invalid",
       icon: "alert",
@@ -179,6 +183,7 @@ function attemptToEvent(guest: Guest | undefined, attempt: CheckInAttempt): Time
 
   return {
     id: `attempt-${attempt.id}`,
+    eventId: guest?.eventId ?? attempt.eventId,
     timestamp: attempt.timestamp,
     kind: "checkin.blocked",
     icon: "alert",

@@ -60,6 +60,9 @@ export type GuestRecord = {
   reservationName: string;
   reservationCode: string;
   eventName: string;
+  accessGrantId?: string;
+  accessCode?: string;
+  qrToken?: string;
   tableId?: string;
   tableName?: string;
   eventStatus: EventOption["status"];

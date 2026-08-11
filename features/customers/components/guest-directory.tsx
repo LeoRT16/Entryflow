@@ -18,6 +18,7 @@ import InvitationCard, {
   type InvitationCardMode,
   type InvitationCardVariant,
 } from "@/features/access/components/invitation-card";
+import { buildWhatsAppAccessMessage } from "@/features/access/domain/access-ledger";
 import { admissionFilters, deliveryFilters, reservationFilters, quickFilters } from "@/features/customers/domain/customer-filters";
 import { buildOperationalNotes, buildTimeline, getGuestAuditRows, getGuestIncidents, getIncidentToneClass, getIncidentVariant, reservationFilterToStatus, statusTone, admissionFilterToStatus } from "@/features/customers/domain/customer-directory";
 import type {
@@ -72,6 +73,8 @@ export default function GuestDirectory() {
           guest.carnet,
           guest.whatsapp || "Sin WhatsApp",
           guest.invitationCode,
+          guest.accessCode ?? "",
+          guest.qrToken ?? "",
           guest.reservationCode,
           guest.reservationName,
           guest.tableName || "Sin mesa",
@@ -941,6 +944,7 @@ function GuestDrawer({
                   invitation={{
                     id: guest.id,
                     eventName: currentEvent.name,
+                    venueName: currentEvent.venue,
                     guestName: guest.guestName,
                     reservationName: guest.reservationName,
                     reservationCode: guest.reservationCode,
@@ -950,11 +954,12 @@ function GuestDrawer({
                     time: currentEvent.startAt.split(" ").at(-1) ?? "21:00",
                     dressCode: guest.manualAdmission ? "Ingreso manual" : "Elegante oscuro",
                     uniqueCode: guest.invitationCode,
-                    qrValue: guest.invitationCode,
+                    qrValue: guest.qrToken ?? guest.invitationCode,
                     theme: "EntryFlow Invitation Designer",
                     logoLabel: currentEvent.name.slice(0, 2),
                     artLabel: guest.reservationName,
                     variant: invitationVariant,
+                    message: buildWhatsAppAccessMessage(guest, currentEvent.venue),
                   }}
                   mode={invitationMode}
                 />

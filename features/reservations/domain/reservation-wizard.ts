@@ -1,0 +1,147 @@
+import type { GuestDraft } from "@/features/reservations/types";
+import type { Resource } from "@/features/domain/types";
+import type { PaymentMethod, PaymentStatus, ReservationType } from "@/features/reservations/types";
+import { buildGuestList } from "@/features/reservations/domain/reservation-draft";
+import { reservationGuestPresets } from "@/features/reservations/domain/reservation-presets";
+
+export type ReservationWizardDefaults = {
+  eventName: string;
+  date: string;
+  time: string;
+  guestCount: number;
+  reservationType: ReservationType;
+  observations: string;
+  holderName: string;
+  holderLastName: string;
+  documentValue: string;
+  whatsapp: string;
+  email: string;
+  preferences: string;
+  vip: boolean;
+  notes: string;
+  guestDrafts: GuestDraft[];
+  selectedResourceId: string;
+  amount: string;
+  advance: string;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+};
+
+export type ReservationSubmissionGate = {
+  tryEnter: () => boolean;
+  release: () => void;
+  isLocked: () => boolean;
+};
+
+export function createReservationSubmissionGate(): ReservationSubmissionGate {
+  let locked = false;
+
+  return {
+    tryEnter() {
+      if (locked) {
+        return false;
+      }
+
+      locked = true;
+      return true;
+    },
+    release() {
+      locked = false;
+    },
+    isLocked() {
+      return locked;
+    },
+  };
+}
+
+export async function runReservationSubmission<T>(
+  gate: ReservationSubmissionGate,
+  task: () => Promise<T>,
+) {
+  if (!gate.tryEnter()) {
+    return undefined;
+  }
+
+  try {
+    return await task();
+  } finally {
+    gate.release();
+  }
+}
+
+export function createReservationWizardDefaults(currentEvent: Pick<{ name: string; startAt: string }, "name" | "startAt">): ReservationWizardDefaults {
+  const [eventDate, eventTime] = currentEvent.startAt.trim().split(/\s+(?=\d{1,2}:\d{2}$)/);
+
+  return {
+    eventName: currentEvent.name,
+    date: eventDate ?? currentEvent.startAt,
+    time: eventTime ?? "",
+    guestCount: 5,
+    reservationType: "Mesa",
+    observations: "Mesa cerca de pista, acceso preferente y confirmación por WhatsApp.",
+    holderName: "Sofía",
+    holderLastName: "Rivas",
+    documentValue: "1234567",
+    whatsapp: "+591 70000011",
+    email: "sofia.rivas@ejemplo.com",
+    preferences: "Mesa tranquila, música moderada",
+    vip: true,
+    notes: "Celebración de cumpleaños con grupo cerrado.",
+    guestDrafts: buildGuestList(5, reservationGuestPresets),
+    selectedResourceId: "",
+    amount: "850",
+    advance: "300",
+    paymentMethod: "Transferencia",
+    paymentStatus: "Parcial",
+  };
+}
+
+export function countDraftRegisteredGuests(guestDrafts: GuestDraft[]) {
+  return guestDrafts.filter((guest) => guest.name.trim().length > 0).length;
+}
+
+export function countDraftPendingGuests(guestCount: number, registeredGuests: number) {
+  return Math.max(guestCount - registeredGuests, 0);
+}
+
+export function resolveInitialReservationResourceId({
+  currentVenueResources,
+  resourceId,
+  tableId,
+}: {
+  currentVenueResources: Pick<Resource, "id">[];
+  resourceId?: string | null;
+  tableId?: string | null;
+}) {
+  const explicitId = resourceId ?? tableId ?? "";
+
+  if (!explicitId) {
+    return "";
+  }
+
+  return currentVenueResources.some((resource) => resource.id === explicitId) ? explicitId : "";
+}
+
+export function resolveReservationCapacityViolation({
+  resourceCapacity,
+  guestCount,
+  existingGuestCount = 0,
+  resourceName = "este recurso",
+}: {
+  resourceCapacity?: number | null;
+  guestCount: number;
+  existingGuestCount?: number;
+  resourceName?: string;
+}) {
+  if (typeof resourceCapacity !== "number" || !Number.isFinite(resourceCapacity)) {
+    return null;
+  }
+
+  const totalGuests = existingGuestCount + guestCount;
+
+  if (totalGuests <= resourceCapacity) {
+    return null;
+  }
+
+  return `La capacidad de ${resourceName} es ${resourceCapacity} personas y esta reserva quedaría en ${totalGuests}/${resourceCapacity}. Reduce invitados o elige otro recurso.`;
+}

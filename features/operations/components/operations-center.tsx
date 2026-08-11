@@ -64,13 +64,13 @@ export default function OperationsCenter() {
     <div className="space-y-6">
       <Topbar
         eyebrow="Centro de operaciones"
-        title="Operations"
+        title="Operaciones"
         description="Panel vivo para monitorear el evento completo con el mismo estado compartido."
         primaryAction={{ label: "Ir a reservas", href: "/reservations" }}
         secondaryAction={{ label: "Abrir check-in", href: "/check-in" }}
       />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
         {snapshot.metrics.map((metric) => (
           <article key={metric.label} className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{metric.label}</p>
@@ -108,9 +108,9 @@ export default function OperationsCenter() {
         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Prioridad operativa</p>
           <div className="mt-4 space-y-3">
-            <PriorityBucket label="Critical" tone="danger" items={priority.criticalItems} />
-            <PriorityBucket label="Warnings" tone="warning" items={priority.attentionNow} />
-            <PriorityBucket label="Normal" tone="success" items={priority.healthySystems} />
+            <PriorityBucket label="Críticos" tone="danger" items={priority.criticalItems} />
+            <PriorityBucket label="Atención" tone="warning" items={priority.attentionNow} />
+            <PriorityBucket label="Estables" tone="success" items={priority.healthySystems} />
           </div>
         </div>
       </section>
@@ -140,13 +140,13 @@ export default function OperationsCenter() {
                     {
                       id: `${reservation.id}-open`,
                       label: "Abrir reserva",
-                      description: "Ir a Reservations.",
+                      description: "Ir a Reservas.",
                       tone: "info" as const,
                       onSelect: () => router.push("/reservations"),
                     },
                     {
                       id: `${reservation.id}-timeline`,
-                      label: "Abrir Timeline",
+                      label: "Abrir actividad",
                       description: "Ver actividad relacionada.",
                       tone: "info" as const,
                       onSelect: () => router.push("/timeline"),

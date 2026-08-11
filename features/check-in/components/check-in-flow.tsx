@@ -12,6 +12,7 @@ import { buildGuestSearchIndex } from "@/features/check-in/utils";
 import { getEntryTone } from "@/features/check-in/domain/check-in-domain";
 import { useCheckInStore } from "@/services/workspace-service";
 import type { Guest, CheckInMethod } from "@/features/check-in/types";
+import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
 
 export default function CheckInFlow() {
   const { confirm, showToast } = useFeedback();
@@ -283,6 +284,14 @@ export default function CheckInFlow() {
             title="Siguiente paso"
             description="El panel prioriza el ingreso que más reduce la cola de atención."
             items={guidedActions}
+          />
+
+          <QrCameraScanner
+            eventName={activeEvent.name}
+            onDetected={(value) => {
+              setSearchQuery(value);
+              registerCheckIn({ query: value, method: "QR", operator: "Escáner" });
+            }}
           />
 
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">

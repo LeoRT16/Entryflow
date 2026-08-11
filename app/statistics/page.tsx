@@ -4,6 +4,7 @@ import Topbar from "@/components/topbar";
 import StatusBadge from "@/components/status-badge";
 import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
 import { useCheckInStore } from "@/services/workspace-service";
+import PermissionGuard from "@/components/permission-guard";
 
 function StatCard({
   label,
@@ -24,7 +25,7 @@ function StatCard({
 }
 
 export default function StatisticsPage() {
-  const { status, error, workspaceIntelligence, workspacePriority, tableSummaries } = useCheckInStore();
+  const { status, error } = useCheckInStore();
 
   if (status === "loading") {
     return (
@@ -34,9 +35,23 @@ export default function StatisticsPage() {
 
   if (status === "error") {
     return (
-      <StateShell title="No pudimos cargar estadísticas" description={error?.message ?? "Reintentá la carga desde Supabase."} />
+      <StateShell
+        title="No pudimos cargar estadísticas"
+        description={error?.message ?? "Reintentá la carga desde Supabase."}
+        actionLabel="Reintentar"
+      />
     );
   }
+
+  return (
+    <PermissionGuard permission="statistics.view">
+      <StatisticsContent />
+    </PermissionGuard>
+  );
+}
+
+function StatisticsContent() {
+  const { workspaceIntelligence, workspacePriority, tableSummaries } = useCheckInStore();
 
   const currentEventSummary = workspaceIntelligence.dashboard.currentEventSummary;
   const tableInsight = workspaceIntelligence.tables;
@@ -57,9 +72,9 @@ export default function StatisticsPage() {
   return (
     <div className="space-y-6">
       <Topbar
-        eyebrow="Analytics"
+        eyebrow="Analítica"
         title={`Estadísticas de ${dashboard.currentEvent.name}`}
-        description="Métricas operativas derivadas del mismo estado compartido que usan Reservations, Check-in, Customers y Dashboard."
+        description="Métricas operativas derivadas del mismo estado compartido que usan Reservas, Ingreso, Invitados y Resumen."
         primaryAction={{ label: "Ir al dashboard", href: "/" }}
         secondaryAction={{ label: "Ver timeline", href: "/timeline" }}
       />
@@ -185,12 +200,29 @@ export default function StatisticsPage() {
   );
 }
 
-function StateShell({ title, description }: { title: string; description: string }) {
+function StateShell({
+  title,
+  description,
+  actionLabel,
+}: {
+  title: string;
+  description: string;
+  actionLabel?: string;
+}) {
   return (
     <div className="space-y-6">
-      <Topbar eyebrow="Analytics" title={title} description={description} />
+      <Topbar eyebrow="Analítica" title={title} description={description} />
       <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-8 text-center">
         <p className="text-sm text-slate-300">{description}</p>
+        {actionLabel ? (
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-4 inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+          >
+            {actionLabel}
+          </button>
+        ) : null}
       </section>
     </div>
   );

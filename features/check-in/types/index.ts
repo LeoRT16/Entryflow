@@ -96,6 +96,9 @@ export type Guest = {
   reservationId: string;
   eventId: string;
   eventName: string;
+  accessGrantId?: string;
+  accessCode?: string;
+  qrToken?: string;
   tableId?: string;
   tableName?: string;
   eventStatus: "En curso" | "Próximo";

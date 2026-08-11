@@ -14,10 +14,10 @@ type ShortcutGroup = {
 
 const groups: ShortcutGroup[] = [
   {
-    title: "Global",
+    title: "Globales",
     description: "Atajos disponibles desde cualquier pantalla.",
     items: [
-      { shortcut: "Cmd+K", label: "Abrir Command Palette", note: "Ctrl+K en Windows." },
+      { shortcut: "Cmd+K", label: "Abrir buscador de comandos", note: "Ctrl+K en Windows." },
       { shortcut: "Esc", label: "Cerrar panel abierto", note: "Palette, ayuda o panel contextual." },
       { shortcut: "/", label: "Foco en la búsqueda principal", note: "Cuando existe un campo visible." },
       { shortcut: "?", label: "Abrir esta ayuda", note: "Sin salir del contexto actual." },
@@ -27,16 +27,16 @@ const groups: ShortcutGroup[] = [
     title: "Navegación",
     description: "Cambio rápido entre módulos principales.",
     items: [
-      { shortcut: "g d", label: "Dashboard" },
-      { shortcut: "g r", label: "Reservations" },
-      { shortcut: "g c", label: "Customers" },
-      { shortcut: "g k", label: "Check-in" },
-      { shortcut: "g o", label: "Operations" },
-      { shortcut: "g t", label: "Tables" },
-      { shortcut: "g l", label: "Timeline" },
-      { shortcut: "g s", label: "Statistics" },
-      { shortcut: "g e", label: "Events" },
-      { shortcut: "g ,", label: "Settings" },
+      { shortcut: "g d", label: "Resumen" },
+      { shortcut: "g r", label: "Reservas" },
+      { shortcut: "g c", label: "Invitados" },
+      { shortcut: "g k", label: "Ingreso" },
+      { shortcut: "g o", label: "Operaciones" },
+      { shortcut: "g t", label: "Recursos" },
+      { shortcut: "g l", label: "Actividad" },
+      { shortcut: "g s", label: "Estadísticas" },
+      { shortcut: "g e", label: "Eventos" },
+      { shortcut: "g ,", label: "Ajustes" },
     ],
   },
   {
@@ -57,12 +57,12 @@ const groups: ShortcutGroup[] = [
     title: "Rápidas por pantalla",
     description: "Atajos específicos para acelerar el flujo operativo.",
     items: [
-      { shortcut: "1-4", label: "Acciones guiadas visibles", note: "Cuando una pantalla muestra Guided Actions." },
-      { shortcut: "J / K", label: "Timeline", note: "Siguiente y anterior evento." },
-      { shortcut: "N / A / C", label: "Reservations", note: "Nueva, asignar mesa, confirmar." },
-      { shortcut: "Enter / N", label: "Check-in", note: "Continuar o pasar al siguiente invitado." },
-      { shortcut: "M / L", label: "Tables", note: "Mover mesa o liberar." },
-      { shortcut: "1-4", label: "Dashboard", note: "Critical, Attention, Recent, Healthy." },
+      { shortcut: "1-4", label: "Acciones guiadas visibles", note: "Cuando una pantalla muestra acciones guiadas." },
+      { shortcut: "J / K", label: "Actividad", note: "Siguiente y anterior evento." },
+      { shortcut: "N / A / C", label: "Reservas", note: "Nueva, asignar recurso, confirmar." },
+      { shortcut: "Enter / N", label: "Ingreso", note: "Continuar o pasar al siguiente invitado." },
+      { shortcut: "M / L", label: "Recursos", note: "Mover recurso o liberar." },
+      { shortcut: "1-4", label: "Resumen", note: "Críticos, atención, recientes, saludables." },
     ],
   },
 ];
@@ -82,9 +82,9 @@ export default function KeyboardShortcutsHelp({ onClose }: { onClose: () => void
       >
         <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5 sm:p-6">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
-              Atajos globales
-            </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
+                Atajos globales
+              </p>
             <h2 id="keyboard-shortcuts-title" className="mt-2 text-2xl font-semibold tracking-tight text-white">
               Operación completa desde teclado
             </h2>

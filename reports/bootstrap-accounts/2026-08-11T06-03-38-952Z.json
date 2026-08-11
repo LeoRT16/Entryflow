@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-08-11T06:03:38.411Z",
+  "organizations": 1,
+  "roles": 0,
+  "users": 0,
+  "profiles": 0,
+  "actions": [
+    {
+      "table": "roles",
+      "createdOrReused": 4,
+      "mode": "seed"
+    },
+    {
+      "table": "users",
+      "organizationId": "3f0bd13e-6996-4b24-b333-ce232c10f415",
+      "action": "created bootstrap owner user",
+      "userId": "7a9b1ef3-b5da-4697-a3f5-1996706eafdd",
+      "email": "owner+nueva-organizacion-betatest@entryflow.local"
+    },
+    {
+      "table": "profiles",
+      "organizationId": "3f0bd13e-6996-4b24-b333-ce232c10f415",
+      "action": "created bootstrap owner profile",
+      "profileId": "e04821a4-77bc-4a44-bec6-fe78f13e2cc2"
+    }
+  ]
+}

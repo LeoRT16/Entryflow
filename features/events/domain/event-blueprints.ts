@@ -7,6 +7,7 @@ import type {
   OperationalModel,
   ResourceType,
 } from "@/features/domain/types";
+import { getDefaultTimezone } from "@/lib/timezone";
 
 export type EventBlueprint = {
   eventType: EventType;
@@ -32,6 +33,7 @@ export type EventDraft = {
   startTime: string;
   endTime: string;
   timezone: string;
+  venueId: string;
   venue: string;
   capacity: string;
   operationalModel: OperationalModel;
@@ -382,7 +384,8 @@ export function buildEventDraft(blueprint: EventBlueprint): EventDraft {
     date: "8 de agosto de 2026",
     startTime: "21:00",
     endTime: "03:00",
-    timezone: "America/La_Paz",
+    timezone: getDefaultTimezone(),
+    venueId: "",
     venue: blueprint.label === "Personalizado" ? "Sede principal" : "La Rota Carlota",
     capacity: blueprint.capacityRequired ? "200" : "0",
     operationalModel: blueprint.operationalModel,
@@ -399,17 +402,10 @@ export function buildEventFromDraft(params: {
   status?: EventStatus;
   id?: string;
 }): Event {
-  const slug = params.draft.name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64) || params.blueprint.eventType;
-  const suffix = params.id ?? globalThis.crypto?.randomUUID?.().slice(0, 8) ?? Math.random().toString(36).slice(2, 8);
+  const nextId = params.id ?? globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   return {
-    id: params.id ?? `${slug}-${suffix}`,
+    id: nextId,
     organizationId: params.organizationId,
     name: params.draft.name,
     description: params.draft.description || params.blueprint.description,
@@ -418,6 +414,7 @@ export function buildEventFromDraft(params: {
     startAt: `${params.draft.date} ${params.draft.startTime}`,
     endAt: params.draft.endTime ? `${params.draft.date} ${params.draft.endTime}` : undefined,
     timezone: params.draft.timezone,
+    venueId: params.draft.venueId || undefined,
     venue: params.draft.venue,
     capacity: Number.parseInt(params.draft.capacity, 10) || 0,
     enabledModules: params.draft.enabledModules,

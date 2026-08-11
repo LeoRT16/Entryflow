@@ -224,9 +224,9 @@ export default function ReservationOperationsBoard({
         </section>
       </div>
 
-      <section className="space-y-5 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+      <section className="min-w-0 space-y-5 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
               Detalle de reserva
             </p>
@@ -238,7 +238,7 @@ export default function ReservationOperationsBoard({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
             <StatusBadge variant={getReservationStatusTone(activeReservation.status)}>
               {formatReservationStatus(activeReservation.status)}
             </StatusBadge>

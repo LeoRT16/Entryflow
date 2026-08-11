@@ -1,0 +1,37 @@
+{
+  "mode": "dry-run",
+  "detected": {
+    "guests": 53,
+    "reservations": 10,
+    "events": 4,
+    "timelineEvents": 0
+  },
+  "grants": {
+    "total": 53,
+    "missing": 53,
+    "conflicting": 0,
+    "sampleMissing": [
+      {
+        "id": "f3bcff67-3acc-4ff8-9006-64a737c90c06",
+        "guestName": "Leonardo Rodríguez",
+        "reservationName": "Mesa 1 · Sofía Rivas",
+        "code": "RES-33205508-01",
+        "qrToken": "qr_afc1be1917c3903b"
+      },
+      {
+        "id": "d93ac532-3488-41ad-be84-639be21a34be",
+        "guestName": "Andrea Pérez",
+        "reservationName": "Mesa 1 · Sofía Rivas",
+        "code": "RES-33205508-02",
+        "qrToken": "qr_0681bf9e7eb9e9c8"
+      },
+      {
+        "id": "9cf5b405-b5c0-4808-8936-a7e93814a838",
+        "guestName": "Carlos Méndez",
+        "reservationName": "Mesa 1 · Sofía Rivas",
+        "code": "RES-33205508-03",
+        "qrToken": "qr_f7cc3e5aef8729fc"
+      }
+    ]
+  }
+}

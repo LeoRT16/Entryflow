@@ -1,0 +1,1449 @@
+{
+  "mode": "dry-run",
+  "generatedAt": "2026-08-11T01:12:18.550Z",
+  "venues": {
+    "detected": 1,
+    "items": [
+      {
+        "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+        "venueName": "La Rota Carlota",
+        "organizationId": "3f0bd13e-6996-4b24-b333-ce232c10f415",
+        "status": "active"
+      }
+    ]
+  },
+  "events": {
+    "detected": 4,
+    "venueResolution": [
+      {
+        "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+        "eventName": "Boliche",
+        "venueText": "La Rota Carlota",
+        "eventVenueId": null,
+        "metadataVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+        "candidates": [
+          {
+            "method": "metadata.venueId",
+            "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+            "venueName": "La Rota Carlota"
+          }
+        ],
+        "resolvedVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+        "resolvedVenueName": "La Rota Carlota",
+        "resolutionMethod": "metadata.venueId",
+        "ambiguous": false
+      },
+      {
+        "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+        "eventName": "Boliche - anon test",
+        "venueText": "La Rota Carlota",
+        "eventVenueId": null,
+        "metadataVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+        "candidates": [
+          {
+            "method": "metadata.venueId",
+            "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+            "venueName": "La Rota Carlota"
+          }
+        ],
+        "resolvedVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+        "resolvedVenueName": "La Rota Carlota",
+        "resolutionMethod": "metadata.venueId",
+        "ambiguous": false
+      },
+      {
+        "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+        "eventName": "Boliche - fixed payload test",
+        "venueText": "La Rota Carlota",
+        "eventVenueId": null,
+        "metadataVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+        "candidates": [
+          {
+            "method": "metadata.venueId",
+            "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+            "venueName": "La Rota Carlota"
+          }
+        ],
+        "resolvedVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+        "resolvedVenueName": "La Rota Carlota",
+        "resolutionMethod": "metadata.venueId",
+        "ambiguous": false
+      },
+      {
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "venueText": "La Rota Carlota",
+        "eventVenueId": null,
+        "metadataVenueId": null,
+        "candidates": [
+          {
+            "method": "textual match",
+            "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+            "venueName": "La Rota Carlota"
+          }
+        ],
+        "resolvedVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+        "resolvedVenueName": "La Rota Carlota",
+        "resolutionMethod": "textual match",
+        "ambiguous": false
+      }
+    ],
+    "resolved": 4,
+    "unresolved": [],
+    "ambiguous": []
+  },
+  "venueLayouts": [
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "action": "create",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "existingLayoutId": null,
+      "sourceVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05"
+    }
+  ],
+  "venueLayoutSectors": [
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+      "sourceSectorName": "Planta Baja",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutSectorId": "b052021a-b31d-544c-896b-7dcaded03939",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+      "sourceSectorName": "Sin nombre",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutSectorId": "d98b2e45-7be4-58d2-ae04-4656a7bdd6ef",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "sourceSectorName": "Patio B",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutSectorId": "603ef846-0fa7-5333-9b9b-4ae212dfc2a5",
+      "action": "create"
+    }
+  ],
+  "venueLayoutResources": [
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+      "sourceResourceName": "Sin nombre",
+      "sourceSectorId": null,
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "e1fbae0a-e751-5479-85c8-d6561e877c49",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+      "sourceResourceName": "Sin nombre",
+      "sourceSectorId": null,
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "915dfedd-6c23-592c-8e92-08cd19def2a0",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+      "sourceResourceName": "Sin nombre",
+      "sourceSectorId": null,
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "1efbb28f-97e8-5a73-8c99-11eaff94388d",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+      "sourceResourceName": "Sin nombre",
+      "sourceSectorId": null,
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "c331d7c7-599f-5793-bc4c-8f3a37903dc4",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+      "sourceResourceName": "Sin nombre",
+      "sourceSectorId": null,
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "96306d97-8b91-5455-abde-21c94c7e8bad",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+      "sourceResourceName": "Sin nombre",
+      "sourceSectorId": null,
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "91cea845-a875-5fba-a293-bde14eac0777",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+      "sourceResourceName": "Sin nombre",
+      "sourceSectorId": null,
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "e0523c95-be8e-53c9-87e1-09585aff207a",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+      "sourceResourceName": "Sin nombre",
+      "sourceSectorId": null,
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "d4061c85-7f65-55d5-b6a3-835d5d2b0a88",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+      "sourceResourceName": "Mesa 3",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "27fc9b9b-ea58-56eb-b865-4835b5fc4995",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+      "sourceResourceName": "Mesa 4",
+      "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "6526ae72-ebaa-5f7e-adb8-b947882065bb",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+      "sourceResourceName": "mesa 4",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "898397a5-b5b7-583a-a4a4-7f442539ffc9",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+      "sourceResourceName": "mesa 5",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "4211c222-af0f-5c57-8c0b-57fbe5bfe9e7",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+      "sourceResourceName": "mesa2",
+      "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "be74a5a8-85a8-5d65-a61b-add2bff67d3d",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+      "sourceResourceName": "mesa 4",
+      "sourceSectorId": null,
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "b0169982-2fb1-5458-9748-121731242918",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+      "sourceResourceName": "mesa 6",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "9f13de33-455d-534b-919c-3482954d5d1c",
+      "action": "create"
+    },
+    {
+      "venueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "venueName": "La Rota Carlota",
+      "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+      "sourceResourceName": "meesa 7",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "layoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutResourceId": "efe3168c-d7ba-594d-b469-06dc1da36efb",
+      "action": "create"
+    }
+  ],
+  "eventLayouts": [
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "resolvedVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "resolvedVenueName": "La Rota Carlota",
+      "sourceVenueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "resolvedVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "resolvedVenueName": "La Rota Carlota",
+      "sourceVenueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "resolvedVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "resolvedVenueName": "La Rota Carlota",
+      "sourceVenueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "resolvedVenueId": "15b8d560-5b5d-4988-bf29-5d5bdd07ce05",
+      "resolvedVenueName": "La Rota Carlota",
+      "sourceVenueLayoutId": "28dc1435-ec6f-593d-b23c-6f4e6ca0447b",
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "action": "create"
+    }
+  ],
+  "eventLayoutSectors": [
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+      "sourceSectorName": "Planta Baja",
+      "venueLayoutSectorId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutSectorId": "12a41610-a625-59f9-99c3-cb08dd852fdd",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+      "sourceSectorName": "Sin nombre",
+      "venueLayoutSectorId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutSectorId": "dc0f4a07-27c8-5098-9902-cb2bd6f4be3e",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "sourceSectorName": "Patio B",
+      "venueLayoutSectorId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutSectorId": "bb356325-63f7-52e3-8ebf-bfabde37943c",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+      "sourceSectorName": "Planta Baja",
+      "venueLayoutSectorId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutSectorId": "8f273af1-e27a-546a-938b-9914c42b644f",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+      "sourceSectorName": "Sin nombre",
+      "venueLayoutSectorId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutSectorId": "1e397092-acf1-5bb4-ab25-6e28bbbcc6e6",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "sourceSectorName": "Patio B",
+      "venueLayoutSectorId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutSectorId": "09b611bf-fb57-547c-8e0b-62fa5f42cf88",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+      "sourceSectorName": "Planta Baja",
+      "venueLayoutSectorId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutSectorId": "70eac94b-f3a0-584a-a48a-4f24057a88b2",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+      "sourceSectorName": "Sin nombre",
+      "venueLayoutSectorId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutSectorId": "61cf8b57-df31-5192-83c8-ec358993c811",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "sourceSectorName": "Patio B",
+      "venueLayoutSectorId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutSectorId": "3848baab-9085-5caa-8a81-1be26d0aba22",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceSectorId": "078d9733-f5f9-4c55-b32a-f8b35141bceb",
+      "sourceSectorName": "Planta Baja",
+      "venueLayoutSectorId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutSectorId": "9bc461ff-5f46-5475-90c6-ea160a1e710d",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceSectorId": "1ababf4a-b702-42a5-b29a-b92f4883a6bf",
+      "sourceSectorName": "Sin nombre",
+      "venueLayoutSectorId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutSectorId": "8eef7d8e-bd9f-58d9-be13-5d11d8ba44a4",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceSectorId": "6bc21389-6542-44f0-966b-3e25759b8ac8",
+      "sourceSectorName": "Patio B",
+      "venueLayoutSectorId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutSectorId": "f628923d-eff9-53ce-b364-aef23ae95f61",
+      "action": "create"
+    }
+  ],
+  "eventLayoutResources": [
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "f9162521-4fe8-51e8-aebd-44490a6cd7d7",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "efc4ebc3-52fa-5362-af4d-60b953e5e3da",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "fc73a33f-c585-59ad-9017-f078d6662f5c",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "615dbf9f-4d1d-5809-8a8c-28ff75e39c5c",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "15e5da2f-b903-55fe-a8a7-191bc09d0ace",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "a223ed04-5acc-51be-85ae-fbc31be540c0",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "a2fa802d-be8c-51fd-bcba-5560c3dd77c3",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "b358c7a5-6804-5f7f-9b1e-ba25d42db0ab",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+      "sourceResourceName": "Mesa 3",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "3d4126bf-55a7-5429-bad4-9a4de14294f4",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+      "sourceResourceName": "Mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "b3aa7fca-1aa8-50ab-abdb-89289b7a6809",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+      "sourceResourceName": "mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "b6a29da4-e0c4-50cf-a96b-808b1f10dddb",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+      "sourceResourceName": "mesa 5",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "7b751f7a-df62-5964-8971-ee156ad8b04e",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+      "sourceResourceName": "mesa2",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "7967e72a-6dfb-56b3-8256-5a10d2837e04",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+      "sourceResourceName": "mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "9bc8ef6f-f9f2-5eb4-b3b6-f67448307fe1",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+      "sourceResourceName": "mesa 6",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "f76c9c02-b625-5af3-8dd0-1c4994e54b50",
+      "action": "create"
+    },
+    {
+      "eventId": "abcb37d0-a872-41ac-938b-a5bac7e2c493",
+      "eventName": "Boliche",
+      "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+      "sourceResourceName": "meesa 7",
+      "venueLayoutResourceId": null,
+      "layoutId": "30c69c6f-1749-5ace-9600-a121fb49dbd6",
+      "eventLayoutResourceId": "6dd0beb8-5d60-596e-9bca-b95e3bbf50b8",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "c246e178-d73a-5a6b-871b-d25c944bf29c",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "7a936845-c911-59a1-b4e7-ea0701c6c243",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "a56cd055-60ce-5ab9-b426-8905e826cf68",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "05e9a392-c580-5169-9e78-4c953d53ebb2",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "9758dc00-fe49-54ec-8858-2d70fe3fca86",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "95e98d9e-648a-52c6-a223-8ef059e8b363",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "75005dfa-8093-53c2-a89b-941604373646",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "886615de-5913-51c1-a2a8-d72e1ab744d3",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+      "sourceResourceName": "Mesa 3",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "e50a1885-e7e7-5262-9a71-15d3de450b69",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+      "sourceResourceName": "Mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "e4c492ae-2e08-5534-88d0-49f20c4c5018",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+      "sourceResourceName": "mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "475cd22b-57a4-5a8d-9273-5abff8f7f5eb",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+      "sourceResourceName": "mesa 5",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "657fe068-f8b2-5969-a528-770d120cf85f",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+      "sourceResourceName": "mesa2",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "3013bc80-c2c5-52f4-941e-674196098538",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+      "sourceResourceName": "mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "f7d29bf6-19e7-5fcb-a340-5ef39a6562fc",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+      "sourceResourceName": "mesa 6",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "5c8cd7fa-12f3-520f-82a6-68db5422c654",
+      "action": "create"
+    },
+    {
+      "eventId": "93f7c919-718b-4f2d-98e7-5ac0e6f44c09",
+      "eventName": "Boliche - anon test",
+      "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+      "sourceResourceName": "meesa 7",
+      "venueLayoutResourceId": null,
+      "layoutId": "c44419cb-6042-5b02-b0fb-a3c15647e07b",
+      "eventLayoutResourceId": "9a39868e-ba81-592a-81b0-a38cdcc3385b",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "c93aa168-cdc7-5e29-a1cf-ea3dcf09828e",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "8fed1161-d1ca-503b-b901-5d5bc3d5515b",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "15d2d60e-12d2-54ad-a763-1ef88f57578e",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "af51fa76-3b61-50d5-a30a-6672c084e10c",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "cb00faed-0030-5b6c-b0da-a56c26e02f27",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "a3f8211e-1dd4-539d-b06c-60a4a153b732",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "98d9d831-49f3-54c0-9b57-f7c363f376a5",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "e0ea4add-7d58-5c79-a9d4-6653eea22d78",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+      "sourceResourceName": "Mesa 3",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "b7d646d7-606d-575b-aa5b-ede3be02eb55",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+      "sourceResourceName": "Mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "ec322024-9033-596a-8fb2-2f76612aee34",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+      "sourceResourceName": "mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "085d2258-d56b-59ef-8245-55e1d67e952a",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+      "sourceResourceName": "mesa 5",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "894f41a4-ebe3-51ef-9daf-bb0ce52d7ba5",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+      "sourceResourceName": "mesa2",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "769e282d-33e9-5852-8121-62d7d140b94b",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+      "sourceResourceName": "mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "f530b74c-eea0-5863-bd47-b88add19acc4",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+      "sourceResourceName": "mesa 6",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "68a91779-2165-54a3-9763-ac35e3e98ee9",
+      "action": "create"
+    },
+    {
+      "eventId": "cfceecd9-f97c-4e89-8db4-7a67e66f6d9b",
+      "eventName": "Boliche - fixed payload test",
+      "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+      "sourceResourceName": "meesa 7",
+      "venueLayoutResourceId": null,
+      "layoutId": "9c198fe1-1609-5048-ae62-21a6b1c24e03",
+      "eventLayoutResourceId": "dea38fce-032e-5c67-8abd-a7abcbb72b54",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "afa0eba8-6bdb-5ae7-a801-9bb9712999dc",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "5f101c34-6e27-5062-9c4f-751633c8b6f5",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "d0594ff1-0bec-58bd-aa82-69e4525ffd5b",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "415a7c35-26ac-4164-91b4-30ca69bf206c",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "6e437c0c-2fc8-5ed5-83c7-4aab31e714ae",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "31093c86-e111-4860-a728-a356f6cc2035",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "f7580505-45fd-543e-87cb-aeebb07e5a74",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "2e55c43d-4ea8-5c8c-8c35-26d32d501c48",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "7cf1f1be-1d42-5e27-af81-e4266391d4c6",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3",
+      "sourceResourceName": "Sin nombre",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "1130c503-042e-5e2b-8b0d-525773694107",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "5a78b036-4c08-48be-be5a-7c103bf7a054",
+      "sourceResourceName": "Mesa 3",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "c7b3a764-425e-5c47-99ff-090945e3f648",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+      "sourceResourceName": "Mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "496bf190-20b3-5ea8-a6d1-9ccd37eac60c",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+      "sourceResourceName": "mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "ad7b444a-30b5-56f1-bddc-7e5c09784559",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+      "sourceResourceName": "mesa 5",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "2c737d34-6d38-5022-b4b9-314dadab25c7",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "858c37ee-a366-45e8-a050-1b64985559b3",
+      "sourceResourceName": "mesa2",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "3e941ed5-c70e-5b2e-b04f-62a7c6d02d09",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "ca043769-e0bd-4f28-be59-d0aea3ae179a",
+      "sourceResourceName": "mesa 4",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "238ea55c-565a-5898-a2d1-9deab6fc7601",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+      "sourceResourceName": "mesa 6",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "a594c456-5e99-59b1-a5db-01eaa3459a07",
+      "action": "create"
+    },
+    {
+      "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+      "eventName": "Bolichefesttt",
+      "sourceResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+      "sourceResourceName": "meesa 7",
+      "venueLayoutResourceId": null,
+      "layoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+      "eventLayoutResourceId": "de1c1b64-6aef-5082-9ce7-d3e5730bf119",
+      "action": "create"
+    }
+  ],
+  "reservations": {
+    "total": 10,
+    "mapped": 10,
+    "ambiguous": 0,
+    "unmapped": [],
+    "mappings": [
+      {
+        "reservationId": "93a5a2f3-009a-4b1b-a669-8db2ad6bc45a",
+        "code": "RES-33205508",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+        "legacyResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+        "legacyResourceName": "Mesa 4",
+        "venueLayoutResourceId": "6526ae72-ebaa-5f7e-adb8-b947882065bb",
+        "eventLayoutResourceId": "496bf190-20b3-5ea8-a6d1-9ccd37eac60c",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 5
+      },
+      {
+        "reservationId": "49720f3b-c547-4c0a-a74c-4e23ac16e96d",
+        "code": "RES-33205690",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+        "legacyResourceId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+        "legacyResourceName": "Mesa 4",
+        "venueLayoutResourceId": "6526ae72-ebaa-5f7e-adb8-b947882065bb",
+        "eventLayoutResourceId": "496bf190-20b3-5ea8-a6d1-9ccd37eac60c",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 5
+      },
+      {
+        "reservationId": "5712a356-fcb4-42d2-bb3f-09745ae96e0d",
+        "code": "RES-0F2C2801",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+        "legacyResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+        "legacyResourceName": "mesa 4",
+        "venueLayoutResourceId": "898397a5-b5b7-583a-a4a4-7f442539ffc9",
+        "eventLayoutResourceId": "ad7b444a-30b5-56f1-bddc-7e5c09784559",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 5
+      },
+      {
+        "reservationId": "8cf3c8f4-471e-40d5-9e67-5df0264bb0fc",
+        "code": "RES-0F2C3999",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+        "legacyResourceId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+        "legacyResourceName": "mesa 4",
+        "venueLayoutResourceId": "898397a5-b5b7-583a-a4a4-7f442539ffc9",
+        "eventLayoutResourceId": "ad7b444a-30b5-56f1-bddc-7e5c09784559",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 5
+      },
+      {
+        "reservationId": "6c42e578-72c4-4643-88be-34e65cc6636d",
+        "code": "RES-CB493136",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+        "legacyResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+        "legacyResourceName": "mesa 5",
+        "venueLayoutResourceId": "4211c222-af0f-5c57-8c0b-57fbe5bfe9e7",
+        "eventLayoutResourceId": "2c737d34-6d38-5022-b4b9-314dadab25c7",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 5
+      },
+      {
+        "reservationId": "4f1970be-7105-4d26-8342-608bc729743d",
+        "code": "RES-CB494369",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+        "legacyResourceId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+        "legacyResourceName": "mesa 5",
+        "venueLayoutResourceId": "4211c222-af0f-5c57-8c0b-57fbe5bfe9e7",
+        "eventLayoutResourceId": "2c737d34-6d38-5022-b4b9-314dadab25c7",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 5
+      },
+      {
+        "reservationId": "e1830059-39fd-4766-bea9-02228363af00",
+        "code": "RES-F4300726",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+        "legacyResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+        "legacyResourceName": "mesa 6",
+        "venueLayoutResourceId": "9f13de33-455d-534b-919c-3482954d5d1c",
+        "eventLayoutResourceId": "a594c456-5e99-59b1-a5db-01eaa3459a07",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 5
+      },
+      {
+        "reservationId": "1e1eebe8-74a6-4e7a-8db2-fa7adf24b356",
+        "code": "RES-F4309782",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+        "legacyResourceId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+        "legacyResourceName": "mesa 6",
+        "venueLayoutResourceId": "9f13de33-455d-534b-919c-3482954d5d1c",
+        "eventLayoutResourceId": "a594c456-5e99-59b1-a5db-01eaa3459a07",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 8
+      },
+      {
+        "reservationId": "9611467d-53c8-486f-8431-046f2ab398ab",
+        "code": "RES-B57B8749",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+        "legacyResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+        "legacyResourceName": "meesa 7",
+        "venueLayoutResourceId": "efe3168c-d7ba-594d-b469-06dc1da36efb",
+        "eventLayoutResourceId": "de1c1b64-6aef-5082-9ce7-d3e5730bf119",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 5
+      },
+      {
+        "reservationId": "ef6f4f07-08aa-4faa-a269-500f59374298",
+        "code": "RES-B57B9549",
+        "eventId": "a4f28d02-213e-47d2-a147-61f0ec31b152",
+        "eventName": "Bolichefesttt",
+        "tableId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+        "legacyResourceId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+        "legacyResourceName": "meesa 7",
+        "venueLayoutResourceId": "efe3168c-d7ba-594d-b469-06dc1da36efb",
+        "eventLayoutResourceId": "de1c1b64-6aef-5082-9ce7-d3e5730bf119",
+        "eventLayoutId": "d85619ca-7130-54b0-8b29-8661a4b8790b",
+        "mapped": true,
+        "sameEvent": true,
+        "sameVenue": true,
+        "guestCount": 5
+      }
+    ]
+  },
+  "conflicts": {
+    "duplicateActiveReservationsByResource": [
+      {
+        "key": "a4f28d02-213e-47d2-a147-61f0ec31b152::b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+        "reservations": [
+          {
+            "reservationId": "93a5a2f3-009a-4b1b-a669-8db2ad6bc45a",
+            "code": "RES-33205508",
+            "status": "Confirmed",
+            "tableId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+            "tableName": "Mesa 1",
+            "guestCount": 5
+          },
+          {
+            "reservationId": "49720f3b-c547-4c0a-a74c-4e23ac16e96d",
+            "code": "RES-33205690",
+            "status": "Pending",
+            "tableId": "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+            "tableName": "Mesa 1",
+            "guestCount": 5
+          }
+        ]
+      },
+      {
+        "key": "a4f28d02-213e-47d2-a147-61f0ec31b152::8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+        "reservations": [
+          {
+            "reservationId": "5712a356-fcb4-42d2-bb3f-09745ae96e0d",
+            "code": "RES-0F2C2801",
+            "status": "Confirmed",
+            "tableId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+            "tableName": "mesa 4",
+            "guestCount": 5
+          },
+          {
+            "reservationId": "8cf3c8f4-471e-40d5-9e67-5df0264bb0fc",
+            "code": "RES-0F2C3999",
+            "status": "Confirmed",
+            "tableId": "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+            "tableName": "mesa 4",
+            "guestCount": 5
+          }
+        ]
+      },
+      {
+        "key": "a4f28d02-213e-47d2-a147-61f0ec31b152::714d3d5c-c978-4707-a6e4-246eb064cb49",
+        "reservations": [
+          {
+            "reservationId": "6c42e578-72c4-4643-88be-34e65cc6636d",
+            "code": "RES-CB493136",
+            "status": "Confirmed",
+            "tableId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+            "tableName": "mesa 5",
+            "guestCount": 5
+          },
+          {
+            "reservationId": "4f1970be-7105-4d26-8342-608bc729743d",
+            "code": "RES-CB494369",
+            "status": "Confirmed",
+            "tableId": "714d3d5c-c978-4707-a6e4-246eb064cb49",
+            "tableName": "mesa 5",
+            "guestCount": 5
+          }
+        ]
+      },
+      {
+        "key": "a4f28d02-213e-47d2-a147-61f0ec31b152::eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+        "reservations": [
+          {
+            "reservationId": "e1830059-39fd-4766-bea9-02228363af00",
+            "code": "RES-F4300726",
+            "status": "Confirmed",
+            "tableId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+            "tableName": "mesa 6",
+            "guestCount": 5
+          },
+          {
+            "reservationId": "1e1eebe8-74a6-4e7a-8db2-fa7adf24b356",
+            "code": "RES-F4309782",
+            "status": "Confirmed",
+            "tableId": "eee4313e-9d2e-402f-8b95-5ba4dcfdf430",
+            "tableName": "mesa 6",
+            "guestCount": 8
+          }
+        ]
+      },
+      {
+        "key": "a4f28d02-213e-47d2-a147-61f0ec31b152::e032a4a6-7314-451f-8568-7c302eb8b57b",
+        "reservations": [
+          {
+            "reservationId": "9611467d-53c8-486f-8431-046f2ab398ab",
+            "code": "RES-B57B8749",
+            "status": "Pending",
+            "tableId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+            "tableName": "meesa 7",
+            "guestCount": 5
+          },
+          {
+            "reservationId": "ef6f4f07-08aa-4faa-a269-500f59374298",
+            "code": "RES-B57B9549",
+            "status": "Pending",
+            "tableId": "e032a4a6-7314-451f-8568-7c302eb8b57b",
+            "tableName": "meesa 7",
+            "guestCount": 5
+          }
+        ]
+      }
+    ],
+    "orphanResources": [],
+    "orphanSectors": [],
+    "duplicateResourcesByName": [
+      {
+        "label": "resource",
+        "normalizedName": "sin nombre",
+        "count": 8,
+        "ids": [
+          "ff25b49a-118f-4b04-a5f8-6b10aa7bc33f",
+          "47a35b09-25eb-41fb-a9e6-d82d78814ce6",
+          "0d863e6f-cd27-4bca-bad4-b754d8879c24",
+          "415a7c35-26ac-4164-91b4-30ca69bf206c",
+          "31093c86-e111-4860-a728-a356f6cc2035",
+          "56431313-6bd3-4aeb-8c5a-5c2b0d38456d",
+          "50ec53ea-26c4-4448-bdbf-f062505c2c5b",
+          "f3263cc7-4735-47e5-b0b9-b56ae4aa6fb3"
+        ],
+        "names": [
+          "Sin nombre",
+          "Sin nombre",
+          "Sin nombre",
+          "Sin nombre",
+          "Sin nombre",
+          "Sin nombre",
+          "Sin nombre",
+          "Sin nombre"
+        ]
+      },
+      {
+        "label": "resource",
+        "normalizedName": "mesa 4",
+        "count": 3,
+        "ids": [
+          "b4eee150-b00a-42d1-a4b2-f7b7b3da3320",
+          "8c3937d5-a563-4bd1-ac25-c2c3866d0f2c",
+          "ca043769-e0bd-4f28-be59-d0aea3ae179a"
+        ],
+        "names": [
+          "Mesa 4",
+          "mesa 4",
+          "mesa 4"
+        ]
+      }
+    ],
+    "duplicateSectorsByName": []
+  },
+  "trace": {
+    "legacySourceCount": {
+      "organizations": 1,
+      "venues": 1,
+      "sectors": 3,
+      "resources": 16,
+      "events": 4,
+      "reservations": 10,
+      "guests": 53
+    },
+    "venuePresetCount": 1,
+    "eventSnapshotCount": 4
+  },
+  "expectations": {
+    "venues": 1,
+    "events": 4,
+    "resolvedEvents": 4,
+    "venueLayouts": 1,
+    "venueLayoutSectors": 3,
+    "venueLayoutResources": 16,
+    "eventLayouts": 4,
+    "eventLayoutSectors": 12,
+    "eventLayoutResources": 64,
+    "reservations": 10,
+    "reservationsMapped": 10,
+    "ambiguousReservations": 0,
+    "unmappedReservations": 0,
+    "conflictClusters": 5
+  }
+}

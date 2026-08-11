@@ -223,6 +223,24 @@ function fallbackActionLabel(item: WorkspacePriorityItem) {
   return "Continuar flujo";
 }
 
+function formatRouteLabel(href?: string) {
+  if (!href || href === "/") {
+    return "Resumen";
+  }
+
+  if (href === "/operations") return "Operaciones";
+  if (href === "/reservations") return "Reservas";
+  if (href === "/customers") return "Invitados";
+  if (href === "/check-in") return "Ingreso";
+  if (href === "/tables") return "Recursos";
+  if (href === "/timeline") return "Actividad";
+  if (href === "/statistics") return "Estadísticas";
+  if (href === "/events") return "Eventos";
+  if (href === "/settings") return "Ajustes";
+
+  return href.replace("/", "") || "Resumen";
+}
+
 export function buildGuidedActionItem(item: WorkspacePriorityItem, overrides?: Partial<GuidedActionItem>): GuidedActionItem {
   const priority: GuidedActionPriority =
     item.priority === "critical"
@@ -321,7 +339,7 @@ export function GuidedActionPanel({
                             ? "Rápida"
                             : "Preventiva"}
                     </StatusBadge>
-                    {item.href ? <StatusBadge variant="info">{item.href.replace("/", "") || "Dashboard"}</StatusBadge> : null}
+                    {item.href ? <StatusBadge variant="info">{formatRouteLabel(item.href)}</StatusBadge> : null}
                     {shortcut ? <StatusBadge variant="info">{shortcut}</StatusBadge> : null}
                   </div>
                   <p className="mt-3 text-sm font-semibold text-white">{item.label}</p>

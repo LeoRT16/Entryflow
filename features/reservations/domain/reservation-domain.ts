@@ -9,6 +9,7 @@ import type {
   ReservationTimelineEntry,
   ReservationTone,
 } from "@/features/reservations/types";
+import { createUuid } from "@/lib/supabase/helpers";
 
 function createTimeStamp() {
   return new Date().toLocaleTimeString("es-BO", {
@@ -32,6 +33,15 @@ function reservationToneForStatus(status: ReservationStatus): ReservationTone {
   }
 
   return "info";
+}
+
+function normalizeIdentityText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ");
 }
 
 export function normalizeReservationStatus(status: string): ReservationStatus {
@@ -72,6 +82,70 @@ export function formatReservationStatus(status: ReservationStatus | string) {
 
 export function getReservationStatusTone(status: ReservationStatus | string) {
   return reservationToneForStatus(normalizeReservationStatus(status));
+}
+
+export function deriveFrequentCustomerFromHistory(
+  reservations: Array<Pick<ReservationRecord, "holderName" | "holderDocument" | "holderWhatsapp" | "status" | "eventId" | "createdAt" | "updatedAt">>,
+  identity: {
+    holderName?: string;
+    holderDocument?: string;
+    holderWhatsapp?: string;
+    eventId?: string;
+  },
+) {
+  const normalizedName = normalizeIdentityText(identity.holderName ?? "");
+  const normalizedDocument = normalizeIdentityText(identity.holderDocument ?? "");
+  const normalizedWhatsapp = normalizeIdentityText(identity.holderWhatsapp ?? "");
+
+  if (!normalizedName && !normalizedDocument && !normalizedWhatsapp) {
+    return {
+      frequent: false,
+      matchedReservations: 0,
+      lastSeenAt: undefined as string | undefined,
+    };
+  }
+
+  const matchesFor = (source: typeof reservations) =>
+    source.filter((reservation) => {
+    const reservationName = normalizeIdentityText(reservation.holderName ?? "");
+    const reservationDocument = normalizeIdentityText(reservation.holderDocument ?? "");
+    const reservationWhatsapp = normalizeIdentityText(reservation.holderWhatsapp ?? "");
+    const status = normalizeReservationStatus(reservation.status);
+
+    if (status === "Cancelled" || status === "No Show") {
+      return false;
+    }
+
+    if (normalizedDocument && reservationDocument && normalizedDocument === reservationDocument) {
+      return true;
+    }
+
+    if (normalizedWhatsapp && reservationWhatsapp && normalizedWhatsapp === reservationWhatsapp) {
+      return true;
+    }
+
+    if (!normalizedDocument && !normalizedWhatsapp && normalizedName) {
+      return reservationName === normalizedName;
+    }
+
+    return false;
+    });
+
+  const eventScopedMatches = identity.eventId
+    ? matchesFor(reservations.filter((reservation) => reservation.eventId === identity.eventId))
+    : [];
+  const matches = eventScopedMatches.length >= 2 ? eventScopedMatches : matchesFor(reservations);
+
+  const lastSeenAt =
+    matches
+      .map((reservation) => reservation.updatedAt ?? reservation.createdAt)
+      .sort((a, b) => (a < b ? 1 : -1))[0] ?? undefined;
+
+  return {
+    frequent: matches.length >= 2,
+    matchedReservations: matches.length,
+    lastSeenAt,
+  };
 }
 
 function buildTimelineEntry(
@@ -417,23 +491,38 @@ function buildGuestDraftIdentity(index: number, input: ReservationCreationInput)
   };
 }
 
+function getSelectedReservationResource(input: ReservationCreationInput) {
+  return input.selectedResource ?? input.selectedTable;
+}
+
 export function createReservationBundle(input: ReservationCreationInput) {
   const createdAt = createTimeStamp();
-  const codeBase = `${input.eventName}-${input.selectedTable.id}-${Date.now().toString().slice(-4)}`;
+  const selectedResource = getSelectedReservationResource(input);
+
+  if (!selectedResource) {
+    throw new Error("A reservation resource is required.");
+  }
+
+  const codeBase = `${input.eventName}-${selectedResource.id}-${Date.now().toString().slice(-4)}`;
   const code = `RES-${codeBase.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase()}`;
-  const name = `${input.selectedTable.name} · ${input.holderName} ${input.holderLastName}`.trim();
+  const name = `${selectedResource.name} · ${input.holderName} ${input.holderLastName}`.trim();
   const status: ReservationStatus = input.paymentStatus === "Pagado" ? "Confirmed" : "Pending";
   const reservation: ReservationRecord = {
-    id: `reservation-${code.toLowerCase()}`,
+    id: createUuid(),
     code,
     name,
     eventId: input.eventId,
     eventName: input.eventName,
     date: input.date,
     time: input.time,
-    tableName: input.selectedTable.name,
-    tableId: input.selectedTable.id,
-    tableCapacity: input.selectedTable.capacity,
+    resourceId: selectedResource.id,
+    resourceName: selectedResource.name,
+    sectorId: selectedResource.sectorId,
+    sectorName: selectedResource.location,
+    venueId: selectedResource.venueId,
+    tableName: selectedResource.name,
+    tableId: selectedResource.id,
+    tableCapacity: selectedResource.capacity,
     holderName: `${input.holderName} ${input.holderLastName}`.trim(),
     holderDocument: input.documentValue,
     holderWhatsapp: input.whatsapp,
@@ -468,7 +557,7 @@ export function createReservationBundle(input: ReservationCreationInput) {
       const identity = buildGuestDraftIdentity(index, input);
       const invitationCode = `${code}-${String(index + 1).padStart(2, "0")}`;
       return {
-        id: `guest-${reservation.id}-${index + 1}`,
+        id: createUuid(),
         guestName: identity.name,
         reservationName: name,
         reservationCode: code,
