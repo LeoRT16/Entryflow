@@ -156,7 +156,7 @@ function checkInToEvent(guest: Guest, checkIn: CheckIn): TimelineEvent {
   };
 }
 
-function attemptToEvent(guest: Guest | undefined, attempt: CheckInAttempt): TimelineEvent | null {
+export function buildCheckInAttemptTimelineEvent(guest: Guest | undefined, attempt: CheckInAttempt): TimelineEvent | null {
   if (attempt.result === "Encontrado") {
     return null;
   }
@@ -202,6 +202,13 @@ function attemptToEvent(guest: Guest | undefined, attempt: CheckInAttempt): Time
     reservationName: guest?.reservationName,
     tableId: guest?.tableId,
     tableName: guest?.tableName,
+    metadata: {
+      query: attempt.query,
+      method: attempt.method,
+      result: attempt.result,
+      note: attempt.note,
+      accessGrantId: guest?.accessGrantId ?? guest?.id ?? attempt.guestId,
+    },
   };
 }
 
@@ -245,7 +252,7 @@ export function buildTimelineEvents({
     .map((attempt) => {
       const guest = attempt.guestId ? guestById.get(attempt.guestId) : undefined;
 
-      return attemptToEvent(guest, attempt);
+      return buildCheckInAttemptTimelineEvent(guest, attempt);
     })
     .filter((event): event is TimelineEvent => Boolean(event));
 

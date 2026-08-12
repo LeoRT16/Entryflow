@@ -58,6 +58,7 @@ import {
   isAccessGrantAlreadyConsumed,
   persistCompletedCheckInBundle,
 } from "@/features/check-in/domain/check-in-persistence";
+import { buildCheckInAttemptTimelineEvent } from "@/features/timeline/domain/timeline-domain";
 import { buildWorkspaceIntelligence, type WorkspaceIntelligence } from "@/domain/workspace-intelligence";
 import { buildWorkspacePrioritySnapshot, type WorkspacePrioritySnapshot } from "@/domain/workspace-priority";
 import { clearInvalidSupabaseBrowserSession, getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -2522,9 +2523,12 @@ export function WorkspaceServiceProvider({
           };
 
           setAttempts((current) => [duplicateAttempt, ...current].slice(0, 12));
-          const duplicateTimelineEntry: TimelineEvent = { ...createAdmissionTimelineEntry(duplicateResult, duplicateTicket), eventId: currentEvent.id } as TimelineEvent;
+          const duplicateTimelineEntry: TimelineEvent = {
+            ...(buildCheckInAttemptTimelineEvent(guest ?? undefined, duplicateAttempt) ?? createAdmissionTimelineEntry(duplicateResult, duplicateTicket)),
+            eventId: currentEvent.id,
+          } as TimelineEvent;
           upsertPersistedTimelineEvent(duplicateTimelineEntry);
-          void repositories.timeline.upsert(duplicateTimelineEntry).catch(() => restoreSnapshot(snapshot));
+          await repositories.timeline.upsert(duplicateTimelineEntry).catch(() => restoreSnapshot(snapshot));
           notify({
             title: duplicateResult.title,
             description: duplicateResult.note,
