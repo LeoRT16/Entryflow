@@ -11,6 +11,7 @@ import {
 } from "@/features/accounts/domain/accounts-domain";
 import type { AccountPermissionKey, AccountRolePreset, AccountUser, OrganizationAccount, OrganizationMembership } from "@/features/accounts/types";
 import { admissionFilters, deliveryFilters, quickFilters, reservationFilters } from "@/features/customers/domain/customer-filters";
+import { buildGuestWhatsAppUpdate } from "@/features/customers/domain/customer-directory";
 import { searchGuests } from "@/features/check-in/domain/check-in-domain";
 import type {
   Event as PlatformEvent,
@@ -181,6 +182,7 @@ type WorkspaceServiceValue = {
   setReservationStatus: (reservationId: string, status: ReservationStatus) => void;
   assignReservationToTable: (reservationId: string, tableId: string) => void;
   moveGuestToTable: (guestId: string, tableId: string) => void;
+  updateGuestWhatsApp: (guestId: string, whatsapp: string) => Promise<Guest>;
   releaseTable: (tableId: string) => void;
   closeTable: (tableId: string) => void;
   createEvent: (event: PlatformEvent) => Promise<PlatformEvent>;
@@ -1756,6 +1758,49 @@ export function WorkspaceServiceProvider({
     [captureSnapshot, currentEvent, currentEventLayout, eventLayoutResources, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, restoreSnapshot, upsertPersistedTimelineEvent, venueLayoutResources],
   );
 
+  const updateGuestWhatsApp = useCallback(
+    async (guestId: string, whatsapp: string) => {
+      requirePermission("guest.edit");
+      const snapshot = captureSnapshot();
+      const guest = guests.find((item) => item.id === guestId);
+
+      if (!guest) {
+        throw new Error("Guest not found.");
+      }
+
+      const nextGuest = buildGuestWhatsAppUpdate(guest, whatsapp, currentAccount.displayName || "Operación");
+
+      try {
+        await repositories.guests.upsert(nextGuest);
+      } catch (exception) {
+        restoreSnapshot(snapshot);
+        notify({
+          title: "No se pudo actualizar WhatsApp",
+          description: exception instanceof Error ? exception.message : "Supabase rechazó la actualización del invitado.",
+          tone: "danger",
+          icon: "alert",
+        });
+        throw exception;
+      }
+
+      setGuests((current) => current.map((item) => (item.id === guestId ? nextGuest : item)));
+      notify({
+        title: "WhatsApp actualizado",
+        description: `${guest.guestName} quedó listo para compartir por WhatsApp.`,
+        tone: "success",
+        icon: "guest",
+        undo: {
+          label: "Deshacer",
+          timeoutMs: 6000,
+          onUndo: () => restoreSnapshot(snapshot),
+        },
+      });
+
+      return nextGuest;
+    },
+    [captureSnapshot, currentAccount.displayName, guests, notify, repositories.guests, requirePermission, restoreSnapshot],
+  );
+
   const updateReservation = useCallback(
     async (input: ReservationUpdateInput) => {
       requirePermission("reservation.edit");
@@ -2744,6 +2789,7 @@ export function WorkspaceServiceProvider({
       updateReservationGuest,
       assignReservationToTable,
       moveGuestToTable,
+      updateGuestWhatsApp,
       releaseTable,
       closeTable,
       createEvent,
@@ -2805,6 +2851,7 @@ export function WorkspaceServiceProvider({
       guests,
       hasPermission,
       moveGuestToTable,
+      updateGuestWhatsApp,
       organizations,
       profiles,
       registerCheckIn,

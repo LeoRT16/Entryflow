@@ -192,6 +192,43 @@ export function buildOperationalNotes(guest: GuestRecord): OperationalNote[] {
   return notes;
 }
 
+type WhatsAppUpdatableGuest = {
+  whatsapp: string;
+  noWhatsApp?: boolean;
+  recentChange?: boolean;
+  operatorActivity: Array<{
+    time: string;
+    action: string;
+    operator: string;
+    reason?: string;
+  }>;
+};
+
+export function buildGuestWhatsAppUpdate<T extends WhatsAppUpdatableGuest>(
+  guest: T,
+  whatsapp: string,
+  operator = "Operación",
+  timestamp = new Date().toISOString(),
+) {
+  const nextWhatsApp = whatsapp.trim();
+
+  return {
+    ...guest,
+    whatsapp: nextWhatsApp,
+    noWhatsApp: nextWhatsApp.length === 0,
+    recentChange: true,
+    operatorActivity: [
+      ...guest.operatorActivity,
+      {
+        time: timestamp.slice(11, 16),
+        action: "WhatsApp actualizado",
+        operator,
+        reason: "Edición operativa",
+      },
+    ],
+  } as T;
+}
+
 const guestIncidentLibrary: Record<
   string,
   {

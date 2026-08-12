@@ -19,10 +19,20 @@ import InvitationCard, {
   type InvitationCardMode,
   type InvitationCardVariant,
 } from "@/features/access/components/invitation-card";
-import { buildWhatsAppAccessMessage } from "@/features/access/domain/access-ledger";
+import { buildInvitationWhatsAppMessage, buildWhatsAppDeepLink, canUseNativeShareWithFiles, normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
 import { getInvitationDownloadFilename } from "@/features/access/domain/invitation-rendering";
 import { admissionFilters, deliveryFilters, reservationFilters, quickFilters } from "@/features/customers/domain/customer-filters";
-import { buildOperationalNotes, buildTimeline, getGuestAuditRows, getGuestIncidents, getIncidentToneClass, getIncidentVariant, reservationFilterToStatus, statusTone, admissionFilterToStatus } from "@/features/customers/domain/customer-directory";
+import {
+  buildOperationalNotes,
+  buildTimeline,
+  getGuestAuditRows,
+  getGuestIncidents,
+  getIncidentToneClass,
+  getIncidentVariant,
+  reservationFilterToStatus,
+  statusTone,
+  admissionFilterToStatus,
+} from "@/features/customers/domain/customer-directory";
 import type {
   AdmissionFilter,
   AuditRow,
@@ -547,6 +557,7 @@ export default function GuestDirectory() {
 
       {selectedGuest ? (
         <GuestDrawer
+          key={selectedGuest.id}
           guest={selectedGuest}
           onClose={closeDrawer}
           drawerRef={drawerRef}
@@ -785,17 +796,28 @@ function GuestDrawer({
   drawerRef: RefObject<HTMLDivElement | null>;
 }) {
   const { showToast, confirm } = useFeedback();
-  const { currentEvent } = useCheckInStore();
+  const { currentEvent, updateGuestWhatsApp } = useCheckInStore();
   const [isVisible, setIsVisible] = useState(false);
   const [isExportingInvitation, setIsExportingInvitation] = useState(false);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isEditingWhatsApp, setIsEditingWhatsApp] = useState(false);
+  const [whatsappDraft, setWhatsappDraft] = useState(guest.whatsapp);
+  const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
   const [invitationMode, setInvitationMode] = useState<InvitationCardMode>("preview");
   const [invitationVariant, setInvitationVariant] = useState<InvitationCardVariant>("general");
   const exportInvitationRef = useRef<HTMLDivElement | null>(null);
+  const whatsappInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setIsVisible(true));
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (isEditingWhatsApp) {
+      requestAnimationFrame(() => whatsappInputRef.current?.focus());
+    }
+  }, [isEditingWhatsApp]);
 
   const timeline = useMemo(() => buildTimeline(guest), [guest]);
   const notes = useMemo(() => buildOperationalNotes(guest), [guest]);
@@ -832,24 +854,36 @@ function GuestDrawer({
       logoLabel: currentEvent.name.slice(0, 2),
       artLabel: guest.reservationName,
       variant: invitationVariant,
-      message: buildWhatsAppAccessMessage(guest, currentEvent.venue),
+      message: buildInvitationWhatsAppMessage({
+        guestName: guest.guestName,
+        eventName: currentEvent.name,
+        invitationCode: guest.invitationCode,
+      }),
     }),
     [currentEvent.name, currentEvent.startAt, currentEvent.venue, guest, invitationVariant],
   );
 
+  const generateInvitationPng = async () => {
+    if (!exportInvitationRef.current) {
+      throw new Error("La invitación todavía no está lista.");
+    }
+
+    return toPng(exportInvitationRef.current, {
+      cacheBust: true,
+      pixelRatio: 1,
+      backgroundColor: "#0b111a",
+    });
+  };
+
   const handleDownloadInvitation = async () => {
-    if (!exportInvitationRef.current || isExportingInvitation) {
+    if (isExportingInvitation) {
       return;
     }
 
     setIsExportingInvitation(true);
 
     try {
-      const dataUrl = await toPng(exportInvitationRef.current, {
-        cacheBust: true,
-        pixelRatio: 1,
-        backgroundColor: "#0b111a",
-      });
+      const dataUrl = await generateInvitationPng();
 
       const link = document.createElement("a");
       link.href = dataUrl;
@@ -872,6 +906,180 @@ function GuestDrawer({
       });
     } finally {
       setIsExportingInvitation(false);
+    }
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (isSendingWhatsApp) {
+      return;
+    }
+
+    const recipient = normalizeWhatsAppPhoneNumber(guest.whatsapp || null);
+
+    if (!recipient) {
+      showToast({
+        title: "Número de WhatsApp no válido",
+        description: "La invitación no tiene un contacto apto para WhatsApp.",
+        tone: "error",
+      });
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+    showToast({
+      title: "Enviando por WhatsApp",
+      description: "Se está preparando el mensaje y consultando Meta Cloud API.",
+      tone: "info",
+    });
+
+    try {
+      const response = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient,
+          guestName: guest.guestName,
+          eventName: currentEvent.name,
+          invitationCode: guest.invitationCode,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: { message?: string } }
+        | null;
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || "No se pudo enviar la invitación por WhatsApp.");
+      }
+
+      showToast({
+        title: "Invitación enviada por WhatsApp",
+        description: "Meta Cloud API aceptó el mensaje para el contacto del invitado.",
+        tone: "success",
+      });
+    } catch (error) {
+      showToast({
+        title: "No se pudo enviar por WhatsApp",
+        description: error instanceof Error ? error.message : "La invitación no pudo enviarse mediante Meta Cloud API.",
+        tone: "error",
+      });
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
+
+  const handleManualWhatsAppShare = async () => {
+    if (isSendingWhatsApp) {
+      return;
+    }
+
+    const recipient = normalizeWhatsAppPhoneNumber(guest.whatsapp || null);
+
+    if (!recipient) {
+      showToast({
+        title: "Número de WhatsApp no válido",
+        description: "La invitación no tiene un contacto apto para WhatsApp.",
+        tone: "error",
+      });
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+    showToast({
+      title: "Preparando invitación",
+      description: "Se está generando el PNG y el mensaje para WhatsApp.",
+      tone: "info",
+    });
+
+    try {
+      const dataUrl = await generateInvitationPng();
+      const message = buildInvitationWhatsAppMessage({
+        guestName: guest.guestName,
+        eventName: currentEvent.name,
+        invitationCode: guest.invitationCode,
+      });
+      const filename = getInvitationDownloadFilename(guest.invitationCode);
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      const file = new File([blob], filename, { type: blob.type || "image/png" });
+      const navigatorLike = window.navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+
+      if (canUseNativeShareWithFiles(navigatorLike, [file])) {
+        await navigatorLike.share({
+          title: `Invitación de ${guest.guestName}`,
+          text: message,
+          files: [file],
+        });
+
+        showToast({
+          title: "Invitación compartida",
+          description: "Se abrió la hoja nativa para compartir la invitación con su imagen adjunta.",
+          tone: "success",
+        });
+        return;
+      }
+
+      const downloadLink = document.createElement("a");
+      downloadLink.href = dataUrl;
+      downloadLink.download = filename;
+      downloadLink.rel = "noopener";
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+
+      const shareUrl = buildWhatsAppDeepLink({ recipient, message });
+      const popup = window.open(shareUrl, "_blank", "noopener,noreferrer");
+
+      showToast({
+        title: popup ? "WhatsApp preparado" : "WhatsApp bloqueado por el navegador",
+        description: popup
+          ? "La invitación se descargó y WhatsApp se abrió con el mensaje. Adjuntá el PNG manualmente antes de enviar."
+          : "La invitación se descargó. Abrí WhatsApp manualmente y adjuntá el PNG para completarla.",
+        tone: popup ? "success" : "warning",
+      });
+    } catch (error) {
+      showToast({
+        title: "No se pudo preparar WhatsApp",
+        description: error instanceof Error ? error.message : "La invitación no pudo generarse para compartir.",
+        tone: "error",
+      });
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
+
+  const handleSaveWhatsApp = async () => {
+    if (isSavingWhatsApp) {
+      return;
+    }
+
+    const nextWhatsApp = whatsappDraft.trim();
+
+    if (!nextWhatsApp) {
+      showToast({
+        title: "Ingresa un WhatsApp",
+        description: "Necesitamos un número para poder compartir la invitación.",
+        tone: "warning",
+      });
+      return;
+    }
+
+    setIsSavingWhatsApp(true);
+
+    try {
+      await updateGuestWhatsApp(guest.id, nextWhatsApp);
+      setIsEditingWhatsApp(false);
+      showToast({
+        title: "WhatsApp guardado",
+        description: `${guest.guestName} ya tiene un contacto listo para envío.`,
+        tone: "success",
+      });
+    } catch {
+      // The service already emitted a detailed error toast.
+    } finally {
+      setIsSavingWhatsApp(false);
     }
   };
 
@@ -986,18 +1194,34 @@ function GuestDrawer({
                       {mode}
                     </button>
                   ))}
-                  <button
-                    type="button"
-                    onClick={handleDownloadInvitation}
-                    disabled={isExportingInvitation}
-                    className="inline-flex items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isExportingInvitation ? "Descargando..." : "Descargar PNG"}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadInvitation}
+                  disabled={isExportingInvitation}
+                  className="inline-flex items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isExportingInvitation ? "Descargando..." : "Descargar PNG"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendWhatsApp}
+                  disabled={isSendingWhatsApp || isExportingInvitation}
+                  className="inline-flex items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-50 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSendingWhatsApp ? "Enviando por WhatsApp..." : "Enviar por WhatsApp"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleManualWhatsAppShare}
+                  disabled={isSendingWhatsApp || isExportingInvitation}
+                  className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-xs font-medium uppercase tracking-[0.22em] text-slate-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Usar envío manual
+                </button>
+              </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {(["general", "vip", "staff", "media", "sponsor"] as const).map((variant) => (
+                {(["general", "vip", "staff", "media", "sponsor"] as const).map((variant) => (
                     <button
                       key={variant}
                       type="button"
@@ -1012,6 +1236,66 @@ function GuestDrawer({
                       {variant}
                       </button>
                   ))}
+                </div>
+
+                <div className="rounded-[1.5rem] border border-white/10 bg-black/20 px-4 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-slate-400">
+                        WhatsApp
+                      </p>
+                      <p className="mt-2 text-sm text-slate-300">
+                        {guest.whatsapp || "Sin WhatsApp"}
+                      </p>
+                    </div>
+                    {!isEditingWhatsApp ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWhatsappDraft(guest.whatsapp);
+                          setIsEditingWhatsApp(true);
+                        }}
+                        className="inline-flex items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-50 transition hover:bg-emerald-400/15"
+                      >
+                        Cambiar WhatsApp
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {isEditingWhatsApp ? (
+                    <div className="mt-4 space-y-3">
+                      <input
+                        ref={whatsappInputRef}
+                        value={whatsappDraft}
+                        onChange={(event) => setWhatsappDraft(event.target.value)}
+                        placeholder="+591 70000000"
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06]"
+                      />
+                      <p className="text-xs leading-relaxed text-slate-400">
+                        Guardamos el número tal como lo ingreses. La normalización se aplica al preparar WhatsApp Delivery.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSaveWhatsApp}
+                          disabled={isSavingWhatsApp}
+                          className="inline-flex items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isSavingWhatsApp ? "Guardando..." : "Guardar WhatsApp"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWhatsappDraft(guest.whatsapp);
+                            setIsEditingWhatsApp(false);
+                          }}
+                          className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-xs font-medium uppercase tracking-[0.22em] text-slate-200 transition hover:bg-white/[0.06]"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mx-auto w-full max-w-[360px]">
