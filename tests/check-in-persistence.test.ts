@@ -39,7 +39,7 @@ function buildAdmissionResult(overrides: Partial<AdmissionEngineOutput> = {}): A
     note: "Leonardo Rodríguez validó su ingreso con QR.",
     tone: "success",
     audit: {
-      id: "audit-1",
+      id: "b7c29b8a-f6e1-4e0f-9e8a-7efcb1c8d4d2",
       timestamp: "2026-08-11T22:52:00.000Z",
       action: "check-in",
       result: "Valid",
@@ -82,6 +82,7 @@ test("generated check-in id is a valid UUID", () => {
 
   assert.match(bundle.checkIn.id, uuidPattern);
   assert.match(bundle.checkIn.auditTrail[0].id, uuidPattern);
+  assert.match(bundle.timelineEntry.id, uuidPattern);
 });
 
 test("duplicate access grants can be detected without mutating the admission state", () => {
@@ -134,6 +135,53 @@ test("successful check-in persistence writes one row per target table", async ()
   });
 
   assert.deepEqual(calls, ["checkIns.upsert", "guests.upsert.next", "timeline.upsert"]);
+});
+
+test("check-in persistence rejection rolls back before guest and timeline writes", async () => {
+  const calls: string[] = [];
+  const bundle = buildCompletedCheckInBundle({
+    guest: buildGuest(),
+    result: buildAdmissionResult(),
+    ticket: buildTicket(),
+    method: "QR",
+    operator: "Escáner",
+    timestampIso: "2026-08-11T22:52:00.000Z",
+  });
+  const originalGuest = buildGuest();
+
+  await assert.rejects(
+    persistCompletedCheckInBundle({
+      repositories: {
+        checkIns: {
+          async upsert() {
+            calls.push("checkIns.upsert");
+            throw new Error("check-in persistence failed");
+          },
+          async delete() {
+            calls.push("checkIns.delete");
+            return true;
+          },
+        },
+        guests: {
+          async upsert(guest) {
+            calls.push(guest.admissionStatus === "Ingresó" ? "guests.upsert.next" : "guests.upsert.original");
+            return guest;
+          },
+        },
+        timeline: {
+          async upsert() {
+            calls.push("timeline.upsert");
+            return bundle.timelineEntry;
+          },
+        },
+      },
+      originalGuest,
+      bundle,
+    }),
+    /check-in persistence failed/,
+  );
+
+  assert.deepEqual(calls, ["checkIns.upsert"]);
 });
 
 test("persistence rejection rolls back the admitted guest and check-in row", async () => {

@@ -1,4 +1,5 @@
 import type { TimelineEvent } from "@/features/timeline/types";
+import { createUuid } from "@/lib/supabase/helpers";
 
 export type AccessType = "reservation" | "ticket" | "invitation" | "guest-access" | "qr" | "manual" | "staff";
 
@@ -270,7 +271,7 @@ export function buildAdmissionAudit(params: {
   guestId?: string;
 }): AccessAudit {
   return {
-    id: `${params.ticket.id}-${params.timestamp}-${params.result.replace(/\s+/g, "-").toLowerCase()}`,
+    id: createUuid(),
     timestamp: params.timestamp,
     action: params.action,
     result: params.result,

@@ -174,7 +174,11 @@ function buildAttemptsFromLogs(logs: TimelineEvent[], currentEventId: string): C
         guestName: log.guestName,
         note: String(metadata.note ?? log.description ?? ""),
       };
-    });
+  });
+}
+
+export function buildActiveCheckIns(checkInRows: CheckInRow[]) {
+  return checkInRows.filter((row) => row.deleted_at === null).map((row) => mapCheckInRowToDomain(row));
 }
 
 export async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
@@ -235,7 +239,7 @@ export async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
   const guests = guestRows.map((row) => mapGuestRowToDomain(row));
   const reservations = reservationRows.map((row) => mapReservationRowToDomain(row));
   const tables = tableRows.map((row) => mapTableRowToDomain(row));
-  const checkIns = checkInRows.map((row) => mapCheckInRowToDomain(row));
+  const checkIns = buildActiveCheckIns(checkInRows);
   const timelineEvents = timelineRows.map((row) => mapTimelineRowToDomain(row)).sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
 
   const currentOrganizationId = pickCurrentOrganizationId(organizationRows);
