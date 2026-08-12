@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { useFeedback } from "@/components/premium-feedback";
 import { ContextualCard, GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
@@ -16,6 +17,7 @@ import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
 
 export default function CheckInFlow() {
   const { confirm, showToast } = useFeedback();
+  const pathname = usePathname();
   const {
     activeEvent,
     events,
@@ -287,6 +289,7 @@ export default function CheckInFlow() {
           />
 
           <QrCameraScanner
+            key={`${pathname}-${activeEvent.id}`}
             eventName={activeEvent.name}
             onDetected={(value) => {
               setSearchQuery(value);
