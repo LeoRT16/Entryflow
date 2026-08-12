@@ -2,6 +2,7 @@
 
 import StatusBadge from "@/components/status-badge";
 import type { InvitationDesign } from "@/features/access/domain/access-domain";
+import AccessQrCode from "@/features/access/components/access-qr-code";
 
 export type InvitationCardMode = "preview" | "print" | "download" | "wallet";
 export type InvitationCardVariant = NonNullable<InvitationDesign["variant"]>;
@@ -82,22 +83,6 @@ export default function InvitationCard({ invitation, mode = "preview", className
 
           <section className={["flex flex-1 flex-col justify-between rounded-[1.6rem] border px-4 py-4", isPrint ? "border-slate-200 bg-white" : "border-dashed border-white/20 bg-white/[0.03]"].join(" ")}>
             <div className="space-y-4">
-              <div className="grid grid-cols-6 gap-1.5">
-                {Array.from({ length: 24 }).map((_, index) => (
-                  <span
-                    key={index}
-                    className={[
-                      "h-2.5 w-2.5 rounded-[0.15rem]",
-                      (index + invitation.uniqueCode.length) % 3 === 0
-                        ? "bg-cyan-400"
-                        : (index + invitation.uniqueCode.length) % 2 === 0
-                          ? "bg-white"
-                          : "bg-white/30",
-                    ].join(" ")}
-                  />
-                ))}
-              </div>
-
               <div className={["rounded-[1.35rem] border px-4 py-3", isPrint ? "border-slate-200 bg-slate-50" : "border-white/10 bg-black/20"].join(" ")}>
                 <p className={["text-[10px] font-semibold uppercase tracking-[0.34em]", isPrint ? "text-slate-500" : "text-slate-400"].join(" ")}>
                   Código de uso único
@@ -105,6 +90,10 @@ export default function InvitationCard({ invitation, mode = "preview", className
                 <p className={["mt-2 text-xl font-semibold tracking-[0.2em]", isPrint ? "text-slate-900" : "text-white"].join(" ")}>
                   {invitation.uniqueCode}
                 </p>
+              </div>
+
+              <div className="flex justify-center">
+                <AccessQrCode value={invitation.qrValue} size={176} />
               </div>
             </div>
 
@@ -114,7 +103,7 @@ export default function InvitationCard({ invitation, mode = "preview", className
                   QR listo
                 </p>
                 <p className={["mt-1 text-sm", isPrint ? "text-slate-600" : "text-slate-300"].join(" ")}>
-                  {invitation.qrValue}
+                  Escaneá este código una sola vez.
                 </p>
               </div>
               <div className={["rounded-full border px-3 py-1 text-xs font-medium uppercase tracking-[0.24em]", isPrint ? "border-slate-200 bg-white text-slate-500" : "border-white/10 bg-white/[0.04] text-slate-300"].join(" ")}>

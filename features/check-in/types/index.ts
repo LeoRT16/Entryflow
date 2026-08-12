@@ -96,8 +96,11 @@ export type Guest = {
   reservationId: string;
   eventId: string;
   eventName: string;
+  /** Identidad lógica interna del access grant asociado a este invitado. */
   accessGrantId?: string;
+  /** Código visible para operadores y para fallback manual. */
   accessCode?: string;
+  /** Token opaco que debe codificar el QR escaneable. */
   qrToken?: string;
   tableId?: string;
   tableName?: string;
@@ -146,6 +149,7 @@ export type Guest = {
     reason?: string;
   }>;
   internalNotes?: string;
+  /** Estado visible del QR. No debe confundirse con el token QR. */
   qrStatus: QrStatus;
 };
 

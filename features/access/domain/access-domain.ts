@@ -98,7 +98,9 @@ export type InvitationDesign = {
   date: string;
   time: string;
   dressCode?: string;
+  /** Código humano visible en la invitación. */
   uniqueCode: string;
+  /** Token opaco que debe renderizarse como QR. */
   qrValue: string;
   message?: string;
   theme?: string;

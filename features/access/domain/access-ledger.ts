@@ -46,6 +46,29 @@ function hash32(value: string) {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+export function getAccessGrantIdentity(guest: Pick<Guest, "id" | "accessGrantId">) {
+  return guest.accessGrantId ?? guest.id;
+}
+
+export function getVisibleInvitationCode(guest: Pick<Guest, "invitationCode" | "accessCode">) {
+  return guest.accessCode ?? guest.invitationCode;
+}
+
+export function getQrToken(
+  guest: Pick<Guest, "id" | "reservationId" | "eventId" | "invitationCode" | "accessCode" | "qrToken">,
+) {
+  if (guest.qrToken) {
+    return guest.qrToken;
+  }
+
+  return createAccessGrantToken({
+    guestId: guest.id,
+    reservationId: guest.reservationId,
+    eventId: guest.eventId,
+    code: getVisibleInvitationCode(guest),
+  });
+}
+
 export function createAccessGrantToken(input: {
   guestId: string;
   reservationId: string;
@@ -98,13 +121,8 @@ export function buildAccessGrantFromGuest(
   guest: Guest,
   reservation?: ReservationRecord | null,
 ): AccessGrantLedgerEntry {
-  const code = guest.accessCode ?? guest.invitationCode;
-  const qrToken = guest.qrToken ?? createAccessGrantToken({
-    guestId: guest.id,
-    reservationId: guest.reservationId,
-    eventId: guest.eventId,
-    code,
-  });
+  const code = getVisibleInvitationCode(guest);
+  const qrToken = getQrToken(guest);
   const state = inferState(guest, reservation);
   const eventReservationId = reservation?.id ?? guest.reservationId;
   const eventReservationName = reservation?.name ?? guest.reservationName;
