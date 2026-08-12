@@ -22,6 +22,19 @@ export type CompletedCheckInBundle = {
   timelineEntry: TimelineEvent;
 };
 
+export function buildRejectedCheckInTimelineEntry(params: {
+  guest: Guest | null;
+  result: AdmissionEngineOutput;
+  ticket: Ticket | null;
+}) {
+  const { guest, result, ticket } = params;
+
+  return {
+    ...createAdmissionTimelineEntry(result, ticket),
+    eventId: guest?.eventId ?? ticket?.eventId ?? "",
+  } as TimelineEvent;
+}
+
 export function isAccessGrantAlreadyConsumed(
   accessGrantKey: string | undefined,
   consumedAccessGrantIds: ReadonlySet<string>,

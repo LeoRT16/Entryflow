@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { AdmissionEngineOutput, Ticket } from "../features/access/domain/access-domain";
-import { buildCompletedCheckInBundle, isAccessGrantAlreadyConsumed, persistCompletedCheckInBundle } from "../features/check-in/domain/check-in-persistence";
+import {
+  buildCompletedCheckInBundle,
+  buildRejectedCheckInTimelineEntry,
+  isAccessGrantAlreadyConsumed,
+  persistCompletedCheckInBundle,
+} from "../features/check-in/domain/check-in-persistence";
 import type { Guest } from "../features/check-in/types";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -91,6 +96,51 @@ test("duplicate access grants can be detected without mutating the admission sta
   assert.equal(isAccessGrantAlreadyConsumed("grant-1", consumed), true);
   assert.equal(isAccessGrantAlreadyConsumed("grant-2", consumed), false);
   assert.equal(isAccessGrantAlreadyConsumed(undefined, consumed), false);
+});
+
+test("rejected duplicate attempts build the canonical blocked timeline entry", () => {
+  const guest = buildGuest({
+    id: "guest-blocked",
+    guestName: "Phase C Final E2E",
+    reservationId: "reservation-blocked",
+    eventId: "event-1",
+    accessGrantId: "guest-blocked",
+    checkInTime: "19:45",
+    admissionStatus: "Ingresó",
+    reservationStatus: "Checked In",
+    qrStatus: "Usado",
+  });
+
+  const result = buildAdmissionResult({
+    result: "Already Checked In",
+    title: "Segundo intento bloqueado",
+    reason: "El ticket ya fue consumido.",
+    status: "Duplicate Attempt",
+    tone: "warning",
+    note: "Esta invitación ya fue utilizada.",
+    audit: {
+      ...buildAdmissionResult().audit,
+      action: "QR validation",
+      result: "Already Checked In",
+      reason: "El ticket ya fue consumido.",
+      ticketId: "ticket-blocked",
+    },
+  });
+
+  const timelineEntry = buildRejectedCheckInTimelineEntry({
+    guest,
+    result,
+    ticket: {
+      ...buildTicket(),
+      id: "ticket-blocked",
+    },
+  });
+
+  assert.equal(timelineEntry.kind, "checkin.blocked");
+  assert.equal(timelineEntry.title, "Segundo intento bloqueado");
+  assert.equal(timelineEntry.description, "El ticket ya fue consumido.");
+  assert.equal(timelineEntry.eventId, "event-1");
+  assert.equal((timelineEntry.metadata as { result?: string }).result, "Already Checked In");
 });
 
 test("successful check-in persistence writes one row per target table", async () => {
