@@ -5,6 +5,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import AccessQrCode from "../features/access/components/access-qr-code";
 import InvitationCard from "../features/access/components/invitation-card";
 import type { InvitationDesign } from "../features/access/domain/access-domain";
+import {
+  buildInvitationComposition,
+  buildInvitationRenderData,
+  getInvitationDownloadFilename,
+  INVITATION_RENDER_SIZE,
+} from "../features/access/domain/invitation-rendering";
 
 function buildInvitation(overrides: Partial<InvitationDesign> = {}): InvitationDesign {
   return {
@@ -89,6 +95,28 @@ test("InvitationCard keeps the human code visible and omits qrToken from visible
   assert.ok(markup.includes(invitation.uniqueCode));
   assert.ok(markup.includes("Código de uso único"));
   assert.ok(markup.includes("Escaneá este código una sola vez."));
+  assert.ok(markup.includes("La captura de pantalla no garantiza el ingreso."));
+  assert.ok(markup.includes(invitation.eventName));
+  assert.ok(markup.includes(invitation.guestName));
   assert.equal(markup.includes(invitation.qrValue), false);
-  assert.equal(markup.includes(invitation.guestName), true);
+});
+
+test("Invitation rendering composition keeps the 1080x1920 contract", () => {
+  const invitation = buildInvitation();
+  const renderData = buildInvitationRenderData(invitation);
+  const composition = buildInvitationComposition(invitation, "download");
+
+  assert.equal(INVITATION_RENDER_SIZE.width, 1080);
+  assert.equal(INVITATION_RENDER_SIZE.height, 1920);
+  assert.equal(renderData.qrToken, invitation.qrValue);
+  assert.equal(renderData.accessTypeLabel, "GENERAL");
+  assert.equal(composition.template.width, 1080);
+  assert.equal(composition.template.height, 1920);
+  assert.equal(composition.template.mode, "download");
+  assert.equal(composition.data.uniqueCode, invitation.uniqueCode);
+});
+
+test("Invitation download filename is deterministic and sanitized", () => {
+  assert.equal(getInvitationDownloadFilename("RES-59B30752-01"), "invitation-res-59b30752-01.png");
+  assert.equal(getInvitationDownloadFilename("  RES 59B30752 01  "), "invitation-res-59b30752-01.png");
 });

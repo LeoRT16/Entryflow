@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { toPng } from "html-to-image";
 
 import StatusBadge from "@/components/status-badge";
 import Topbar from "@/components/topbar";
@@ -19,6 +20,7 @@ import InvitationCard, {
   type InvitationCardVariant,
 } from "@/features/access/components/invitation-card";
 import { buildWhatsAppAccessMessage } from "@/features/access/domain/access-ledger";
+import { getInvitationDownloadFilename } from "@/features/access/domain/invitation-rendering";
 import { admissionFilters, deliveryFilters, reservationFilters, quickFilters } from "@/features/customers/domain/customer-filters";
 import { buildOperationalNotes, buildTimeline, getGuestAuditRows, getGuestIncidents, getIncidentToneClass, getIncidentVariant, reservationFilterToStatus, statusTone, admissionFilterToStatus } from "@/features/customers/domain/customer-directory";
 import type {
@@ -785,8 +787,10 @@ function GuestDrawer({
   const { showToast, confirm } = useFeedback();
   const { currentEvent } = useCheckInStore();
   const [isVisible, setIsVisible] = useState(false);
+  const [isExportingInvitation, setIsExportingInvitation] = useState(false);
   const [invitationMode, setInvitationMode] = useState<InvitationCardMode>("preview");
   const [invitationVariant, setInvitationVariant] = useState<InvitationCardVariant>("general");
+  const exportInvitationRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setIsVisible(true));
@@ -808,6 +812,68 @@ function GuestDrawer({
       : guest.deliveryStatus === "Fallida"
         ? "danger"
         : "warning";
+
+  const invitation = useMemo(
+    () => ({
+      id: guest.id,
+      eventName: currentEvent.name,
+      venueName: currentEvent.venue,
+      guestName: guest.guestName,
+      reservationName: guest.reservationName,
+      reservationCode: guest.reservationCode,
+      tableName: guest.tableName,
+      zoneName: guest.seat,
+      date: currentEvent.startAt.split(" ").slice(0, -1).join(" ") || "8 de agosto de 2026",
+      time: currentEvent.startAt.split(" ").at(-1) ?? "21:00",
+      dressCode: guest.manualAdmission ? "Ingreso manual" : "Elegante oscuro",
+      uniqueCode: guest.invitationCode,
+      qrValue: guest.qrToken ?? guest.invitationCode,
+      theme: "EntryFlow Invitation Designer",
+      logoLabel: currentEvent.name.slice(0, 2),
+      artLabel: guest.reservationName,
+      variant: invitationVariant,
+      message: buildWhatsAppAccessMessage(guest, currentEvent.venue),
+    }),
+    [currentEvent.name, currentEvent.startAt, currentEvent.venue, guest, invitationVariant],
+  );
+
+  const handleDownloadInvitation = async () => {
+    if (!exportInvitationRef.current || isExportingInvitation) {
+      return;
+    }
+
+    setIsExportingInvitation(true);
+
+    try {
+      const dataUrl = await toPng(exportInvitationRef.current, {
+        cacheBust: true,
+        pixelRatio: 1,
+        backgroundColor: "#0b111a",
+      });
+
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = getInvitationDownloadFilename(guest.invitationCode);
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      showToast({
+        title: "Invitación descargada",
+        description: "Se generó el PNG 1080x1920 con el QR real listo para compartir.",
+        tone: "success",
+      });
+    } catch (error) {
+      showToast({
+        title: "No se pudo descargar la invitación",
+        description: error instanceof Error ? error.message : "La exportación PNG no pudo completarse.",
+        tone: "error",
+      });
+    } finally {
+      setIsExportingInvitation(false);
+    }
+  };
 
   const invitationState =
     guest.admissionStatus === "Ingresó"
@@ -904,7 +970,7 @@ function GuestDrawer({
               </div>
 
               <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {(["preview", "print", "download", "wallet"] as const).map((mode) => (
                     <button
                       key={mode}
@@ -916,10 +982,18 @@ function GuestDrawer({
                           ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
                           : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]",
                       ].join(" ")}
-                    >
+                      >
                       {mode}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={handleDownloadInvitation}
+                    disabled={isExportingInvitation}
+                    className="inline-flex items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isExportingInvitation ? "Descargando..." : "Descargar PNG"}
+                  </button>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -936,33 +1010,19 @@ function GuestDrawer({
                       ].join(" ")}
                     >
                       {variant}
-                    </button>
+                      </button>
                   ))}
                 </div>
 
-                <InvitationCard
-                  invitation={{
-                    id: guest.id,
-                    eventName: currentEvent.name,
-                    venueName: currentEvent.venue,
-                    guestName: guest.guestName,
-                    reservationName: guest.reservationName,
-                    reservationCode: guest.reservationCode,
-                    tableName: guest.tableName,
-                    zoneName: guest.seat,
-                    date: currentEvent.startAt.split(" ").slice(0, -1).join(" ") || "8 de agosto de 2026",
-                    time: currentEvent.startAt.split(" ").at(-1) ?? "21:00",
-                    dressCode: guest.manualAdmission ? "Ingreso manual" : "Elegante oscuro",
-                    uniqueCode: guest.invitationCode,
-                    qrValue: guest.qrToken ?? guest.invitationCode,
-                    theme: "EntryFlow Invitation Designer",
-                    logoLabel: currentEvent.name.slice(0, 2),
-                    artLabel: guest.reservationName,
-                    variant: invitationVariant,
-                    message: buildWhatsAppAccessMessage(guest, currentEvent.venue),
-                  }}
-                  mode={invitationMode}
-                />
+                <div className="mx-auto w-full max-w-[360px]">
+                  <InvitationCard invitation={invitation} mode={invitationMode} />
+                </div>
+
+                <div className="pointer-events-none fixed left-[-200vw] top-0 w-[1080px] overflow-hidden" aria-hidden="true">
+                  <div ref={exportInvitationRef} className="w-[1080px]">
+                    <InvitationCard invitation={invitation} mode="download" />
+                  </div>
+                </div>
               </div>
             </section>
 
