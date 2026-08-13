@@ -51,6 +51,7 @@ function emptyFormState(): AccountFormState {
 
 export default function AccountsSettingsCard() {
   const { accounts, currentAccount, createAccount, updateAccount, setAccountStatus, can } = useCheckInStore();
+  const canManageAccounts = can("accounts.manage") || currentAccount.isOwner;
   const canManagePermissions = can("permissions.manage") || currentAccount.isOwner;
   const allAccounts = useMemo(() => {
     const current = currentAccount.id === "bootstrap-account" ? [currentAccount, ...accounts] : [currentAccount, ...accounts];
@@ -165,7 +166,7 @@ export default function AccountsSettingsCard() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Equipo y permisos</p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Cuentas de la organización</h2>
           <p className="mt-2 text-sm text-slate-400">
-            Los roles son presets. Los permisos efectivos se ajustan por cuenta y se guardan en Supabase.
+            Mantenimiento básico de cuentas. La administración profunda de usuarios, roles y permisos vendrá en el siguiente bloque.
           </p>
         </div>
         <StatusBadge variant={currentAccount.isOwner ? "success" : "info"}>{currentAccount.isOwner ? "Owner activo" : getAccountPresetLabel(currentAccount.roleSlug)}</StatusBadge>
@@ -175,16 +176,20 @@ export default function AccountsSettingsCard() {
         <div className="space-y-3 rounded-[1.5rem] border border-white/10 bg-slate-950/30 p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Cuentas</p>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedId("new");
-                setForm(emptyFormState());
-              }}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.22em] text-slate-300 transition hover:bg-white/[0.08]"
-            >
-              Nueva
-            </button>
+            {canManageAccounts ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedId("new");
+                  setForm(emptyFormState());
+                }}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.22em] text-slate-300 transition hover:bg-white/[0.08]"
+              >
+                Nueva
+              </button>
+            ) : (
+              <StatusBadge variant="warning">Solo lectura</StatusBadge>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -244,138 +249,140 @@ export default function AccountsSettingsCard() {
             ) : null}
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-200">Nombre visible</span>
-              <input
-                value={form.displayName}
-                onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))}
-                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06]"
-                placeholder="Nombre en la interfaz"
-              />
-            </label>
+          <fieldset disabled={!canManageAccounts} className="mt-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-200">Nombre visible</span>
+                <input
+                  value={form.displayName}
+                  onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))}
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
+                  placeholder="Nombre en la interfaz"
+                />
+              </label>
 
-            <label className="block">
-              <span className="text-sm font-medium text-slate-200">Email</span>
-              <input
-                value={form.userEmail}
-                onChange={(event) => setForm((current) => ({ ...current, userEmail: event.target.value }))}
-                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06]"
-                placeholder="usuario@dominio.com"
-              />
-            </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-200">Email</span>
+                <input
+                  value={form.userEmail}
+                  onChange={(event) => setForm((current) => ({ ...current, userEmail: event.target.value }))}
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
+                  placeholder="usuario@dominio.com"
+                />
+              </label>
 
-            <label className="block">
-              <span className="text-sm font-medium text-slate-200">Perfil</span>
-              <input
-                value={form.userDisplayName}
-                onChange={(event) => setForm((current) => ({ ...current, userDisplayName: event.target.value }))}
-                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06]"
-                placeholder="Nombre de usuario"
-              />
-            </label>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-200">Perfil</span>
+                <input
+                  value={form.userDisplayName}
+                  onChange={(event) => setForm((current) => ({ ...current, userDisplayName: event.target.value }))}
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
+                  placeholder="Nombre de usuario"
+                />
+              </label>
 
-            <label className="block">
-              <span className="text-sm font-medium text-slate-200">Área</span>
-              <input
-                value={form.area}
-                onChange={(event) => setForm((current) => ({ ...current, area: event.target.value }))}
-                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06]"
-                placeholder="Recepción, puerta, dirección..."
-              />
-            </label>
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-200">Preset de rol</span>
-              <select
-                value={form.roleSlug}
-                onChange={(event) => handleRoleChange(event.target.value as AccountRoleSlug)}
-                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/60 focus:bg-white/[0.06]"
-              >
-                {(["owner", "administrator", "reception", "door"] as AccountRoleSlug[]).map((slug) => (
-                  <option key={slug} value={slug}>
-                    {getAccountPresetLabel(slug)}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-2 text-xs text-slate-500">{getAccountPresetDescription(form.roleSlug)}</p>
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-medium text-slate-200">Estado</span>
-              <select
-                value={form.status}
-                onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as "active" | "inactive" }))}
-                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/60 focus:bg-white/[0.06]"
-              >
-                <option value="active">Activo</option>
-                <option value="inactive">Inactivo</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-slate-950/30 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Permisos efectivos</p>
-                <p className="mt-1 text-sm text-slate-400">Agrupados por área. El preset sirve como base y luego podés personalizar la cuenta.</p>
-              </div>
-              <StatusBadge variant={canManagePermissions ? "success" : "warning"}>{canManagePermissions ? "Editable" : "Solo lectura"}</StatusBadge>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-200">Área</span>
+                <input
+                  value={form.area}
+                  onChange={(event) => setForm((current) => ({ ...current, area: event.target.value }))}
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
+                  placeholder="Recepción, puerta, dirección..."
+                />
+              </label>
             </div>
 
-            <div className="mt-4 grid gap-4 xl:grid-cols-2">
-              {ACCOUNT_PERMISSION_GROUPS.map((group) => (
-                <div key={group.id} className="rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{group.label}</p>
-                  <div className="mt-3 space-y-2">
-                    {group.permissions.map((permission) => {
-                      const checked = form.permissions.includes(permission.key);
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-200">Preset de rol</span>
+                <select
+                  value={form.roleSlug}
+                  onChange={(event) => handleRoleChange(event.target.value as AccountRoleSlug)}
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
+                >
+                  {(["owner", "administrator", "reception", "door"] as AccountRoleSlug[]).map((slug) => (
+                    <option key={slug} value={slug}>
+                      {getAccountPresetLabel(slug)}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-xs text-slate-500">{getAccountPresetDescription(form.roleSlug)}</p>
+              </label>
 
-                      return (
-                        <label key={permission.key} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/30 p-3">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => togglePermission(permission.key)}
-                            disabled={!canManagePermissions}
-                            className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent text-cyan-400 focus:ring-cyan-400/60"
-                          />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-white">{permission.label}</p>
-                            <p className="mt-1 text-xs text-slate-500">{permission.description}</p>
-                            <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-slate-600">{getPermissionLabel(permission.key)}</p>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-200">Estado</span>
+                <select
+                  value={form.status}
+                  onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as "active" | "inactive" }))}
+                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
+                >
+                  <option value="active">Activo</option>
+                  <option value="inactive">Inactivo</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-slate-950/30 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Permisos efectivos</p>
+                  <p className="mt-1 text-sm text-slate-400">Agrupados por área. El preset sirve como base y luego podés personalizar la cuenta.</p>
                 </div>
-              ))}
-            </div>
-          </div>
+                <StatusBadge variant={canManagePermissions ? "success" : "warning"}>{canManagePermissions ? "Editable" : "Solo lectura"}</StatusBadge>
+              </div>
 
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isSaving ? "Guardando..." : selectedAccount ? "Guardar cambios" : "Crear cuenta"}
-            </button>
-            {selectedAccount && selectedAccount.id !== "bootstrap-account" ? (
+              <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                {ACCOUNT_PERMISSION_GROUPS.map((group) => (
+                  <div key={group.id} className="rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{group.label}</p>
+                    <div className="mt-3 space-y-2">
+                      {group.permissions.map((permission) => {
+                        const checked = form.permissions.includes(permission.key);
+
+                        return (
+                          <label key={permission.key} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-slate-950/30 p-3">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => togglePermission(permission.key)}
+                              disabled={!canManagePermissions}
+                              className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent text-cyan-400 focus:ring-cyan-400/60"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-white">{permission.label}</p>
+                              <p className="mt-1 text-xs text-slate-500">{permission.description}</p>
+                              <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-slate-600">{getPermissionLabel(permission.key)}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => handleStatusChange(selectedAccount.status === "active" ? "inactive" : "active")}
+                onClick={handleSave}
                 disabled={isSaving}
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {selectedAccount.status === "active" ? "Desactivar" : "Reactivar"}
+                {isSaving ? "Guardando..." : selectedAccount ? "Guardar cambios" : "Crear cuenta"}
               </button>
-            ) : null}
-          </div>
+              {selectedAccount && selectedAccount.id !== "bootstrap-account" ? (
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange(selectedAccount.status === "active" ? "inactive" : "active")}
+                  disabled={isSaving}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {selectedAccount.status === "active" ? "Desactivar" : "Reactivar"}
+                </button>
+              ) : null}
+            </div>
+          </fieldset>
         </div>
       </div>
     </section>
