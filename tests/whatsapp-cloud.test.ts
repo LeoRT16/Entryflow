@@ -34,7 +34,7 @@ test("WhatsApp Cloud configuration reads server env and falls back to a version"
   });
 });
 
-test("WhatsApp Cloud payload normalizes Bolivia numbers and uses the Meta test template", () => {
+test("WhatsApp Cloud payload normalizes Bolivia numbers and builds a text message", () => {
   const { payload } = buildWhatsAppCloudMessage({
     recipient: "+591 7737 4577",
     guestName: "WhatsApp Delivery E2E",
@@ -45,9 +45,12 @@ test("WhatsApp Cloud payload normalizes Bolivia numbers and uses the Meta test t
   assert.equal(payload.to, "59177374577");
   assert.equal(payload.messaging_product, "whatsapp");
   assert.equal(payload.recipient_type, "individual");
-  assert.equal(payload.type, "template");
-  assert.equal(payload.template.name, "hello_world");
-  assert.equal(payload.template.language.code, "en_US");
+  assert.equal(payload.type, "text");
+  assert.equal(payload.text.preview_url, false);
+  assert.equal(
+    payload.text.body,
+    "Hola WhatsApp Delivery E2E, tienes una invitación para EntryFlow Summit.\nCódigo de invitación: RES-WA-001.\nTe esperamos.",
+  );
 });
 
 test("WhatsApp Cloud request init uses the server token and JSON body", () => {
@@ -101,7 +104,8 @@ test("WhatsApp Cloud send succeeds with a provider message id and never exposes 
   assert.equal(calls[0]?.[0], "https://graph.facebook.com/v23.0/987654321/messages");
   assert.equal((calls[0]?.[1]?.headers as Record<string, string>).Authorization, "Bearer super-secret");
   assert.equal(JSON.parse(calls[0]?.[1]?.body as string).to, "59177374577");
-  assert.equal(JSON.parse(calls[0]?.[1]?.body as string).type, "template");
+  assert.equal(JSON.parse(calls[0]?.[1]?.body as string).type, "text");
+  assert.equal(JSON.parse(calls[0]?.[1]?.body as string).text.preview_url, false);
 });
 
 test("WhatsApp Cloud send rejects invalid numbers before calling Meta", async () => {
@@ -162,6 +166,68 @@ test("WhatsApp Cloud send sanitizes provider errors", async () => {
       return true;
     },
   );
+});
+
+test("WhatsApp Cloud send logs Meta error details without leaking secrets", async () => {
+  const fetchImpl = async () =>
+    new Response(
+      JSON.stringify({
+        error: {
+          message: "Authentication failed",
+          type: "OAuthException",
+          code: 401,
+          error_subcode: 123456,
+          fbtrace_id: "FBTRACE-abc-123",
+        },
+      }),
+      {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+
+  const originalConsoleError = console.error;
+  const consoleCalls: unknown[][] = [];
+  console.error = (...args: unknown[]) => {
+    consoleCalls.push(args);
+  };
+
+  try {
+    await assert.rejects(
+      () =>
+        sendWhatsAppCloudMessage(
+          {
+            recipient: "77374577",
+            guestName: "Guest",
+            eventName: "Event",
+            invitationCode: "RES-001",
+          },
+          fetchImpl,
+          buildProcessEnv({
+            WHATSAPP_ACCESS_TOKEN: "super-secret",
+            WHATSAPP_PHONE_NUMBER_ID: "987654321",
+          }),
+        ),
+      WhatsAppCloudError,
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(consoleCalls.length, 1);
+  assert.equal(consoleCalls[0]?.[0], "Meta WhatsApp Cloud API error");
+  assert.deepEqual(consoleCalls[0]?.[1], {
+    httpStatus: 401,
+    error: {
+      message: "Authentication failed",
+      type: "OAuthException",
+      code: 401,
+      error_subcode: 123456,
+      fbtrace_id: "FBTRACE-abc-123",
+    },
+  });
+  assert.equal(JSON.stringify(consoleCalls).includes("super-secret"), false);
+  assert.equal(JSON.stringify(consoleCalls).includes("Authorization"), false);
 });
 
 test("WhatsApp Cloud route validates request data before attempting to send", async () => {

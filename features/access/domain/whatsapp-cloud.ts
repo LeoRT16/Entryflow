@@ -17,12 +17,10 @@ export type WhatsAppCloudMessagePayload = {
   messaging_product: "whatsapp";
   recipient_type: "individual";
   to: string;
-  type: "template";
-  template: {
-    name: string;
-    language: {
-      code: string;
-    };
+  type: "text";
+  text: {
+    preview_url: false;
+    body: string;
   };
 };
 
@@ -47,8 +45,6 @@ export class WhatsAppCloudError extends Error {
 }
 
 const DEFAULT_WHATSAPP_API_VERSION = "v23.0";
-const DEFAULT_WHATSAPP_TEMPLATE_NAME = "hello_world";
-const DEFAULT_WHATSAPP_TEMPLATE_LANGUAGE_CODE = "en_US";
 
 export function getWhatsAppCloudConfig(env: NodeJS.ProcessEnv = process.env): WhatsAppCloudConfig | null {
   const accessToken = env.WHATSAPP_ACCESS_TOKEN?.trim();
@@ -87,12 +83,10 @@ export function buildWhatsAppCloudMessage(params: {
       messaging_product: "whatsapp",
       recipient_type: "individual",
       to: recipient,
-      type: "template",
-      template: {
-        name: process.env.WHATSAPP_TEMPLATE_NAME?.trim() || DEFAULT_WHATSAPP_TEMPLATE_NAME,
-        language: {
-          code: process.env.WHATSAPP_TEMPLATE_LANGUAGE_CODE?.trim() || DEFAULT_WHATSAPP_TEMPLATE_LANGUAGE_CODE,
-        },
+      type: "text",
+      text: {
+        preview_url: false,
+        body: `Hola ${params.guestName}, tienes una invitación para ${params.eventName}.\nCódigo de invitación: ${params.invitationCode}.\nTe esperamos.`,
       },
     } satisfies WhatsAppCloudMessagePayload,
   };
@@ -129,6 +123,54 @@ function extractSafeMetaErrorMessage(errorBody: unknown) {
   return typeof message === "string" && message.trim() ? message.trim() : null;
 }
 
+type MetaErrorDetails = {
+  message: string | null;
+  type: string | null;
+  code: number | null;
+  errorSubcode: number | null;
+  fbtraceId: string | null;
+};
+
+function extractMetaErrorDetails(errorBody: unknown): MetaErrorDetails {
+  if (!errorBody || typeof errorBody !== "object") {
+    return {
+      message: null,
+      type: null,
+      code: null,
+      errorSubcode: null,
+      fbtraceId: null,
+    };
+  }
+
+  const maybeError = (errorBody as { error?: unknown }).error;
+
+  if (!maybeError || typeof maybeError !== "object") {
+    return {
+      message: null,
+      type: null,
+      code: null,
+      errorSubcode: null,
+      fbtraceId: null,
+    };
+  }
+
+  const error = maybeError as {
+    message?: unknown;
+    type?: unknown;
+    code?: unknown;
+    error_subcode?: unknown;
+    fbtrace_id?: unknown;
+  };
+
+  return {
+    message: typeof error.message === "string" && error.message.trim() ? error.message.trim() : null,
+    type: typeof error.type === "string" && error.type.trim() ? error.type.trim() : null,
+    code: typeof error.code === "number" ? error.code : null,
+    errorSubcode: typeof error.error_subcode === "number" ? error.error_subcode : null,
+    fbtraceId: typeof error.fbtrace_id === "string" && error.fbtrace_id.trim() ? error.fbtrace_id.trim() : null,
+  };
+}
+
 export async function sendWhatsAppCloudMessage(
   params: WhatsAppCloudSendInput,
   fetchImpl: WhatsAppFetchLike = fetch,
@@ -150,6 +192,18 @@ export async function sendWhatsAppCloudMessage(
 
   if (!response.ok) {
     const providerMessage = extractSafeMetaErrorMessage(responseBody);
+    const metaErrorDetails = extractMetaErrorDetails(responseBody);
+
+    console.error("Meta WhatsApp Cloud API error", {
+      httpStatus: response.status,
+      error: {
+        message: metaErrorDetails.message,
+        type: metaErrorDetails.type,
+        code: metaErrorDetails.code,
+        error_subcode: metaErrorDetails.errorSubcode,
+        fbtrace_id: metaErrorDetails.fbtraceId,
+      },
+    });
 
     throw new WhatsAppCloudError(providerMessage ?? "No se pudo enviar la invitación por WhatsApp.", {
       status: response.status,
