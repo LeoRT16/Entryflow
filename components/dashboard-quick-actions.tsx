@@ -3,49 +3,54 @@
 import { useMemo } from "react";
 
 import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
-import { useCheckInStore } from "@/services/workspace-service";
+import { buildLiveDashboardQuickActions } from "@/features/events/domain/live-dashboard";
 
 export default function DashboardQuickActions() {
-  const { workspacePriority } = useCheckInStore();
-
-  const guidedActions = useMemo(() => {
-    const candidates = [
-      ...workspacePriority.criticalItems.slice(0, 2),
-      ...workspacePriority.attentionNow.slice(0, 2),
-      ...workspacePriority.nextBestActions.slice(0, 2),
-    ];
-    const seen = new Set<string>();
-
-    return candidates
-      .filter((item) => {
-        const signature = `${item.route}:${item.title}`;
-        if (seen.has(signature)) {
-          return false;
-        }
-
-        seen.add(signature);
-        return true;
-      })
-      .slice(0, 4)
-      .map((item) =>
-        buildGuidedActionItem(item, {
-          href: item.route,
-          impact:
-            item.priority === "critical"
-              ? "Abre la pantalla donde se resuelve el bloqueo."
-              : item.priority === "high"
-                ? "Reduce el ruido operativo y despeja la cola."
-                : item.priority === "medium"
-                  ? "Mantiene el flujo sin perder contexto."
-                  : "Ayuda a sostener la operación estable.",
-        }),
-      );
-  }, [workspacePriority]);
+  const guidedActions = useMemo(
+    () =>
+      buildLiveDashboardQuickActions().map((item, index) =>
+        buildGuidedActionItem(
+          {
+            id: item.id,
+            title: item.label,
+            description: item.description,
+            module: "Dashboard",
+            category: "dashboard",
+            priority: index === 0 ? "critical" : index === 1 ? "high" : index === 2 ? "medium" : "low",
+            severity: index === 0 ? "critical" : index === 1 ? "high" : index === 2 ? "medium" : "low",
+            confidence: index === 0 ? 0.98 : index === 1 ? 0.9 : index === 2 ? 0.8 : 0.72,
+            requiresAction: true,
+            blocking: index === 0,
+            timestamp: "00:00",
+            expiresAt: "00:00",
+            state: index === 0 ? "blocked" : index === 1 ? "watch" : "stable",
+            tone: item.tone,
+            route: item.route,
+          },
+          {
+            href: item.route,
+            label: item.label,
+            reason: item.description,
+            impact:
+              index === 0
+                ? "Abre el scanner y prioriza el ingreso."
+                : index === 1
+                  ? "Lleva el control de confirmaciones y pendientes."
+                  : index === 2
+                    ? "Permite revisar recursos sin perder contexto."
+                    : "Muestra trazabilidad operativa en vivo.",
+            shortcut: item.shortcut,
+            tone: item.tone,
+          },
+        ),
+      ),
+    [],
+  );
 
   return (
     <GuidedActionPanel
-      title="Acciones guiadas"
-      description="El sistema muestra primero lo que desbloquea la operación y oculta lo que todavía no hace falta."
+      title="Acciones rápidas"
+      description="El escáner y los módulos operativos aparecen primero para que la puerta no pierda ritmo."
       items={guidedActions}
       enableKeyboardShortcuts={false}
     />
