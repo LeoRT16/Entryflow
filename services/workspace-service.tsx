@@ -56,6 +56,7 @@ import {
 } from "@/features/access/domain/access-ledger";
 import {
   buildCompletedCheckInBundle,
+  CheckInAlreadyConsumedError,
   isAccessGrantAlreadyConsumed,
   buildRejectedCheckInTimelineEntry,
   persistCompletedCheckInBundle,
@@ -2657,6 +2658,50 @@ export function WorkspaceServiceProvider({
             bundle,
           });
         } catch (exception) {
+          if (exception instanceof CheckInAlreadyConsumedError && guest) {
+            const duplicateTicket = buildAccessTicketFromGuest(
+              { ...guest, admissionStatus: "Ingresó", checkInTime: guest.checkInTime ?? timestampIso },
+              timestampIso,
+            );
+            const duplicateResult = evaluateAdmission({
+              ticket: duplicateTicket,
+              query,
+              method: admissionMethod,
+              operator,
+              gate: method === "Manual" ? "Recepción" : guest.gate ?? "Principal",
+              timestamp: timestampIso,
+            });
+
+            const duplicateAttempt: CheckInAttempt = {
+              id: createUuid(),
+              eventId: currentEvent.id,
+              query,
+              method,
+              timestamp,
+              result: mapAdmissionResultToAttemptResult(duplicateResult.result),
+              guestId: guest.id,
+              guestName: guest.guestName,
+              note: duplicateResult.note,
+            };
+
+            setAttempts((current) => [duplicateAttempt, ...current].slice(0, 12));
+            const duplicateTimelineEntry: TimelineEvent = buildRejectedCheckInTimelineEntry({
+              guest,
+              result: duplicateResult,
+              ticket: duplicateTicket,
+            });
+            upsertPersistedTimelineEvent(duplicateTimelineEntry);
+            await repositories.timeline.upsert(duplicateTimelineEntry).catch(() => restoreSnapshot(snapshot));
+            notify({
+              title: duplicateResult.title,
+              description: duplicateResult.note,
+              tone: duplicateResult.tone,
+              icon: "alert",
+              href: "/check-in",
+            });
+            return { result: duplicateAttempt.result, guest, note: duplicateAttempt.note };
+          }
+
           restoreSnapshot(snapshot);
           notify({
             title: "No se pudo registrar el ingreso",

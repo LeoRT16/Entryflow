@@ -5,6 +5,7 @@ import type { AdmissionEngineOutput, Ticket } from "../features/access/domain/ac
 import {
   buildCompletedCheckInBundle,
   buildRejectedCheckInTimelineEntry,
+  CheckInAlreadyConsumedError,
   isAccessGrantAlreadyConsumed,
   persistCompletedCheckInBundle,
 } from "../features/check-in/domain/check-in-persistence";
@@ -73,6 +74,26 @@ function buildTicket(): Ticket {
     auditTrail: [],
     metadata: {},
   };
+}
+
+function createUniqueAccessGrantViolationError() {
+  return {
+    code: "23505",
+    constraint: "checkins_access_grant_id_active_unique",
+    message: 'duplicate key value violates unique constraint "checkins_access_grant_id_active_unique"',
+  };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve, reject };
 }
 
 test("generated check-in id is a valid UUID", () => {
@@ -158,8 +179,8 @@ test("successful check-in persistence writes one row per target table", async ()
   await persistCompletedCheckInBundle({
     repositories: {
       checkIns: {
-        async upsert() {
-          calls.push("checkIns.upsert");
+        async create() {
+          calls.push("checkIns.create");
           return bundle.checkIn;
         },
         async delete() {
@@ -184,7 +205,7 @@ test("successful check-in persistence writes one row per target table", async ()
     bundle,
   });
 
-  assert.deepEqual(calls, ["checkIns.upsert", "guests.upsert.next", "timeline.upsert"]);
+  assert.deepEqual(calls, ["checkIns.create", "guests.upsert.next", "timeline.upsert"]);
 });
 
 test("check-in persistence rejection rolls back before guest and timeline writes", async () => {
@@ -203,8 +224,8 @@ test("check-in persistence rejection rolls back before guest and timeline writes
     persistCompletedCheckInBundle({
       repositories: {
         checkIns: {
-          async upsert() {
-            calls.push("checkIns.upsert");
+          async create() {
+            calls.push("checkIns.create");
             throw new Error("check-in persistence failed");
           },
           async delete() {
@@ -231,7 +252,7 @@ test("check-in persistence rejection rolls back before guest and timeline writes
     /check-in persistence failed/,
   );
 
-  assert.deepEqual(calls, ["checkIns.upsert"]);
+  assert.deepEqual(calls, ["checkIns.create"]);
 });
 
 test("persistence rejection rolls back the admitted guest and check-in row", async () => {
@@ -250,8 +271,8 @@ test("persistence rejection rolls back the admitted guest and check-in row", asy
     persistCompletedCheckInBundle({
       repositories: {
         checkIns: {
-          async upsert() {
-            calls.push("checkIns.upsert");
+          async create() {
+            calls.push("checkIns.create");
             return bundle.checkIn;
           },
           async delete() {
@@ -281,7 +302,7 @@ test("persistence rejection rolls back the admitted guest and check-in row", asy
     /guest persistence failed/,
   );
 
-  assert.deepEqual(calls, ["checkIns.upsert", "guests.upsert.next", "checkIns.delete"]);
+  assert.deepEqual(calls, ["checkIns.create", "guests.upsert.next", "checkIns.delete"]);
 });
 
 test("timeline persistence rejection does not leave the guest admitted", async () => {
@@ -300,8 +321,8 @@ test("timeline persistence rejection does not leave the guest admitted", async (
     persistCompletedCheckInBundle({
       repositories: {
         checkIns: {
-          async upsert() {
-            calls.push("checkIns.upsert");
+          async create() {
+            calls.push("checkIns.create");
             return bundle.checkIn;
           },
           async delete() {
@@ -328,5 +349,99 @@ test("timeline persistence rejection does not leave the guest admitted", async (
     /timeline persistence failed/,
   );
 
-  assert.deepEqual(calls, ["checkIns.upsert", "guests.upsert.next", "timeline.upsert", "guests.upsert.original", "checkIns.delete"]);
+  assert.deepEqual(calls, ["checkIns.create", "guests.upsert.next", "timeline.upsert", "guests.upsert.original", "checkIns.delete"]);
+});
+
+test("concurrent check-ins for the same access grant let exactly one persist", async () => {
+  const calls: string[] = [];
+  const gate = deferred<void>();
+  const seenAccessGrants = new Set<string>();
+
+  const repositories = {
+    checkIns: {
+      async create(checkIn: { id: string; accessGrantId?: string | null }) {
+        calls.push(`checkIns.create:${checkIn.id}`);
+        await gate.promise;
+        const accessGrantId = checkIn.accessGrantId ?? null;
+
+        if (accessGrantId && seenAccessGrants.has(accessGrantId)) {
+          throw createUniqueAccessGrantViolationError();
+        }
+
+        if (accessGrantId) {
+          seenAccessGrants.add(accessGrantId);
+        }
+
+        return checkIn as never;
+      },
+      async delete() {
+        calls.push("checkIns.delete");
+        return true;
+      },
+    },
+    guests: {
+      async upsert(guest: Guest) {
+        calls.push(guest.admissionStatus === "Ingresó" ? "guests.upsert.next" : "guests.upsert.original");
+        return guest;
+      },
+    },
+    timeline: {
+      async upsert() {
+        calls.push("timeline.upsert");
+        return buildCompletedCheckInBundle({
+          guest: buildGuest(),
+          result: buildAdmissionResult(),
+          ticket: buildTicket(),
+          method: "QR",
+          operator: "Escáner",
+          timestampIso: "2026-08-11T22:52:00.000Z",
+        }).timelineEntry;
+      },
+    },
+  };
+
+  const originalGuest = buildGuest({
+    accessGrantId: "grant-atomic",
+  });
+  const firstBundle = buildCompletedCheckInBundle({
+    guest: originalGuest,
+    result: buildAdmissionResult(),
+    ticket: buildTicket(),
+    method: "QR",
+    operator: "Escáner",
+    timestampIso: "2026-08-11T22:52:00.000Z",
+  });
+  const secondBundle = buildCompletedCheckInBundle({
+    guest: originalGuest,
+    result: buildAdmissionResult(),
+    ticket: buildTicket(),
+    method: "QR",
+    operator: "Escáner",
+    timestampIso: "2026-08-11T22:52:00.000Z",
+  });
+
+  const first = persistCompletedCheckInBundle({
+    repositories: repositories as never,
+    originalGuest,
+    bundle: firstBundle,
+  });
+  const second = persistCompletedCheckInBundle({
+    repositories: repositories as never,
+    originalGuest,
+    bundle: secondBundle,
+  });
+
+  gate.resolve();
+
+  const results = await Promise.allSettled([first, second]);
+
+  assert.equal(results.filter((item) => item.status === "fulfilled").length, 1);
+  assert.equal(results.filter((item) => item.status === "rejected").length, 1);
+  const rejection = results.find((item): item is PromiseRejectedResult => item.status === "rejected");
+  assert.ok(rejection);
+  assert.ok(rejection.reason instanceof CheckInAlreadyConsumedError);
+  assert.equal(calls.filter((call) => call.startsWith("checkIns.create:")).length, 2);
+  assert.equal(calls.filter((call) => call === "guests.upsert.next").length, 1);
+  assert.equal(calls.filter((call) => call === "timeline.upsert").length, 1);
+  assert.equal(calls.filter((call) => call === "checkIns.delete").length, 0);
 });

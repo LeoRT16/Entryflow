@@ -5,7 +5,7 @@ import { createUuid } from "@/lib/supabase/helpers";
 
 export type CheckInPersistenceRepositories = {
   checkIns: {
-    upsert(checkIn: CheckIn): Promise<CheckIn>;
+    create(checkIn: CheckIn): Promise<CheckIn>;
     delete(id: string): Promise<boolean>;
   };
   guests: {
@@ -21,6 +21,27 @@ export type CompletedCheckInBundle = {
   checkIn: CheckIn;
   timelineEntry: TimelineEvent;
 };
+
+export class CheckInAlreadyConsumedError extends Error {
+  constructor(message = "El acceso ya fue consumido.") {
+    super(message);
+    this.name = "CheckInAlreadyConsumedError";
+  }
+}
+
+function isUniqueAccessGrantViolation(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeError = error as { code?: unknown; constraint?: unknown; message?: unknown };
+
+  return (
+    maybeError.code === "23505" &&
+    (maybeError.constraint === "checkins_access_grant_id_active_unique" ||
+      (typeof maybeError.message === "string" && maybeError.message.includes("access_grant_id")))
+  );
+}
 
 export function buildRejectedCheckInTimelineEntry(params: {
   guest: Guest | null;
@@ -120,9 +141,17 @@ export async function persistCompletedCheckInBundle(params: {
   let guestPersisted = false;
 
   try {
-    await repositories.checkIns.upsert(bundle.checkIn);
+    await repositories.checkIns.create(bundle.checkIn);
     checkInPersisted = true;
+  } catch (error) {
+    if (isUniqueAccessGrantViolation(error)) {
+      throw new CheckInAlreadyConsumedError();
+    }
 
+    throw error;
+  }
+
+  try {
     await repositories.guests.upsert(bundle.nextGuest);
     guestPersisted = true;
 

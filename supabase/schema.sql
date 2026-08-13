@@ -202,6 +202,10 @@ create table if not exists public.checkins (
   deleted_at timestamptz
 );
 
+create unique index if not exists checkins_access_grant_id_active_unique
+  on public.checkins (access_grant_id)
+  where deleted_at is null and access_grant_id is not null;
+
 create table if not exists public.timeline_events (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events(id) on delete cascade,
