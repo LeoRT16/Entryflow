@@ -6,7 +6,10 @@ import { usePathname } from "next/navigation";
 
 import StatusBadge from "@/components/status-badge";
 import LogoutButton from "@/components/logout-button";
+import EventSwitcher from "@/components/event-switcher";
+import TerminalEventBanner from "@/components/terminal-event-banner";
 import { useCheckInStore } from "@/services/workspace-service";
+import { isTerminalEventStatus } from "@/features/events/domain";
 import { getEventModuleLabel, getEventNavigation, getEventTypeLabel } from "@/features/events/domain";
 
 function isActivePath(pathname: string, href: string) {
@@ -163,6 +166,8 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const { currentOrganization, currentEvent, currentAccount, can } = useCheckInStore();
+  const canSwitchEventContext = can("event.view");
+  const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
   const eventNavigation = useMemo(() => getEventNavigation(currentEvent), [currentEvent]);
   const moduleLinks = useMemo(
     () =>
@@ -206,9 +211,18 @@ export default function Sidebar({
           <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">
             Workspace activo
           </p>
-          <h1 className="mt-2 text-xl font-semibold tracking-tight text-white">
-            {currentEvent.name}
-          </h1>
+          <div className="mt-3 max-w-full">
+            {canSwitchEventContext ? (
+              <EventSwitcher compact />
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <p className="truncate text-sm font-semibold text-white">{currentEvent.name}</p>
+                <p className="mt-1 truncate text-xs text-slate-500">
+                  {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
+                </p>
+              </div>
+            )}
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
             <StatusBadge variant="info">{currentAccount.displayName}</StatusBadge>
@@ -216,6 +230,13 @@ export default function Sidebar({
               {currentEvent.status === "live" ? "En curso" : currentEvent.status === "published" ? "Publicado" : currentEvent.status === "draft" ? "Borrador" : currentEvent.status === "finished" ? "Finalizado" : "Archivado"}
             </StatusBadge>
           </div>
+          {isTerminalEvent ? (
+            <div className="mt-3">
+              <TerminalEventBanner
+                description="El evento activo está cerrado. Podés navegar al historial, cambiar de evento y consultar la operación en modo lectura."
+              />
+            </div>
+          ) : null}
           <p className="mt-3 text-xs text-slate-500">
             {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
           </p>
@@ -310,9 +331,18 @@ export default function Sidebar({
             <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">
               Workspace activo
             </p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">
-              {currentEvent.name}
-            </h2>
+            <div className="mt-3 max-w-full">
+              {canSwitchEventContext ? (
+                <EventSwitcher compact />
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                  <p className="truncate text-sm font-semibold text-white">{currentEvent.name}</p>
+                  <p className="mt-1 truncate text-xs text-slate-500">
+                    {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
+                  </p>
+                </div>
+              )}
+            </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
               <StatusBadge variant="info">{currentAccount.displayName}</StatusBadge>
@@ -320,6 +350,13 @@ export default function Sidebar({
                 {currentEvent.status === "live" ? "En curso" : currentEvent.status === "published" ? "Publicado" : currentEvent.status === "draft" ? "Borrador" : currentEvent.status === "finished" ? "Finalizado" : "Archivado"}
               </StatusBadge>
             </div>
+            {isTerminalEvent ? (
+              <div className="mt-3">
+                <TerminalEventBanner
+                  description="El evento activo está cerrado. El menú permanece disponible para revisar información histórica y cambiar de contexto."
+                />
+              </div>
+            ) : null}
             <p className="mt-3 text-xs text-slate-400">
               {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
             </p>

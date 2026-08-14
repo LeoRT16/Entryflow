@@ -22,7 +22,7 @@ import { getDefaultTimezone } from "@/lib/timezone";
 type EventCreationWizardProps = {
   open: boolean;
   onClose: () => void;
-  onCreate: (event: Event) => Promise<Event>;
+  onCreate: (event: Event) => Promise<Event | undefined>;
   organizationId: string;
   organizationTimezone: string;
   venues: Venue[];
@@ -164,7 +164,12 @@ export default function EventCreationWizard({
     });
 
     try {
-      await onCreate(nextEvent);
+      const createdEvent = await onCreate(nextEvent);
+
+      if (!createdEvent) {
+        return;
+      }
+
       showToast({
         title: "Evento creado",
         description: `${nextEvent.name} quedó disponible en la biblioteca de eventos.`,

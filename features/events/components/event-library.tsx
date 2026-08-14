@@ -13,6 +13,7 @@ import {
   getEventNavigation,
   getEventTypeLabel,
   getOperationalModelLabel,
+  isTerminalEventStatus,
 } from "@/features/events/domain";
 import { useCheckInStore } from "@/services/workspace-service";
 import EventCreationWizard from "@/features/events/components/event-creation-wizard";
@@ -85,15 +86,15 @@ export default function EventLibrary() {
   };
 
   const currentEventAction =
-    currentEvent.status === "draft"
+    isTerminalEventStatus(currentEvent.status)
+      ? null
+      : currentEvent.status === "draft"
       ? {
           label: "Publicar evento",
           tone: "info" as const,
           onClick: () => setEventStatus(currentEvent.id, "published"),
         }
-      : currentEvent.status === "finished"
-        ? null
-        : {
+      : {
             label: "Cerrar evento",
             tone: "warning" as const,
             onClick: () => setEventStatus(currentEvent.id, "finished"),

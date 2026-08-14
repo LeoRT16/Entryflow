@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { getEventTypeLabel } from "@/features/events/domain";
+import { getEventTypeLabel, isTerminalEventStatus } from "@/features/events/domain";
 import { useFeedback } from "@/components/premium-feedback";
 import PermissionGuard from "@/components/permission-guard";
 import StatusBadge from "@/components/status-badge";
@@ -230,6 +230,7 @@ function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
 function EventSettingsCard({ canManage }: { canManage: boolean }) {
   const { showToast } = useFeedback();
   const { currentEvent, events, currentOrganization, createEvent, setCurrentEventId, venues } = useCheckInStore();
+  const canEditEvent = canManage && !isTerminalEventStatus(currentEvent.status);
   const venueOptions = useMemo(
     () => venues.filter((venue) => venue.organizationId === currentOrganization.id),
     [currentOrganization.id, venues],
@@ -260,13 +261,26 @@ function EventSettingsCard({ canManage }: { canManage: boolean }) {
       status: eventStatus,
     };
 
-    await createEvent(nextEvent);
-    setCurrentEventId(nextEvent.id);
-    showToast({
-      title: "Evento actualizado",
-      description: `${nextEvent.name} quedó sincronizado como evento activo.`,
-      tone: "success",
-    });
+    try {
+      const savedEvent = await createEvent(nextEvent);
+
+      if (!savedEvent) {
+        return;
+      }
+
+      setCurrentEventId(nextEvent.id);
+      showToast({
+        title: "Evento actualizado",
+        description: `${nextEvent.name} quedó sincronizado como evento activo.`,
+        tone: "success",
+      });
+    } catch (error) {
+      showToast({
+        title: "No pudimos guardar el evento",
+        description: error instanceof Error ? error.message : "Revisá la conexión con Supabase.",
+        tone: "error",
+      });
+    }
   };
 
   return (
@@ -278,6 +292,11 @@ function EventSettingsCard({ canManage }: { canManage: boolean }) {
           <p className="mt-2 text-sm text-slate-400">
             Esta sección aplica solo al evento activo. La configuración avanzada sigue en Eventos.
           </p>
+          {isTerminalEventStatus(currentEvent.status) ? (
+            <p className="mt-2 text-xs uppercase tracking-[0.22em] text-amber-300/80">
+              Evento cerrado: la edición queda en modo lectura.
+            </p>
+          ) : null}
         </div>
         <StatusBadge variant="success">{getEventTypeLabel(currentEvent.eventType)}</StatusBadge>
       </div>
@@ -300,7 +319,7 @@ function EventSettingsCard({ canManage }: { canManage: boolean }) {
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        {canManage ? (
+        {canEditEvent ? (
           <>
             <Input label="Nombre del evento" value={eventName} onChange={setEventName} placeholder="Evento principal" />
             <Input label="Fecha y hora" value={eventStartAt} onChange={setEventStartAt} type="datetime-local" />
@@ -318,7 +337,7 @@ function EventSettingsCard({ canManage }: { canManage: boolean }) {
       <div className="mt-4">
         <label className="block">
           <span className="text-sm font-medium text-slate-200">Venue del evento</span>
-          {canManage ? (
+          {canEditEvent ? (
             venueOptions.length ? (
               <select
                 value={eventVenueId}
@@ -353,7 +372,7 @@ function EventSettingsCard({ canManage }: { canManage: boolean }) {
       <div className="mt-4">
         <label className="block">
           <span className="text-sm font-medium text-slate-200">Descripción</span>
-          {canManage ? (
+          {canEditEvent ? (
             <textarea
               value={eventDescription}
               onChange={(event) => setEventDescription(event.target.value)}
@@ -371,7 +390,7 @@ function EventSettingsCard({ canManage }: { canManage: boolean }) {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="text-sm font-medium text-slate-200">Estado del evento</span>
-          {canManage ? (
+          {canEditEvent ? (
             <select
               value={eventStatus}
               onChange={(event) => setEventStatus(event.target.value as typeof eventStatus)}
@@ -403,7 +422,7 @@ function EventSettingsCard({ canManage }: { canManage: boolean }) {
       </div>
 
       <div className="mt-5 flex flex-wrap gap-3">
-        {canManage ? (
+        {canEditEvent ? (
           <button
             type="button"
             onClick={saveEvent}

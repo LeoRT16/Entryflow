@@ -26,6 +26,7 @@ import {
 } from "@/lib/supabase/mappers";
 import type { CheckInRow, EventRow, GuestRow, OrganizationRow, ProfileRow, ResourceRow, ReservationRow, RoleRow, SectorRow, TableRow, TimelineRow, UserRow, VenueRow } from "@/lib/supabase/types";
 import { createEmptyWorkspaceLayouts, loadWorkspaceLayouts, type WorkspaceLayoutCollections } from "@/services/workspace-layouts";
+import { buildEventSelectionCandidate, pickCurrentEventId as pickCurrentEventSelectionId } from "@/features/events/domain";
 
 export type WorkspaceBootstrap = {
   authState: WorkspaceAuthState;
@@ -187,17 +188,20 @@ function readCatalogFromOrganization(organization: Organization) {
 }
 
 function pickCurrentEventId(events: EventRow[], organizationId: string) {
-  const eventList = [...events]
-    .filter((event) => event.organization_id === organizationId && event.deleted_at === null)
-    .sort((a, b) => {
-      if (a.updated_at !== b.updated_at) {
-        return a.updated_at < b.updated_at ? 1 : -1;
-      }
-
-      return a.start_at < b.start_at ? 1 : -1;
-    });
-
-  return eventList[0]?.id ?? "";
+  return pickCurrentEventSelectionId(
+    events.map((event) =>
+      buildEventSelectionCandidate({
+        id: event.id,
+        organizationId: event.organization_id,
+        status: event.status,
+        updatedAt: event.updated_at,
+        startAt: event.start_at,
+        deletedAt: event.deleted_at,
+      }),
+    ),
+    organizationId,
+    "",
+  );
 }
 
 export function pickCurrentProfileIdForUser(profiles: ProfileRow[], currentOrganizationId: string, currentUserId: string) {

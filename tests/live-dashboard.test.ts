@@ -610,3 +610,36 @@ test("buildLiveDashboardQuickActions keeps the scanner as the first mobile-criti
   assert.equal(actions[0]?.label, "Escanear / Ingreso");
   assert.equal(actions[0]?.shortcut, "⌘1");
 });
+
+test("buildLiveDashboardModel marks terminal events as read-only while preserving navigation", () => {
+  const model = buildLiveDashboardModel({
+    currentOrganizationName: "EntryFlow",
+    currentEvent: {
+      name: "Live Event",
+      status: "finished",
+      startAt: "13 de agosto de 2026 21:00",
+      venue: "Sala Principal",
+      eventType: "nightlife",
+    },
+    reservationSummaries: [buildReservationSummary()],
+    ...buildInput({
+      workspaceStatus: "ready",
+      capacityState: "stable",
+      pendingGuests: 0,
+      blockedGrants: 0,
+      duplicateAttempts: 0,
+      rejectedAttempts: 0,
+      alerts: [],
+      attention: [],
+      recentCheckIns: 0,
+    }),
+  });
+
+  const quickActions = buildLiveDashboardQuickActions({ terminalEvent: true });
+
+  assert.equal(model.header.liveLabel, "Cerrado");
+  assert.equal(model.header.summary, "Este evento está cerrado. La información permanece disponible en modo lectura.");
+  assert.equal(model.header.nextAction, "Evento cerrado. Revisa historial, reservas y trazabilidad sin ejecutar mutaciones.");
+  assert.equal(quickActions[0]?.label, "Ingreso · solo lectura");
+  assert.equal(quickActions[0]?.route, "/check-in");
+});

@@ -6,8 +6,9 @@ import { useMemo } from "react";
 
 import DashboardQuickActions from "@/components/dashboard-quick-actions";
 import StatusBadge from "@/components/status-badge";
+import TerminalEventBanner from "@/components/terminal-event-banner";
 import TimelineFeed from "@/features/timeline/components/timeline-feed";
-import { isModuleEnabled } from "@/features/events/domain";
+import { isModuleEnabled, isTerminalEventStatus } from "@/features/events/domain";
 import { buildLiveDashboardModel } from "@/features/events/domain/live-dashboard";
 import { useCheckInStore } from "@/services/workspace-service";
 
@@ -122,6 +123,7 @@ function LiveAlertCard({
 
 export default function EventCommandCenter() {
   const { currentOrganization, currentEvent, reservationSummaries, workspaceIntelligence, workspacePriority, status, setEventStatus } = useCheckInStore();
+  const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
 
   const model = useMemo(
     () =>
@@ -158,7 +160,7 @@ export default function EventCommandCenter() {
           </div>
 
           <div className="flex flex-col gap-3 lg:items-end">
-            {currentEvent.status !== "finished" ? (
+            {!isTerminalEvent ? (
               <button
                 type="button"
                 onClick={() => setEventStatus(currentEvent.id, "finished")}
@@ -166,7 +168,12 @@ export default function EventCommandCenter() {
               >
                 Cerrar evento
               </button>
-            ) : null}
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Evento cerrado</p>
+                <p className="mt-2 text-sm text-slate-300">La operación queda en modo lectura.</p>
+              </div>
+            )}
             <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Siguiente paso</p>
               <p className="mt-2 max-w-sm text-sm leading-6 text-slate-300">{model.header.nextAction}</p>
@@ -175,6 +182,10 @@ export default function EventCommandCenter() {
           </div>
         </div>
       </section>
+
+      {isTerminalEvent ? (
+        <TerminalEventBanner description="El evento está cerrado. El command center conserva solo lectura, trazabilidad y navegación histórica." />
+      ) : null}
 
       <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
         <SectionHeader

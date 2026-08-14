@@ -1,3 +1,7 @@
+"use client";
+
+import { isTerminalEventStatus } from "@/features/events/domain";
+import { useCheckInStore } from "@/services/workspace-service";
 import StatusBadge from "@/components/status-badge";
 import { EmptyState } from "@/components/premium-feedback";
 import type { ReservationRow } from "@/types/dashboard";
@@ -7,6 +11,9 @@ export default function RecentReservationsTable({
 }: {
   reservations: ReservationRow[];
 }) {
+  const { currentEvent } = useCheckInStore();
+  const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
+
   return (
     <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
       <div className="border-b border-white/10 px-5 py-5 sm:px-6">
@@ -74,7 +81,10 @@ export default function RecentReservationsTable({
               icon="inbox"
               title="No hay reservas visibles."
               description="Cuando existan nuevos movimientos, aparecerán aquí con su estado operativo."
-              primaryAction={{ label: "Crear reserva", href: "/reservations" }}
+              primaryAction={{
+                label: isTerminalEvent ? "Ver reservas" : "Crear reserva",
+                href: "/reservations",
+              }}
               secondaryAction={{ label: "Ver invitados", href: "/customers" }}
             />
           </div>

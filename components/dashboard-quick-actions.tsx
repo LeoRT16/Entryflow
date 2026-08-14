@@ -3,12 +3,17 @@
 import { useMemo } from "react";
 
 import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
+import { isTerminalEventStatus } from "@/features/events/domain";
 import { buildLiveDashboardQuickActions } from "@/features/events/domain/live-dashboard";
+import { useCheckInStore } from "@/services/workspace-service";
 
 export default function DashboardQuickActions() {
+  const { currentEvent } = useCheckInStore();
+  const terminalEvent = isTerminalEventStatus(currentEvent.status);
+
   const guidedActions = useMemo(
     () =>
-      buildLiveDashboardQuickActions().map((item, index) =>
+      buildLiveDashboardQuickActions({ terminalEvent }).map((item, index) =>
         buildGuidedActionItem(
           {
             id: item.id,
@@ -44,7 +49,7 @@ export default function DashboardQuickActions() {
           },
         ),
       ),
-    [],
+    [terminalEvent],
   );
 
   return (

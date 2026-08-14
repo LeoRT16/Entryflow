@@ -17,6 +17,41 @@ function getRequestString(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  let body: WhatsAppSendRequestBody;
+
+  try {
+    body = (await request.json()) as WhatsAppSendRequestBody;
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "invalid_request",
+          message: "La solicitud de WhatsApp no es válida.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const recipient = getRequestString(body.recipient);
+  const guestName = getRequestString(body.guestName);
+  const eventName = getRequestString(body.eventName);
+  const invitationCode = getRequestString(body.invitationCode);
+
+  if (!recipient || !guestName || !eventName || !invitationCode) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "missing_fields",
+          message: "Faltan datos para preparar el envío por WhatsApp.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
   const authUser = await getSupabaseAuthUser();
 
   if (!authUser) {
@@ -74,41 +109,6 @@ export async function POST(request: Request) {
         },
       },
       { status: 403 },
-    );
-  }
-
-  let body: WhatsAppSendRequestBody;
-
-  try {
-    body = (await request.json()) as WhatsAppSendRequestBody;
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "invalid_request",
-          message: "La solicitud de WhatsApp no es válida.",
-        },
-      },
-      { status: 400 },
-    );
-  }
-
-  const recipient = getRequestString(body.recipient);
-  const guestName = getRequestString(body.guestName);
-  const eventName = getRequestString(body.eventName);
-  const invitationCode = getRequestString(body.invitationCode);
-
-  if (!recipient || !guestName || !eventName || !invitationCode) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "missing_fields",
-          message: "Faltan datos para preparar el envío por WhatsApp.",
-        },
-      },
-      { status: 400 },
     );
   }
 

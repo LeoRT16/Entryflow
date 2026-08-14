@@ -3,6 +3,8 @@
 import Link from "next/link";
 
 import StatusBadge from "@/components/status-badge";
+import TerminalEventBanner from "@/components/terminal-event-banner";
+import { isTerminalEventStatus } from "@/features/events/domain";
 import { useCheckInStore } from "@/services/workspace-service";
 
 function formatStatus(status: string) {
@@ -38,6 +40,7 @@ export default function Topbar({
   };
 }) {
   const { currentOrganization, currentEvent, currentAccount } = useCheckInStore();
+  const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
 
   return (
     <header className="flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-4 shadow-[0_1px_0_rgba(255,255,255,0.04)] sm:p-5">
@@ -74,6 +77,12 @@ export default function Topbar({
           </StatusBadge>
           <StatusBadge variant="info">Hora: {getEventTime(currentEvent.startAt)}</StatusBadge>
         </div>
+
+        {isTerminalEvent ? (
+          <TerminalEventBanner
+            description="Este evento ya está cerrado. La vista permanece disponible para revisar información histórica y trazabilidad sin ejecutar mutaciones."
+          />
+        ) : null}
       </div>
 
       {primaryAction || secondaryAction ? (

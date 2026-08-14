@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useFeedback } from "@/components/premium-feedback";
 import { ContextualCard, GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
 import StatusBadge from "@/components/status-badge";
+import TerminalEventBanner from "@/components/terminal-event-banner";
 import Topbar from "@/components/topbar";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { buildGuestSearchIndex } from "@/features/check-in/utils";
@@ -14,6 +15,7 @@ import { getEntryTone } from "@/features/check-in/domain/check-in-domain";
 import { useCheckInStore } from "@/services/workspace-service";
 import type { Guest, CheckInMethod } from "@/features/check-in/types";
 import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
+import { isTerminalEventStatus } from "@/features/events/domain";
 
 export default function CheckInFlow() {
   const { confirm, showToast } = useFeedback();
@@ -35,6 +37,8 @@ export default function CheckInFlow() {
   const prioritySummary = workspacePriority.summary;
   const health = workspaceIntelligence.health;
   const flow = workspaceIntelligence.flow;
+  const currentEventStatus = events.find((event) => event.id === activeEvent.id)?.status ?? "live";
+  const isTerminalEvent = isTerminalEventStatus(currentEventStatus);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPendingIndex, setSelectedPendingIndex] = useState(0);
   const deferredQuery = useDeferredValue(searchQuery);
@@ -67,16 +71,24 @@ export default function CheckInFlow() {
 
   const openGuest = useCallback(
     (guest: Guest, method: CheckInMethod = "QR") => {
+      if (isTerminalEvent) {
+        return;
+      }
+
       registerCheckIn({
         query: buildGuestSearchIndex(guest),
         method,
         operator: method === "Manual" ? "Recepción" : "Escáner",
       });
     },
-    [registerCheckIn],
+    [isTerminalEvent, registerCheckIn],
   );
 
   const executeManualCheckIn = useCallback(() => {
+    if (isTerminalEvent) {
+      return;
+    }
+
     if (!searchQuery.trim()) {
       showToast({
         title: "Ingresa un criterio de búsqueda",
@@ -103,9 +115,13 @@ export default function CheckInFlow() {
         });
       },
     });
-  }, [confirm, registerCheckIn, searchQuery, searchResults, showToast]);
+  }, [confirm, isTerminalEvent, registerCheckIn, searchQuery, searchResults, showToast]);
 
   const continueCheckIn = useCallback(() => {
+    if (isTerminalEvent) {
+      return;
+    }
+
     const candidate = searchQuery.trim()
       ? searchResults[0] ?? null
       : pendingGuests[selectedPendingIndexClamped] ?? pendingGuests[0] ?? null;
@@ -120,7 +136,7 @@ export default function CheckInFlow() {
     }
 
     openGuest(candidate, "QR");
-  }, [openGuest, pendingGuests, searchQuery, searchResults, selectedPendingIndexClamped, showToast]);
+  }, [isTerminalEvent, openGuest, pendingGuests, searchQuery, searchResults, selectedPendingIndexClamped, showToast]);
 
   const goToNextPendingGuest = useCallback(() => {
     if (!pendingGuests.length) {
@@ -133,24 +149,32 @@ export default function CheckInFlow() {
   useKeyboardShortcuts(
     useMemo(
       () => [
-        {
-          id: "check-in-continue",
-          shortcut: "enter",
-          priority: 50,
-          handler: continueCheckIn,
-        },
-        {
-          id: "check-in-next",
-          shortcut: "n",
-          priority: 40,
-          handler: goToNextPendingGuest,
-        },
+        ...(isTerminalEvent
+          ? []
+          : [
+              {
+                id: "check-in-continue",
+                shortcut: "enter",
+                priority: 50,
+                handler: continueCheckIn,
+              },
+              {
+                id: "check-in-next",
+                shortcut: "n",
+                priority: 40,
+                handler: goToNextPendingGuest,
+              },
+            ]),
       ],
-      [continueCheckIn, goToNextPendingGuest],
+      [continueCheckIn, goToNextPendingGuest, isTerminalEvent],
     ),
   );
 
   const guidedActions = useMemo(() => {
+    if (isTerminalEvent) {
+      return [];
+    }
+
     const actions = [
       ...(pendingGuests[0]
         ? [
@@ -198,7 +222,7 @@ export default function CheckInFlow() {
         return true;
       })
       .slice(0, 3);
-  }, [checkInInsights, executeManualCheckIn, openGuest, pendingGuests, searchQuery, searchResults]);
+  }, [checkInInsights, executeManualCheckIn, isTerminalEvent, openGuest, pendingGuests, searchQuery, searchResults]);
 
   return (
     <div className="space-y-6">
@@ -282,20 +306,38 @@ export default function CheckInFlow() {
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
-          <GuidedActionPanel
-            title="Siguiente paso"
-            description="El panel prioriza el ingreso que más reduce la cola de atención."
-            items={guidedActions}
-          />
+          {isTerminalEvent ? (
+            <TerminalEventBanner description="El evento está cerrado. El ingreso queda en modo histórico y no admite nuevos check-ins." />
+          ) : (
+            <GuidedActionPanel
+              title="Siguiente paso"
+              description="El panel prioriza el ingreso que más reduce la cola de atención."
+              items={guidedActions}
+            />
+          )}
 
-          <QrCameraScanner
-            key={`${pathname}-${activeEvent.id}`}
-            eventName={activeEvent.name}
-            onDetected={(value) => {
-              setSearchQuery(value);
-              registerCheckIn({ query: value, method: "QR", operator: "Escáner" });
-            }}
-          />
+          {isTerminalEvent ? (
+            <section className="rounded-[2rem] border border-white/10 bg-slate-950/40 p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Scanner deshabilitado
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                Evento cerrado · solo lectura
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Podés revisar trazabilidad, pendientes e historial, pero no registrar nuevos ingresos.
+              </p>
+            </section>
+          ) : (
+            <QrCameraScanner
+              key={`${pathname}-${activeEvent.id}`}
+              eventName={activeEvent.name}
+              onDetected={(value) => {
+                setSearchQuery(value);
+                registerCheckIn({ query: value, method: "QR", operator: "Escáner" });
+              }}
+            />
+          )}
 
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -316,6 +358,7 @@ export default function CheckInFlow() {
               <input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
+                disabled={isTerminalEvent}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -329,13 +372,14 @@ export default function CheckInFlow() {
                 }}
                 data-shortcut-search="true"
                 placeholder="Escanear QR o buscar invitado"
-                className="h-13 w-full flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06] focus:ring-4 focus:ring-cyan-500/10"
+                className="h-13 w-full flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06] focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               />
 
               <button
                 type="button"
                 onClick={() => registerCheckIn({ query: searchQuery || "QR inexistente", method: "QR", operator: "Escáner" })}
-                className="inline-flex h-12 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
+                disabled={isTerminalEvent}
+                className="inline-flex h-12 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-cyan-400/10"
               >
                 Validar QR
               </button>
@@ -343,7 +387,8 @@ export default function CheckInFlow() {
               <button
                 type="button"
                 onClick={executeManualCheckIn}
-                className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                disabled={isTerminalEvent}
+                className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white/[0.04]"
               >
                 Ingreso manual
               </button>
@@ -369,6 +414,7 @@ export default function CheckInFlow() {
                   <GuestResultCard
                     key={guest.id}
                     guest={guest}
+                    readOnly={isTerminalEvent}
                     onCheckIn={() => openGuest(guest, "QR")}
                     onManual={() => openGuest(guest, "Manual")}
                   />
@@ -478,26 +524,44 @@ export default function CheckInFlow() {
 
             <div className="mt-4 space-y-3">
               {pendingGuests.slice(0, 4).map((guest, index) => (
-                <button
-                  key={guest.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedPendingIndex(index);
-                    openGuest(guest, "QR");
-                  }}
-                  className={[
-                    "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition",
-                    selectedPendingIndexClamped === index
-                      ? "border-cyan-400/40 bg-cyan-400/10"
-                      : "border-white/10 bg-slate-950/40 hover:bg-slate-950/55",
-                  ].join(" ")}
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-white">{guest.guestName}</p>
-                    <p className="mt-1 text-xs text-slate-400">{guest.reservationName}</p>
+                isTerminalEvent ? (
+                  <div
+                    key={guest.id}
+                    className={[
+                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left",
+                      selectedPendingIndexClamped === index
+                        ? "border-cyan-400/40 bg-cyan-400/10"
+                        : "border-white/10 bg-slate-950/40",
+                    ].join(" ")}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white">{guest.guestName}</p>
+                      <p className="mt-1 text-xs text-slate-400">{guest.reservationName}</p>
+                    </div>
+                    <StatusBadge variant="warning">Pendiente</StatusBadge>
                   </div>
-                  <StatusBadge variant="warning">Pendiente</StatusBadge>
-                </button>
+                ) : (
+                  <button
+                    key={guest.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPendingIndex(index);
+                      openGuest(guest, "QR");
+                    }}
+                    className={[
+                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition",
+                      selectedPendingIndexClamped === index
+                        ? "border-cyan-400/40 bg-cyan-400/10"
+                        : "border-white/10 bg-slate-950/40 hover:bg-slate-950/55",
+                    ].join(" ")}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white">{guest.guestName}</p>
+                      <p className="mt-1 text-xs text-slate-400">{guest.reservationName}</p>
+                    </div>
+                    <StatusBadge variant="warning">Pendiente</StatusBadge>
+                  </button>
+                )
               ))}
             </div>
           </section>
@@ -535,13 +599,37 @@ function StatCard({
 
 function GuestResultCard({
   guest,
+  readOnly,
   onCheckIn,
   onManual,
 }: {
   guest: Guest;
+  readOnly: boolean;
   onCheckIn: () => void;
   onManual: () => void;
 }) {
+  if (readOnly) {
+    return (
+      <article className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h3 className="text-lg font-semibold tracking-tight text-white">{guest.guestName}</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {guest.reservationName} · {guest.eventName}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <StatusBadge variant={getEntryTone(guest.deliveryStatus)}>{guest.deliveryStatus}</StatusBadge>
+              <StatusBadge variant={getEntryTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
+              <StatusBadge variant="info">{guest.invitationCode}</StatusBadge>
+            </div>
+          </div>
+
+          <StatusBadge variant="warning">Solo lectura</StatusBadge>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <ContextualCard
       items={[

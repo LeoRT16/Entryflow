@@ -2,6 +2,7 @@ import type { WorkspaceIntelligence } from "@/domain/workspace-intelligence";
 import type { WorkspacePriorityItem, WorkspacePrioritySnapshot } from "@/domain/workspace-priority";
 import { getEventTypeLabel } from "@/features/events/domain";
 import type { Event as PlatformEvent } from "@/features/domain/types";
+import { isTerminalEventStatus } from "@/features/events/domain/event-rules";
 import type { ReservationSummary } from "@/features/reservations/types";
 import type { TimelineEvent } from "@/features/timeline/types";
 
@@ -118,6 +119,10 @@ function getStatusLabel(status: PlatformEvent["status"]) {
 }
 
 function getRealtimeTone(workspaceStatus: LiveDashboardInput["workspaceStatus"], eventStatus: PlatformEvent["status"]): LiveDashboardTone {
+  if (isTerminalEventStatus(eventStatus)) {
+    return "warning";
+  }
+
   if (workspaceStatus === "ready" && eventStatus === "live") {
     return "success";
   }
@@ -130,6 +135,10 @@ function getRealtimeTone(workspaceStatus: LiveDashboardInput["workspaceStatus"],
 }
 
 function getRealtimeLabel(workspaceStatus: LiveDashboardInput["workspaceStatus"], eventStatus: PlatformEvent["status"]) {
+  if (isTerminalEventStatus(eventStatus)) {
+    return "Cerrado";
+  }
+
   if (workspaceStatus === "ready" && eventStatus === "live") {
     return "En vivo";
   }
@@ -168,12 +177,18 @@ function compareSeverity(a: LiveDashboardAlert, b: LiveDashboardAlert) {
   return toneWeight(b.tone) - toneWeight(a.tone);
 }
 
-export function buildLiveDashboardQuickActions(): LiveDashboardQuickAction[] {
+export function buildLiveDashboardQuickActions({
+  terminalEvent = false,
+}: {
+  terminalEvent?: boolean;
+} = {}): LiveDashboardQuickAction[] {
   return [
     {
       id: "quick-action-check-in",
-      label: "Escanear / Ingreso",
-      description: "Abrir el scanner y registrar accesos.",
+      label: terminalEvent ? "Ingreso · solo lectura" : "Escanear / Ingreso",
+      description: terminalEvent
+        ? "Abrir el historial y la trazabilidad de accesos del evento cerrado."
+        : "Abrir el scanner y registrar accesos.",
       route: "/check-in",
       tone: "danger",
       shortcut: "⌘1",
@@ -225,6 +240,7 @@ export function buildLiveDashboardModel({
     workspaceIntelligence.access.rejectedAttempts +
     workspaceIntelligence.access.duplicateAttempts +
     workspaceIntelligence.access.blockedGrants;
+  const terminalEvent = isTerminalEventStatus(currentEvent.status);
 
   const capacityState: LiveDashboardModel["capacity"]["state"] =
     workspaceIntelligence.capacity.state === "blocked" ? "blocked" : workspaceIntelligence.capacity.state === "watch" ? "watch" : "stable";
@@ -281,8 +297,12 @@ export function buildLiveDashboardModel({
       liveTone: toLiveTone(getRealtimeTone(workspaceStatus, currentEvent.status)),
       timestampLabel: formatEventDateTime(currentEvent.startAt),
       venue: currentEvent.venue,
-      summary: workspacePriority.summary.message,
-      nextAction: workspacePriority.summary.nextBestAction,
+      summary: terminalEvent
+        ? "Este evento está cerrado. La información permanece disponible en modo lectura."
+        : workspacePriority.summary.message,
+      nextAction: terminalEvent
+        ? "Evento cerrado. Revisa historial, reservas y trazabilidad sin ejecutar mutaciones."
+        : workspacePriority.summary.nextBestAction,
     },
     kpis: [
       {
@@ -364,6 +384,6 @@ export function buildLiveDashboardModel({
       pendingGuests: reservation.metrics.pendingGuests,
     })),
     recentActivity: workspaceIntelligence.operations.recentActivity.slice(0, 6),
-    quickActions: buildLiveDashboardQuickActions(),
+    quickActions: buildLiveDashboardQuickActions({ terminalEvent }),
   };
 }

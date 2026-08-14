@@ -10,6 +10,7 @@ import LiveSummaryRow from "@/features/reservations/components/live-summary-row"
 import ResourceReservationModal from "@/features/tables/components/resource-reservation-modal";
 import { getPrimaryActiveTableReservation } from "@/features/tables/domain/table-domain";
 import { canPersistResourceName } from "@/features/tables/domain/resource-validation";
+import { isTerminalEventStatus } from "@/features/events/domain";
 import type { Resource, ResourceType, Sector } from "@/features/domain/types";
 import { createUuid, nowIso } from "@/lib/supabase/helpers";
 import { useCheckInStore } from "@/services/workspace-service";
@@ -91,6 +92,7 @@ function TablesFlowWorkspace() {
     moveResourceToSector,
   } = useCheckInStore();
   const router = useRouter();
+  const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
 
   const [selectedSectorId, setSelectedSectorId] = useState(currentVenueSectors[0]?.id ?? "");
   const [selectedResourceId, setSelectedResourceId] = useState(currentVenueResources[0]?.id ?? "");
@@ -146,6 +148,7 @@ function TablesFlowWorkspace() {
           closed: selectedReservationResource.status === "Closed" || selectedReservationResource.status === "Blocked",
         },
         reservations,
+        currentEvent.id,
       )
     : null;
   const selectedReservationGuests = selectedReservation
@@ -297,6 +300,10 @@ function TablesFlowWorkspace() {
   };
 
   const openReservationEditor = (reservationId: string, action: "edit" | "append" = "edit") => {
+    if (isTerminalEvent) {
+      return;
+    }
+
     const params = new URLSearchParams({
       editReservationId: reservationId,
       action,
@@ -549,6 +556,7 @@ function TablesFlowWorkspace() {
                     closed: resource.status === "Closed" || resource.status === "Blocked",
                   },
                   reservations,
+                  currentEvent.id,
                 );
                 const hasActiveReservation = Boolean(activeReservation);
 
@@ -597,16 +605,18 @@ function TablesFlowWorkspace() {
                           >
                             Ver reserva
                           </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openReservationEditor(activeReservation.id, "edit");
-                            }}
-                            className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-medium text-cyan-50"
-                          >
-                            Editar reserva
-                          </button>
+                          {!isTerminalEvent ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openReservationEditor(activeReservation.id, "edit");
+                              }}
+                              className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-medium text-cyan-50"
+                            >
+                              Editar reserva
+                            </button>
+                          ) : null}
                         </>
                       ) : null}
                       <button
@@ -762,6 +772,7 @@ function TablesFlowWorkspace() {
             : "Sin sector"
         }
         conflictCount={selectedReservationConflictCount}
+        isTerminalEvent={isTerminalEvent}
         onClose={() => setSelectedReservationResourceId(null)}
         onAddManillas={() => {
           if (!selectedReservation) {

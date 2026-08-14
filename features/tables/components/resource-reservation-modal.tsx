@@ -17,6 +17,7 @@ type ResourceReservationModalProps = {
   summary: TableSummary | null;
   sectorName: string;
   conflictCount: number;
+  isTerminalEvent?: boolean;
   onClose: () => void;
   onEditReservation: () => void;
   onAddManillas: () => void;
@@ -30,6 +31,7 @@ export default function ResourceReservationModal({
   summary,
   sectorName,
   conflictCount,
+  isTerminalEvent = false,
   onClose,
   onEditReservation,
   onAddManillas,
@@ -137,20 +139,28 @@ export default function ResourceReservationModal({
             >
               Cerrar
             </button>
-            <button
-              type="button"
-              onClick={onAddManillas}
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
-            >
-              Agregar manillas
-            </button>
-            <button
-              type="button"
-              onClick={onEditReservation}
-              className="inline-flex h-11 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
-            >
-              Editar reserva
-            </button>
+            {isTerminalEvent ? (
+              <span className="inline-flex h-11 items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-400">
+                Vista histórica
+              </span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onAddManillas}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
+                >
+                  Agregar manillas
+                </button>
+                <button
+                  type="button"
+                  onClick={onEditReservation}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+                >
+                  Editar reserva
+                </button>
+              </>
+            )}
           </div>
         </section>
       </div>

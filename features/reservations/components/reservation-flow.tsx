@@ -40,8 +40,10 @@ import type {
 import { useCheckInStore } from "@/services/workspace-service";
 import { resolveCurrentEventLayout, resolveCurrentEventLayoutResource } from "@/services/workspace-layout-resolution";
 import StatusBadge from "@/components/status-badge";
+import TerminalEventBanner from "@/components/terminal-event-banner";
 import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { isTerminalEventStatus } from "@/features/events/domain";
 
 type CheckInStore = ReturnType<typeof useCheckInStore>;
 
@@ -284,6 +286,10 @@ function ReservationFlowWorkspace({
       selectedResource
         ? reservations
             .filter((reservation) => {
+              if (reservation.eventId !== currentEvent.id) {
+                return false;
+              }
+
               if (selectedResourceEventLayoutResourceId && reservation.eventLayoutResourceId === selectedResourceEventLayoutResourceId) {
                 return true;
               }
@@ -296,7 +302,7 @@ function ReservationFlowWorkspace({
             })
             .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
         : [],
-    [reservations, selectedResource, selectedResourceEventLayoutResourceId],
+    [currentEvent.id, reservations, selectedResource, selectedResourceEventLayoutResourceId],
   );
   const selectedActiveReservation = selectedResourceReservations[0] ?? null;
   const selectedReservationConflictCount = selectedResourceReservations.length;
@@ -313,9 +319,14 @@ function ReservationFlowWorkspace({
         : [],
     [editingReservation, reservationGuests],
   );
+  const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (isTerminalEvent) {
+      return;
+    }
 
     if (!editingReservationId) {
       editHydratedRef.current = null;
@@ -365,10 +376,14 @@ function ReservationFlowWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [currentVenueResources, editAction, editingReservation, editingReservationGuests, editingReservationId]);
+  }, [currentVenueResources, editAction, editingReservation, editingReservationGuests, editingReservationId, isTerminalEvent]);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (isTerminalEvent) {
+      return;
+    }
 
     if (!editReservationId) {
       suppressEditHydrationRef.current = false;
@@ -388,7 +403,7 @@ function ReservationFlowWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [editReservationId]);
+  }, [editReservationId, isTerminalEvent]);
 
   const resetWizardState = useCallback(() => {
     setEditingReservationId(null);
@@ -485,6 +500,10 @@ function ReservationFlowWorkspace({
   const prioritySummary = workspacePriority.summary;
   const capacity = workspaceIntelligence.capacity;
   const openReservationWizard = useCallback(() => {
+    if (isTerminalEvent) {
+      return;
+    }
+
     if (reservationSubmissionGateRef.current.isLocked()) {
       return;
     }
@@ -494,7 +513,7 @@ function ReservationFlowWorkspace({
     resetWizardState();
     setIsWizardOpen(true);
     setStep(1);
-  }, [clearWizardQuery, resetWizardState]);
+  }, [clearWizardQuery, resetWizardState, isTerminalEvent]);
   const closeWizard = useCallback(() => {
     if (reservationSubmissionGateRef.current.isLocked()) {
       return;
@@ -518,6 +537,10 @@ function ReservationFlowWorkspace({
     prioritizedReservations[0] ??
     null;
   const guidedActions = useMemo(() => {
+    if (isTerminalEvent) {
+      return [];
+    }
+
     const actions = [
       ...(activeReservation && (activeReservation.status === "Draft" || activeReservation.status === "Pending")
         ? [
@@ -578,44 +601,52 @@ function ReservationFlowWorkspace({
         return true;
       })
       .slice(0, 3);
-  }, [activeReservation, reservationInsights, setReservationStatus]);
+  }, [activeReservation, isTerminalEvent, reservationInsights, setReservationStatus]);
 
-  useKeyboardShortcuts(
-    useMemo(
-      () => [
-        {
-          id: "reservations-new",
-          shortcut: "n",
-          priority: 50,
-          handler: openReservationWizard,
-        },
-        {
-          id: "reservations-assign-table",
-          shortcut: "a",
-          priority: 45,
-          handler: () => router.push("/tables"),
-        },
-        {
-          id: "reservations-confirm",
-          shortcut: "c",
-          priority: 55,
-          handler: () => {
-            if (!activeReservation) {
-              return;
-            }
+  const keyboardShortcuts = useMemo(
+    () => [
+      ...(isTerminalEvent
+        ? []
+        : [
+            {
+              id: "reservations-new",
+              shortcut: "n",
+              priority: 50,
+              handler: openReservationWizard,
+            },
+          ]),
+      {
+        id: "reservations-assign-table",
+        shortcut: "a",
+        priority: 45,
+        handler: () => router.push("/tables"),
+      },
+      ...(isTerminalEvent
+        ? []
+        : [
+            {
+              id: "reservations-confirm",
+              shortcut: "c",
+              priority: 55,
+              handler: () => {
+                if (!activeReservation) {
+                  return;
+                }
 
-            if (activeReservation.status === "Draft" || activeReservation.status === "Pending") {
-              setReservationStatus(activeReservation.id, "Confirmed");
-            }
-          },
-        },
-      ],
-      [activeReservation, openReservationWizard, router, setReservationStatus],
-    ),
+                if (activeReservation.status === "Draft" || activeReservation.status === "Pending") {
+                  setReservationStatus(activeReservation.id, "Confirmed");
+                }
+              },
+            },
+          ]),
+    ],
+    [activeReservation, isTerminalEvent, openReservationWizard, router, setReservationStatus],
   );
 
+  useKeyboardShortcuts(keyboardShortcuts);
+
   useEffect(() => {
-    if (!isWizardOpen) {
+    if (!isWizardOpen || isTerminalEvent) {
       return;
     }
 
@@ -634,7 +665,7 @@ function ReservationFlowWorkspace({
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [closeWizard, isWizardOpen]);
+  }, [closeWizard, isTerminalEvent, isWizardOpen]);
 
   const updateGuestCount = (nextCount: number) => {
     const sanitizedCount = clampGuestCount(nextCount);
@@ -738,9 +769,12 @@ function ReservationFlowWorkspace({
 
         const reservation = await createReservation(payload);
 
-        if (reservation) {
-          setActiveReservationId(reservation.id);
+        if (!reservation) {
+          setSubmissionError("El evento está cerrado y no admite nuevas reservas.");
+          return;
         }
+
+        setActiveReservationId(reservation.id);
 
         finalizeWizardClose();
       });
@@ -771,7 +805,13 @@ function ReservationFlowWorkspace({
           return;
         }
 
-        await updateReservation(payload);
+        const reservation = await updateReservation(payload);
+
+        if (!reservation) {
+          setSubmissionError("El evento está cerrado y no admite cambios en la reserva.");
+          return;
+        }
+
         finalizeWizardClose();
       });
     } catch (error) {
@@ -817,9 +857,12 @@ function ReservationFlowWorkspace({
           })),
         );
 
-        if (reservation) {
-          setActiveReservationId(reservation.id);
+        if (!reservation) {
+          setSubmissionError("La reserva o el evento están cerrados y no admiten más invitados.");
+          return;
         }
+
+        setActiveReservationId(reservation.id);
 
         finalizeWizardClose();
       });
@@ -862,9 +905,10 @@ function ReservationFlowWorkspace({
             <button
               type="button"
               onClick={openReservationWizard}
-              className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 sm:w-auto"
+              disabled={isTerminalEvent}
+              className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white sm:w-auto"
             >
-              Crear reserva
+              {isTerminalEvent ? "Evento cerrado" : "Crear reserva"}
             </button>
             <div className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300 sm:w-auto">
               Contexto activo: <span className="font-medium text-white">{currentEvent.name}</span>
@@ -892,15 +936,20 @@ function ReservationFlowWorkspace({
 
       <section className="grid gap-6 xl:grid-cols-[1fr_0.74fr]">
         <div className="min-w-0 space-y-6">
-          <GuidedActionPanel
-            title="Siguiente paso"
-            description="El sistema muestra primero la acción que más desbloquea esta reserva."
-            items={guidedActions}
-          />
+          {isTerminalEvent ? (
+            <TerminalEventBanner description="El evento está cerrado. La vista queda disponible para revisar reservas y trazabilidad sin ejecutar mutaciones." />
+          ) : (
+            <GuidedActionPanel
+              title="Siguiente paso"
+              description="El sistema muestra primero la acción que más desbloquea esta reserva."
+              items={guidedActions}
+            />
+          )}
 
           <ReservationOperationsBoard
             reservations={prioritizedReservations}
             activeReservationId={activeReservation?.id ?? ""}
+            isTerminalEvent={isTerminalEvent}
             onSelectReservation={setActiveReservationId}
             onMarkConfirmed={(reservationId) => {
               setReservationStatus(reservationId, "Confirmed");
@@ -997,7 +1046,7 @@ function ReservationFlowWorkspace({
         </aside>
       </section>
 
-      {isWizardOpen ? (
+      {isWizardOpen && !isTerminalEvent ? (
         <ReservationWizardModal
           step={step}
           setStep={setStep}
@@ -1065,6 +1114,9 @@ function ReservationFlowWorkspace({
           eventOptions={eventOptions}
           submissionError={submissionError}
         />
+      ) : null}
+      {isWizardOpen && isTerminalEvent ? (
+        <TerminalEventBanner description="El evento está cerrado. El asistente de reservas queda en modo lectura y no permite crear ni editar reservas." />
       ) : null}
     </div>
   );

@@ -6,7 +6,11 @@ import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
 import { ContextualCard } from "@/components/quick-actions-menu";
 import LiveSummaryRow from "@/features/reservations/components/live-summary-row";
-import { formatReservationStatus, getReservationStatusTone } from "@/features/reservations/domain/reservation-domain";
+import {
+  formatReservationStatus,
+  getReservationStatusTone,
+  isTerminalReservationStatus,
+} from "@/features/reservations/domain/reservation-domain";
 import type {
   ReservationGuestAction,
   ReservationGuestInput,
@@ -16,6 +20,7 @@ import type {
 type ReservationOperationsBoardProps = {
   reservations: ReservationSummary[];
   activeReservationId: string;
+  isTerminalEvent?: boolean;
   onSelectReservation: (reservationId: string) => void;
   onMarkConfirmed: (reservationId: string) => void;
   onAddGuest: (reservationId: string, guest: ReservationGuestInput) => void;
@@ -28,6 +33,23 @@ type ReservationOperationsBoardProps = {
   onCancelReservation: (reservationId: string) => void;
 };
 
+export function getReservationGuestActionVisibility(
+  reservationStatus: ReservationSummary["status"],
+  guest: ReservationSummary["guests"][number],
+  eventTerminal = false,
+) {
+  const terminal = eventTerminal || isTerminalReservationStatus(reservationStatus);
+
+  return {
+    terminal,
+    showConfirm: !terminal && guest.canConfirm,
+    showCheckIn: !terminal && guest.canCheckIn,
+    showRevert: !terminal && guest.canRevert,
+    showCancel: !terminal && guest.canCancel,
+    showRemove: !terminal && guest.canRemove,
+  };
+}
+
 export default function ReservationOperationsBoard({
   reservations,
   activeReservationId,
@@ -37,10 +59,12 @@ export default function ReservationOperationsBoard({
   onGuestAction,
   onRegisterCheckIn,
   onCancelReservation,
+  isTerminalEvent = false,
 }: ReservationOperationsBoardProps) {
   const { showToast } = useFeedback();
   const activeReservation =
     reservations.find((reservation) => reservation.id === activeReservationId) ?? reservations[0] ?? null;
+  const isTerminalReservation = activeReservation ? isTerminalEvent || isTerminalReservationStatus(activeReservation.status) : false;
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
   const [guestWhatsapp, setGuestWhatsapp] = useState("");
@@ -70,6 +94,10 @@ export default function ReservationOperationsBoard({
 
   const handleAddGuest = () => {
     if (!activeReservation) {
+      return;
+    }
+
+    if (isTerminalReservation) {
       return;
     }
 
@@ -130,6 +158,7 @@ export default function ReservationOperationsBoard({
           <div className="mt-5 space-y-3">
             {reservations.map((reservation) => {
               const isActive = reservation.id === activeReservation.id;
+              const terminalReservation = isTerminalEvent || isTerminalReservationStatus(reservation.status);
 
               const reservationActions = [
                 {
@@ -144,30 +173,34 @@ export default function ReservationOperationsBoard({
                     setGuestWhatsapp("");
                   },
                 },
-                {
-                  id: `${reservation.id}-confirm`,
-                  label: "Confirmar",
-                  description: "Marcar la reserva como confirmada.",
-                  tone: "success" as const,
-                  onSelect: () => onMarkConfirmed(reservation.id),
-                },
-                {
-                  id: `${reservation.id}-guest`,
-                  label: "Agregar invitado",
-                  description: "Sumar una nueva invitación al grupo.",
-                  tone: "info" as const,
-                  onSelect: () => {
-                    onSelectReservation(reservation.id);
-                    setGuestName("");
-                  },
-                },
-                {
-                  id: `${reservation.id}-cancel`,
-                  label: "Cancelar",
-                  description: "Anular la reserva desde el flujo operativo.",
-                  tone: "danger" as const,
-                  onSelect: () => onCancelReservation(reservation.id),
-                },
+                ...(!terminalReservation
+                  ? [
+                      {
+                        id: `${reservation.id}-confirm`,
+                        label: "Confirmar",
+                        description: "Marcar la reserva como confirmada.",
+                        tone: "success" as const,
+                        onSelect: () => onMarkConfirmed(reservation.id),
+                      },
+                      {
+                        id: `${reservation.id}-guest`,
+                        label: "Agregar invitado",
+                        description: "Sumar una nueva invitación al grupo.",
+                        tone: "info" as const,
+                        onSelect: () => {
+                          onSelectReservation(reservation.id);
+                          setGuestName("");
+                        },
+                      },
+                      {
+                        id: `${reservation.id}-cancel`,
+                        label: "Cancelar",
+                        description: "Anular la reserva desde el flujo operativo.",
+                        tone: "danger" as const,
+                        onSelect: () => onCancelReservation(reservation.id),
+                      },
+                    ]
+                  : []),
               ];
 
               return (
@@ -238,10 +271,11 @@ export default function ReservationOperationsBoard({
             </p>
           </div>
 
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-            <StatusBadge variant={getReservationStatusTone(activeReservation.status)}>
-              {formatReservationStatus(activeReservation.status)}
-            </StatusBadge>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+          <StatusBadge variant={getReservationStatusTone(activeReservation.status)}>
+            {formatReservationStatus(activeReservation.status)}
+          </StatusBadge>
+          {!isTerminalReservation ? (
             <button
               type="button"
               onClick={() => onMarkConfirmed(activeReservation.id)}
@@ -249,8 +283,13 @@ export default function ReservationOperationsBoard({
             >
               Marcar confirmado
             </button>
-          </div>
+          ) : (
+            <span className="inline-flex h-11 items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-400">
+              Reserva terminal
+            </span>
+          )}
         </div>
+      </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <LiveSummaryRow label="Evento" value={activeReservation.eventName} />
@@ -285,7 +324,9 @@ export default function ReservationOperationsBoard({
             {activeReservation.guests.map((guest) => (
               <ReservationGuestRow
                 key={guest.id}
+                reservationStatus={activeReservation.status}
                 guest={guest}
+                eventTerminal={isTerminalEvent}
                 onConfirm={() => {
                   onGuestAction({ reservationId: activeReservation.id, guestId: guest.id, action: "confirm" });
                 }}
@@ -309,29 +350,38 @@ export default function ReservationOperationsBoard({
             <input
               value={guestName}
               onChange={(event) => setGuestName(event.target.value)}
+              disabled={isTerminalReservation}
               placeholder="Nombre del invitado"
               className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06]"
             />
             <input
               value={guestDocument}
               onChange={(event) => setGuestDocument(event.target.value)}
+              disabled={isTerminalReservation}
               placeholder="Carnet"
               className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06]"
             />
             <input
               value={guestWhatsapp}
               onChange={(event) => setGuestWhatsapp(event.target.value)}
+              disabled={isTerminalReservation}
               placeholder="WhatsApp"
               className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06]"
             />
             <button
               type="button"
               onClick={handleAddGuest}
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+              disabled={isTerminalReservation}
+              className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white/[0.04]"
             >
               Agregar invitado
             </button>
           </div>
+          {isTerminalReservation ? (
+            <p className="mt-3 text-xs text-slate-500">
+              El evento está cerrado, por lo que no se pueden agregar ni modificar invitados desde este panel.
+            </p>
+          ) : null}
         </section>
 
         <section className="rounded-[1.6rem] border border-white/10 bg-slate-950/40 p-4">
@@ -369,6 +419,8 @@ export default function ReservationOperationsBoard({
 
 function ReservationGuestRow({
   guest,
+  reservationStatus,
+  eventTerminal,
   onConfirm,
   onCancel,
   onCheckIn,
@@ -376,12 +428,16 @@ function ReservationGuestRow({
   onRemove,
 }: {
   guest: ReservationSummary["guests"][number];
+  reservationStatus: ReservationSummary["status"];
+  eventTerminal: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   onCheckIn: () => void;
   onRevert: () => void;
   onRemove: () => void;
 }) {
+  const actionVisibility = getReservationGuestActionVisibility(reservationStatus, guest, eventTerminal);
+
   return (
     <div className="rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -402,7 +458,7 @@ function ReservationGuestRow({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {guest.canConfirm ? (
+          {actionVisibility.showConfirm ? (
             <button
               type="button"
               onClick={onConfirm}
@@ -412,7 +468,7 @@ function ReservationGuestRow({
             </button>
           ) : null}
 
-          {guest.canCheckIn ? (
+          {actionVisibility.showCheckIn ? (
             <button
               type="button"
               onClick={onCheckIn}
@@ -422,7 +478,7 @@ function ReservationGuestRow({
             </button>
           ) : null}
 
-          {guest.canRevert ? (
+          {actionVisibility.showRevert ? (
             <button
               type="button"
               onClick={onRevert}
@@ -432,7 +488,7 @@ function ReservationGuestRow({
             </button>
           ) : null}
 
-          {guest.canCancel ? (
+          {actionVisibility.showCancel ? (
             <button
               type="button"
               onClick={onCancel}
@@ -442,7 +498,7 @@ function ReservationGuestRow({
             </button>
           ) : null}
 
-          {guest.canRemove ? (
+          {actionVisibility.showRemove ? (
             <button
               type="button"
               onClick={onRemove}
@@ -452,6 +508,12 @@ function ReservationGuestRow({
             </button>
           ) : null}
         </div>
+
+        {actionVisibility.terminal ? (
+          <p className="mt-3 text-xs text-slate-500">
+            Reserva terminal: las acciones operativas quedan deshabilitadas y solo se conserva el historial.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

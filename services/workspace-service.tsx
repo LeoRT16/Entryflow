@@ -28,7 +28,18 @@ import type {
 } from "@/features/domain/types";
 import { mapEventToLegacyEvent } from "@/features/domain/compatibility";
 import { getAdmissionsForEvent, getAttendeesForEvent, getReservationsForEvent } from "@/features/domain/selectors";
-import { buildReservationSummaries, createReservationBundle, normalizeReservationStatus, updateReservationStatusFromGuests } from "@/features/reservations/domain/reservation-domain";
+import {
+  buildEventSelectionCandidate,
+  isTerminalEventStatus,
+  pickCurrentEventCandidate,
+} from "@/features/events/domain";
+import {
+  buildReservationSummaries,
+  createReservationBundle,
+  isTerminalReservationStatus,
+  normalizeReservationStatus,
+  updateReservationStatusFromGuests,
+} from "@/features/reservations/domain/reservation-domain";
 import type {
   ReservationCreationInput,
   ReservationGuestAction,
@@ -172,8 +183,8 @@ type WorkspaceServiceValue = {
     guest?: Guest;
     note: string;
   }>;
-  createReservation: (input: ReservationCreationInput) => Promise<ReservationRecord>;
-  updateReservation: (input: ReservationUpdateInput) => Promise<ReservationRecord>;
+  createReservation: (input: ReservationCreationInput) => Promise<ReservationRecord | undefined>;
+  updateReservation: (input: ReservationUpdateInput) => Promise<ReservationRecord | undefined>;
   createOrganization: (organization: Organization) => Promise<Organization>;
   addReservationGuest: (reservationId: string, guest: ReservationGuestInput) => void;
   appendReservationGuests: (reservationId: string, guests: ReservationGuestInput[]) => Promise<ReservationRecord | undefined>;
@@ -188,7 +199,7 @@ type WorkspaceServiceValue = {
   updateGuestWhatsApp: (guestId: string, whatsapp: string) => Promise<Guest>;
   releaseTable: (tableId: string) => void;
   closeTable: (tableId: string) => void;
-  createEvent: (event: PlatformEvent) => Promise<PlatformEvent>;
+  createEvent: (event: PlatformEvent) => Promise<PlatformEvent | undefined>;
   setEventStatus: (eventId: string, status: PlatformEvent["status"]) => void;
   setOrganizationsState: Dispatch<SetStateAction<Organization[]>>;
   setVenuesState: Dispatch<SetStateAction<Venue[]>>;
@@ -222,7 +233,9 @@ function getOrganizationSelection(organizations: Organization[], currentOrganiza
     };
 }
 
-function getEventSelection(events: PlatformEvent[], organizationId: string, currentEventId: string) {
+export function getEventSelection(events: PlatformEvent[], organizationId: string, currentEventId: string) {
+  // Preserve the hydrated selection first so the first post-refresh render does
+  // not re-key the workspace while the router is trying to navigate.
   const current = events.find((event) => event.id === currentEventId && (!organizationId || event.organizationId === organizationId))
     ?? events.find((event) => event.id === currentEventId)
     ?? events.find((event) => event.organizationId === organizationId && event.status === "live")
@@ -243,6 +256,107 @@ function getEventSelection(events: PlatformEvent[], organizationId: string, curr
     admissionMethods: [],
     resourceTypes: [],
   };
+}
+
+function readWorkspacePreference(key: string) {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return window.localStorage.getItem(key)?.trim() ?? "";
+}
+
+function hasAccessibleOrganization(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string) {
+  if (!initialWorkspace || !organizationId) {
+    return false;
+  }
+
+  return initialWorkspace.organizations.some((organization) => organization.id === organizationId)
+    && initialWorkspace.profiles.some((profile) => profile.organizationId === organizationId && !profile.deletedAt);
+}
+
+function hasAccessibleEvent(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string, eventId: string) {
+  if (!initialWorkspace || !organizationId || !eventId) {
+    return false;
+  }
+
+  return initialWorkspace.events.some((event) => event.id === eventId && event.organizationId === organizationId);
+}
+
+function hasAccessibleProfile(
+  initialWorkspace: WorkspaceBootstrap | null | undefined,
+  organizationId: string,
+  profileId: string,
+  currentUserId = "",
+) {
+  if (!initialWorkspace || !organizationId || !profileId) {
+    return false;
+  }
+
+  return initialWorkspace.profiles.some(
+    (profile) =>
+      profile.id === profileId &&
+      profile.organizationId === organizationId &&
+      !profile.deletedAt &&
+      (!currentUserId || profile.userId === currentUserId),
+  );
+}
+
+export function resolveInitialCurrentOrganizationId(initialWorkspace: WorkspaceBootstrap | null | undefined) {
+  const storedOrganizationId = readWorkspacePreference("entryflow.currentOrganizationId");
+
+  if (hasAccessibleOrganization(initialWorkspace, storedOrganizationId)) {
+    return storedOrganizationId;
+  }
+
+  if (hasAccessibleOrganization(initialWorkspace, initialWorkspace?.currentOrganizationId ?? "")) {
+    return initialWorkspace?.currentOrganizationId ?? "";
+  }
+
+  return initialWorkspace?.organizations.find((organization) => organization.status === "active")?.id
+    ?? initialWorkspace?.organizations[0]?.id
+    ?? "";
+}
+
+export function resolveInitialCurrentEventId(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string) {
+  const storedEventId = readWorkspacePreference("entryflow.currentEventId");
+
+  if (hasAccessibleEvent(initialWorkspace, organizationId, storedEventId)) {
+    return storedEventId;
+  }
+
+  if (hasAccessibleEvent(initialWorkspace, organizationId, initialWorkspace?.currentEventId ?? "")) {
+    return initialWorkspace?.currentEventId ?? "";
+  }
+
+  return initialWorkspace?.events.find((event) => event.organizationId === organizationId && event.status === "live")?.id
+    ?? initialWorkspace?.events.find((event) => event.organizationId === organizationId)?.id
+    ?? "";
+}
+
+export function resolveInitialCurrentProfileId(
+  initialWorkspace: WorkspaceBootstrap | null | undefined,
+  organizationId: string,
+  currentUserId = "",
+) {
+  const storedProfileId = readWorkspacePreference("entryflow.currentProfileId");
+
+  if (hasAccessibleProfile(initialWorkspace, organizationId, storedProfileId, currentUserId)) {
+    return storedProfileId;
+  }
+
+  if (hasAccessibleProfile(initialWorkspace, organizationId, initialWorkspace?.currentProfileId ?? "", currentUserId)) {
+    return initialWorkspace?.currentProfileId ?? "";
+  }
+
+  const userProfiles = (initialWorkspace?.profiles ?? []).filter(
+    (profile) => profile.organizationId === organizationId && !profile.deletedAt && (!currentUserId || profile.userId === currentUserId),
+  );
+
+  return userProfiles[0]?.id
+    ?? (initialWorkspace?.profiles ?? []).find((profile) => profile.organizationId === organizationId && !profile.deletedAt)?.id
+    ?? (initialWorkspace?.profiles ?? []).find((profile) => !profile.deletedAt)?.id
+    ?? "";
 }
 
 function getAccountSelection({
@@ -646,38 +760,15 @@ export function WorkspaceServiceProvider({
   const [attempts, setAttempts] = useState<CheckInAttempt[]>(initialWorkspace?.attempts ?? []);
   const [persistedTimelineEvents, setPersistedTimelineEvents] = useState<TimelineEvent[]>(initialWorkspace?.timelineEvents ?? []);
   const consumedAccessGrantIdsRef = useRef<Set<string>>(new Set());
+  const initialOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
   const [currentOrganizationId, setCurrentOrganizationIdState] = useState(() => {
-    if (initialWorkspace?.currentOrganizationId) {
-      return initialWorkspace.currentOrganizationId;
-    }
-
-    if (typeof window !== "undefined") {
-      return window.localStorage.getItem("entryflow.currentOrganizationId") ?? "";
-    }
-
-    return "";
+    return initialOrganizationId;
   });
   const [currentEventId, setCurrentEventIdState] = useState(() => {
-    if (initialWorkspace?.currentEventId) {
-      return initialWorkspace.currentEventId;
-    }
-
-    if (typeof window !== "undefined") {
-      return window.localStorage.getItem("entryflow.currentEventId") ?? "";
-    }
-
-    return "";
+    return resolveInitialCurrentEventId(initialWorkspace, initialOrganizationId);
   });
   const [currentProfileId, setCurrentProfileIdState] = useState(() => {
-    if (initialWorkspace?.currentProfileId) {
-      return initialWorkspace.currentProfileId;
-    }
-
-    if (typeof window !== "undefined") {
-      return window.localStorage.getItem("entryflow.currentProfileId") ?? "";
-    }
-
-    return "";
+    return resolveInitialCurrentProfileId(initialWorkspace, initialOrganizationId);
   });
   const initialCurrentUserId = initialWorkspace?.currentUserId ?? "";
   const [status, setStatus] = useState<WorkspaceServiceStatus>(
@@ -1122,8 +1213,8 @@ export function WorkspaceServiceProvider({
     [currentEventCheckIns, currentEventGuests, currentEventReservations],
   );
   const tableSummaries = useMemo(
-    () => buildTableSummaries(currentEventTables, currentEventReservations, currentEventGuests, currentEventCheckIns),
-    [currentEventCheckIns, currentEventGuests, currentEventReservations, currentEventTables],
+    () => buildTableSummaries(currentEventTables, currentEventReservations, currentEventGuests, currentEventCheckIns, currentEvent.id),
+    [currentEvent.id, currentEventCheckIns, currentEventGuests, currentEventReservations, currentEventTables],
   );
   const syntheticTimelineEvents = useMemo<TimelineEvent[]>(
     () => [
@@ -1253,8 +1344,21 @@ export function WorkspaceServiceProvider({
   const setCurrentOrganizationId = useCallback(
     (organizationId: string) => {
       setCurrentOrganizationIdState(organizationId);
-      const organizationEvents = events.filter((event) => event.organizationId === organizationId);
-      const nextEvent = organizationEvents.find((event) => event.status === "live") ?? organizationEvents[0];
+      const nextEventCandidate = pickCurrentEventCandidate(
+        events.map((event) =>
+          buildEventSelectionCandidate({
+            id: event.id,
+            organizationId: event.organizationId,
+            status: event.status,
+            startAt: event.startAt,
+          }),
+        ),
+        organizationId,
+        currentEventId,
+      );
+      const nextEvent = nextEventCandidate
+        ? events.find((event) => event.id === nextEventCandidate.id && event.organizationId === nextEventCandidate.organizationId)
+        : undefined;
       const organizationProfiles = profiles.filter((profile) => profile.organizationId === organizationId && profile.userId === (currentUser?.id ?? initialCurrentUserId) && !profile.deletedAt);
       const nextProfile =
         organizationProfiles.find((profile) => profile.id === currentProfileId)
@@ -1267,12 +1371,16 @@ export function WorkspaceServiceProvider({
         setCurrentEventIdState("");
       }
     },
-    [currentProfileId, currentUser?.id, events, initialCurrentUserId, profiles],
+    [currentEventId, currentProfileId, currentUser?.id, events, initialCurrentUserId, profiles],
   );
 
   const setCurrentEventId = useCallback((eventId: string) => {
-    setCurrentEventIdState(eventId);
-  }, []);
+    const nextEvent = events.find((event) => event.id === eventId && event.organizationId === currentOrganizationId);
+
+    if (nextEvent) {
+      setCurrentEventIdState(nextEvent.id);
+    }
+  }, [currentOrganizationId, events]);
 
   const setCurrentProfileId = useCallback(
     (profileId: string) => {
@@ -1528,6 +1636,18 @@ export function WorkspaceServiceProvider({
   const createEvent = useCallback(
     async (event: PlatformEvent) => {
       requirePermission(events.some((item) => item.id === event.id) ? "event.edit" : "event.create");
+      const existingEvent = events.find((item) => item.id === event.id);
+      if (existingEvent && isTerminalEventStatus(existingEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "Este evento ya está cerrado y no admite cambios operativos.",
+          tone: "warning",
+          icon: "alert",
+          href: "/events",
+        });
+        return undefined;
+      }
+
       const snapshot = captureSnapshot();
       try {
         setEvents((current) => (current.some((item) => item.id === event.id) ? current.map((item) => (item.id === event.id ? event : item)) : [event, ...current]));
@@ -1540,7 +1660,7 @@ export function WorkspaceServiceProvider({
         throw exception;
       }
     },
-    [captureSnapshot, events, persist, requirePermission, restoreSnapshot],
+    [captureSnapshot, events, notify, persist, requirePermission, restoreSnapshot],
   );
 
   const createOrganization = useCallback(
@@ -1670,9 +1790,21 @@ export function WorkspaceServiceProvider({
   const setEventStatus = useCallback(
     (eventId: string, status: PlatformEvent["status"]) => {
       requirePermission("event.edit");
-      const snapshot = captureSnapshot();
       const targetEvent = events.find((event) => event.id === eventId);
       if (!targetEvent) return;
+
+      if (isTerminalEventStatus(targetEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: `${targetEvent.name} ya está cerrado y no admite cambios operativos.`,
+          tone: "warning",
+          icon: "alert",
+          href: "/events",
+        });
+        return;
+      }
+
+      const snapshot = captureSnapshot();
       setEvents((current) => current.map((event) => (event.id === eventId ? { ...event, status } : event)));
       void repositories.events.setStatus(eventId, status).catch(() => restoreSnapshot(snapshot));
       notify({
@@ -1699,6 +1831,17 @@ export function WorkspaceServiceProvider({
   const createReservation = useCallback(
     async (input: ReservationCreationInput) => {
       requirePermission("reservation.create");
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés crear reservas sobre un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return undefined;
+      }
+
       const snapshot = captureSnapshot();
       try {
         const bundle = createReservationBundle(input);
@@ -1815,6 +1958,17 @@ export function WorkspaceServiceProvider({
   const updateReservation = useCallback(
     async (input: ReservationUpdateInput) => {
       requirePermission("reservation.edit");
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés modificar reservas sobre un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return undefined;
+      }
+
       const snapshot = captureSnapshot();
       const reservation = reservations.find((item) => item.id === input.reservationId);
 
@@ -1990,23 +2144,46 @@ export function WorkspaceServiceProvider({
   const appendReservationGuests = useCallback(
     async (reservationId: string, guestInputs: ReservationGuestInput[]) => {
       requirePermission("reservation.edit");
-      const snapshot = captureSnapshot();
-        const reservation = reservations.find((item) => item.id === reservationId);
+      const reservation = reservations.find((item) => item.id === reservationId);
 
       if (!reservation) {
         return undefined;
       }
 
-        try {
-          const reservationGuests = guests.filter((guest) => guest.reservationId === reservationId);
-          const nextGuests: Guest[] = [];
-          let nextGuestIds = [...reservation.guestIds];
-          let nextReservation = { ...reservation };
-          const totalGuestCount = reservationGuests.length + guestInputs.length;
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés agregar invitados a un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return undefined;
+      }
 
-          for (const [index, guestInput] of guestInputs.entries()) {
-            const guestIndex = reservationGuests.length + index + 1;
-            const guestId = createUuid();
+      if (isTerminalReservationStatus(reservation.status)) {
+        notify({
+          title: "Reserva cerrada",
+          description: "Esta reserva ya es histórica y no admite más invitados.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return undefined;
+      }
+
+      const snapshot = captureSnapshot();
+
+      try {
+        const reservationGuests = guests.filter((guest) => guest.reservationId === reservationId);
+        const nextGuests: Guest[] = [];
+        let nextGuestIds = [...reservation.guestIds];
+        let nextReservation = { ...reservation };
+        const totalGuestCount = reservationGuests.length + guestInputs.length;
+
+        for (const [index, guestInput] of guestInputs.entries()) {
+          const guestIndex = reservationGuests.length + index + 1;
+          const guestId = createUuid();
           const nextGuest: Guest = {
             id: guestId,
             guestName: guestInput.guestName,
@@ -2017,7 +2194,7 @@ export function WorkspaceServiceProvider({
             eventName: reservation.eventName,
             tableId: reservation.tableId,
             tableName: reservation.tableName,
-              eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
+            eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
             invitationSequence: `${guestIndex} de ${totalGuestCount}`,
             invitationCode: `${reservation.code}-${String(guestIndex).padStart(2, "0")}`,
             carnet: guestInput.carnet,
@@ -2087,9 +2264,30 @@ export function WorkspaceServiceProvider({
   const addReservationGuest = useCallback(
     (reservationId: string, guestInput: ReservationGuestInput) => {
       requirePermission("reservation.edit");
-      const snapshot = captureSnapshot();
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) return;
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés agregar invitados a un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return;
+      }
+      if (isTerminalReservationStatus(reservation.status)) {
+        notify({
+          title: "Reserva cerrada",
+          description: "Esta reserva ya es histórica y no admite más invitados.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return;
+      }
+
+      const snapshot = captureSnapshot();
       const reservationGuests = guests.filter((guest) => guest.reservationId === reservationId);
       const guestIndex = reservationGuests.length + 1;
       const guestId = createUuid();
@@ -2171,9 +2369,30 @@ export function WorkspaceServiceProvider({
       action: ReservationGuestAction;
     }) => {
       requirePermission("reservation.edit");
-      const snapshot = captureSnapshot();
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) return;
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés modificar invitados sobre un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return;
+      }
+      if (isTerminalReservationStatus(reservation.status)) {
+        notify({
+          title: "Reserva cerrada",
+          description: "Esta reserva ya es histórica y no admite cambios.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return;
+      }
+
+      const snapshot = captureSnapshot();
 
       const nextGuests: Guest[] =
         action === "remove"
@@ -2301,15 +2520,36 @@ export function WorkspaceServiceProvider({
         },
       });
     },
-    [captureSnapshot, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
+    [captureSnapshot, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
   );
 
   const setReservationStatus = useCallback(
     (reservationId: string, status: ReservationStatus) => {
       requirePermission("reservation.edit");
-      const snapshot = captureSnapshot();
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) return;
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés modificar reservas sobre un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return;
+      }
+      if (isTerminalReservationStatus(reservation.status)) {
+        notify({
+          title: "Reserva cerrada",
+          description: "Esta reserva ya es histórica y no admite cambios.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return;
+      }
+
+      const snapshot = captureSnapshot();
       const affectedGuests = guests.filter((guest) => guest.reservationId === reservationId);
       setReservations((current) =>
         current.map((item) =>
@@ -2422,16 +2662,37 @@ export function WorkspaceServiceProvider({
         undo: status === "Cancelled" || status === "No Show" ? { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } : undefined,
       });
     },
-    [captureSnapshot, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
+    [captureSnapshot, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
   );
 
   const assignReservationToTable = useCallback(
     (reservationId: string, tableId: string) => {
       requirePermission("resource.assign");
-      const snapshot = captureSnapshot();
       const reservation = reservations.find((item) => item.id === reservationId);
       const table = tables.find((item) => item.id === tableId);
       if (!reservation || !table) return;
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés reasignar mesas sobre un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/tables",
+        });
+        return;
+      }
+      if (isTerminalReservationStatus(reservation.status)) {
+        notify({
+          title: "Reserva cerrada",
+          description: "Esta reserva ya es histórica y no admite reasignación de mesa.",
+          tone: "warning",
+          icon: "alert",
+          href: "/tables",
+        });
+        return;
+      }
+
+      const snapshot = captureSnapshot();
       const selectedEventLayoutResource = resolveCurrentEventLayoutResource({
         currentEventLayout,
         resourceId: table.id,
@@ -2464,16 +2725,38 @@ export function WorkspaceServiceProvider({
       void repositories.tables.update(tableId, { status: "Reserved", closed: false } as never).catch(() => restoreSnapshot(snapshot));
       notify({ title: "Mesa asignada", description: `${table.name} quedó vinculada a la reserva.`, tone: "info", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
     },
-    [captureSnapshot, currentEventLayout, eventLayoutResources, notify, repositories.reservations, repositories.tables, requirePermission, reservations, restoreSnapshot, tables, venueLayoutResources],
+    [captureSnapshot, currentEvent.status, currentEventLayout, eventLayoutResources, notify, repositories.reservations, repositories.tables, requirePermission, reservations, restoreSnapshot, tables, venueLayoutResources],
   );
 
   const moveGuestToTable = useCallback(
     (guestId: string, tableId: string) => {
       requirePermission("resource.assign");
-      const snapshot = captureSnapshot();
       const table = tables.find((item) => item.id === tableId);
       const guest = guests.find((item) => item.id === guestId);
       if (!table || !guest) return;
+      const reservation = reservations.find((item) => item.id === guest.reservationId);
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés mover invitados sobre un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/tables",
+        });
+        return;
+      }
+      if (reservation && isTerminalReservationStatus(reservation.status)) {
+        notify({
+          title: "Reserva cerrada",
+          description: "Este invitado pertenece a una reserva histórica y no admite cambios.",
+          tone: "warning",
+          icon: "alert",
+          href: "/tables",
+        });
+        return;
+      }
+
+      const snapshot = captureSnapshot();
       setGuests((current) => current.map((item) => (item.id === guestId ? { ...item, tableId: table.id, tableName: table.name } : item)));
       setReservations((current) =>
         current.map((reservation) =>
@@ -2485,15 +2768,37 @@ export function WorkspaceServiceProvider({
       void repositories.guests.moveToTable(guestId, tableId).catch(() => restoreSnapshot(snapshot));
       notify({ title: "Mesa cambiada", description: `${guest.guestName} pasó a ${table.name}.`, tone: "warning", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
     },
-    [captureSnapshot, guests, notify, repositories.guests, requirePermission, restoreSnapshot, tables],
+    [captureSnapshot, currentEvent.status, guests, notify, repositories.guests, requirePermission, reservations, restoreSnapshot, tables],
   );
 
   const releaseTable = useCallback(
     (tableId: string) => {
       requirePermission("resource.manage");
-      const snapshot = captureSnapshot();
       const table = tables.find((item) => item.id === tableId);
       if (!table) return;
+      const affectedReservations = reservations.filter((reservation) => reservation.tableId === tableId || reservation.resourceId === tableId);
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés liberar mesas de un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/tables",
+        });
+        return;
+      }
+      if (affectedReservations.some((reservation) => isTerminalReservationStatus(reservation.status))) {
+        notify({
+          title: "Reserva cerrada",
+          description: "La mesa sigue vinculada a una reserva histórica y no se puede liberar sin afectar el historial.",
+          tone: "warning",
+          icon: "alert",
+          href: "/tables",
+        });
+        return;
+      }
+
+      const snapshot = captureSnapshot();
       setTables((current) => current.map((item) => (item.id === tableId ? { ...item, status: "Available", closed: false } : item)));
       setReservations((current) =>
         current.map((reservation) =>
@@ -2506,15 +2811,37 @@ export function WorkspaceServiceProvider({
       void repositories.tables.release(tableId).catch(() => restoreSnapshot(snapshot));
       notify({ title: "Mesa liberada", description: `${table.name} quedó disponible nuevamente.`, tone: "warning", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
     },
-    [captureSnapshot, notify, repositories.tables, requirePermission, restoreSnapshot, tables],
+    [captureSnapshot, currentEvent.status, notify, repositories.tables, requirePermission, reservations, restoreSnapshot, tables],
   );
 
   const closeTable = useCallback(
     (tableId: string) => {
       requirePermission("resource.manage");
-      const snapshot = captureSnapshot();
       const table = tables.find((item) => item.id === tableId);
       if (!table) return;
+      const affectedReservations = reservations.filter((reservation) => reservation.tableId === tableId || reservation.resourceId === tableId);
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés cerrar mesas de un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/tables",
+        });
+        return;
+      }
+      if (affectedReservations.some((reservation) => isTerminalReservationStatus(reservation.status))) {
+        notify({
+          title: "Reserva cerrada",
+          description: "La mesa sigue vinculada a una reserva histórica y no se puede cerrar sin afectar el historial.",
+          tone: "warning",
+          icon: "alert",
+          href: "/tables",
+        });
+        return;
+      }
+
+      const snapshot = captureSnapshot();
       setTables((current) => current.map((item) => (item.id === tableId ? { ...item, status: "Closed", closed: true } : item)));
       setReservations((current) =>
         current.map((reservation) =>
@@ -2526,12 +2853,27 @@ export function WorkspaceServiceProvider({
       void repositories.tables.close(tableId).catch(() => restoreSnapshot(snapshot));
       notify({ title: "Mesa cerrada", description: `${table.name} quedó fuera de servicio temporalmente.`, tone: "danger", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
     },
-    [captureSnapshot, notify, repositories.tables, requirePermission, restoreSnapshot, tables],
+    [captureSnapshot, currentEvent.status, notify, repositories.tables, requirePermission, reservations, restoreSnapshot, tables],
   );
 
   const registerCheckIn = useCallback(
     async ({ query, method, operator = method === "Manual" ? "Recepción" : "Escáner" }: { query: string; method: CheckInMethod; operator?: string; manual?: boolean }) => {
       requirePermission("checkin.perform");
+      if (isTerminalEventStatus(currentEvent.status)) {
+        const note = "Este evento está cerrado y no admite nuevos ingresos.";
+        notify({
+          title: "Evento cerrado",
+          description: note,
+          tone: "warning",
+          icon: "alert",
+          href: "/check-in",
+        });
+        return {
+          result: "Bloqueado" as const,
+          note,
+        };
+      }
+
       if (checkInSubmissionInFlightRef.current) {
         return {
           result: "Bloqueado" as const,

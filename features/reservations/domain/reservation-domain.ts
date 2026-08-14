@@ -80,6 +80,15 @@ export function formatReservationStatus(status: ReservationStatus | string) {
   return "No asistió";
 }
 
+export function isTerminalReservationStatus(status: ReservationStatus | string) {
+  const normalized = normalizeReservationStatus(status);
+  return normalized === "Cancelled" || normalized === "No Show" || normalized === "Completed";
+}
+
+export function isReservationOperational(status: ReservationStatus | string) {
+  return !isTerminalReservationStatus(status);
+}
+
 export function getReservationStatusTone(status: ReservationStatus | string) {
   return reservationToneForStatus(normalizeReservationStatus(status));
 }
@@ -206,7 +215,7 @@ function getGuestReservationSummary(guest: Guest): ReservationGuestSummary {
   };
 }
 
-function inferReservationStatus(guests: Guest[], baseStatus?: ReservationStatus) {
+function inferReservationStatus(guests: Guest[], baseStatus?: ReservationStatus): ReservationStatus {
   if (!guests.length) {
     return baseStatus ?? "Draft";
   }
@@ -215,7 +224,7 @@ function inferReservationStatus(guests: Guest[], baseStatus?: ReservationStatus)
   const cancelled = guests.filter((guest) => normalizeReservationStatus(guest.reservationStatus) === "Cancelled" || guest.admissionStatus === "Anulada").length;
   const pending = guests.filter((guest) => guest.admissionStatus === "Pendiente").length;
 
-  if (baseStatus === "Cancelled" || baseStatus === "No Show" || baseStatus === "Completed") {
+  if (baseStatus && isTerminalReservationStatus(baseStatus)) {
     return baseStatus;
   }
 

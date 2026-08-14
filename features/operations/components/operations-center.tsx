@@ -3,9 +3,11 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import StatusBadge from "@/components/status-badge";
+import TerminalEventBanner from "@/components/terminal-event-banner";
 import Topbar from "@/components/topbar";
 import { ContextualCard, GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
 import LiveSummaryRow from "@/features/reservations/components/live-summary-row";
+import { isTerminalEventStatus } from "@/features/events/domain";
 import { useCheckInStore } from "@/services/workspace-service";
 import TimelineFeed from "@/features/timeline/components/timeline-feed";
 
@@ -21,10 +23,15 @@ function accentTone(tone: "success" | "warning" | "danger" | "info") {
 
 export default function OperationsCenter() {
   const router = useRouter();
-  const { workspaceIntelligence, workspacePriority } = useCheckInStore();
+  const { currentEvent, workspaceIntelligence, workspacePriority } = useCheckInStore();
   const snapshot = workspaceIntelligence.operations;
   const priority = workspacePriority;
+  const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
   const guidedActions = useMemo(() => {
+    if (isTerminalEvent) {
+      return [];
+    }
+
     const candidates = [
       ...priority.criticalItems,
       ...priority.attentionNow,
@@ -58,7 +65,7 @@ export default function OperationsCenter() {
                   : "Sostiene la estabilidad del evento.",
         }),
       );
-  }, [priority]);
+  }, [isTerminalEvent, priority]);
 
   return (
     <div className="space-y-6">
@@ -69,6 +76,10 @@ export default function OperationsCenter() {
         primaryAction={{ label: "Ir a reservas", href: "/reservations" }}
         secondaryAction={{ label: "Abrir check-in", href: "/check-in" }}
       />
+
+      {isTerminalEvent ? (
+        <TerminalEventBanner description="El evento está cerrado. Las métricas siguen visibles, pero las acciones guiadas cambian a navegación e historial de solo lectura." />
+      ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
         {snapshot.metrics.map((metric) => (
@@ -86,7 +97,11 @@ export default function OperationsCenter() {
         <div className={`rounded-3xl border p-5 ${accentTone(priority.summary.critical > 0 ? "danger" : priority.summary.attention > 0 ? "warning" : "success")}`}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Lectura operativa</p>
           <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">{priority.summary.message}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-300">{priority.summary.nextBestAction}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {isTerminalEvent
+              ? "El evento está cerrado. Esta vista queda para revisar historial, alertas y navegación de solo lectura."
+              : priority.summary.nextBestAction}
+          </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Críticos</p>
@@ -99,11 +114,15 @@ export default function OperationsCenter() {
           </div>
         </div>
 
-        <GuidedActionPanel
-          title="Siguiente paso"
-          description="Acciones contextualizadas para resolver primero lo que impacta la operación."
-          items={guidedActions}
-        />
+        {isTerminalEvent ? (
+          <TerminalEventBanner description="No hay acciones operativas ejecutables para un evento cerrado. Usá las rutas de navegación para revisar el historial." />
+        ) : (
+          <GuidedActionPanel
+            title="Siguiente paso"
+            description="Acciones contextualizadas para resolver primero lo que impacta la operación."
+            items={guidedActions}
+          />
+        )}
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Prioridad operativa</p>

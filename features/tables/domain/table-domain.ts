@@ -57,8 +57,12 @@ export function formatTableStatus(status: TableStatus | string) {
   return "Cerrada";
 }
 
-function getTableReservations(table: TableRecord, reservations: ReservationRecord[]) {
+function getTableReservations(table: TableRecord, reservations: ReservationRecord[], currentEventId?: string) {
   return reservations.filter((reservation) => {
+    if (currentEventId && reservation.eventId !== currentEventId) {
+      return false;
+    }
+
     if (table.eventLayoutResourceId && reservation.eventLayoutResourceId === table.eventLayoutResourceId) {
       return true;
     }
@@ -71,8 +75,8 @@ function getTableReservations(table: TableRecord, reservations: ReservationRecor
   });
 }
 
-function getActiveTableReservations(table: TableRecord, reservations: ReservationRecord[]) {
-  return getTableReservations(table, reservations).filter(isActiveReservation);
+function getActiveTableReservations(table: TableRecord, reservations: ReservationRecord[], currentEventId?: string) {
+  return getTableReservations(table, reservations, currentEventId).filter(isActiveReservation);
 }
 
 function sortReservationsByRecency(a: ReservationRecord, b: ReservationRecord) {
@@ -87,21 +91,21 @@ function sortReservationsByRecency(a: ReservationRecord, b: ReservationRecord) {
   return a.id.localeCompare(b.id);
 }
 
-function getPrimaryTableReservation(table: TableRecord, reservations: ReservationRecord[]) {
-  return [...getActiveTableReservations(table, reservations)].sort(sortReservationsByRecency)[0] ?? null;
+function getPrimaryTableReservation(table: TableRecord, reservations: ReservationRecord[], currentEventId?: string) {
+  return [...getActiveTableReservations(table, reservations, currentEventId)].sort(sortReservationsByRecency)[0] ?? null;
 }
 
-export function getPrimaryActiveTableReservation(table: TableRecord, reservations: ReservationRecord[]) {
-  return getPrimaryTableReservation(table, reservations);
+export function getPrimaryActiveTableReservation(table: TableRecord, reservations: ReservationRecord[], currentEventId?: string) {
+  return getPrimaryTableReservation(table, reservations, currentEventId);
 }
 
 function dedupeGuestsById(guests: Guest[]) {
   return Array.from(new Map(guests.map((guest) => [guest.id, guest])).values());
 }
 
-function getTableGuests(table: TableRecord, reservations: ReservationRecord[], guests: Guest[]) {
-  const activeReservations = getActiveTableReservations(table, reservations);
-  const primaryReservation = getPrimaryTableReservation(table, reservations);
+function getTableGuests(table: TableRecord, reservations: ReservationRecord[], guests: Guest[], currentEventId?: string) {
+  const activeReservations = getActiveTableReservations(table, reservations, currentEventId);
+  const primaryReservation = getPrimaryTableReservation(table, reservations, currentEventId);
 
   if (!primaryReservation) {
     return [];
@@ -124,11 +128,7 @@ function getTableGuests(table: TableRecord, reservations: ReservationRecord[], g
   return [];
 }
 
-function deriveTableStatus(
-  table: TableRecord,
-  reservations: ReservationRecord[],
-  guests: Guest[],
-) {
+function deriveTableStatus(table: TableRecord, reservations: ReservationRecord[], guests: Guest[], currentEventId?: string) {
   if (table.closed) {
     return "Closed" as const;
   }
@@ -137,8 +137,8 @@ function deriveTableStatus(
     return "Blocked" as const;
   }
 
-  const tableReservations = getActiveTableReservations(table, reservations);
-  const tableGuests = getTableGuests(table, reservations, guests);
+  const tableReservations = getActiveTableReservations(table, reservations, currentEventId);
+  const tableGuests = getTableGuests(table, reservations, guests, currentEventId);
   const assignedGuests = tableGuests.length;
 
   if (!tableReservations.length && !assignedGuests) {
@@ -169,9 +169,10 @@ export function buildTableMetrics(
   reservations: ReservationRecord[],
   guests: Guest[],
   checkIns: CheckIn[],
+  currentEventId?: string,
 ): TableMetrics {
-  const tableReservations = getActiveTableReservations(table, reservations);
-  const tableGuests = getTableGuests(table, reservations, guests);
+  const tableReservations = getActiveTableReservations(table, reservations, currentEventId);
+  const tableGuests = getTableGuests(table, reservations, guests, currentEventId);
   const assignedGuests = tableGuests.length;
   const checkedInGuests = tableGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
   const pendingGuests = tableGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
@@ -198,11 +199,12 @@ export function buildTableSummary(
   reservations: ReservationRecord[],
   guests: Guest[],
   checkIns: CheckIn[],
+  currentEventId?: string,
 ): TableSummary {
-  const tableReservations = getTableReservations(table, reservations);
-  const tableGuests = getTableGuests(table, reservations, guests);
-  const status = deriveTableStatus(table, reservations, guests);
-  const metrics = buildTableMetrics(table, reservations, guests, checkIns);
+  const tableReservations = getTableReservations(table, reservations, currentEventId);
+  const tableGuests = getTableGuests(table, reservations, guests, currentEventId);
+  const status = deriveTableStatus(table, reservations, guests, currentEventId);
+  const metrics = buildTableMetrics(table, reservations, guests, checkIns, currentEventId);
 
   return {
     id: table.id,
@@ -240,6 +242,7 @@ export function buildTableSummaries(
   reservations: ReservationRecord[],
   guests: Guest[],
   checkIns: CheckIn[],
+  currentEventId?: string,
 ) {
-  return tables.map((table) => buildTableSummary(table, reservations, guests, checkIns));
+  return tables.map((table) => buildTableSummary(table, reservations, guests, checkIns, currentEventId));
 }

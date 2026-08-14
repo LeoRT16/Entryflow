@@ -9,7 +9,7 @@ import { useCheckInStore } from "@/services/workspace-service";
 import { buildGuestSearchIndex, normalizeCheckInText } from "@/features/check-in/utils";
 import { formatReservationStatus } from "@/features/reservations/domain/reservation-domain";
 import { formatTableStatus } from "@/features/tables/domain/table-domain";
-import { getEventTypeLabel } from "@/features/events/domain";
+import { getEventTypeLabel, isTerminalEventStatus } from "@/features/events/domain";
 import type { AccountPermissionKey } from "@/features/accounts/types";
 
 type PaletteSection =
@@ -121,6 +121,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const normalizedQuery = normalizeCheckInText(query);
+  const terminalEvent = isTerminalEventStatus(currentEvent.status);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -133,81 +134,85 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const criticalActions = useMemo(
     () =>
-      workspacePriority.criticalItems.slice(0, 5).map((item, index) => {
-        const guided = buildGuidedActionItem(item, {
-          href: item.route,
-          impact: item.description,
-        });
+      terminalEvent
+        ? []
+        : workspacePriority.criticalItems.slice(0, 5).map((item, index) => {
+            const guided = buildGuidedActionItem(item, {
+              href: item.route,
+              impact: item.description,
+            });
 
-        return {
-          id: `critical-${item.id}`,
-          section: "Acciones críticas" as const,
-          title: guided.label,
-          description: `${guided.reason} · ${guided.impact}`,
-          badge: item.module,
-          shortcut: item.route,
-          icon: iconForSection("Acciones críticas"),
-          searchText: normalizeCheckInText(
-            [
-              item.title,
-              item.description,
-              item.module,
-              item.category,
-              item.route,
-              guided.label,
-            ].join(" "),
-          ),
-          order: index,
-          onSelect: () => {
-            router.push(item.route);
-            onClose();
-          },
-        };
-      }),
-    [onClose, router, workspacePriority.criticalItems],
+            return {
+              id: `critical-${item.id}`,
+              section: "Acciones críticas" as const,
+              title: guided.label,
+              description: `${guided.reason} · ${guided.impact}`,
+              badge: item.module,
+              shortcut: item.route,
+              icon: iconForSection("Acciones críticas"),
+              searchText: normalizeCheckInText(
+                [
+                  item.title,
+                  item.description,
+                  item.module,
+                  item.category,
+                  item.route,
+                  guided.label,
+                ].join(" "),
+              ),
+              order: index,
+              onSelect: () => {
+                router.push(item.route);
+                onClose();
+              },
+            };
+          }),
+    [onClose, router, terminalEvent, workspacePriority.criticalItems],
   );
 
   const guidedActions = useMemo(
     () =>
-      workspacePriority.nextBestActions.slice(0, 5).map((item, index) => {
-        const guided = buildGuidedActionItem(item, {
-          href: item.route,
-          impact: item.description,
-        });
+      terminalEvent
+        ? []
+        : workspacePriority.nextBestActions.slice(0, 5).map((item, index) => {
+            const guided = buildGuidedActionItem(item, {
+              href: item.route,
+              impact: item.description,
+            });
 
-        return {
-          id: `guided-${item.id}`,
-          section: "Acciones guiadas" as const,
-          title: guided.label,
-          description: `${guided.reason} · ${guided.impact}`,
-          badge: item.module,
-          shortcut: item.route,
-          icon: iconForSection("Acciones guiadas"),
-          searchText: normalizeCheckInText(
-            [
-              guided.label,
-              guided.reason,
-              guided.impact,
-              item.title,
-              item.description,
-              item.module,
-              item.route,
-            ].join(" "),
-          ),
-          order: index,
-          onSelect: () => {
-            if (guided.href) {
-              router.push(guided.href);
-            } else if (guided.onSelect) {
-              guided.onSelect();
-            } else {
-              router.push(item.route);
-            }
-            onClose();
-          },
-        };
-      }),
-    [onClose, router, workspacePriority.nextBestActions],
+            return {
+              id: `guided-${item.id}`,
+              section: "Acciones guiadas" as const,
+              title: guided.label,
+              description: `${guided.reason} · ${guided.impact}`,
+              badge: item.module,
+              shortcut: item.route,
+              icon: iconForSection("Acciones guiadas"),
+              searchText: normalizeCheckInText(
+                [
+                  guided.label,
+                  guided.reason,
+                  guided.impact,
+                  item.title,
+                  item.description,
+                  item.module,
+                  item.route,
+                ].join(" "),
+              ),
+              order: index,
+              onSelect: () => {
+                if (guided.href) {
+                  router.push(guided.href);
+                } else if (guided.onSelect) {
+                  guided.onSelect();
+                } else {
+                  router.push(item.route);
+                }
+                onClose();
+              },
+            };
+          }),
+    [onClose, router, terminalEvent, workspacePriority.nextBestActions],
   );
 
   const workspaceActions = useMemo(() => {

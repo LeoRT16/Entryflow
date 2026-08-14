@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
-import { useCheckInStore } from "@/services/workspace-service";
+import { hasPermission } from "@/features/accounts/domain/accounts-domain";
+import type { OrganizationAccount } from "@/features/accounts/types";
 import { getEventTypeLabel } from "@/features/events/domain";
 import type { EventType } from "@/features/domain/types";
+import { useCheckInStore } from "@/services/workspace-service";
 
 function formatEventStatusLabel(status: string) {
   if (status === "live") return "En curso";
@@ -19,7 +21,68 @@ function matchesQuery(value: string, query: string) {
   return value.toLowerCase().includes(query.toLowerCase());
 }
 
-export default function EventSwitcher() {
+export function canSwitchEventContext(account: Pick<OrganizationAccount, "permissions" | "rolePermissions">) {
+  return hasPermission(account, "event.view");
+}
+
+export type EventSwitcherSection = {
+  title: string;
+  events: Array<{
+    id: string;
+    name: string;
+    eventType: EventType;
+    status: string;
+    venue: string;
+    startAt: string;
+  }>;
+};
+
+export function buildEventSwitcherSections(
+  events: Array<{
+    id: string;
+    organizationId: string;
+    name: string;
+    eventType: EventType;
+    status: string;
+    venue: string;
+    startAt: string;
+  }>,
+  currentOrganizationId: string,
+  query = "",
+): EventSwitcherSection[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  const scopedEvents = events.filter((event) => event.organizationId === currentOrganizationId);
+  const filteredEvents = scopedEvents.filter((event) => {
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    return [
+      event.name,
+      event.venue,
+      event.startAt,
+      getEventTypeLabel(event.eventType),
+      formatEventStatusLabel(event.status),
+    ].some((field) => matchesQuery(field, normalizedQuery));
+  });
+
+  return [
+    {
+      title: "Eventos en curso",
+      events: filteredEvents.filter((event) => event.status === "live"),
+    },
+    {
+      title: "Próximos eventos",
+      events: filteredEvents.filter((event) => event.status === "published" || event.status === "draft"),
+    },
+    {
+      title: "Historial",
+      events: filteredEvents.filter((event) => event.status === "finished" || event.status === "cancelled"),
+    },
+  ].filter((section) => section.events.length > 0 || normalizedQuery.length > 0);
+}
+
+export default function EventSwitcher({ compact = false }: { compact?: boolean } = {}) {
   const { currentOrganization, currentEvent, events, setCurrentEventId } = useCheckInStore();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -56,44 +119,36 @@ export default function EventSwitcher() {
     };
   }, [open]);
 
-  const visibleEvents = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const scopedEvents = events.filter((event) => event.organizationId === currentOrganization.id);
+  const sections = useMemo(
+    () => buildEventSwitcherSections(events, currentOrganization.id, query),
+    [currentOrganization.id, events, query],
+  );
 
-    return scopedEvents.filter((event) => {
-      if (!normalizedQuery) {
-        return event.status === "live" || event.status === "published" || event.status === "draft";
-      }
-
-      return [
-        event.name,
-        event.venue,
-        event.startAt,
-        getEventTypeLabel(event.eventType),
-        formatEventStatusLabel(event.status),
-      ].some((field) => matchesQuery(field, normalizedQuery));
-    });
-  }, [currentOrganization.id, events, query]);
-
-  const activeEvents = visibleEvents.filter((event) => event.status === "live");
-  const upcomingEvents = visibleEvents.filter((event) => event.status === "published" || event.status === "draft");
+  const buttonClasses = compact
+    ? "w-full px-4 py-3"
+    : "min-w-[14rem] max-w-[20rem] px-4 py-3";
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex min-w-[14rem] max-w-[20rem] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left transition hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+        className={[
+          "inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+          buttonClasses,
+        ].join(" ")}
         aria-expanded={open}
         aria-haspopup="dialog"
       >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-100">
-          {currentOrganization.name.slice(0, 2)}
-        </span>
+        {!compact ? (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-100">
+            {currentOrganization.name.slice(0, 2)}
+          </span>
+        ) : null}
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500">
-            {currentOrganization.name}
+          <span className="block truncate text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+            {compact ? "Evento activo" : currentOrganization.name}
           </span>
           <span className="mt-1 block truncate text-sm font-medium text-white">
             {currentEvent.name}
@@ -106,7 +161,12 @@ export default function EventSwitcher() {
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[min(90vw,34rem)] overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#08111f] shadow-[0_30px_100px_rgba(0,0,0,0.5)]">
+        <div
+          className={[
+            "absolute top-[calc(100%+0.75rem)] z-50 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#08111f] shadow-[0_30px_100px_rgba(0,0,0,0.5)]",
+            compact ? "left-0 right-0" : "right-0 w-[min(90vw,34rem)]",
+          ].join(" ")}
+        >
           <div className="border-b border-white/10 p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
               Cambiar evento
@@ -129,24 +189,18 @@ export default function EventSwitcher() {
           </div>
 
           <div className="max-h-[min(60vh,32rem)] space-y-4 overflow-y-auto p-4">
-            <EventSection
-              title="Eventos activos"
-              events={activeEvents}
-              currentEventId={currentEvent.id}
-              onSelect={(eventId) => {
-                setCurrentEventId(eventId);
-                setOpen(false);
-              }}
-            />
-            <EventSection
-              title="Próximos eventos"
-              events={upcomingEvents}
-              currentEventId={currentEvent.id}
-              onSelect={(eventId) => {
-                setCurrentEventId(eventId);
-                setOpen(false);
-              }}
-            />
+            {sections.map((section) => (
+              <EventSection
+                key={section.title}
+                title={section.title}
+                events={section.events}
+                currentEventId={currentEvent.id}
+                onSelect={(eventId) => {
+                  setCurrentEventId(eventId);
+                  setOpen(false);
+                }}
+              />
+            ))}
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-white/10 p-4">
@@ -193,7 +247,7 @@ function EventSection({
   if (!events.length) {
     return (
       <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-slate-500">
-        {title === "Eventos activos" ? "No hay eventos activos disponibles." : "No hay próximos eventos."}
+        {title === "Eventos en curso" ? "No hay eventos en curso disponibles." : title === "Próximos eventos" ? "No hay próximos eventos." : "No hay eventos históricos."}
       </div>
     );
   }
