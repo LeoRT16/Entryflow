@@ -116,7 +116,7 @@ export const ACCOUNT_ROLE_PRESETS: AccountRolePreset[] = [
     id: "preset-owner",
     slug: "owner",
     name: "Owner",
-    description: "Acceso total y protecciones especiales para la propiedad de la organización.",
+    description: "Control total de la organización. El último Owner activo queda protegido.",
     permissions: ACCOUNT_PERMISSION_GROUPS.flatMap((group) => group.permissions.map((permission) => permission.key)),
     metadata: { isOwner: true },
   },
@@ -124,7 +124,7 @@ export const ACCOUNT_ROLE_PRESETS: AccountRolePreset[] = [
     id: "preset-administrator",
     slug: "administrator",
     name: "Administrador",
-    description: "Preset amplio para operación y configuración.",
+    description: "Acceso administrativo amplio sin gestión de permisos de nivel propietario.",
     permissions: ACCOUNT_PERMISSION_GROUPS.flatMap((group) =>
       group.permissions
         .map((permission) => permission.key)
@@ -135,7 +135,7 @@ export const ACCOUNT_ROLE_PRESETS: AccountRolePreset[] = [
     id: "preset-reception",
     slug: "reception",
     name: "Recepción",
-    description: "Preset orientado a atención, reservas e ingreso.",
+    description: "Operación de recepción, reservas e ingreso.",
     permissions: [
       "reservation.view",
       "reservation.create",
@@ -158,7 +158,7 @@ export const ACCOUNT_ROLE_PRESETS: AccountRolePreset[] = [
     id: "preset-door",
     slug: "door",
     name: "Puerta",
-    description: "Preset reducido para validar ingresos en puerta.",
+    description: "Operación centrada en admisión y check-in.",
     permissions: [
       "reservation.view",
       "guest.view",

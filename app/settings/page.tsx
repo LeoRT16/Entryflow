@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import AccountsSettingsCard from "@/features/accounts/components/accounts-settings-card";
 import { getEventTypeLabel } from "@/features/events/domain";
 import { useFeedback } from "@/components/premium-feedback";
 import PermissionGuard from "@/components/permission-guard";
@@ -64,10 +63,15 @@ function ReadOnlyField({
 }
 
 export default function SettingsPage() {
-  const { status, error, organizations, events, can } = useCheckInStore();
+  const { status, error, organizations, events, accounts, currentOrganization, can } = useCheckInStore();
   const canManageOrganization = can("organization.manage");
   const canManageEvent = can("event.edit");
   const canManageVenue = can("venue.manage");
+  const organizationMembers = useMemo(
+    () => accounts.filter((account) => account.organizationId === currentOrganization.id && account.id !== "bootstrap-account"),
+    [accounts, currentOrganization.id],
+  );
+  const activeMembers = organizationMembers.filter((account) => account.status === "active").length;
 
   if (status === "loading") {
     return <PanelShell title="Cargando ajustes" description="Estamos preparando la configuración de la organización activa." />;
@@ -100,7 +104,7 @@ export default function SettingsPage() {
         title="Configuración operativa"
         description="La configuración vive en cuatro bloques: Organización, Evento activo, Venue y Cuentas."
         primaryAction={{ label: "Ir al dashboard", href: "/" }}
-        secondaryAction={{ label: "Biblioteca de eventos", href: "/events" }}
+        secondaryAction={{ label: "Equipo", href: "/users" }}
       />
 
       <PermissionGuard permission="settings.view">
@@ -111,7 +115,11 @@ export default function SettingsPage() {
 
         <VenueSettingsCard canManage={canManageVenue} />
 
-        <AccountsSettingsCard />
+        <MembersHandoffCard
+          memberCount={organizationMembers.length}
+          activeMemberCount={activeMembers}
+          organizationName={currentOrganization.name}
+        />
       </PermissionGuard>
     </div>
   );
@@ -651,6 +659,49 @@ function VenueSettingsCard({ canManage }: { canManage: boolean }) {
             ) : null}
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function MembersHandoffCard({
+  memberCount,
+  activeMemberCount,
+  organizationName,
+}: {
+  memberCount: number;
+  activeMemberCount: number;
+  organizationName: string;
+}) {
+  return (
+    <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Cuentas</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Miembros de la organización</h2>
+          <p className="mt-2 max-w-3xl text-sm text-slate-400">
+            La administración de miembros vive en la superficie canónica de usuarios. Esta vista solo muestra un resumen del espacio activo.
+          </p>
+        </div>
+        <StatusBadge variant="info">{memberCount} miembros</StatusBadge>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        <ReadOnlyField label="Organización" value={organizationName} hint="Alcance del workspace activo." />
+        <ReadOnlyField label="Miembros activos" value={String(activeMemberCount)} hint="Miembros con estado activo." />
+        <ReadOnlyField label="Miembros totales" value={String(memberCount)} hint="Solo miembros visibles de la organización." />
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+          <Link
+            href="/users"
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+          >
+          Abrir equipo
+          </Link>
+        <p className="text-sm text-slate-400">
+          Roles fijos, permisos efectivos y protección del último Owner quedan centralizados allí.
+        </p>
       </div>
     </section>
   );

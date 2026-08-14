@@ -28,6 +28,8 @@ import type { CheckInRow, EventRow, GuestRow, OrganizationRow, ProfileRow, Resou
 import { createEmptyWorkspaceLayouts, loadWorkspaceLayouts, type WorkspaceLayoutCollections } from "@/services/workspace-layouts";
 
 export type WorkspaceBootstrap = {
+  authState: WorkspaceAuthState;
+  currentUserId: string;
   users: AccountUser[];
   profiles: OrganizationMembership[];
   roles: AccountRolePreset[];
@@ -52,6 +54,41 @@ export type WorkspaceBootstrap = {
   currentEventId: string;
   currentProfileId: string;
 };
+
+export type WorkspaceAuthState =
+  | {
+      status: "signed-out";
+    }
+  | {
+      status: "ready";
+      authUserId: string;
+      authUserEmail: string | null;
+      publicUserId: string;
+      organizationIds: string[];
+    }
+  | {
+      status: "must-change-password";
+      authUserId: string;
+      authUserEmail: string | null;
+      publicUserId: string;
+    }
+  | {
+      status: "unlinked";
+      authUserId: string;
+      authUserEmail: string | null;
+    }
+  | {
+      status: "inactive-membership";
+      authUserId: string;
+      authUserEmail: string | null;
+      publicUserId: string;
+    }
+  | {
+      status: "no-membership";
+      authUserId: string;
+      authUserEmail: string | null;
+      publicUserId: string;
+    };
 
 type WorkspacePayload = WorkspaceBootstrap;
 
@@ -79,10 +116,43 @@ async function fetchSupabaseTable<T>(table: string): Promise<T[]> {
   return Array.isArray(payload) ? (payload as T[]) : [];
 }
 
+async function loadAuthIdentityEmailSet(client: ReturnType<typeof getSupabaseServerClient>) {
+  const authIdentityEmails = new Set<string>();
+
+  if (!client || !getSupabaseServiceRoleKey()) {
+    return authIdentityEmails;
+  }
+
+  const perPage = 100;
+
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await client.auth.admin.listUsers({ page, perPage });
+
+    if (error) {
+      return authIdentityEmails;
+    }
+
+    for (const user of data.users) {
+      const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+      if (email) {
+        authIdentityEmails.add(email);
+      }
+    }
+
+    if (!data.nextPage || !data.users.length || data.users.length < perPage) {
+      break;
+    }
+  }
+
+  return authIdentityEmails;
+}
+
 function createEmptyWorkspaceBootstrap(): WorkspaceBootstrap {
   const layouts = createEmptyWorkspaceLayouts();
 
   return {
+    authState: { status: "signed-out" },
+    currentUserId: "",
     users: [],
     profiles: [],
     roles: [],
@@ -116,18 +186,6 @@ function readCatalogFromOrganization(organization: Organization) {
   return { venues, sectors, resources };
 }
 
-function pickCurrentOrganizationId(organizations: OrganizationRow[]) {
-  return [...organizations]
-    .filter((organization) => organization.status === "active" && organization.deleted_at === null)
-    .sort((a, b) => {
-      if (a.updated_at !== b.updated_at) {
-        return a.updated_at < b.updated_at ? 1 : -1;
-      }
-
-      return a.created_at < b.created_at ? 1 : -1;
-    })[0]?.id ?? "";
-}
-
 function pickCurrentEventId(events: EventRow[], organizationId: string) {
   const eventList = [...events]
     .filter((event) => event.organization_id === organizationId && event.deleted_at === null)
@@ -142,19 +200,32 @@ function pickCurrentEventId(events: EventRow[], organizationId: string) {
   return eventList[0]?.id ?? "";
 }
 
-function pickCurrentProfileId(profiles: ProfileRow[]) {
+export function pickCurrentProfileIdForUser(profiles: ProfileRow[], currentOrganizationId: string, currentUserId: string) {
   const activeProfiles = [...profiles].filter((profile) => !profile.deleted_at);
-  return (
-    activeProfiles.find((profile) => {
-      const metadata = profile.metadata && typeof profile.metadata === "object" && !Array.isArray(profile.metadata)
-        ? (profile.metadata as Record<string, unknown>)
-        : {};
+  const userProfiles = activeProfiles.filter((profile) => profile.user_id === currentUserId && (!currentOrganizationId || profile.organization_id === currentOrganizationId));
 
-      return metadata.bootstrap === true || metadata.bootstrapOwner === true;
-    })?.id
-    ?? activeProfiles[0]?.id
-    ?? ""
+  return userProfiles[0]?.id
+    ?? activeProfiles.find((profile) => profile.user_id === currentUserId && profile.organization_id === currentOrganizationId)?.id
+    ?? activeProfiles.find((profile) => profile.user_id === currentUserId)?.id
+    ?? "";
+}
+
+export function pickCurrentOrganizationIdForUser(organizations: OrganizationRow[], profiles: ProfileRow[], currentUserId: string) {
+  const allowedOrganizationIds = new Set(
+    profiles
+      .filter((profile) => profile.user_id === currentUserId && !profile.deleted_at)
+      .map((profile) => profile.organization_id),
   );
+
+  return [...organizations]
+    .filter((organization) => organization.status === "active" && organization.deleted_at === null && allowedOrganizationIds.has(organization.id))
+    .sort((a, b) => {
+      if (a.updated_at !== b.updated_at) {
+        return a.updated_at < b.updated_at ? 1 : -1;
+      }
+
+      return a.created_at < b.created_at ? 1 : -1;
+    })[0]?.id ?? "";
 }
 
 function buildAttemptsFromLogs(logs: TimelineEvent[], currentEventId: string): CheckInAttempt[] {
@@ -181,7 +252,27 @@ export function buildActiveCheckIns(checkInRows: CheckInRow[]) {
   return checkInRows.filter((row) => row.deleted_at === null).map((row) => mapCheckInRowToDomain(row));
 }
 
-export async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
+export function getWorkspaceAuthStateMessage(authState: WorkspaceAuthState) {
+  if (authState.status === "must-change-password") {
+    return "Tu acceso temporal sigue activo. Creá tu contraseña personal para entrar al equipo.";
+  }
+
+  if (authState.status === "unlinked") {
+    return "Esta cuenta todavía no está vinculada a un equipo de EntryFlow.";
+  }
+
+  if (authState.status === "inactive-membership") {
+    return "Tu vínculo con EntryFlow está inactivo.";
+  }
+
+  if (authState.status === "no-membership") {
+    return "Esta cuenta todavía no tiene acceso a un equipo de EntryFlow.";
+  }
+
+  return "Necesitás iniciar sesión para acceder a EntryFlow.";
+}
+
+export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: string | null }): Promise<WorkspaceBootstrap> {
   noStore();
   if (!hasSupabaseConfig()) {
     return createEmptyWorkspaceBootstrap();
@@ -193,7 +284,12 @@ export async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
     return createEmptyWorkspaceBootstrap();
   }
 
+  if (!authUser) {
+    return createEmptyWorkspaceBootstrap();
+  }
+
   const repositories = createSupabaseWorkspaceRepositories(client);
+  const authIdentityEmails = await loadAuthIdentityEmailSet(client);
 
   const [
     userRows,
@@ -225,28 +321,177 @@ export async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
     fetchSupabaseTable<TimelineRow>("timeline_events"),
   ]);
 
+  let linkedUserRow = userRows.find((row) => row.auth_user_id === authUser.id && row.deleted_at === null) ?? null;
+  const authEmail = typeof authUser.email === "string" ? authUser.email.trim().toLowerCase() : "";
+
+  if (!linkedUserRow && authEmail) {
+    const emailMatch = userRows.find(
+      (row) => row.deleted_at === null && row.email.toLowerCase() === authEmail && row.auth_user_id === null,
+    );
+
+    if (emailMatch) {
+      const persistedUser = await repositories.users.update(emailMatch.id, {
+        ...mapUserRowToDomain(emailMatch),
+        authUserId: authUser.id,
+      });
+
+      if (persistedUser) {
+        linkedUserRow = {
+          ...emailMatch,
+          auth_user_id: authUser.id,
+          updated_at: persistedUser.updatedAt,
+        };
+        userRows[userRows.findIndex((row) => row.id === emailMatch.id)] = linkedUserRow;
+      }
+    }
+  }
+
+  if (!linkedUserRow) {
+    return {
+      ...createEmptyWorkspaceBootstrap(),
+      authState: {
+        status: "unlinked",
+        authUserId: authUser.id,
+        authUserEmail: authUser.email ?? null,
+      },
+    };
+  }
+
+  if (linkedUserRow.must_change_password) {
+    return {
+      ...createEmptyWorkspaceBootstrap(),
+      authState: {
+        status: "must-change-password",
+        authUserId: authUser.id,
+        authUserEmail: authUser.email ?? null,
+        publicUserId: linkedUserRow.id,
+      },
+      currentUserId: linkedUserRow.id,
+    };
+  }
+
+  const activeProfilesForUser = profileRows.filter((profile) => profile.user_id === linkedUserRow.id && profile.deleted_at === null);
+  const allProfilesForUser = profileRows.filter((profile) => profile.user_id === linkedUserRow.id);
+
+  if (!activeProfilesForUser.length) {
+    return {
+      ...createEmptyWorkspaceBootstrap(),
+      authState: {
+        status: allProfilesForUser.length ? "inactive-membership" : "no-membership",
+        authUserId: authUser.id,
+        authUserEmail: authUser.email ?? null,
+        publicUserId: linkedUserRow.id,
+      },
+      currentUserId: linkedUserRow.id,
+    };
+  }
+
+  const allowedOrganizationIds = new Set(
+    activeProfilesForUser
+      .map((profile) => profile.organization_id)
+      .filter((organizationId) => {
+        const organization = organizationRows.find((row) => row.id === organizationId);
+        return Boolean(organization && organization.deleted_at === null && organization.status === "active");
+      }),
+  );
+
+  if (!allowedOrganizationIds.size) {
+    return {
+      ...createEmptyWorkspaceBootstrap(),
+      authState: {
+        status: "inactive-membership",
+        authUserId: authUser.id,
+        authUserEmail: authUser.email ?? null,
+        publicUserId: linkedUserRow.id,
+      },
+      currentUserId: linkedUserRow.id,
+    };
+  }
+
+  const organizationRowsForWorkspace = organizationRows.filter(
+    (organization) => allowedOrganizationIds.has(organization.id) && organization.status === "active" && organization.deleted_at === null,
+  );
+  const profileRowsForWorkspace = profileRows.filter((profile) => allowedOrganizationIds.has(profile.organization_id));
+  const allowedUserIds = new Set(profileRowsForWorkspace.map((profile) => profile.user_id));
+  allowedUserIds.add(linkedUserRow.id);
+
+  const venueRowsForWorkspace = venueRows.filter(
+    (venue) => allowedOrganizationIds.has(venue.organization_id) && venue.deleted_at === null,
+  );
+  const allowedVenueIds = new Set(venueRowsForWorkspace.map((venue) => venue.id));
+
+  const sectorRowsForWorkspace = sectorRows.filter(
+    (sector) => allowedVenueIds.has(sector.venue_id) && sector.deleted_at === null,
+  );
+  const resourceRowsForWorkspace = resourceRows.filter(
+    (resource) => allowedVenueIds.has(resource.venue_id) && resource.deleted_at === null,
+  );
+
+  const eventRowsForWorkspace = eventRows.filter(
+    (event) => allowedOrganizationIds.has(event.organization_id) && event.deleted_at === null,
+  );
+  const allowedEventIds = new Set(eventRowsForWorkspace.map((event) => event.id));
+
+  const guestRowsForWorkspace = guestRows.filter((guest) => allowedEventIds.has(guest.event_id) && guest.deleted_at === null);
+  const reservationRowsForWorkspace = reservationRows.filter((reservation) => allowedEventIds.has(reservation.event_id) && reservation.deleted_at === null);
+  const tableRowsForWorkspace = tableRows.filter(
+    (table) => table.deleted_at === null && (table.event_id === null || allowedEventIds.has(table.event_id)),
+  );
+  const checkInRowsForWorkspace = checkInRows.filter((checkIn) => allowedEventIds.has(checkIn.event_id) && checkIn.deleted_at === null);
+  const timelineRowsForWorkspace = timelineRows.filter((timeline) => allowedEventIds.has(timeline.event_id));
+
   const layouts = await loadWorkspaceLayouts(repositories);
+  const venueLayouts = layouts.venueLayouts.filter((layout) => allowedVenueIds.has(layout.venueId) && layout.status === "active");
+  const allowedVenueLayoutIds = new Set(venueLayouts.map((layout) => layout.id));
+  const venueLayoutSectors = layouts.venueLayoutSectors.filter((layoutSector) => allowedVenueLayoutIds.has(layoutSector.venueLayoutId));
+  const venueLayoutResources = layouts.venueLayoutResources.filter((layoutResource) => allowedVenueLayoutIds.has(layoutResource.venueLayoutId));
+  const eventLayouts = layouts.eventLayouts.filter(
+    (layout) => allowedEventIds.has(layout.eventId) || allowedVenueIds.has(layout.venueId),
+  );
+  const allowedEventLayoutIds = new Set(eventLayouts.map((layout) => layout.id));
+  const eventLayoutSectors = layouts.eventLayoutSectors.filter((layoutSector) => allowedEventLayoutIds.has(layoutSector.eventLayoutId));
+  const eventLayoutResources = layouts.eventLayoutResources.filter((layoutResource) => allowedEventLayoutIds.has(layoutResource.eventLayoutId));
 
-  const users = userRows.map((row) => mapUserRowToDomain(row));
+  const currentOrganizationId =
+    pickCurrentOrganizationIdForUser(organizationRowsForWorkspace, profileRowsForWorkspace, linkedUserRow.id)
+    || organizationRowsForWorkspace[0]?.id
+    || "";
+  const currentEventId = pickCurrentEventId(eventRowsForWorkspace, currentOrganizationId);
+  const currentProfileId = pickCurrentProfileIdForUser(profileRowsForWorkspace, currentOrganizationId, linkedUserRow.id);
+
+  const users = userRows
+    .filter((row) => allowedUserIds.has(row.id) && row.deleted_at === null)
+    .map((row) => {
+      const user = mapUserRowToDomain(row);
+
+      return {
+        ...user,
+        authIdentityExists: Boolean(user.authUserId) || authIdentityEmails.has(user.email.trim().toLowerCase()),
+      };
+    });
   const roles = roleRows.map((row) => mapRoleRowToDomain(row));
-  const profiles = profileRows.map((row) => mapProfileRowToDomain(row));
-  const organizations = organizationRows.map((row) => mapOrganizationRowToDomain(row));
+  const profiles = profileRowsForWorkspace.map((row) => mapProfileRowToDomain(row));
+  const organizations = organizationRowsForWorkspace.map((row) => mapOrganizationRowToDomain(row));
   const organizationFallback = organizations[0] ? readCatalogFromOrganization(organizations[0]) : { venues: [], sectors: [], resources: [] };
-  const venues = venueRows.map((row) => mapVenueRowToDomain(row));
-  const sectors = sectorRows.map((row) => mapSectorRowToDomain(row));
-  const resources = resourceRows.map((row) => mapResourceRowToDomain(row));
-  const events = eventRows.map((row) => mapEventRowToDomain(row));
-  const guests = guestRows.map((row) => mapGuestRowToDomain(row));
-  const reservations = reservationRows.map((row) => mapReservationRowToDomain(row));
-  const tables = tableRows.map((row) => mapTableRowToDomain(row));
-  const checkIns = buildActiveCheckIns(checkInRows);
-  const timelineEvents = timelineRows.map((row) => mapTimelineRowToDomain(row)).sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
-
-  const currentOrganizationId = pickCurrentOrganizationId(organizationRows);
-  const currentEventId = pickCurrentEventId(eventRows, currentOrganizationId);
-  const currentProfileId = pickCurrentProfileId(profileRows);
+  const venues = venueRowsForWorkspace.map((row) => mapVenueRowToDomain(row));
+  const sectors = sectorRowsForWorkspace.map((row) => mapSectorRowToDomain(row));
+  const resources = resourceRowsForWorkspace.map((row) => mapResourceRowToDomain(row));
+  const events = eventRowsForWorkspace.map((row) => mapEventRowToDomain(row));
+  const guests = guestRowsForWorkspace.map((row) => mapGuestRowToDomain(row));
+  const reservations = reservationRowsForWorkspace.map((row) => mapReservationRowToDomain(row));
+  const tables = tableRowsForWorkspace.map((row) => mapTableRowToDomain(row));
+  const checkIns = buildActiveCheckIns(checkInRowsForWorkspace);
+  const timelineEvents = timelineRowsForWorkspace.map((row) => mapTimelineRowToDomain(row)).sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
 
   return {
+    authState: {
+      status: "ready",
+      authUserId: authUser.id,
+      authUserEmail: authUser.email ?? null,
+      publicUserId: linkedUserRow.id,
+      organizationIds: [...allowedOrganizationIds],
+    },
+    currentUserId: linkedUserRow.id,
     users,
     profiles,
     roles,
@@ -255,6 +500,12 @@ export async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
     sectors: sectors.length ? sectors : organizationFallback.sectors,
     resources: resources.length ? resources : organizationFallback.resources,
     ...layouts,
+    venueLayouts,
+    venueLayoutSectors,
+    venueLayoutResources,
+    eventLayouts,
+    eventLayoutSectors,
+    eventLayoutResources,
     events,
     guests,
     reservations,
@@ -268,8 +519,8 @@ export async function loadWorkspaceBootstrap(): Promise<WorkspaceBootstrap> {
   };
 }
 
-export async function loadWorkspacePayload(): Promise<WorkspacePayload> {
-  const bootstrap = await loadWorkspaceBootstrap();
+export async function loadWorkspacePayload(authUser?: { id: string; email?: string | null }): Promise<WorkspacePayload> {
+  const bootstrap = await loadWorkspaceBootstrap(authUser);
 
   return bootstrap;
 }

@@ -102,6 +102,8 @@ export function mapOrganizationToRow(organization: Organization): Omit<Organizat
 export function mapUserRowToDomain(row: UserRow): AccountUser {
   return {
     id: row.id,
+    authUserId: row.auth_user_id ?? null,
+    mustChangePassword: row.must_change_password,
     email: row.email,
     displayName: row.display_name,
     avatarUrl: row.avatar_url ?? undefined,
@@ -115,6 +117,8 @@ export function mapUserRowToDomain(row: UserRow): AccountUser {
 export function mapUserToRow(user: AccountUser): Omit<UserRow, "created_at" | "updated_at" | "deleted_at"> {
   return {
     id: user.id,
+    auth_user_id: user.authUserId ?? null,
+    must_change_password: user.mustChangePassword ?? false,
     email: user.email,
     display_name: user.displayName,
     avatar_url: user.avatarUrl ?? null,

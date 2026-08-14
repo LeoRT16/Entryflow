@@ -145,6 +145,8 @@ type WorkspaceServiceValue = {
     roleSlug: string;
     area?: string;
     permissions?: AccountPermissionKey[];
+    tempPassword?: string;
+    confirmTempPassword?: string;
   }) => Promise<OrganizationAccount>;
   updateAccount: (account: OrganizationAccount) => Promise<OrganizationAccount>;
   setAccountStatus: (profileId: string, status: "active" | "inactive") => Promise<void>;
@@ -249,21 +251,36 @@ function getAccountSelection({
   roles,
   currentOrganizationId,
   currentProfileId,
+  currentUserId,
+  allowBootstrapFallback = false,
 }: {
   users: AccountUser[];
   profiles: OrganizationMembership[];
   roles: AccountRolePreset[];
   currentOrganizationId: string;
   currentProfileId: string;
+  currentUserId: string;
+  allowBootstrapFallback?: boolean;
 }) {
   const activeProfiles = profiles.filter((profile) => profile.organizationId === currentOrganizationId && !profile.deletedAt);
-  const selectedProfile = activeProfiles.find((profile) => profile.id === currentProfileId)
-    ?? activeProfiles.find((profile) => (profile.metadata?.bootstrap as boolean | undefined) === true || (profile.metadata?.bootstrapOwner as boolean | undefined) === true)
-    ?? activeProfiles[0];
+  const currentUserProfiles = profiles.filter((profile) => profile.userId === currentUserId && !profile.deletedAt);
+  const selectedProfile =
+    currentUserProfiles.find((profile) => profile.id === currentProfileId && profile.organizationId === currentOrganizationId)
+    ?? currentUserProfiles.find((profile) => profile.organizationId === currentOrganizationId)
+    ?? currentUserProfiles.find((profile) => profile.id === currentProfileId)
+    ?? currentUserProfiles[0]
+    ?? (allowBootstrapFallback
+      ? activeProfiles.find((profile) => (profile.metadata?.bootstrap as boolean | undefined) === true || (profile.metadata?.bootstrapOwner as boolean | undefined) === true)
+        ?? activeProfiles[0]
+      : undefined);
   const selectedUser = selectedProfile ? users.find((user) => user.id === selectedProfile.userId && !user.deletedAt) ?? null : null;
   const role = selectedProfile ? roles.find((item) => item.id === selectedProfile.roleId) ?? getRolePresetBySlug("administrator") : getRolePresetBySlug("owner");
 
   if (!selectedProfile || !selectedUser) {
+    if (!allowBootstrapFallback) {
+      throw new Error("No se pudo resolver la cuenta activa autenticada.");
+    }
+
     const permissions = getEffectivePermissions({
       permissions: role.permissions,
       rolePermissions: role.permissions,
@@ -277,6 +294,7 @@ function getAccountSelection({
         userEmail: "",
         userDisplayName: "Cuenta principal",
         displayName: "Cuenta principal",
+        mustChangePassword: false,
         roleId: role.id,
         roleSlug: role.slug,
         roleName: role.name,
@@ -491,7 +509,7 @@ function hydrateGuestAccessGrant(guest: Guest): Guest {
   };
 }
 
-async function loadWorkspaceFromRepositories(repositories: SupabaseWorkspaceRepositories) {
+async function loadWorkspaceFromRepositories(repositories: SupabaseWorkspaceRepositories, currentUserId = "") {
   const [
     users,
     roles,
@@ -534,16 +552,25 @@ async function loadWorkspaceFromRepositories(repositories: SupabaseWorkspaceRepo
     repositories.timeline.list(),
   ]);
 
-  const currentOrganizationId = organizations.find((organization) => organization.status === "active")?.id ?? "";
+  const activeProfiles = currentUserId
+    ? profiles.filter((profile) => profile.userId === currentUserId && !profile.deletedAt)
+    : profiles.filter((profile) => !profile.deletedAt);
+  const currentOrganizationId =
+    organizations.find((organization) => organization.status === "active" && activeProfiles.some((profile) => profile.organizationId === organization.id))?.id
+    ?? organizations.find((organization) => organization.status === "active")?.id
+    ?? "";
   const currentEventId = events.find((event) => event.organizationId === currentOrganizationId && event.status === "live")?.id
     ?? events.find((event) => event.organizationId === currentOrganizationId)?.id
     ?? "";
   const ownerRole = roles.find((role) => role.slug === "owner") ?? roles[0];
-  const currentProfileId =
-    profiles.find((profile) => profile.organizationId === currentOrganizationId && profile.roleId === ownerRole?.id && !profile.deletedAt)?.id
-    ?? profiles.find((profile) => profile.organizationId === currentOrganizationId && !profile.deletedAt)?.id
-    ?? profiles.find((profile) => !profile.deletedAt)?.id
-    ?? "";
+  const currentProfileId = currentUserId
+    ? activeProfiles.find((profile) => profile.organizationId === currentOrganizationId)?.id
+      ?? activeProfiles[0]?.id
+      ?? ""
+    : profiles.find((profile) => profile.organizationId === currentOrganizationId && profile.roleId === ownerRole?.id && !profile.deletedAt)?.id
+      ?? profiles.find((profile) => profile.organizationId === currentOrganizationId && !profile.deletedAt)?.id
+      ?? profiles.find((profile) => !profile.deletedAt)?.id
+      ?? "";
 
   const attempts = [
     ...timelineEvents.filter((item) => item.kind === "checkin.invalid" || item.kind === "checkin.blocked"),
@@ -652,6 +679,7 @@ export function WorkspaceServiceProvider({
 
     return "";
   });
+  const initialCurrentUserId = initialWorkspace?.currentUserId ?? "";
   const [status, setStatus] = useState<WorkspaceServiceStatus>(
     hasWorkspaceData(initialWorkspace) ? "ready" : hasSupabaseConfig() ? "loading" : "empty",
   );
@@ -771,7 +799,10 @@ export function WorkspaceServiceProvider({
   const reloadWorkspace = useCallback(async () => {
     try {
       setStatus("loading");
-      const snapshot = await loadWorkspaceFromRepositories(repositories);
+      const snapshot = await loadWorkspaceFromRepositories(repositories, initialCurrentUserId);
+      const accessibleProfiles = initialCurrentUserId
+        ? snapshot.profiles.filter((profile) => profile.userId === initialCurrentUserId && !profile.deletedAt)
+        : snapshot.profiles.filter((profile) => !profile.deletedAt);
       const nextCurrentOrganizationId =
         snapshot.organizations.find((organization) => organization.id === currentOrganizationId)?.id
         ?? snapshot.organizations.find((organization) => organization.id === snapshot.currentOrganizationId)?.id
@@ -783,12 +814,16 @@ export function WorkspaceServiceProvider({
         ?? snapshot.events.find((event) => event.organizationId === nextCurrentOrganizationId && event.status === "live")?.id
         ?? snapshot.events.find((event) => event.organizationId === nextCurrentOrganizationId)?.id
         ?? "";
-      const nextCurrentProfileId =
-      snapshot.profiles.find((profile) => profile.id === currentProfileId && (!nextCurrentOrganizationId || profile.organizationId === nextCurrentOrganizationId) && !profile.deletedAt)?.id
-        ?? snapshot.profiles.find((profile) => profile.id === snapshot.currentProfileId && (!nextCurrentOrganizationId || profile.organizationId === nextCurrentOrganizationId) && !profile.deletedAt)?.id
-        ?? snapshot.profiles.find((profile) => profile.organizationId === nextCurrentOrganizationId && !profile.deletedAt)?.id
-        ?? snapshot.profiles.find((profile) => !profile.deletedAt)?.id
-        ?? "";
+      const nextCurrentProfileId = initialCurrentUserId
+        ? accessibleProfiles.find((profile) => profile.id === currentProfileId && (!nextCurrentOrganizationId || profile.organizationId === nextCurrentOrganizationId))?.id
+          ?? accessibleProfiles.find((profile) => profile.organizationId === nextCurrentOrganizationId)?.id
+          ?? accessibleProfiles[0]?.id
+          ?? ""
+        : snapshot.profiles.find((profile) => profile.id === currentProfileId && (!nextCurrentOrganizationId || profile.organizationId === nextCurrentOrganizationId) && !profile.deletedAt)?.id
+          ?? snapshot.profiles.find((profile) => profile.id === snapshot.currentProfileId && (!nextCurrentOrganizationId || profile.organizationId === nextCurrentOrganizationId) && !profile.deletedAt)?.id
+          ?? snapshot.profiles.find((profile) => profile.organizationId === nextCurrentOrganizationId && !profile.deletedAt)?.id
+          ?? snapshot.profiles.find((profile) => !profile.deletedAt)?.id
+          ?? "";
       setUsers(snapshot.users);
       setRoles(snapshot.roles);
       setProfiles(snapshot.profiles);
@@ -841,7 +876,7 @@ export function WorkspaceServiceProvider({
       setError(exception as Error);
       setStatus("error");
     }
-  }, [currentEventId, currentOrganizationId, currentProfileId, repositories]);
+  }, [currentEventId, currentOrganizationId, currentProfileId, initialCurrentUserId, repositories]);
 
   useEffect(() => {
     if (hydratedRef.current || !browserAuthReady) {
@@ -917,8 +952,10 @@ export function WorkspaceServiceProvider({
         roles,
         currentOrganizationId: currentOrganization.id,
         currentProfileId,
+        currentUserId: initialCurrentUserId,
+        allowBootstrapFallback: false,
       }),
-    [currentOrganization.id, currentProfileId, profiles, roles, users],
+    [currentOrganization.id, currentProfileId, initialCurrentUserId, profiles, roles, users],
   );
   const currentAccount = accountSelection.account;
   const currentUser = accountSelection.user;
@@ -937,6 +974,9 @@ export function WorkspaceServiceProvider({
         id: membership.id,
         organizationId: membership.organizationId,
         userId: user.id,
+        authUserId: user.authUserId ?? null,
+        authIdentityExists: user.authIdentityExists ?? Boolean(user.authUserId),
+        mustChangePassword: user.mustChangePassword ?? false,
         userEmail: user.email,
         userDisplayName: user.displayName,
         displayName: membership.displayName,
@@ -1215,12 +1255,9 @@ export function WorkspaceServiceProvider({
       setCurrentOrganizationIdState(organizationId);
       const organizationEvents = events.filter((event) => event.organizationId === organizationId);
       const nextEvent = organizationEvents.find((event) => event.status === "live") ?? organizationEvents[0];
-      const organizationProfiles = profiles.filter((profile) => profile.organizationId === organizationId && !profile.deletedAt);
+      const organizationProfiles = profiles.filter((profile) => profile.organizationId === organizationId && profile.userId === (currentUser?.id ?? initialCurrentUserId) && !profile.deletedAt);
       const nextProfile =
-        organizationProfiles.find((profile) => {
-          const role = roles.find((item) => item.id === profile.roleId);
-          return role?.slug === "owner" || Boolean(profile.metadata?.bootstrap || profile.metadata?.bootstrapOwner);
-        })
+        organizationProfiles.find((profile) => profile.id === currentProfileId)
         ?? organizationProfiles[0];
 
       setCurrentProfileIdState(nextProfile?.id ?? "");
@@ -1230,7 +1267,7 @@ export function WorkspaceServiceProvider({
         setCurrentEventIdState("");
       }
     },
-    [events, profiles, roles],
+    [currentProfileId, currentUser?.id, events, initialCurrentUserId, profiles],
   );
 
   const setCurrentEventId = useCallback((eventId: string) => {
@@ -1239,13 +1276,13 @@ export function WorkspaceServiceProvider({
 
   const setCurrentProfileId = useCallback(
     (profileId: string) => {
-      setCurrentProfileIdState(profileId);
-      const profile = profiles.find((item) => item.id === profileId && !item.deletedAt);
+      const profile = profiles.find((item) => item.id === profileId && item.userId === (currentUser?.id ?? initialCurrentUserId) && !item.deletedAt);
       if (profile) {
+        setCurrentProfileIdState(profileId);
         setCurrentOrganizationId(profile.organizationId);
       }
     },
-    [profiles, setCurrentOrganizationId],
+    [currentUser?.id, initialCurrentUserId, profiles, setCurrentOrganizationId],
   );
 
   const setActiveEventId = setCurrentEventId;
@@ -1268,87 +1305,60 @@ export function WorkspaceServiceProvider({
       roleSlug: string;
       area?: string;
       permissions?: AccountPermissionKey[];
+      tempPassword?: string;
+      confirmTempPassword?: string;
     }) => {
       requirePermission("accounts.manage");
-      const snapshot = captureSnapshot();
-      try {
-        const role = roles.find((item) => item.slug === params.roleSlug) ?? getRolePresetBySlug(params.roleSlug);
-        const desiredPermissions = normalizeAccountPermissions(params.permissions, role.permissions);
-        const existingUser = users.find((user) => user.email.toLowerCase() === params.email.trim().toLowerCase() && !user.deletedAt);
-        const persistedUser = existingUser
-          ? await repositories.users.update(existingUser.id, {
-              ...existingUser,
-              email: params.email.trim(),
-              displayName: params.displayName.trim() || existingUser.displayName,
-            })
-          : await repositories.users.create({
-              id: params.userId ?? createUuid(),
-              email: params.email.trim(),
-              displayName: params.displayName.trim(),
-              avatarUrl: undefined,
-              metadata: { source: "settings-account" },
-              deletedAt: null,
-            } as Partial<AccountUser>);
+      const role = roles.find((item) => item.slug === params.roleSlug) ?? getRolePresetBySlug(params.roleSlug);
+      const desiredPermissions = normalizeAccountPermissions(params.permissions, role.permissions);
 
-        if (!persistedUser) {
-          throw new Error("No se pudo guardar el usuario.");
-        }
-
-        const existingMembership = profiles.find(
-          (profile) => profile.organizationId === params.organizationId && profile.userId === persistedUser.id && !profile.deletedAt,
-        );
-        const membershipPayload: OrganizationMembership = {
-          id: existingMembership?.id ?? createUuid(),
+      const response = await fetch("/api/accounts/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: params.email.trim(),
+          displayName: params.displayName.trim(),
           organizationId: params.organizationId,
-          userId: persistedUser.id,
-          roleId: role.id,
-          displayName: params.displayName.trim() || persistedUser.displayName,
-          attributes: {
-            area: params.area?.trim() || existingMembership?.attributes.area || "",
-            status: "active" as const,
-            permissions: desiredPermissions,
-          },
-          metadata: {
-            ...(existingMembership?.metadata ?? {}),
-            attributes: {
-              ...(existingMembership?.attributes ?? {}),
-              area: params.area?.trim() || existingMembership?.attributes.area || "",
-              status: "active" as const,
-            },
-            permissions: desiredPermissions,
-          },
-          status: "active",
-          createdAt: existingMembership?.createdAt ?? nowIso(),
-          updatedAt: nowIso(),
-          deletedAt: null,
-        };
-        const persistedMembership = existingMembership
-          ? await repositories.profiles.update(existingMembership.id, membershipPayload)
-          : await repositories.profiles.create(membershipPayload);
+          roleSlug: params.roleSlug,
+          area: params.area?.trim() ?? "",
+          permissions: desiredPermissions,
+          tempPassword: params.tempPassword ?? "",
+          confirmTempPassword: params.confirmTempPassword ?? "",
+        }),
+      });
 
-        if (!persistedMembership) {
-          throw new Error("No se pudo guardar la membresía.");
-        }
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            error?: { message?: string };
+            user?: AccountUser;
+            profile?: OrganizationMembership;
+            account?: OrganizationAccount;
+          }
+        | null;
 
-        const nextUsers = existingUser
-          ? users.map((user) => (user.id === persistedUser.id ? persistedUser : user))
-          : [persistedUser, ...users];
-        const nextProfiles = existingMembership
-          ? profiles.map((profile) => (profile.id === persistedMembership.id ? persistedMembership : profile))
-          : [persistedMembership, ...profiles];
-
-        setUsers(nextUsers);
-        setProfiles(nextProfiles);
-        if (!currentProfile || currentAccount.id === "bootstrap-account") {
-          setCurrentProfileIdState(persistedMembership.id);
-        }
-        return buildAccountFromEntities(persistedUser, persistedMembership, role);
-      } catch (exception) {
-        restoreSnapshot(snapshot);
-        throw exception;
+      if (!response.ok || !payload?.ok || !payload.user || !payload.profile || !payload.account) {
+        throw new Error(payload?.error?.message || "No se pudo invitar al miembro.");
       }
+
+      const nextUsers = users.some((user) => user.id === payload.user?.id)
+        ? users.map((user) => (user.id === payload.user?.id ? payload.user! : user))
+        : [payload.user, ...users];
+      const nextProfiles = profiles.some((profile) => profile.id === payload.profile?.id)
+        ? profiles.map((profile) => (profile.id === payload.profile?.id ? payload.profile! : profile))
+        : [payload.profile, ...profiles];
+
+      setUsers(nextUsers);
+      setProfiles(nextProfiles);
+      if (!currentProfile || currentAccount.id === "bootstrap-account") {
+        setCurrentProfileIdState(payload.profile.id);
+      }
+
+      return payload.account;
     },
-    [buildAccountFromEntities, captureSnapshot, currentAccount.id, currentProfile, profiles, repositories.profiles, repositories.users, requirePermission, restoreSnapshot, roles, users],
+    [currentAccount.id, currentProfile, profiles, requirePermission, roles, users],
   );
 
   const updateAccount = useCallback(
@@ -2753,6 +2763,8 @@ export function WorkspaceServiceProvider({
           return buildAccountFromEntities(
             {
               id: profile.userId,
+              authUserId: null,
+              authIdentityExists: false,
               email: "",
               displayName: profile.displayName,
               createdAt: profile.createdAt,

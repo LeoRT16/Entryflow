@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { getSupabaseAuthUser } from "@/lib/supabase/auth";
+import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
+import { getRolePresetBySlug, normalizeAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import { sendWhatsAppCloudMessage, WhatsAppCloudError } from "@/features/access/domain/whatsapp-cloud";
 
 type WhatsAppSendRequestBody = {
@@ -14,6 +17,66 @@ function getRequestString(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  const authUser = await getSupabaseAuthUser();
+
+  if (!authUser) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "unauthenticated",
+          message: "Debés iniciar sesión para enviar invitaciones por WhatsApp.",
+        },
+      },
+      { status: 401 },
+    );
+  }
+
+  const workspace = await loadWorkspaceBootstrap({ id: authUser.id, email: authUser.email });
+
+  if (workspace.authState.status !== "ready") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: workspace.authState.status,
+          message: getWorkspaceAuthStateMessage(workspace.authState),
+        },
+      },
+      { status: 403 },
+    );
+  }
+
+  const currentProfile = workspace.profiles.find((profile) => profile.id === workspace.currentProfileId && !profile.deletedAt) ?? null;
+  if (!currentProfile) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "forbidden",
+          message: "No pudimos resolver tu perfil activo para esta organización.",
+        },
+      },
+      { status: 403 },
+    );
+  }
+
+  const currentRole = workspace.roles.find((role) => role.id === currentProfile.roleId) ?? getRolePresetBySlug("administrator");
+  const permissions = normalizeAccountPermissions(currentProfile.metadata?.permissions, currentRole.permissions);
+
+  if (!permissions.includes("access.issue")) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "forbidden",
+          message: "No tenés permiso para enviar invitaciones por WhatsApp.",
+        },
+      },
+      { status: 403 },
+    );
+  }
+
   let body: WhatsAppSendRequestBody;
 
   try {
@@ -87,4 +150,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

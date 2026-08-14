@@ -309,6 +309,8 @@ export type RoleRow = SupabaseRowBase & {
 };
 
 export type UserRow = SupabaseRowBase & {
+  auth_user_id: string | null;
+  must_change_password: boolean;
   email: string;
   display_name: string;
   avatar_url: string | null;

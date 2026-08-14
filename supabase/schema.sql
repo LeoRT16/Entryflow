@@ -264,6 +264,8 @@ create table if not exists public.roles (
 
 create table if not exists public.users (
   id uuid primary key default gen_random_uuid(),
+  auth_user_id uuid unique references auth.users(id) on delete set null,
+  must_change_password boolean not null default false,
   email text not null unique,
   display_name text not null,
   avatar_url text,
@@ -284,6 +286,10 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
 );
+
+create unique index if not exists profiles_user_id_organization_id_active_unique
+  on public.profiles (user_id, organization_id)
+  where deleted_at is null;
 
 create trigger set_updated_at_organizations before update on public.organizations for each row execute function public.set_updated_at();
 create trigger set_updated_at_events before update on public.events for each row execute function public.set_updated_at();

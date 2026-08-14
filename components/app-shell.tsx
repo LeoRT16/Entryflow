@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/components/sidebar";
 import CommandPalette from "@/components/command-palette";
 import { FeedbackProvider } from "@/components/premium-feedback";
@@ -11,7 +11,8 @@ import KeyboardShortcutsHelp from "@/components/keyboard-shortcuts-help";
 import { focusFirstShortcutSearchInput, useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { WorkspaceProvider } from "@/adapters/workspace-provider";
 import { useWorkspaceData } from "@/services/workspace-service";
-import type { WorkspaceBootstrap } from "@/services/workspace-loader";
+import { getWorkspaceAuthStateMessage, type WorkspaceBootstrap } from "@/services/workspace-loader";
+import LogoutButton from "@/components/logout-button";
 
 export default function AppShell({
   children,
@@ -19,6 +20,28 @@ export default function AppShell({
 }: {
   children: ReactNode;
   initialWorkspace?: WorkspaceBootstrap | null;
+}) {
+  const pathname = usePathname();
+  const authState = initialWorkspace?.authState ?? { status: "signed-out" as const };
+  const isPublicRoute = pathname === "/login" || pathname.startsWith("/auth/");
+
+  if (isPublicRoute) {
+    return <>{children}</>;
+  }
+
+  if (authState.status !== "ready") {
+    return <AuthBlockedState authState={authState} />;
+  }
+
+  return <WorkspaceShell initialWorkspace={initialWorkspace}>{children}</WorkspaceShell>;
+}
+
+function WorkspaceShell({
+  children,
+  initialWorkspace,
+}: {
+  children: ReactNode;
+  initialWorkspace: WorkspaceBootstrap | null | undefined;
 }) {
   const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -158,6 +181,14 @@ export default function AppShell({
           router.push("/settings");
         },
       },
+      {
+        id: "global-nav-users",
+        shortcut: "g u",
+        priority: 70,
+        handler: () => {
+          router.push("/users");
+        },
+      },
     ],
     [commandPaletteOpen, keyboardHelpOpen, mobileNavOpen, router],
   );
@@ -186,6 +217,34 @@ export default function AppShell({
         {keyboardHelpOpen ? <KeyboardShortcutsHelp onClose={() => setKeyboardHelpOpen(false)} /> : null}
       </WorkspaceProvider>
     </FeedbackProvider>
+  );
+}
+
+function AuthBlockedState({
+  authState,
+}: {
+  authState: NonNullable<WorkspaceBootstrap["authState"]>;
+}) {
+  const message =
+    getWorkspaceAuthStateMessage(authState);
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[color:var(--background)] px-4 text-[color:var(--foreground)]">
+      <section className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-slate-500">Acceso restringido</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">No podemos abrir el workspace todavía.</h1>
+        <p className="mt-4 text-sm leading-6 text-slate-400">{message}</p>
+        <p className="mt-3 text-sm leading-6 text-slate-500">
+          {authState.status === "unlinked" || authState.status === "inactive-membership" || authState.status === "no-membership"
+            ? "Si esto no debería ocurrir, cerrá sesión y volvé a entrar con la cuenta correcta."
+            : "Volvé a iniciar sesión para continuar."}
+        </p>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <LogoutButton label="Cerrar sesión" />
+        </div>
+      </section>
+    </div>
   );
 }
 

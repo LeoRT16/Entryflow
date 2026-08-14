@@ -76,6 +76,9 @@ export type OrganizationMembership = {
 
 export type AccountUser = {
   id: string;
+  authUserId?: string | null;
+  authIdentityExists?: boolean;
+  mustChangePassword?: boolean;
   email: string;
   displayName: string;
   avatarUrl?: string;
@@ -89,6 +92,9 @@ export type OrganizationAccount = {
   id: string;
   organizationId: string;
   userId: string;
+  authUserId?: string | null;
+  authIdentityExists?: boolean;
+  mustChangePassword?: boolean;
   userEmail: string;
   userDisplayName: string;
   displayName: string;

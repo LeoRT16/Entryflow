@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import StatusBadge from "@/components/status-badge";
+import LogoutButton from "@/components/logout-button";
 import { useCheckInStore } from "@/services/workspace-service";
 import { getEventModuleLabel, getEventNavigation, getEventTypeLabel } from "@/features/events/domain";
 
@@ -141,6 +142,15 @@ function NavIcon({
           <circle cx="12" cy="12" r="2.3" />
         </svg>
       );
+    case "users":
+      return (
+        <svg {...iconProps}>
+          <path d="M8.5 10.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+          <path d="M16.5 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+          <path d="M4.5 19c.7-3 2.9-4.8 5.5-4.8s4.8 1.8 5.5 4.8" />
+          <path d="M13.8 19c.4-1.8 1.7-3 3.2-3 1.1 0 2.1.4 2.8 1.3" />
+        </svg>
+      );
   }
 }
 
@@ -176,6 +186,7 @@ export default function Sidebar({
     { href: "/statistics", label: "Estadísticas", icon: "analytics", permission: "statistics.view" as const },
     { href: "/events", label: "Eventos", icon: "events", permission: "event.view" as const },
     { href: "/settings", label: "Ajustes", icon: "settings", permission: "settings.view" as const },
+    { href: "/users", label: "Equipo", icon: "users", permission: "accounts.view" as const },
   ].filter((item) => can(item.permission));
 
   return (
@@ -189,7 +200,8 @@ export default function Sidebar({
         />
       ) : null}
 
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-white/10 bg-[#0d1117] md:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden h-dvh w-72 flex-col overflow-hidden border-r border-white/10 bg-[#0d1117] md:flex">
+        <div className="flex min-h-0 flex-1 flex-col">
         <div className="border-b border-white/10 px-6 py-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">
             Workspace activo
@@ -210,7 +222,7 @@ export default function Sidebar({
           <p className="mt-1 text-xs text-slate-500">Rol: {currentAccount.roleName}</p>
         </div>
 
-        <nav className="flex-1 px-3 py-4">
+        <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
           <div className="space-y-5">
             <div className="space-y-1">
               <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
@@ -271,15 +283,28 @@ export default function Sidebar({
             </div>
           </div>
         </nav>
+
+        <div className="border-t border-white/10 px-5 py-4">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Sesión</p>
+            <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
+            <p className="mt-1 text-xs text-slate-500">{currentAccount.roleName} · {currentOrganization.name}</p>
+            <div className="mt-3">
+              <LogoutButton />
+            </div>
+          </div>
+        </div>
+        </div>
       </aside>
 
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-40 w-80 max-w-[85vw] flex-col border-r border-white/10 bg-[#0d1117] transition-transform duration-200 ease-out md:hidden",
+          "fixed inset-y-0 left-0 z-40 h-dvh w-80 max-w-[85vw] flex-col overflow-hidden border-r border-white/10 bg-[#0d1117] transition-transform duration-200 ease-out md:hidden",
           mobileNavOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
         aria-hidden={!mobileNavOpen}
       >
+        <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-start justify-between border-b border-white/10 px-5 py-5">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">
@@ -311,7 +336,7 @@ export default function Sidebar({
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-4">
+        <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
           <div className="space-y-5">
             <div className="space-y-1">
               <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
@@ -374,6 +399,18 @@ export default function Sidebar({
             </div>
           </div>
         </nav>
+
+        <div className="border-t border-white/10 px-5 py-4">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Sesión</p>
+            <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
+            <p className="mt-1 text-xs text-slate-500">{currentAccount.roleName} · {currentOrganization.name}</p>
+            <div className="mt-3">
+              <LogoutButton />
+            </div>
+          </div>
+        </div>
+        </div>
       </aside>
     </>
   );
