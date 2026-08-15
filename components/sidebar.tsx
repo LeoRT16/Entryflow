@@ -1,16 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import StatusBadge from "@/components/status-badge";
 import LogoutButton from "@/components/logout-button";
 import EventSwitcher from "@/components/event-switcher";
+import StatusBadge from "@/components/status-badge";
 import TerminalEventBanner from "@/components/terminal-event-banner";
+import { getEventTypeLabel, isTerminalEventStatus } from "@/features/events/domain";
+import { getNavigationGroups } from "@/features/navigation/navigation";
 import { useCheckInStore } from "@/services/workspace-service";
-import { isTerminalEventStatus } from "@/features/events/domain";
-import { getEventModuleLabel, getEventNavigation, getEventTypeLabel } from "@/features/events/domain";
 
 function isActivePath(pathname: string, href: string) {
   if (href === "/") {
@@ -18,6 +17,14 @@ function isActivePath(pathname: string, href: string) {
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function formatEventStatus(status: string) {
+  if (status === "live") return "En curso";
+  if (status === "published") return "Publicado";
+  if (status === "draft") return "Borrador";
+  if (status === "finished") return "Finalizado";
+  return "Cancelado";
 }
 
 function NavIcon({
@@ -131,13 +138,6 @@ function NavIcon({
           <path d="M19 19v-8" />
         </svg>
       );
-    case "notifications":
-      return (
-        <svg {...iconProps}>
-          <path d="M12 4.5a4.5 4.5 0 0 0-4.5 4.5v2.2c0 .8-.2 1.5-.7 2.1L5 15.8h14l-1.8-2.5c-.4-.6-.7-1.3-.7-2.1V9a4.5 4.5 0 0 0-4.5-4.5Z" />
-          <path d="M10 18a2 2 0 0 0 4 0" />
-        </svg>
-      );
     case "settings":
       return (
         <svg {...iconProps}>
@@ -154,6 +154,12 @@ function NavIcon({
           <path d="M13.8 19c.4-1.8 1.7-3 3.2-3 1.1 0 2.1.4 2.8 1.3" />
         </svg>
       );
+    default:
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="7" />
+        </svg>
+      );
   }
 }
 
@@ -168,31 +174,36 @@ export default function Sidebar({
   const { currentOrganization, currentEvent, currentAccount, can } = useCheckInStore();
   const canSwitchEventContext = can("event.view");
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
-  const eventNavigation = useMemo(() => getEventNavigation(currentEvent), [currentEvent]);
-  const moduleLinks = useMemo(
-    () =>
-      eventNavigation.flatMap((group) =>
-        group.items.filter((item) => item.enabled && item.route).map((item) => ({
-          href: item.route as string,
-          label: getEventModuleLabel(item.module),
-          icon: item.module,
-        })),
-      ),
-    [eventNavigation],
-  );
-  const platformLinks = [
-    { href: "/", label: "Resumen", icon: "dashboard", permission: "dashboard.view" as const },
-    { href: "/operations", label: "Operaciones", icon: "operations", permission: "operations.view" as const },
-    { href: "/reservations", label: "Reservas", icon: "reservations", permission: "reservation.view" as const },
-    { href: "/customers", label: "Invitados", icon: "customers", permission: "guest.view" as const },
-    { href: "/check-in", label: "Ingreso", icon: "checkin", permission: "checkin.view" as const },
-    { href: "/tables", label: "Recursos", icon: "tables", permission: "resource.view" as const },
-    { href: "/timeline", label: "Actividad", icon: "timeline", permission: "timeline.view" as const },
-    { href: "/statistics", label: "Estadísticas", icon: "analytics", permission: "statistics.view" as const },
-    { href: "/events", label: "Eventos", icon: "events", permission: "event.view" as const },
-    { href: "/settings", label: "Ajustes", icon: "settings", permission: "settings.view" as const },
-    { href: "/users", label: "Equipo", icon: "users", permission: "accounts.view" as const },
-  ].filter((item) => can(item.permission));
+  const navigationGroups = getNavigationGroups(can, currentEvent);
+
+  const renderNavigation = (onLinkClick?: () => void) =>
+    navigationGroups.map((group) => (
+      <div key={group.title} className="space-y-1">
+        <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">{group.title}</p>
+        <ul className="space-y-1">
+          {group.links.map((item) => {
+            const active = isActivePath(pathname, item.href);
+
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={onLinkClick}
+                  className={[
+                    "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition",
+                    active ? "bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "text-slate-300 hover:bg-white/5 hover:text-white",
+                  ].join(" ")}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <NavIcon name={item.icon} active={active} />
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    ));
 
   return (
     <>
@@ -207,114 +218,60 @@ export default function Sidebar({
 
       <aside className="fixed inset-y-0 left-0 z-40 hidden h-dvh w-72 flex-col overflow-hidden border-r border-white/10 bg-[#0d1117] md:flex">
         <div className="flex min-h-0 flex-1 flex-col">
-        <div className="border-b border-white/10 px-6 py-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">
-            Workspace activo
-          </p>
-          <div className="mt-3 max-w-full">
-            {canSwitchEventContext ? (
-              <EventSwitcher compact />
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <p className="truncate text-sm font-semibold text-white">{currentEvent.name}</p>
-                <p className="mt-1 truncate text-xs text-slate-500">
-                  {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
-                </p>
+          <div className="border-b border-white/10 px-5 py-5">
+            <p className="kicker">Contexto operativo</p>
+            <div className="mt-3 max-w-full">
+              {canSwitchEventContext ? (
+                <EventSwitcher compact />
+              ) : (
+                <div className="surface-interactive px-4 py-3">
+                  <p className="truncate text-sm font-semibold text-white">{currentEvent.name}</p>
+                  <p className="mt-1 truncate text-xs text-slate-500">
+                    {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
+              <StatusBadge
+                variant={
+                  currentEvent.status === "live"
+                    ? "success"
+                    : currentEvent.status === "published"
+                      ? "info"
+                      : currentEvent.status === "draft"
+                        ? "warning"
+                        : "danger"
+                }
+              >
+                {formatEventStatus(currentEvent.status)}
+              </StatusBadge>
+              <StatusBadge variant="info">{currentAccount.roleName}</StatusBadge>
+            </div>
+            {isTerminalEvent ? (
+              <div className="mt-3">
+                <TerminalEventBanner description="El evento activo está cerrado. Podés navegar al historial, cambiar de evento y consultar la operación en modo lectura." />
               </div>
-            )}
+            ) : null}
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
-            <StatusBadge variant="info">{currentAccount.displayName}</StatusBadge>
-            <StatusBadge variant={currentEvent.status === "live" ? "success" : currentEvent.status === "published" ? "info" : currentEvent.status === "draft" ? "warning" : "danger"}>
-              {currentEvent.status === "live" ? "En curso" : currentEvent.status === "published" ? "Publicado" : currentEvent.status === "draft" ? "Borrador" : currentEvent.status === "finished" ? "Finalizado" : "Archivado"}
-            </StatusBadge>
-          </div>
-          {isTerminalEvent ? (
-            <div className="mt-3">
-              <TerminalEventBanner
-                description="El evento activo está cerrado. Podés navegar al historial, cambiar de evento y consultar la operación en modo lectura."
-              />
-            </div>
-          ) : null}
-          <p className="mt-3 text-xs text-slate-500">
-            {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">Rol: {currentAccount.roleName}</p>
-        </div>
 
-        <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
-          <div className="space-y-5">
-            <div className="space-y-1">
-              <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
-                Plataforma
+          <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+            <div className="space-y-5">{renderNavigation()}</div>
+          </nav>
+
+          <div className="border-t border-white/10 px-5 py-4">
+            <div className="surface-elevated p-4">
+              <p className="kicker">Sesión</p>
+              <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {currentOrganization.name} · {currentAccount.roleName}
               </p>
-              <ul className="space-y-1">
-                {platformLinks.map((item) => {
-                  const active = isActivePath(pathname, item.href);
-
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={[
-                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition",
-                          active
-                            ? "bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-                            : "text-slate-300 hover:bg-white/5 hover:text-white",
-                        ].join(" ")}
-                        aria-current={active ? "page" : undefined}
-                      >
-                        <NavIcon name={item.icon} active={active} />
-                        {item.label}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
-            <div className="space-y-1">
-              <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
-                Módulos activos
-              </p>
-              <ul className="space-y-1">
-                {moduleLinks.map((item) => {
-                  const active = isActivePath(pathname, item.href);
-
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={[
-                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition",
-                          active
-                            ? "bg-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-                            : "text-slate-300 hover:bg-white/5 hover:text-white",
-                        ].join(" ")}
-                        aria-current={active ? "page" : undefined}
-                      >
-                        <NavIcon name={item.icon} active={active} />
-                        {item.label}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="mt-3">
+                <LogoutButton />
+              </div>
             </div>
           </div>
-        </nav>
-
-        <div className="border-t border-white/10 px-5 py-4">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Sesión</p>
-            <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
-            <p className="mt-1 text-xs text-slate-500">{currentAccount.roleName} · {currentOrganization.name}</p>
-            <div className="mt-3">
-              <LogoutButton />
-            </div>
-          </div>
-        </div>
         </div>
       </aside>
 
@@ -326,127 +283,71 @@ export default function Sidebar({
         aria-hidden={!mobileNavOpen}
       >
         <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-start justify-between border-b border-white/10 px-5 py-5">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">
-              Workspace activo
-            </p>
-            <div className="mt-3 max-w-full">
-              {canSwitchEventContext ? (
-                <EventSwitcher compact />
-              ) : (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                  <p className="truncate text-sm font-semibold text-white">{currentEvent.name}</p>
-                  <p className="mt-1 truncate text-xs text-slate-500">
-                    {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
-              <StatusBadge variant="info">{currentAccount.displayName}</StatusBadge>
-              <StatusBadge variant={currentEvent.status === "live" ? "success" : currentEvent.status === "published" ? "info" : currentEvent.status === "draft" ? "warning" : "danger"}>
-                {currentEvent.status === "live" ? "En curso" : currentEvent.status === "published" ? "Publicado" : currentEvent.status === "draft" ? "Borrador" : currentEvent.status === "finished" ? "Finalizado" : "Archivado"}
-              </StatusBadge>
-            </div>
-            {isTerminalEvent ? (
-              <div className="mt-3">
-                <TerminalEventBanner
-                  description="El evento activo está cerrado. El menú permanece disponible para revisar información histórica y cambiar de contexto."
-                />
+          <div className="flex items-start justify-between border-b border-white/10 px-5 py-5">
+            <div>
+              <p className="kicker">Contexto operativo</p>
+              <div className="mt-3 max-w-full">
+                {canSwitchEventContext ? (
+                  <EventSwitcher compact />
+                ) : (
+                  <div className="surface-interactive px-4 py-3">
+                    <p className="truncate text-sm font-semibold text-white">{currentEvent.name}</p>
+                    <p className="mt-1 truncate text-xs text-slate-500">
+                      {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
+                    </p>
+                  </div>
+                )}
               </div>
-            ) : null}
-            <p className="mt-3 text-xs text-slate-400">
-              {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">Rol: {currentAccount.roleName}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
+                <StatusBadge
+                  variant={
+                    currentEvent.status === "live"
+                      ? "success"
+                      : currentEvent.status === "published"
+                        ? "info"
+                        : currentEvent.status === "draft"
+                          ? "warning"
+                          : "danger"
+                  }
+                >
+                  {formatEventStatus(currentEvent.status)}
+                </StatusBadge>
+                <StatusBadge variant="info">{currentAccount.roleName}</StatusBadge>
+              </div>
+              {isTerminalEvent ? (
+                <div className="mt-3">
+                  <TerminalEventBanner description="El evento activo está cerrado. El menú permanece disponible para revisar información histórica y cambiar de contexto." />
+                </div>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              onClick={onCloseMobileNav}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
+              aria-label="Cerrar menú de navegación"
+            >
+              <span className="text-xl leading-none">×</span>
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={onCloseMobileNav}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
-            aria-label="Cerrar menú de navegación"
-          >
-            <span className="text-xl leading-none">×</span>
-          </button>
-        </div>
+          <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
+            <div className="space-y-5">{renderNavigation(onCloseMobileNav)}</div>
+          </nav>
 
-        <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
-          <div className="space-y-5">
-            <div className="space-y-1">
-              <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
-                Plataforma
+          <div className="border-t border-white/10 px-5 py-4">
+            <div className="surface-elevated p-4">
+              <p className="kicker">Sesión</p>
+              <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {currentOrganization.name} · {currentAccount.roleName}
               </p>
-              <ul className="space-y-1">
-                {platformLinks.map((item) => {
-                  const active = isActivePath(pathname, item.href);
-
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        onClick={onCloseMobileNav}
-                        className={[
-                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition",
-                          active
-                            ? "bg-white/10 text-white"
-                            : "text-slate-300 hover:bg-white/5 hover:text-white",
-                        ].join(" ")}
-                        aria-current={active ? "page" : undefined}
-                      >
-                        <NavIcon name={item.icon} active={active} />
-                        {item.label}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
-            <div className="space-y-1">
-              <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-500">
-                Módulos activos
-              </p>
-              <ul className="space-y-1">
-                {moduleLinks.map((item) => {
-                  const active = isActivePath(pathname, item.href);
-
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        onClick={onCloseMobileNav}
-                        className={[
-                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition",
-                          active
-                            ? "bg-white/10 text-white"
-                            : "text-slate-300 hover:bg-white/5 hover:text-white",
-                        ].join(" ")}
-                        aria-current={active ? "page" : undefined}
-                      >
-                        <NavIcon name={item.icon} active={active} />
-                        {item.label}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="mt-3">
+                <LogoutButton />
+              </div>
             </div>
           </div>
-        </nav>
-
-        <div className="border-t border-white/10 px-5 py-4">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Sesión</p>
-            <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
-            <p className="mt-1 text-xs text-slate-500">{currentAccount.roleName} · {currentOrganization.name}</p>
-            <div className="mt-3">
-              <LogoutButton />
-            </div>
-          </div>
-        </div>
         </div>
       </aside>
     </>

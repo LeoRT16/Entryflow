@@ -1,9 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { getFirstAccessibleNavigationHref, getNavigationModuleForPath, getNavigationPermissionForPath } from "@/features/navigation/navigation";
 import type { Database } from "@/lib/supabase/types";
 import { getSupabaseAnonKey, getSupabaseUrl, hasSupabaseConfig } from "@/lib/supabase/helpers";
 import { loadWorkspaceBootstrap } from "@/services/workspace-loader";
+import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
+import { isModuleEnabled } from "@/features/events/domain";
 
 function createSupabaseMiddlewareClient(request: NextRequest, response: NextResponse) {
   return createServerClient<Database>(getSupabaseUrl(), getSupabaseAnonKey(), {
@@ -51,26 +54,58 @@ export async function middleware(request: NextRequest) {
 
   const isPublicRoute = pathname === "/login" || pathname.startsWith("/auth/");
 
-  if (user && !isPublicRoute) {
-    const workspace = await loadWorkspaceBootstrap({ id: user.id, email: user.email });
+  const workspace = user ? await loadWorkspaceBootstrap({ id: user.id, email: user.email }) : null;
 
-    if (workspace.authState.status === "must-change-password") {
+  const currentProfile = workspace?.profiles.find((profile) => profile.id === workspace.currentProfileId && !profile.deletedAt) ?? null;
+  const currentRole = currentProfile ? workspace?.roles.find((role) => role.id === currentProfile.roleId) ?? getRolePresetBySlug("administrator") : null;
+  const effectivePermissions = currentProfile && currentRole
+    ? resolveAccountPermissions({
+        permissions: currentProfile.metadata?.permissions,
+        rolePermissions: currentRole.permissions,
+        roleMetadata: currentRole.metadata,
+        accountMetadata: currentProfile.metadata,
+      })
+    : [];
+  const currentEvent = workspace?.events.find((event) => event.id === workspace.currentEventId) ?? null;
+
+  const routePermission = getNavigationPermissionForPath(pathname);
+  const routeModule = getNavigationModuleForPath(pathname);
+  const canAccessRoute = routePermission ? effectivePermissions.includes(routePermission) : true;
+  const moduleAvailable = routeModule ? (!currentEvent ? false : isModuleEnabled(currentEvent, routeModule)) : true;
+
+  if (user && !isPublicRoute && workspace?.authState.status === "must-change-password") {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/auth/setup-password";
+    redirectUrl.search = `?next=${encodeURIComponent(`${pathname}${search}` || "/")}`;
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    copyCookies(response, redirectResponse);
+    return redirectResponse;
+  }
+
+  if (user && pathname === "/login") {
+    const fallbackHref = workspace
+      ? getFirstAccessibleNavigationHref((permission) => effectivePermissions.includes(permission), currentEvent ?? undefined)
+      : null;
+
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = fallbackHref ?? "/";
+    redirectUrl.search = "";
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    copyCookies(response, redirectResponse);
+    return redirectResponse;
+  }
+
+  if (user && !isPublicRoute && (!canAccessRoute || !moduleAvailable)) {
+    const fallbackHref = getFirstAccessibleNavigationHref((permission) => effectivePermissions.includes(permission), currentEvent ?? undefined);
+
+    if (fallbackHref && fallbackHref !== pathname) {
       const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/auth/setup-password";
-      redirectUrl.search = `?next=${encodeURIComponent(`${pathname}${search}` || "/")}`;
+      redirectUrl.pathname = fallbackHref;
+      redirectUrl.search = "";
       const redirectResponse = NextResponse.redirect(redirectUrl);
       copyCookies(response, redirectResponse);
       return redirectResponse;
     }
-  }
-
-  if (user && pathname === "/login") {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/auth/setup-password";
-    redirectUrl.search = `?next=${encodeURIComponent("/")}`;
-    const redirectResponse = NextResponse.redirect(redirectUrl);
-    copyCookies(response, redirectResponse);
-    return redirectResponse;
   }
 
   if (!user && !isPublicRoute) {

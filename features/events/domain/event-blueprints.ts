@@ -367,7 +367,7 @@ export function getEventNavigation(event: Pick<Event, "eventType" | "enabledModu
 
   return [
     {
-      title: "Módulos activos",
+      title: "Módulos incluidos",
       items: activeItems.filter((item) => item.enabled),
     },
     {

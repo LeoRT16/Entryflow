@@ -1,733 +1,474 @@
 "use client";
 
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useDeferredValue, useMemo, useState } from "react";
 
-import { useFeedback } from "@/components/premium-feedback";
-import { ContextualCard, GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
 import StatusBadge from "@/components/status-badge";
-import TerminalEventBanner from "@/components/terminal-event-banner";
-import Topbar from "@/components/topbar";
-import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
 import { buildGuestSearchIndex } from "@/features/check-in/utils";
 import { getEntryTone } from "@/features/check-in/domain/check-in-domain";
-import { useCheckInStore } from "@/services/workspace-service";
-import type { Guest, CheckInMethod } from "@/features/check-in/types";
-import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
 import { isTerminalEventStatus } from "@/features/events/domain";
+import type { CheckInMethod, Guest } from "@/features/check-in/types";
+import { useCheckInStore } from "@/services/workspace-service";
 
-export default function CheckInFlow() {
-  const { confirm, showToast } = useFeedback();
-  const pathname = usePathname();
-  const {
-    activeEvent,
-    events,
-    guests,
-    attempts,
-    workspaceIntelligence,
-    workspacePriority,
-    registerCheckIn,
-    searchGuests,
-    setActiveEventId,
-  } = useCheckInStore();
-  const currentEventSummary = workspaceIntelligence.dashboard.currentEventSummary;
-  const attentionCount = workspaceIntelligence.customers.attentionGuests.length;
-  const checkInInsights = workspacePriority.byModule["Check-in"];
-  const prioritySummary = workspacePriority.summary;
-  const health = workspaceIntelligence.health;
-  const flow = workspaceIntelligence.flow;
-  const currentEventStatus = events.find((event) => event.id === activeEvent.id)?.status ?? "live";
-  const isTerminalEvent = isTerminalEventStatus(currentEventStatus);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedPendingIndex, setSelectedPendingIndex] = useState(0);
-  const deferredQuery = useDeferredValue(searchQuery);
-  const activeGuests = useMemo(
-    () => guests.filter((guest) => guest.eventId === activeEvent.id),
-    [activeEvent.id, guests],
-  );
-  const searchResults = useMemo(
-    () =>
-      searchGuests(deferredQuery)
-        .filter((guest) => guest.eventId === activeEvent.id)
-        .sort((a, b) => {
-          const aPriority = a.admissionStatus === "Pendiente" ? 0 : a.attention ? 1 : 2;
-          const bPriority = b.admissionStatus === "Pendiente" ? 0 : b.attention ? 1 : 2;
-          return aPriority - bPriority;
-        })
-        .slice(0, 6),
-    [activeEvent.id, deferredQuery, searchGuests],
-  );
-  const pendingGuests = activeGuests.filter((guest) => guest.admissionStatus === "Pendiente");
-  const recentAttempts = attempts
-    .filter((attempt) => attempt.eventId === activeEvent.id)
-    .filter((attempt) => attempt.guestId || attempt.result === "No encontrado")
-    .slice(0, 5);
-  const percent = Math.round((currentEventSummary.checkedIn / Math.max(currentEventSummary.expectedGuests, 1)) * 100);
-
-  const selectedPendingIndexClamped = pendingGuests.length
-    ? Math.min(selectedPendingIndex, pendingGuests.length - 1)
-    : 0;
-
-  const openGuest = useCallback(
-    (guest: Guest, method: CheckInMethod = "QR") => {
-      if (isTerminalEvent) {
-        return;
-      }
-
-      registerCheckIn({
-        query: buildGuestSearchIndex(guest),
-        method,
-        operator: method === "Manual" ? "Recepción" : "Escáner",
-      });
-    },
-    [isTerminalEvent, registerCheckIn],
-  );
-
-  const executeManualCheckIn = useCallback(() => {
-    if (isTerminalEvent) {
-      return;
+type CheckInAttemptState =
+  | {
+      kind: "idle";
     }
+  | {
+      kind: "success" | "warning" | "danger";
+      title: string;
+      note: string;
+      guest?: Guest;
+    };
 
-    if (!searchQuery.trim()) {
-      showToast({
-        title: "Ingresa un criterio de búsqueda",
-        description: "Podés buscar por nombre, apellido, carnet, WhatsApp, reserva o código.",
-        tone: "warning",
-      });
-      return;
-    }
-
-    const candidate = searchResults[0] ?? null;
-
-    confirm({
-      title: "Registrar ingreso manual",
-      description: candidate
-        ? `${candidate.guestName} será marcado como ingresado manualmente.`
-        : "Se intentará registrar manualmente la coincidencia actual.",
-      tone: "info",
-      confirmLabel: "Registrar ingreso",
-      onConfirm: () => {
-        registerCheckIn({
-          query: candidate ? buildGuestSearchIndex(candidate) : searchQuery,
-          method: "Manual",
-          operator: "Recepción",
-        });
-      },
-    });
-  }, [confirm, isTerminalEvent, registerCheckIn, searchQuery, searchResults, showToast]);
-
-  const continueCheckIn = useCallback(() => {
-    if (isTerminalEvent) {
-      return;
-    }
-
-    const candidate = searchQuery.trim()
-      ? searchResults[0] ?? null
-      : pendingGuests[selectedPendingIndexClamped] ?? pendingGuests[0] ?? null;
-
-    if (!candidate) {
-      showToast({
-        title: "No hay invitados listos",
-        description: "Todavía no existe un invitado pendiente para continuar el flujo.",
-        tone: "warning",
-      });
-      return;
-    }
-
-    openGuest(candidate, "QR");
-  }, [isTerminalEvent, openGuest, pendingGuests, searchQuery, searchResults, selectedPendingIndexClamped, showToast]);
-
-  const goToNextPendingGuest = useCallback(() => {
-    if (!pendingGuests.length) {
-      return;
-    }
-
-    setSelectedPendingIndex((current) => (current + 1) % pendingGuests.length);
-  }, [pendingGuests.length]);
-
-  useKeyboardShortcuts(
-    useMemo(
-      () => [
-        ...(isTerminalEvent
-          ? []
-          : [
-              {
-                id: "check-in-continue",
-                shortcut: "enter",
-                priority: 50,
-                handler: continueCheckIn,
-              },
-              {
-                id: "check-in-next",
-                shortcut: "n",
-                priority: 40,
-                handler: goToNextPendingGuest,
-              },
-            ]),
-      ],
-      [continueCheckIn, goToNextPendingGuest, isTerminalEvent],
-    ),
-  );
-
-  const guidedActions = useMemo(() => {
-    if (isTerminalEvent) {
-      return [];
-    }
-
-    const actions = [
-      ...(pendingGuests[0]
-        ? [
-            {
-              id: `${pendingGuests[0].id}-continue`,
-              label: "Continuar check-in",
-              reason: `${pendingGuests[0].guestName} todavía espera ingreso.`,
-              impact: "Abre el flujo para registrar ese acceso sin perder contexto.",
-              priority: "critical" as const,
-              tone: "danger" as const,
-              onSelect: () => openGuest(pendingGuests[0], "QR"),
-            },
-          ]
-        : []),
-      ...(searchQuery.trim() && searchResults[0]
-        ? [
-            {
-              id: `${searchResults[0].id}-manual`,
-              label: "Ingreso manual",
-              reason: `${searchResults[0].guestName} coincide con la búsqueda actual.`,
-              impact: "Registra el mismo estado compartido sin volver al inicio.",
-              priority: "blocking" as const,
-              tone: "warning" as const,
-              onSelect: executeManualCheckIn,
-            },
-          ]
-        : []),
-      ...checkInInsights.slice(0, 2).map((item) =>
-        buildGuidedActionItem(item, {
-          href: item.route,
-          impact: item.description,
-        }),
-      ),
-    ];
-
-    const seen = new Set<string>();
-
-    return actions
-      .filter((item) => {
-        if (seen.has(item.id)) {
-          return false;
-        }
-
-        seen.add(item.id);
-        return true;
-      })
-      .slice(0, 3);
-  }, [checkInInsights, executeManualCheckIn, isTerminalEvent, openGuest, pendingGuests, searchQuery, searchResults]);
-
-  return (
-    <div className="space-y-6">
-      <Topbar
-        eyebrow="Ingresos"
-        title="Check-in operativo"
-        description="Escanea, revisa y confirma entradas desde un solo panel conectado al resto de la app."
-        primaryAction={{ label: "Ir a reservas", href: "/reservations" }}
-        secondaryAction={{ label: "Abrir invitados", href: "/customers" }}
-      />
-
-      <section className="grid gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusBadge variant="info">Operativo</StatusBadge>
-            <StatusBadge variant="success">{activeEvent.name}</StatusBadge>
-            <StatusBadge variant="warning">{currentEventSummary.pending} pendientes</StatusBadge>
-          </div>
-
-          <div className="space-y-3">
-            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Confirma ingresos con pocos clics.
-            </h1>
-            <p className="max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
-              El flujo prioriza velocidad, estados claros y retroalimentación inmediata para QR válido, usado, anulado, bloqueado o inexistente.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-4">
-            <StatCard label="Ingresados" value={currentEventSummary.checkedIn} tone="success" />
-            <StatCard label="Pendientes" value={currentEventSummary.pending} tone="warning" />
-            <StatCard label="Reservas" value={currentEventSummary.reservations} tone="info" />
-            <StatCard label="Atención" value={attentionCount} tone="danger" />
-          </div>
-        </div>
-
-        <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                Evento activo
-              </p>
-              <p className="mt-2 text-sm text-slate-400">
-                Cambia el contexto operativo sin salir del flujo.
-              </p>
-            </div>
-            <StatusBadge variant="info">Live</StatusBadge>
-          </div>
-
-          <label className="block">
-            <span className="sr-only">Seleccionar evento</span>
-            <select
-              value={activeEvent.id}
-              onChange={(event) => setActiveEventId(event.target.value)}
-              className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/50 focus:bg-white/[0.06]"
-            >
-              {events.map((event) => (
-                <option key={event.id} value={event.id}>
-                  {event.name} — {event.status === "live" ? "En curso" : event.status === "published" ? "Publicado" : event.status === "draft" ? "Borrador" : event.status === "finished" ? "Finalizado" : "Cancelado"}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Link
-              href="/reservations"
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Abrir reservas
-            </Link>
-            <Link
-              href="/customers"
-              className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Ver invitados
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6">
-          {isTerminalEvent ? (
-            <TerminalEventBanner description="El evento está cerrado. El ingreso queda en modo histórico y no admite nuevos check-ins." />
-          ) : (
-            <GuidedActionPanel
-              title="Siguiente paso"
-              description="El panel prioriza el ingreso que más reduce la cola de atención."
-              items={guidedActions}
-            />
-          )}
-
-          {isTerminalEvent ? (
-            <section className="rounded-[2rem] border border-white/10 bg-slate-950/40 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                Scanner deshabilitado
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                Evento cerrado · solo lectura
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-400">
-                Podés revisar trazabilidad, pendientes e historial, pero no registrar nuevos ingresos.
-              </p>
-            </section>
-          ) : (
-            <QrCameraScanner
-              key={`${pathname}-${activeEvent.id}`}
-              eventName={activeEvent.name}
-              onDetected={(value) => {
-                setSearchQuery(value);
-                registerCheckIn({ query: value, method: "QR", operator: "Escáner" });
-              }}
-            />
-          )}
-
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Búsqueda rápida
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                  Buscar por nombre, apellido, carnet, WhatsApp, reserva o código.
-                </h2>
-              </div>
-              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-slate-400">
-                {percent}% de avance
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                disabled={isTerminalEvent}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    continueCheckIn();
-                  }
-
-                  if (event.key === "Escape" && searchQuery) {
-                    event.preventDefault();
-                    setSearchQuery("");
-                  }
-                }}
-                data-shortcut-search="true"
-                placeholder="Escanear QR o buscar invitado"
-                className="h-13 w-full flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06] focus:ring-4 focus:ring-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-
-              <button
-                type="button"
-                onClick={() => registerCheckIn({ query: searchQuery || "QR inexistente", method: "QR", operator: "Escáner" })}
-                disabled={isTerminalEvent}
-                className="inline-flex h-12 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-cyan-400/10"
-              >
-                Validar QR
-              </button>
-
-              <button
-                type="button"
-                onClick={executeManualCheckIn}
-                disabled={isTerminalEvent}
-                className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white/[0.04]"
-              >
-                Ingreso manual
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Resultados
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                  Coincidencias operativas
-                </h2>
-              </div>
-              <StatusBadge variant="info">{searchResults.length}</StatusBadge>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {searchResults.length ? (
-                searchResults.map((guest) => (
-                  <GuestResultCard
-                    key={guest.id}
-                    guest={guest}
-                    readOnly={isTerminalEvent}
-                    onCheckIn={() => openGuest(guest, "QR")}
-                    onManual={() => openGuest(guest, "Manual")}
-                  />
-                ))
-              ) : (
-                <EmptyStateCard
-                  title="No encontramos coincidencias en este evento."
-                  description="Probá con nombre, apellido, carnet, WhatsApp, reserva o código."
-                />
-              )}
-            </div>
-          </section>
-        </div>
-
-        <aside className="space-y-6">
-          <section className="rounded-[2rem] border border-white/10 bg-slate-950/40 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Estado actual
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                  Resumen en vivo
-                </h2>
-              </div>
-              <StatusBadge variant="success">{percent}%</StatusBadge>
-            </div>
-
-            <div className="mt-4 grid gap-3">
-                {[
-                  { label: "Ingresados", value: `${currentEventSummary.checkedIn}`, tone: "success" as const },
-                  { label: "Pendientes", value: `${currentEventSummary.pending}`, tone: "warning" as const },
-                  { label: "Reservas activas", value: `${currentEventSummary.reservations}`, tone: "info" as const },
-                  { label: "Atención", value: `${attentionCount}`, tone: "danger" as const },
-                ].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-slate-500">{item.label}</p>
-                  <p className={`mt-2 text-2xl font-semibold ${item.tone === "danger" ? "text-red-100" : item.tone === "warning" ? "text-amber-100" : item.tone === "success" ? "text-emerald-100" : "text-cyan-100"}`}>{item.value}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Lectura inteligente</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{prioritySummary.message}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">{flow.summary}</p>
-            <p className="mt-2 text-xs uppercase tracking-[0.22em] text-slate-500">{health.title}</p>
-            <div className="mt-4 space-y-3">
-              {checkInInsights.length ? (
-                checkInInsights.slice(0, 3).map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white">{item.title}</p>
-                        <p className="mt-1 text-sm leading-6 text-slate-400">{item.description}</p>
-                      </div>
-                      <StatusBadge variant={item.tone}>{item.priority}</StatusBadge>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
-                  Sin recomendaciones activas.
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Últimos intentos
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                  Trazabilidad de acceso
-                </h2>
-              </div>
-              <StatusBadge variant="info">{recentAttempts.length}</StatusBadge>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {recentAttempts.length ? (
-                recentAttempts.map((attempt) => <AttemptRow key={attempt.id} attempt={attempt} />)
-              ) : (
-                <EmptyStateCard
-                  title="Todavía no hay intentos registrados."
-                  description="Escaneá un QR o probá un ingreso manual para ver la auditoría."
-                />
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Pendientes
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                  Invitados por ingresar
-                </h2>
-              </div>
-              <StatusBadge variant="warning">{currentEventSummary.pending}</StatusBadge>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {pendingGuests.slice(0, 4).map((guest, index) => (
-                isTerminalEvent ? (
-                  <div
-                    key={guest.id}
-                    className={[
-                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left",
-                      selectedPendingIndexClamped === index
-                        ? "border-cyan-400/40 bg-cyan-400/10"
-                        : "border-white/10 bg-slate-950/40",
-                    ].join(" ")}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-white">{guest.guestName}</p>
-                      <p className="mt-1 text-xs text-slate-400">{guest.reservationName}</p>
-                    </div>
-                    <StatusBadge variant="warning">Pendiente</StatusBadge>
-                  </div>
-                ) : (
-                  <button
-                    key={guest.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedPendingIndex(index);
-                      openGuest(guest, "QR");
-                    }}
-                    className={[
-                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition",
-                      selectedPendingIndexClamped === index
-                        ? "border-cyan-400/40 bg-cyan-400/10"
-                        : "border-white/10 bg-slate-950/40 hover:bg-slate-950/55",
-                    ].join(" ")}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-white">{guest.guestName}</p>
-                      <p className="mt-1 text-xs text-slate-400">{guest.reservationName}</p>
-                    </div>
-                    <StatusBadge variant="warning">Pendiente</StatusBadge>
-                  </button>
-                )
-              ))}
-            </div>
-          </section>
-        </aside>
-      </section>
-    </div>
-  );
+function formatEventContext(startAt: string) {
+  return startAt.trim().split(/\s+/).filter(Boolean).join(" · ");
 }
 
-function StatCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "success" | "warning" | "danger" | "info";
-}) {
-  const toneClass =
-    tone === "success"
-      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-      : tone === "warning"
-        ? "border-amber-400/20 bg-amber-400/10 text-amber-100"
-        : tone === "danger"
-          ? "border-red-400/20 bg-red-400/10 text-red-100"
-          : "border-cyan-400/20 bg-cyan-400/10 text-cyan-100";
-
-  return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
-      <p className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xl font-semibold ${toneClass}`}>{value}</p>
-    </div>
-  );
+function getEventStatusLabel(status: "live" | "published" | "draft" | "finished" | "cancelled") {
+  if (status === "live") return "En curso";
+  if (status === "published") return "Publicado";
+  if (status === "draft") return "Borrador";
+  if (status === "finished") return "Finalizado";
+  return "Cancelado";
 }
 
-function GuestResultCard({
-  guest,
-  readOnly,
-  onCheckIn,
-  onManual,
-}: {
-  guest: Guest;
-  readOnly: boolean;
-  onCheckIn: () => void;
-  onManual: () => void;
-}) {
-  if (readOnly) {
-    return (
-      <article className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <h3 className="text-lg font-semibold tracking-tight text-white">{guest.guestName}</h3>
-            <p className="mt-1 text-sm text-slate-400">
-              {guest.reservationName} · {guest.eventName}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <StatusBadge variant={getEntryTone(guest.deliveryStatus)}>{guest.deliveryStatus}</StatusBadge>
-              <StatusBadge variant={getEntryTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
-              <StatusBadge variant="info">{guest.invitationCode}</StatusBadge>
-            </div>
-          </div>
+function getAttemptTone(result: string) {
+  if (result === "Encontrado") return "success" as const;
+  if (result === "Usado") return "warning" as const;
+  if (result === "Anulado" || result === "Bloqueado") return "danger" as const;
+  return "danger" as const;
+}
 
-          <StatusBadge variant="warning">Solo lectura</StatusBadge>
-        </div>
-      </article>
-    );
+function getEligibilityMessage(guest: Guest) {
+  if (guest.admissionStatus === "Ingresó") {
+    return {
+      canEnter: false,
+      tone: "warning" as const,
+      label: "Ya ingresó",
+      detail: "Este acceso ya fue consumido.",
+    };
   }
 
+  if (guest.admissionStatus === "Anulada" || guest.admissionStatus === "Bloqueada" || guest.qrStatus === "Anulado" || guest.qrStatus === "Bloqueado") {
+    return {
+      canEnter: false,
+      tone: "danger" as const,
+      label: "No puede entrar",
+      detail: "El acceso está bloqueado o anulado.",
+    };
+  }
+
+  if (guest.qrStatus === "Usado") {
+    return {
+      canEnter: false,
+      tone: "warning" as const,
+      label: "Ya fue usado",
+      detail: "El código ya fue consumido en un ingreso previo.",
+    };
+  }
+
+  return {
+    canEnter: true,
+    tone: "success" as const,
+    label: "Puede entrar",
+    detail: "La validación coincide con un acceso habilitado.",
+  };
+}
+
+export default function CheckInFlow() {
+  const { currentEvent } = useCheckInStore();
+
+  return <CheckInWorkspace key={currentEvent.id} />;
+}
+
+function CheckInWorkspace() {
+  const {
+    currentEvent,
+    currentVenue,
+    guests,
+    registerCheckIn,
+    searchGuests: searchGuestList,
+  } = useCheckInStore();
+
+  const eventGuests = useMemo(() => guests.filter((guest) => guest.eventId === currentEvent.id), [currentEvent.id, guests]);
+  const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
+  const [query, setQuery] = useState("");
+  const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+  const [validationMethod, setValidationMethod] = useState<CheckInMethod>("Manual");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [attemptState, setAttemptState] = useState<CheckInAttemptState>({ kind: "idle" });
+
+  const deferredQuery = useDeferredValue(query);
+  const normalizedQuery = deferredQuery.trim();
+  const shouldShowResults = normalizedQuery.length >= 2;
+
+  const searchResults = useMemo(
+    () => (shouldShowResults ? searchGuestList(normalizedQuery).filter((guest) => guest.eventId === currentEvent.id).slice(0, 6) : []),
+    [currentEvent.id, normalizedQuery, searchGuestList, shouldShowResults],
+  );
+
+  const selectedGuest =
+    eventGuests.find((guest) => guest.id === selectedGuestId)
+    ?? (searchResults.length === 1 ? searchResults[0] : null);
+
+  const eligibility = selectedGuest ? getEligibilityMessage(selectedGuest) : null;
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    setSelectedGuestId(null);
+    setValidationMethod("Manual");
+    setAttemptState({ kind: "idle" });
+  };
+
+  const handleDetected = (value: string) => {
+    setQuery(value);
+    setValidationMethod("QR");
+    setAttemptState({ kind: "idle" });
+
+    const matches = searchGuestList(value).filter((guest) => guest.eventId === currentEvent.id);
+    setSelectedGuestId(matches.length === 1 ? matches[0].id : null);
+  };
+
+  const handleSelectGuest = (guest: Guest) => {
+    setSelectedGuestId(guest.id);
+    setValidationMethod("Manual");
+    setAttemptState({ kind: "idle" });
+  };
+
+  const handleRegister = async () => {
+    if (!selectedGuest || isSubmitting || isTerminalEvent) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setAttemptState({ kind: "idle" });
+
+    try {
+      const result = await registerCheckIn({
+        query: buildGuestSearchIndex(selectedGuest),
+        method: validationMethod,
+        operator: validationMethod === "Manual" ? "Recepción" : "Escáner",
+      });
+
+      const tone = getAttemptTone(result.result);
+
+      setAttemptState({
+        kind: tone,
+        title:
+          result.result === "Encontrado"
+            ? "Ingreso registrado"
+            : result.result === "Usado"
+              ? "Ingreso ya consumido"
+              : result.result === "Anulado"
+                ? "Ingreso anulado"
+                : "Ingreso bloqueado",
+        note: result.note,
+        guest: result.guest ?? selectedGuest,
+      });
+
+      if (result.result === "Encontrado") {
+        setQuery("");
+        setSelectedGuestId(null);
+      }
+    } catch (error) {
+      setAttemptState({
+        kind: "danger",
+        title: "No se pudo registrar el ingreso",
+        note: error instanceof Error ? error.message : "No se pudo completar la validación actual.",
+        guest: selectedGuest,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetAttempt = () => {
+    setQuery("");
+    setSelectedGuestId(null);
+    setValidationMethod("Manual");
+    setAttemptState({ kind: "idle" });
+  };
+
   return (
-    <ContextualCard
-      items={[
-        {
-          id: `${guest.id}-qr`,
-          label: "Registrar ingreso",
-          description: "Validar con QR usando el flujo real.",
-          tone: "success" as const,
-          onSelect: onCheckIn,
-        },
-        {
-          id: `${guest.id}-manual`,
-          label: "Ingreso manual",
-          description: "Registrar el mismo estado compartido.",
-          tone: "info" as const,
-          onSelect: onManual,
-        },
-        {
-          id: `${guest.id}-copy`,
-          label: "Copiar código",
-          description: "Copiar el código de invitación al portapapeles.",
-          tone: "warning" as const,
-          onSelect: async () => {
-            await navigator.clipboard.writeText(guest.invitationCode);
-          },
-        },
-      ]}
-      className="rounded-[1.5rem] border border-white/10 bg-slate-950/45 p-4"
-    >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <h3 className="text-lg font-semibold tracking-tight text-white">{guest.guestName}</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            {guest.reservationName} · {guest.eventName}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <StatusBadge variant={getEntryTone(guest.deliveryStatus)}>{guest.deliveryStatus}</StatusBadge>
-            <StatusBadge variant={getEntryTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
-            <StatusBadge variant="info">{guest.invitationCode}</StatusBadge>
-            {guest.gate ? <StatusBadge variant="info">{guest.gate}</StatusBadge> : null}
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(244,114,182,0.08),_transparent_26%),linear-gradient(180deg,#07111f_0%,#08111d_46%,#050b14_100%)] px-4 py-6 text-white sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+        <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_90px_rgba(2,6,23,0.35)] backdrop-blur">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-slate-500">
+                INGRESO
+              </p>
+              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Ingreso
+              </h1>
+              <p className="max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
+                Valida y registra el acceso de invitados al evento activo.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge variant={currentEvent.status === "live" ? "success" : "info"}>
+                {getEventStatusLabel(currentEvent.status)}
+              </StatusBadge>
+              {isTerminalEvent ? (
+                <StatusBadge variant="warning">Evento cerrado</StatusBadge>
+              ) : null}
+            </div>
           </div>
-        </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onCheckIn}
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
-          >
-            Registrar QR
-          </button>
-          <button
-            type="button"
-            onClick={onManual}
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-          >
-            Manual
-          </button>
-        </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Evento
+              </p>
+              <p className="mt-2 text-sm font-medium text-white">{currentEvent.name}</p>
+            </div>
+            <div className="rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Fecha y hora
+              </p>
+              <p className="mt-2 text-sm font-medium text-white">
+                {formatEventContext(currentEvent.startAt)}
+              </p>
+            </div>
+            <div className="rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Sede
+              </p>
+              <p className="mt-2 text-sm font-medium text-white">{currentEvent.venue || currentVenue?.name || "Sin sede"}</p>
+            </div>
+            <div className="rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Estado
+              </p>
+              <p className="mt-2 text-sm font-medium text-white">
+                {currentEvent.status === "live" ? "En curso" : "Próximo"}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-6">
+            <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                    Búsqueda manual
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                    Buscar por nombre, carnet, invitación o reserva
+                  </h2>
+                </div>
+                <StatusBadge variant={validationMethod === "QR" ? "info" : "success"}>
+                  {validationMethod === "QR" ? "Validación por QR" : "Validación manual"}
+                </StatusBadge>
+              </div>
+
+              <label className="mt-4 block">
+                <span className="sr-only">Buscar invitado</span>
+                <input
+                  value={query}
+                  onChange={(event) => handleQueryChange(event.target.value)}
+                  placeholder="Nombre, carnet, código de invitación o reserva"
+                  className="mt-1 w-full rounded-[1.25rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/20"
+                />
+              </label>
+
+              <div className="mt-4 rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3 text-sm leading-6 text-slate-300">
+                Escribe un identificador existente o escanea un QR. Si la búsqueda devuelve una sola coincidencia, la validación se abre de inmediato.
+              </div>
+
+              {shouldShowResults ? (
+                searchResults.length > 1 ? (
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                        Coincidencias
+                      </p>
+                      <p className="text-xs text-slate-400">{searchResults.length} resultados</p>
+                    </div>
+
+                    <div className="grid gap-3">
+                      {searchResults.map((guest) => {
+                        const tone = getEntryTone(guest.admissionStatus);
+                        return (
+                          <button
+                            key={guest.id}
+                            type="button"
+                            onClick={() => handleSelectGuest(guest)}
+                            className="rounded-[1.35rem] border border-white/10 bg-slate-950/70 p-4 text-left transition hover:border-cyan-400/30 hover:bg-slate-950/90"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-base font-semibold text-white">{guest.guestName}</p>
+                                <p className="mt-1 text-sm text-slate-400">
+                                  {guest.reservationCode} · {guest.reservationName}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <StatusBadge variant={tone}>{guest.admissionStatus}</StatusBadge>
+                                <StatusBadge variant={getEntryTone(guest.qrStatus)}>{guest.qrStatus}</StatusBadge>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+                              <span>{guest.carnet}</span>
+                              <span>·</span>
+                              <span>{guest.tableName ?? "Sin mesa"}</span>
+                              <span>·</span>
+                              <span>{guest.invitationCode}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3 text-sm text-slate-300">
+                    Una coincidencia encontrada. La validación se muestra en el panel lateral.
+                  </div>
+                )
+              ) : null}
+            </section>
+
+            <QrCameraScanner eventName={currentEvent.name} onDetected={handleDetected} />
+          </div>
+
+          <aside className="space-y-6">
+            <section className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                    Validación actual
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                    Una sola incidencia operativa visible
+                  </h2>
+                </div>
+
+                {selectedGuest ? (
+                  <StatusBadge variant={eligibility?.tone ?? "info"}>
+                    {eligibility?.label ?? "Listo"}
+                  </StatusBadge>
+                ) : (
+                  <StatusBadge variant="info">Esperando lectura</StatusBadge>
+                )}
+              </div>
+
+              {attemptState.kind !== "idle" ? (
+                <div
+                  className={[
+                    "mt-4 rounded-[1.35rem] border px-4 py-4",
+                    attemptState.kind === "success"
+                      ? "border-emerald-400/20 bg-emerald-400/10"
+                      : attemptState.kind === "warning"
+                        ? "border-amber-400/20 bg-amber-400/10"
+                        : "border-rose-400/20 bg-rose-400/10",
+                  ].join(" ")}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{attemptState.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-200">{attemptState.note}</p>
+                    </div>
+                    {attemptState.guest ? (
+                      <StatusBadge variant={attemptState.kind === "success" ? "success" : attemptState.kind === "warning" ? "warning" : "danger"}>
+                        {attemptState.guest.guestName}
+                      </StatusBadge>
+                    ) : null}
+                  </div>
+
+                  {attemptState.kind === "success" && attemptState.guest ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-[1.1rem] border border-white/10 bg-black/15 px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                          Confirmación
+                        </p>
+                        <p className="mt-2 text-sm text-white">Ingreso registrado para {attemptState.guest.guestName}.</p>
+                      </div>
+                      <div className="rounded-[1.1rem] border border-white/10 bg-black/15 px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                          Mesa
+                        </p>
+                        <p className="mt-2 text-sm text-white">{attemptState.guest.tableName ?? "Sin mesa"}</p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={resetAttempt}
+                    className="mt-4 inline-flex h-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                  >
+                    Nueva lectura
+                  </button>
+                </div>
+              ) : selectedGuest ? (
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-[1.35rem] border border-white/10 bg-black/15 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-semibold text-white">{selectedGuest.guestName}</p>
+                        <p className="mt-1 text-sm text-slate-400">
+                          {selectedGuest.reservationCode} · {selectedGuest.reservationName}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <StatusBadge variant={eligibility?.tone ?? "info"}>{eligibility?.label ?? "Listo"}</StatusBadge>
+                        <StatusBadge variant={getEntryTone(selectedGuest.admissionStatus)}>{selectedGuest.admissionStatus}</StatusBadge>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                          Puede entrar
+                        </p>
+                        <p className="mt-2 text-sm text-white">{eligibility?.canEnter ? "Sí" : "No"}</p>
+                      </div>
+                      <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+                          Qué hacer
+                        </p>
+                        <p className="mt-2 text-sm text-white">Registrar ingreso</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-300">
+                      {eligibility?.detail ?? "La validación está lista para confirmar el acceso."}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleRegister()}
+                    disabled={isSubmitting || isTerminalEvent}
+                    className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSubmitting ? "Registrando ingreso..." : "Registrar ingreso"}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-[1.35rem] border border-dashed border-white/10 bg-black/10 px-4 py-6 text-sm leading-6 text-slate-300">
+                  Escaneá un QR o buscá un invitado para abrir la validación.
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Flujo
+              </p>
+              <div className="mt-4 space-y-3 text-sm leading-6 text-slate-300">
+                <p>1. Escaneá el QR o escribí un identificador conocido.</p>
+                <p>2. Confirmá la coincidencia correcta en el panel lateral.</p>
+                <p>3. Registrá el ingreso sin abrir listas ni paneles extra.</p>
+              </div>
+            </section>
+          </aside>
+        </section>
       </div>
-    </ContextualCard>
-  );
-}
-
-function AttemptRow({ attempt }: { attempt: { timestamp: string; guestName?: string; result: string; note: string } }) {
-  return (
-    <ContextualCard
-      items={[
-        {
-          id: `${attempt.timestamp}-copy-note`,
-          label: "Copiar nota",
-          description: "Copiar el mensaje del intento.",
-          tone: "info" as const,
-          onSelect: async () => {
-            await navigator.clipboard.writeText(attempt.note);
-          },
-        },
-      ]}
-      className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-white">{attempt.guestName ?? attempt.result}</p>
-          <p className="mt-1 text-sm text-slate-400">{attempt.note}</p>
-        </div>
-        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-          {attempt.timestamp}
-        </span>
-      </div>
-    </ContextualCard>
-  );
-}
-
-function EmptyStateCard({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-center">
-      <p className="text-sm font-medium text-white">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
-    </div>
+    </main>
   );
 }

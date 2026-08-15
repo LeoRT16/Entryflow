@@ -1,42 +1,71 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 
-import Topbar from "@/components/topbar";
 import StatusBadge from "@/components/status-badge";
-import type { Event } from "@/features/domain/types";
-import {
-  getEnabledModules,
-  getEventBlueprint,
-  getEventModuleLabel,
-  getEventNavigation,
-  getEventTypeLabel,
-  getOperationalModelLabel,
-  isTerminalEventStatus,
-} from "@/features/events/domain";
-import { useCheckInStore } from "@/services/workspace-service";
+import type { Event, ResourceType } from "@/features/domain/types";
+import { getEventTypeLabel, getOperationalModelLabel, isTerminalEventStatus } from "@/features/events/domain";
+import EventEditorModal from "@/features/events/components/event-editor-modal";
 import EventCreationWizard from "@/features/events/components/event-creation-wizard";
-import OrganizationCreationModal from "@/features/events/components/organization-creation-modal";
+import { useCheckInStore } from "@/services/workspace-service";
 
 type EventStatusGroup = "live" | "upcoming" | "finished";
+
+type EventAction = {
+  label: string;
+  tone: "success" | "warning" | "info";
+  onClick: () => void;
+};
+
+const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
+  table: "Mesas",
+  lounge: "Lounges",
+  box: "Boxes",
+  seat: "Asientos",
+  zone: "Zonas",
+  booth: "Stands",
+  room: "Salas",
+  gate: "Puertas",
+  area: "Áreas",
+};
+
+function formatEventStatusLabel(status: Event["status"]) {
+  if (status === "live") return "En curso";
+  if (status === "published") return "Publicado";
+  if (status === "draft") return "Borrador";
+  if (status === "finished") return "Finalizado";
+  return "Cancelado";
+}
+
+function getEventStatusTone(status: Event["status"]) {
+  if (status === "live") return "success" as const;
+  if (status === "published") return "info" as const;
+  if (status === "draft") return "warning" as const;
+  return "warning" as const;
+}
+
+function getResourceTypeLabel(resourceType: ResourceType) {
+  return RESOURCE_TYPE_LABELS[resourceType] ?? resourceType;
+}
+
+function formatResourceTypes(resourceTypes: Event["resourceTypes"]) {
+  return resourceTypes.map(getResourceTypeLabel).join(" · ");
+}
 
 export default function EventLibrary() {
   const {
     events,
-    organizations,
-    venues,
     currentEventId,
     currentEvent,
     currentOrganization,
-    setCurrentOrganizationId,
     createEvent,
-    createOrganization,
+    setCurrentEventId,
     setEventStatus,
+    venues,
   } = useCheckInStore();
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [organizationOpen, setOrganizationOpen] = useState(false);
   const [wizardOrganizationId, setWizardOrganizationId] = useState(currentOrganization.id);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const groupedEvents = useMemo(() => {
     const groups: Record<EventStatusGroup, Event[]> = {
@@ -62,14 +91,29 @@ export default function EventLibrary() {
     return groups;
   }, [events]);
 
-  const currentNavigation = currentEvent ? getEventNavigation(currentEvent) : [];
-  const counts = useMemo(
-    () => ({
-      active: events.filter((event) => event.status === "live").length,
-      upcoming: events.filter((event) => event.status === "published" || event.status === "draft").length,
-      finished: events.filter((event) => event.status === "finished" || event.status === "cancelled").length,
-    }),
-    [events],
+  const visibleSections = useMemo(
+    () =>
+      [
+        {
+          key: "live",
+          title: "Activos",
+          accent: "success" as const,
+          events: groupedEvents.live,
+        },
+        {
+          key: "upcoming",
+          title: "Próximos",
+          accent: "info" as const,
+          events: groupedEvents.upcoming,
+        },
+        {
+          key: "finished",
+          title: "Finalizados",
+          accent: "warning" as const,
+          events: groupedEvents.finished,
+        },
+      ].filter((section) => section.events.length > 0),
+    [groupedEvents],
   );
 
   const openEventWizard = (organizationId: string = currentOrganization.id) => {
@@ -77,256 +121,67 @@ export default function EventLibrary() {
     setWizardOpen(true);
   };
 
-  const handleCreateOrganization = async (nextOrganization: Parameters<typeof createOrganization>[0]) => {
-    await createOrganization(nextOrganization);
-    setWizardOrganizationId(nextOrganization.id);
-    setOrganizationOpen(false);
-    setWizardOpen(true);
-    return nextOrganization;
+  const openEventEditor = () => {
+    setEditorOpen(true);
   };
 
-  const currentEventAction =
+  const currentEventAction: EventAction | null =
     isTerminalEventStatus(currentEvent.status)
       ? null
       : currentEvent.status === "draft"
-      ? {
-          label: "Publicar evento",
-          tone: "info" as const,
-          onClick: () => setEventStatus(currentEvent.id, "published"),
-        }
-      : {
+        ? {
+            label: "Publicar evento",
+            tone: "info",
+            onClick: () => setEventStatus(currentEvent.id, "published"),
+          }
+        : {
             label: "Cerrar evento",
-            tone: "warning" as const,
+            tone: "warning",
             onClick: () => setEventStatus(currentEvent.id, "finished"),
           };
 
   return (
-    <div className="space-y-6">
-      <Topbar
-        eyebrow="Eventos"
-        title="Biblioteca de eventos"
-        description="La plataforma permite preparar conciertos, conferencias, teatros y eventos privados con contratos distintos sin salir del espacio de trabajo."
-        primaryAction={{ label: "Ir a operaciones", href: "/operations" }}
-        secondaryAction={{ label: "Centro de operaciones", href: "/" }}
-      />
-
-      <section className="grid gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] xl:grid-cols-[1.08fr_0.92fr]">
-        <div className="space-y-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusBadge variant="info">Organización: {currentOrganization.name}</StatusBadge>
-            <StatusBadge variant="success">Evento actual: {currentEvent?.name ?? "Sin evento"}</StatusBadge>
-            <StatusBadge variant="warning">{counts.upcoming} próximos</StatusBadge>
-            <StatusBadge variant="danger">{counts.finished} finalizados</StatusBadge>
-          </div>
-
-          <div className="space-y-3">
-            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Crea y explora distintos tipos de evento.
-            </h1>
-            <p className="max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
-              El asistente genera eventos con plantillas oficiales, módulos sugeridos, métodos de admisión y navegación conceptual para cada formato.
+    <div className="mx-auto w-full max-w-[1140px] space-y-5 px-4 sm:px-6 lg:px-0">
+      <header className="surface-panel flex flex-col gap-3 px-4 py-4 sm:px-5 sm:py-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-2">
+            <p className="kicker">Eventos</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2.35rem]">Eventos</h1>
+            <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-[0.95rem]">
+              Crea y administra los eventos de tu organización.
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-4">
-            <Metric label="Activos" value={counts.active} tone="success" />
-            <Metric label="Próximos" value={counts.upcoming} tone="info" />
-            <Metric label="Finalizados" value={counts.finished} tone="warning" />
-            <Metric label="Totales" value={events.length} tone="danger" />
-          </div>
+          <button
+            type="button"
+            onClick={() => openEventWizard(currentOrganization.id)}
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+          >
+            + Crear evento
+          </button>
         </div>
-
-        <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                Contexto actual
-              </p>
-              <p className="mt-2 text-sm text-slate-400">
-                La plataforma sigue operando sobre el mismo evento activo de siempre.
-              </p>
-            </div>
-            <StatusBadge variant="info">Evento actual</StatusBadge>
-          </div>
-
-          <div className="rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Organización
-                </p>
-                <p className="mt-2 text-sm text-slate-400">Crea o cambia el espacio operativo antes de abrir el asistente.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOrganizationOpen(true)}
-                className="inline-flex h-10 items-center justify-center rounded-xl bg-white px-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
-              >
-                Nueva organización
-              </button>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {organizations.map((organization) => {
-                const selected = organization.id === currentOrganization.id;
-
-                return (
-                  <button
-                    key={organization.id}
-                    type="button"
-                    onClick={() => setCurrentOrganizationId(organization.id)}
-                    className={[
-                      "rounded-full border px-3 py-2 text-xs font-medium uppercase tracking-[0.22em] transition",
-                      selected
-                        ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
-                        : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20 hover:bg-white/[0.06]",
-                    ].join(" ")}
-                  >
-                    {organization.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Evento actual</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-              {currentEvent?.name}
-            </h2>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <StatusBadge variant="success">{currentEvent ? getEventTypeLabel(currentEvent.eventType) : "Sin tipo"}</StatusBadge>
-              <StatusBadge variant="info">{currentEvent ? currentEvent.venue : "Sin ubicación"}</StatusBadge>
-              <StatusBadge variant="warning">{currentEvent ? currentEvent.capacity : 0} cupos</StatusBadge>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <MiniStat label="Modelo" value={currentEvent ? getOperationalModelLabel(currentEvent.operationalModel) : "-"} />
-              <MiniStat label="Módulos" value={currentEvent ? `${getEnabledModules(currentEvent).length}` : "0"} />
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => openEventWizard(currentOrganization.id)}
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-              >
-                Crear evento
-              </button>
-              {currentEventAction ? (
-                <button
-                  type="button"
-                  onClick={currentEventAction.onClick}
-                  className={[
-                    "inline-flex h-11 items-center justify-center rounded-xl border px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
-                    currentEventAction.tone === "warning"
-                      ? "border-amber-400/25 bg-amber-400/10 text-amber-50 hover:bg-amber-400/15"
-                      : "border-cyan-400/25 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/15",
-                  ].join(" ")}
-                >
-                  {currentEventAction.label}
-                </button>
-              ) : null}
-              <Link
-                href="/timeline"
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
-              >
-                Ver actividad
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+      </header>
 
       <section className="space-y-5">
-        <LibrarySection
-          title="Eventos activos"
-          description="Operando ahora mismo en la plataforma conectada al espacio de trabajo activo."
-          events={groupedEvents.live}
-          accent="success"
-          currentEventId={currentEventId}
-        />
-        <LibrarySection
-          title="Próximos"
-          description="Eventos publicados o en borrador que todavía no están activos."
-          events={groupedEvents.upcoming}
-          accent="info"
-          currentEventId={currentEventId}
-        />
-        <LibrarySection
-          title="Finalizados"
-          description="Eventos ya cerrados para revisión y análisis."
-          events={groupedEvents.finished}
-          accent="warning"
-          currentEventId={currentEventId}
-        />
+        {visibleSections.length ? (
+          visibleSections.map((section) => (
+            <LibrarySection
+              key={section.key}
+              title={section.title}
+              events={section.events}
+              accent={section.accent}
+              currentEventId={currentEventId}
+              currentEventAction={currentEventAction}
+              onSelectEvent={setCurrentEventId}
+              onEditCurrentEvent={openEventEditor}
+            />
+          ))
+        ) : (
+          <section className="surface-panel p-4 sm:p-5">
+            <p className="text-sm text-slate-400">No hay eventos para mostrar.</p>
+          </section>
+        )}
       </section>
-
-      {currentEvent ? (
-        <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Preview del evento actual</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{currentEvent.name}</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-400">{currentEvent.description}</p>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <MiniStat label="Tipo" value={getEventTypeLabel(currentEvent.eventType)} />
-              <MiniStat label="Estado" value={formatEventStatusLabel(currentEvent.status)} />
-              <MiniStat label="Capacidad" value={`${currentEvent.capacity}`} />
-              <MiniStat label="Ubicación" value={currentEvent.venue} />
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {getEnabledModules(currentEvent).map((module) => (
-                <span
-                  key={module}
-                  className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-medium uppercase tracking-[0.22em] text-slate-300"
-                >
-                  {getEventModuleLabel(module)}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Navegación conceptual</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Cómo se vería este evento</h2>
-
-            <div className="mt-4 space-y-4">
-              {currentNavigation.map((group) => (
-                <div key={group.title} className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">{group.title}</p>
-                  <div className="space-y-2">
-                    {group.items.map((item) => (
-                      <div
-                        key={`${group.title}-${item.module}`}
-                        className={`rounded-2xl border px-3 py-3 ${
-                          item.enabled
-                            ? "border-white/10 bg-white/[0.04]"
-                            : item.future
-                              ? "border-white/5 bg-black/20 opacity-70"
-                              : "border-white/5 bg-black/10 opacity-55"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-white">{item.label}</p>
-                            <p className="text-xs text-slate-400">{item.description}</p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1 text-[10px] uppercase tracking-[0.24em] text-slate-500">
-                            <span>{item.required ? "Esencial" : item.future ? "Próximamente" : "Opcional"}</span>
-                            <span>{item.route ?? "Sin ruta legacy"}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
 
       {wizardOpen ? (
         <EventCreationWizard
@@ -339,12 +194,14 @@ export default function EventLibrary() {
         />
       ) : null}
 
-      {organizationOpen ? (
-        <OrganizationCreationModal
-          open={organizationOpen}
-          onClose={() => setOrganizationOpen(false)}
-          onCreate={handleCreateOrganization}
-          templateOrganization={currentOrganization}
+      {editorOpen ? (
+        <EventEditorModal
+          key={currentEvent.id}
+          open={editorOpen}
+          event={currentEvent}
+          venues={venues}
+          onClose={() => setEditorOpen(false)}
+          onSave={createEvent}
         />
       ) : null}
     </div>
@@ -353,186 +210,134 @@ export default function EventLibrary() {
 
 function LibrarySection({
   title,
-  description,
   events,
   accent,
   currentEventId,
+  currentEventAction,
+  onSelectEvent,
+  onEditCurrentEvent,
 }: {
   title: string;
-  description: string;
   events: Event[];
   accent: "success" | "info" | "warning";
   currentEventId: string;
+  currentEventAction: EventAction | null;
+  onSelectEvent: (eventId: string) => void;
+  onEditCurrentEvent: () => void;
 }) {
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+    <section className="surface-panel p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{title}</p>
-          <h3 className="mt-2 text-xl font-semibold text-white">{description}</h3>
+        <div className="min-w-0">
+          <p className="kicker">{title}</p>
         </div>
         <StatusBadge variant={accent}>{events.length}</StatusBadge>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        {events.length ? (
-          events.map((event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              current={event.id === currentEventId}
-            />
-          ))
-        ) : (
-          <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-black/10 p-5 text-sm text-slate-500 lg:col-span-2 xl:col-span-3">
-            No hay eventos en esta sección todavía.
-          </div>
-        )}
+      <div className="mt-3 space-y-2.5">
+        {events.map((event) => (
+          <EventCard
+            key={event.id}
+            event={event}
+            current={event.id === currentEventId}
+            currentEventAction={event.id === currentEventId ? currentEventAction : null}
+            onSelect={() => onSelectEvent(event.id)}
+            onEditCurrentEvent={onEditCurrentEvent}
+          />
+        ))}
       </div>
     </section>
   );
 }
 
-function EventCard({ event, current }: { event: Event; current: boolean }) {
-  const blueprint = getEventBlueprint(event.eventType);
-  const previewModules = getEnabledModules(event).slice(0, 4);
-  const previewResources = event.resourceTypes.slice(0, 3);
-  const navigation = getEventNavigation(event);
+function EventCard({
+  event,
+  current,
+  currentEventAction,
+  onSelect,
+  onEditCurrentEvent,
+}: {
+  event: Event;
+  current: boolean;
+  currentEventAction: EventAction | null;
+  onSelect: () => void;
+  onEditCurrentEvent: () => void;
+}) {
+  const resourceLabel = event.resourceTypes.length ? formatResourceTypes(event.resourceTypes.slice(0, 3)) : "";
 
   return (
     <article
-      className={`flex h-full flex-col rounded-[1.5rem] border p-4 transition ${
+      className={`surface-elevated flex h-full flex-col gap-3 p-3 sm:p-4 transition ${
         current
-          ? "border-cyan-400/50 bg-cyan-400/10 shadow-[0_0_0_1px_rgba(34,211,238,0.16)]"
+          ? "border-cyan-400/50 bg-cyan-400/8 shadow-[0_0_0_1px_rgba(34,211,238,0.14)]"
           : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-            {current ? "Evento actual" : formatEventStatusLabel(event.status)}
-          </p>
-          <h4 className="mt-2 text-xl font-semibold text-white">{event.name}</h4>
-        </div>
-        <span className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] ${toneClassForEvent(event.status)}`}>
-          {getEventTypeLabel(event.eventType)}
-        </span>
-      </div>
-
-      <p className="mt-3 text-sm leading-6 text-slate-400">{event.description}</p>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <MiniStat label="Modelo" value={getOperationalModelLabel(event.operationalModel)} />
-        <MiniStat label="Capacidad" value={`${event.capacity}`} />
-        <MiniStat label="Ubicación" value={event.venue} />
-        <MiniStat label="Módulos" value={`${event.enabledModules.length}`} />
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {previewModules.map((module) => (
-          <span key={module} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.22em] text-slate-300">
-            {getEventModuleLabel(module)}
-          </span>
-        ))}
-        {event.enabledModules.length > previewModules.length ? (
-          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.22em] text-slate-500">
-            +{event.enabledModules.length - previewModules.length}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-black/15 p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Recursos sugeridos</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {previewResources.length ? (
-            previewResources.map((resourceType) => (
-              <span key={resourceType} className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-slate-300">
-                {resourceType}
-              </span>
-            ))
-          ) : (
-            <span className="text-xs text-slate-500">Sin recursos sugeridos.</span>
-          )}
-        </div>
-        {!event.enabledModules.includes("resources") ? (
-          <p className="mt-3 text-xs leading-5 text-slate-500">
-            Este preset no depende de Tables. Los recursos solo se sugieren para configuración futura.
-          </p>
-        ) : null}
-      </div>
-
-      <div className="mt-4 rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Navegación</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {navigation[0]?.items.slice(0, 4).map((item) => (
-            <span
-              key={item.module}
-              className={`rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.22em] ${
-                item.enabled
-                  ? "border-cyan-400/20 bg-cyan-400/10 text-cyan-100"
-                  : "border-white/10 bg-black/20 text-slate-500"
-              }`}
-            >
-              {item.label}
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge variant={getEventStatusTone(event.status)}>{formatEventStatusLabel(event.status)}</StatusBadge>
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-300">
+              {getEventTypeLabel(event.eventType)}
             </span>
-          ))}
+          </div>
+
+          <h3 className="break-words text-[1.05rem] font-semibold tracking-tight text-white sm:text-lg">{event.name}</h3>
+
+          {event.description ? <p className="break-words text-sm leading-6 text-slate-400">{event.description}</p> : null}
         </div>
+
+        {current ? <StatusBadge variant="info">En uso</StatusBadge> : null}
       </div>
 
-      {current ? (
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs font-medium text-cyan-100">
-          <span className="h-2 w-2 rounded-full bg-cyan-300" />
-          En uso en la sesión actual
-        </div>
-      ) : null}
+      <div className="space-y-1.5 text-sm leading-6 text-slate-300">
+        <p className="min-w-0 break-words">
+          <span className="text-slate-500">Modelo</span> {getOperationalModelLabel(event.operationalModel)} · {event.capacity} personas · {event.venue}
+        </p>
+        {resourceLabel ? (
+          <p className="min-w-0 break-words">
+            <span className="text-slate-500">Recursos</span> {resourceLabel}
+          </p>
+        ) : null}
+      </div>
 
-      <div className="mt-4 text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-        {blueprint.icon} · plantilla {blueprint.eventType}
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        {current ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onEditCurrentEvent}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+            >
+              Editar evento
+            </button>
+            {currentEventAction ? (
+              <button
+                type="button"
+                onClick={currentEventAction.onClick}
+                className={[
+                  "inline-flex h-9 items-center justify-center rounded-xl border px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                  currentEventAction.tone === "warning"
+                    ? "border-amber-400/25 bg-amber-400/10 text-amber-50 hover:bg-amber-400/15"
+                    : currentEventAction.tone === "success"
+                      ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-50 hover:bg-emerald-400/15"
+                      : "border-cyan-400/25 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/15",
+                ].join(" ")}
+              >
+                {currentEventAction.label}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onSelect}
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+          >
+            Seleccionar evento
+          </button>
+        )}
       </div>
     </article>
   );
-}
-
-function Metric({ label, value, tone }: { label: string; value: number; tone: "success" | "info" | "warning" | "danger" }) {
-  return (
-    <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <span className="text-3xl font-semibold tracking-tight text-white">{value}</span>
-        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] ${metricToneClass[tone]}`}>
-          {label}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-white">{value}</p>
-    </div>
-  );
-}
-
-const metricToneClass = {
-  success: "border-emerald-400/20 bg-emerald-400/10 text-emerald-100",
-  info: "border-cyan-400/20 bg-cyan-400/10 text-cyan-100",
-  warning: "border-amber-400/20 bg-amber-400/10 text-amber-100",
-  danger: "border-rose-400/20 bg-rose-400/10 text-rose-100",
-} as const;
-
-function toneClassForEvent(status: Event["status"]) {
-  if (status === "live") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
-  if (status === "published" || status === "draft") return "border-cyan-400/20 bg-cyan-400/10 text-cyan-100";
-  return "border-amber-400/20 bg-amber-400/10 text-amber-100";
-}
-
-function formatEventStatusLabel(status: Event["status"]) {
-  if (status === "live") return "En curso";
-  if (status === "published") return "Publicado";
-  if (status === "draft") return "Borrador";
-  if (status === "finished") return "Finalizado";
-  return "Cancelado";
 }

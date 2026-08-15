@@ -10,7 +10,7 @@ export default function TerminalEventBanner({
   description: string;
 }) {
   return (
-    <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3">
+    <div className="surface-alert px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge variant="warning">{title}</StatusBadge>
         <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-amber-50/70">

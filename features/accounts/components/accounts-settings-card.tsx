@@ -8,8 +8,10 @@ import {
   getAccountPresetDescription,
   getAccountPresetLabel,
   getAccountStatusLabel,
+  getAccountEditablePermissions,
   getPermissionLabel,
   getRolePresetBySlug,
+  canonicalizeAccountPermissionsForPersistence,
   normalizeAccountPermissions,
 } from "@/features/accounts/domain/accounts-domain";
 import type { AccountPermissionKey, AccountRoleSlug, OrganizationAccount } from "@/features/accounts/types";
@@ -33,7 +35,7 @@ function toFormState(account: OrganizationAccount): AccountFormState {
     roleSlug: account.roleSlug,
     area: account.attributes.area ?? "",
     status: account.status,
-    permissions: account.permissions.length ? account.permissions : account.rolePermissions,
+    permissions: getAccountEditablePermissions(account),
   };
 }
 
@@ -106,7 +108,10 @@ export default function AccountsSettingsCard() {
       const baseName = form.userDisplayName.trim() || form.displayName.trim() || form.userEmail.split("@")[0] || "Cuenta";
       const displayName = form.displayName.trim() || baseName;
       const userDisplayName = form.userDisplayName.trim() || baseName;
-      const permissions = normalizeAccountPermissions(form.permissions, getRolePresetBySlug(form.roleSlug).permissions);
+      const permissions = canonicalizeAccountPermissionsForPersistence({
+        permissions: form.permissions,
+        rolePermissions: getRolePresetBySlug(form.roleSlug).permissions,
+      });
 
       if (!selectedAccount || selectedId === "new" || selectedAccount.id === "bootstrap-account") {
         const created = await createAccount({

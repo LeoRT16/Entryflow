@@ -4,10 +4,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import { useFeedback } from "@/components/premium-feedback";
 import {
+  canonicalizeAccountPermissionsForPersistence,
   getEffectivePermissions,
   getRolePresetBySlug,
   isOwnerAccount,
-  normalizeAccountPermissions,
+  hasSameAccountPermissionSet,
+  resolveAccountPermissions,
 } from "@/features/accounts/domain/accounts-domain";
 import type { AccountPermissionKey, AccountRolePreset, AccountUser, OrganizationAccount, OrganizationMembership } from "@/features/accounts/types";
 import { admissionFilters, deliveryFilters, quickFilters, reservationFilters } from "@/features/customers/domain/customer-filters";
@@ -430,10 +432,12 @@ function getAccountSelection({
     };
   }
 
-  const profilePermissions = normalizeAccountPermissions(
-      selectedProfile.metadata?.permissions,
-    role.permissions,
-  );
+  const profilePermissions = resolveAccountPermissions({
+    permissions: selectedProfile.metadata?.permissions,
+    rolePermissions: role.permissions,
+    roleMetadata: role.metadata,
+    accountMetadata: selectedProfile.metadata,
+  });
   const permissions = profilePermissions.length ? profilePermissions : role.permissions;
   const isOwner = selectedProfile.roleId === role.id && role.slug === "owner";
   const accountStatus: "active" | "inactive" = selectedProfile.deletedAt ? "inactive" : selectedProfile.attributes.status === "inactive" ? "inactive" : "active";
@@ -1059,7 +1063,12 @@ export function WorkspaceServiceProvider({
   const can = hasPermission;
   const buildAccountFromEntities = useCallback(
     (user: AccountUser, membership: OrganizationMembership, role: AccountRolePreset): OrganizationAccount => {
-      const permissions = normalizeAccountPermissions(membership.metadata?.permissions, role.permissions);
+      const permissions = resolveAccountPermissions({
+        permissions: membership.metadata?.permissions,
+        rolePermissions: role.permissions,
+        roleMetadata: role.metadata,
+        accountMetadata: membership.metadata,
+      });
 
       return {
         id: membership.id,
@@ -1418,7 +1427,11 @@ export function WorkspaceServiceProvider({
     }) => {
       requirePermission("accounts.manage");
       const role = roles.find((item) => item.slug === params.roleSlug) ?? getRolePresetBySlug(params.roleSlug);
-      const desiredPermissions = normalizeAccountPermissions(params.permissions, role.permissions);
+      const desiredPermissions = canonicalizeAccountPermissionsForPersistence({
+        permissions: params.permissions,
+        rolePermissions: role.permissions,
+      });
+      const permissionsSource = hasSameAccountPermissionSet(desiredPermissions, role.permissions) ? "preset" : "custom";
 
       const response = await fetch("/api/accounts/invite", {
         method: "POST",
@@ -1432,6 +1445,7 @@ export function WorkspaceServiceProvider({
           roleSlug: params.roleSlug,
           area: params.area?.trim() ?? "",
           permissions: desiredPermissions,
+          permissionsSource,
           tempPassword: params.tempPassword ?? "",
           confirmTempPassword: params.confirmTempPassword ?? "",
         }),
@@ -1495,7 +1509,11 @@ export function WorkspaceServiceProvider({
           throw new Error("El usuario de la cuenta no existe.");
         }
 
-        const desiredPermissions = normalizeAccountPermissions(account.permissions, targetRole.permissions);
+        const desiredPermissions = canonicalizeAccountPermissionsForPersistence({
+          permissions: account.permissions,
+          rolePermissions: targetRole.permissions,
+        });
+        const permissionsSource = hasSameAccountPermissionSet(desiredPermissions, targetRole.permissions) ? "preset" : "custom";
         const persistedUser = await repositories.users.update(existingUser.id, {
           ...existingUser,
           email: account.userEmail.trim() || existingUser.email,
@@ -1523,6 +1541,7 @@ export function WorkspaceServiceProvider({
               status: account.status,
             },
             permissions: desiredPermissions,
+            permissionsSource,
           },
           deletedAt: account.status === "inactive" ? nowIso() : null,
         });

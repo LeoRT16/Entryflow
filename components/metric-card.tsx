@@ -23,10 +23,10 @@ export default function MetricCard({
   }[tone];
 
   return (
-    <section className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+    <section className="surface-panel min-w-0 p-5">
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-400">{label}</p>
+          <p className="kicker">{label}</p>
           <p className="mt-3 text-3xl font-semibold tracking-tight text-white">
             {value}
           </p>

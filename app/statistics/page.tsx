@@ -9,17 +9,14 @@ import PermissionGuard from "@/components/permission-guard";
 function StatCard({
   label,
   value,
-  detail,
 }: {
   label: string;
   value: string | number;
-  detail: string;
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
-      <p className="mt-2 text-sm text-slate-400">{detail}</p>
+    <div className="surface-panel flex min-h-[108px] min-w-0 flex-col justify-between p-4">
+      <p className="kicker">{label}</p>
+      <p className="min-w-0 break-words text-3xl font-semibold tracking-tight text-white">{value}</p>
     </div>
   );
 }
@@ -56,7 +53,6 @@ function StatisticsContent() {
   const currentEventSummary = workspaceIntelligence.dashboard.currentEventSummary;
   const tableInsight = workspaceIntelligence.tables;
   const dashboard = workspaceIntelligence.dashboard;
-  const capacity = workspaceIntelligence.capacity;
   const occupancy = tableInsight.occupancyPercent;
   const statisticsInsights = workspacePriority.byModule.Statistics;
   const health = workspaceIntelligence.health;
@@ -72,61 +68,47 @@ function StatisticsContent() {
   return (
     <div className="space-y-6">
       <Topbar
-        eyebrow="Analítica"
-        title={`Estadísticas de ${dashboard.currentEvent.name}`}
-        description="Métricas operativas derivadas del mismo estado compartido que usan Reservas, Ingreso, Invitados y Resumen."
+        eyebrow="Estadísticas"
+        title="Estadísticas"
+        description={`Métricas operativas del evento activo: ${dashboard.currentEvent.name}.`}
         primaryAction={{ label: "Ir al dashboard", href: "/" }}
         secondaryAction={{ label: "Ver timeline", href: "/timeline" }}
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="¿Qué pasa?"
-          value={prioritySummary.message}
-          detail={health.title}
+          label="Críticos"
+          value={prioritySummary.critical}
         />
         <StatCard
-          label="¿Qué requiere atención?"
-          value={`${prioritySummary.critical + prioritySummary.attention}`}
-          detail={prioritySummary.nextBestAction}
+          label="Atención"
+          value={prioritySummary.attention}
         />
         <StatCard
-          label="¿Qué cambió?"
-          value={activity.recentWindow}
-          detail={activity.lastActivity}
+          label="Eventos recientes"
+          value={activity.recentEvents}
         />
         <StatCard
-          label="¿Qué puedo ignorar?"
-          value={prioritySummary.canIgnore}
-          detail={capacity.summary}
+          label="Estables"
+          value={prioritySummary.healthy}
         />
       </section>
 
       <GuidedActionPanel
-        title="Siguiente paso"
+        title="Recomendaciones"
         description="Las recomendaciones operativas se ordenan por el impacto inmediato que tienen sobre la operación."
         items={guidedActions}
       />
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Lectura inteligente</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{prioritySummary.nextBestAction}</h2>
+        <div className="surface-panel p-5">
+          <p className="kicker">Lectura inteligente</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{health.title}</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">{health.description}</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Atención</p>
-              <p className="mt-2 text-sm font-medium text-white">{prioritySummary.message}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Actividad</p>
-              <p className="mt-2 text-sm font-medium text-white">{activity.summary}</p>
-            </div>
-          </div>
         </div>
 
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Recomendaciones</p>
+        <div className="surface-panel p-5">
+          <p className="kicker">Recomendaciones</p>
           <div className="mt-4 space-y-3">
             {statisticsInsights.length ? (
               statisticsInsights.map((item) => (
@@ -153,10 +135,10 @@ function StatisticsContent() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.02fr_0.98fr]">
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+        <div className="surface-panel p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Capacidad operativa</p>
+              <p className="kicker">Capacidad operativa</p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Distribución del evento</h2>
             </div>
             <StatusBadge variant="info">{occupancy}%</StatusBadge>
@@ -176,8 +158,8 @@ function StatisticsContent() {
           </div>
         </div>
 
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Estado del dashboard</p>
+        <div className="surface-panel p-5">
+          <p className="kicker">Estado del dashboard</p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Resumen operativo vivo</h2>
 
           <div className="mt-5 space-y-3">
@@ -211,7 +193,7 @@ function StateShell({
 }) {
   return (
     <div className="space-y-6">
-      <Topbar eyebrow="Analítica" title={title} description={description} />
+      <Topbar eyebrow="Estadísticas" title={title} description={description} />
       <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-8 text-center">
         <p className="text-sm text-slate-300">{description}</p>
         {actionLabel ? (

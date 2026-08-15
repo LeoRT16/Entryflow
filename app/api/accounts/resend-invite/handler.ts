@@ -6,7 +6,7 @@ import {
   linkPublicUserToAuthIdentity,
   setPublicUserMustChangePassword,
 } from "@/app/api/accounts/auth-onboarding";
-import { getRolePresetBySlug, normalizeAccountPermissions } from "@/features/accounts/domain/accounts-domain";
+import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import type { OrganizationAccount } from "@/features/accounts/types";
 import type { WorkspaceBootstrap } from "@/services/workspace-loader";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
@@ -57,7 +57,12 @@ function buildOrganizationAccount(workspace: WorkspaceBootstrap, memberId: strin
   }
 
   const role = workspace.roles.find((item) => item.id === membership.roleId) ?? getRolePresetBySlug("administrator");
-  const permissions = normalizeAccountPermissions(membership.metadata?.permissions, role.permissions);
+  const permissions = resolveAccountPermissions({
+    permissions: membership.metadata?.permissions,
+    rolePermissions: role.permissions,
+    roleMetadata: role.metadata,
+    accountMetadata: membership.metadata,
+  });
 
   const account: OrganizationAccount = {
     id: membership.id,
@@ -135,7 +140,12 @@ export async function handleResendInvite(request: Request, dependencies: ResendI
   }
 
   const currentRole = workspace.roles.find((role) => role.id === currentProfile.roleId) ?? getRolePresetBySlug("administrator");
-  const effectivePermissions = normalizeAccountPermissions(currentProfile.metadata?.permissions, currentRole.permissions);
+  const effectivePermissions = resolveAccountPermissions({
+    permissions: currentProfile.metadata?.permissions,
+    rolePermissions: currentRole.permissions,
+    roleMetadata: currentRole.metadata,
+    accountMetadata: currentProfile.metadata,
+  });
 
   if (!effectivePermissions.includes("accounts.manage")) {
     return NextResponse.json(

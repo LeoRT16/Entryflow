@@ -391,7 +391,7 @@ export default function EventCreationWizard({
                 <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Recursos sugeridos</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Espacios sugeridos</p>
                       <p className="mt-2 text-sm text-slate-400">Se muestran como orientación. Solo el tipo personalizado permite editarlos.</p>
                     </div>
                     {blueprint.eventType === "custom" ? (
@@ -545,7 +545,7 @@ export default function EventCreationWizard({
                       <SummaryRow label="Fecha" value={draft.date} />
                       <SummaryRow label="Capacidad" value={draft.capacity || "0"} />
                       <SummaryRow label="Modelo operativo" value={getOperationalModelLabel(draft.operationalModel)} />
-                      <SummaryRow label="Módulos activos" value={`${draft.enabledModules.length}`} />
+                      <SummaryRow label="Módulos incluidos" value={`${draft.enabledModules.length}`} />
                       <SummaryRow label="Admisión" value={draft.admissionMethods.join(" · ")} />
                     </dl>
                   </div>
@@ -688,7 +688,7 @@ export default function EventCreationWizard({
               <div className="rounded-[1.5rem] border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-50">
                 <p className="font-medium">La Rota Carlota permanece intacta.</p>
                 <p className="mt-2 leading-6 text-cyan-50/75">
-                  Este asistente solo agrega eventos a la biblioteca. No altera Reservations, Customers, Check-in, Tables, Timeline u Operations.
+                  Este asistente solo agrega eventos a la biblioteca. No altera Reservas, Invitados, Ingreso, Espacios, Actividad u Operaciones.
                 </p>
               </div>
             </div>

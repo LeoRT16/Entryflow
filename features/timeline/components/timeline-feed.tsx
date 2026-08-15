@@ -75,6 +75,26 @@ function EventIcon({ icon }: { icon: TimelineEvent["icon"] }) {
   }
 }
 
+function formatTimelineTimestamp(timestamp: string) {
+  const trimmed = timestamp.trim();
+
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+    return trimmed.slice(0, 5);
+  }
+
+  const parsed = new Date(trimmed);
+
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleTimeString("es-BO", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  }
+
+  return trimmed;
+}
+
 export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
   const router = useRouter();
   const groupedEvents = useMemo(() => {
@@ -116,6 +136,11 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
   }, [events]);
   const orderedEvents = useMemo(
     () => [...groupedEvents.Critical, ...groupedEvents.Operational, ...groupedEvents.Informational, ...groupedEvents.System],
+    [groupedEvents],
+  );
+  const visibleGroups = useMemo(
+    () =>
+      (["Critical", "Operational", "Informational", "System"] as const).filter((group) => groupedEvents[group].length > 0),
     [groupedEvents],
   );
   const [selectedEventIndex, setSelectedEventIndex] = useState(0);
@@ -206,19 +231,31 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
     ),
   );
 
-  if (!events.length) {
+  if (!orderedEvents.length) {
     return (
-      <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-        <p className="text-sm text-slate-400">No hay actividad operativa todavía.</p>
+      <section className="surface-panel p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div>
+            <p className="kicker">
+              Actividad reciente
+            </p>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Cronología operativa</h2>
+          </div>
+          <StatusBadge variant="info">0</StatusBadge>
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-slate-950/20 p-4">
+          <p className="text-sm text-slate-400">No hay actividad reciente.</p>
+        </div>
       </section>
     );
   }
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+    <section className="surface-panel p-5 sm:p-6">
       <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+          <p className="kicker">
             Actividad reciente
           </p>
           <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Cronología operativa</h2>
@@ -227,7 +264,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
       </div>
 
       <div className="mt-5 space-y-3">
-        {(["Critical", "Operational", "Informational", "System"] as const).map((group) => {
+        {visibleGroups.map((group) => {
           const groupEvents = groupedEvents[group];
           const description =
             group === "Critical"
@@ -251,7 +288,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
             <section key={group} className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
+                  <p className="kicker">{label}</p>
                   <p className="mt-1 text-xs text-slate-500">{description}</p>
                 </div>
                 <StatusBadge variant={group === "Critical" ? "danger" : group === "Operational" ? "warning" : group === "Informational" ? "info" : "success"}>
@@ -284,7 +321,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                       {
                         id: `${event.id}-table`,
                         label: "Ir a la mesa",
-                        description: "Abrir el panel de Recursos.",
+                        description: "Abrir el panel de Espacios.",
                         tone: "warning" as const,
                         onSelect: () => router.push("/tables"),
                       },
@@ -305,7 +342,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-semibold text-white">{event.title}</p>
-                          <StatusBadge variant={event.tone}>{event.timestamp}</StatusBadge>
+                          <StatusBadge variant={event.tone}>{formatTimelineTimestamp(event.timestamp)}</StatusBadge>
                         </div>
                         <p className="mt-2 text-sm leading-6 text-slate-400">{event.description}</p>
 

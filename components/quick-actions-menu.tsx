@@ -126,10 +126,10 @@ export function ContextualCard({
               id={menuId}
               role="menu"
               aria-label={menuLabel}
-              className="absolute right-3 top-13 z-20 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#0b0f14] shadow-[0_24px_100px_rgba(0,0,0,0.55)]"
+              className="absolute right-3 top-13 z-20 w-[min(20rem,calc(100vw-2rem))] overflow-hidden surface-panel bg-[#0b0f14]"
             >
               <div className="border-b border-white/10 px-4 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-slate-500">
+                <p className="kicker">
                   Acciones rápidas
                 </p>
               </div>
@@ -232,7 +232,7 @@ function formatRouteLabel(href?: string) {
   if (href === "/reservations") return "Reservas";
   if (href === "/customers") return "Invitados";
   if (href === "/check-in") return "Ingreso";
-  if (href === "/tables") return "Recursos";
+  if (href === "/tables") return "Espacios";
   if (href === "/timeline") return "Actividad";
   if (href === "/statistics") return "Estadísticas";
   if (href === "/events") return "Eventos";
@@ -309,10 +309,10 @@ export function GuidedActionPanel({
   }
 
   return (
-    <section className={`rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 sm:p-6 ${className}`.trim()}>
+    <section className={`surface-panel p-5 sm:p-6 ${className}`.trim()}>
       <div className="flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+          <p className="kicker">
             Acciones guiadas
           </p>
           <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">{title}</h2>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
-import { getRolePresetBySlug, normalizeAccountPermissions } from "@/features/accounts/domain/accounts-domain";
+import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import { sendWhatsAppCloudMessage, WhatsAppCloudError } from "@/features/access/domain/whatsapp-cloud";
 
 type WhatsAppSendRequestBody = {
@@ -97,7 +97,12 @@ export async function POST(request: Request) {
   }
 
   const currentRole = workspace.roles.find((role) => role.id === currentProfile.roleId) ?? getRolePresetBySlug("administrator");
-  const permissions = normalizeAccountPermissions(currentProfile.metadata?.permissions, currentRole.permissions);
+  const permissions = resolveAccountPermissions({
+    permissions: currentProfile.metadata?.permissions,
+    rolePermissions: currentRole.permissions,
+    roleMetadata: currentRole.metadata,
+    accountMetadata: currentProfile.metadata,
+  });
 
   if (!permissions.includes("access.issue")) {
     return NextResponse.json(

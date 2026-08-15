@@ -134,7 +134,7 @@ export default function EventSwitcher({ compact = false }: { compact?: boolean }
         type="button"
         onClick={() => setOpen((current) => !current)}
         className={[
-          "inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+          "surface-interactive inline-flex items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
           buttonClasses,
         ].join(" ")}
         aria-expanded={open}
@@ -153,6 +153,11 @@ export default function EventSwitcher({ compact = false }: { compact?: boolean }
           <span className="mt-1 block truncate text-sm font-medium text-white">
             {currentEvent.name}
           </span>
+          {!compact ? (
+            <span className="mt-1 block truncate text-xs text-slate-500">
+              {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
+            </span>
+          ) : null}
         </span>
 
         <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
@@ -163,12 +168,12 @@ export default function EventSwitcher({ compact = false }: { compact?: boolean }
       {open ? (
         <div
           className={[
-            "absolute top-[calc(100%+0.75rem)] z-50 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#08111f] shadow-[0_30px_100px_rgba(0,0,0,0.5)]",
+            "absolute top-[calc(100%+0.75rem)] z-50 overflow-hidden surface-panel bg-[#08111f]",
             compact ? "left-0 right-0" : "right-0 w-[min(90vw,34rem)]",
           ].join(" ")}
         >
           <div className="border-b border-white/10 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
+            <p className="kicker">
               Cambiar evento
             </p>
             <h2 className="mt-2 text-lg font-semibold tracking-tight text-white">
@@ -207,7 +212,7 @@ export default function EventSwitcher({ compact = false }: { compact?: boolean }
             <Link
               href="/events"
               onClick={() => setOpen(false)}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+              className="surface-interactive inline-flex h-10 items-center justify-center px-3 text-sm font-medium text-white"
             >
               Ver todos los eventos
             </Link>

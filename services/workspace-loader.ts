@@ -9,6 +9,7 @@ import type { TimelineEvent } from "@/features/timeline/types";
 import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl, hasSupabaseConfig } from "@/lib/supabase/helpers";
+import { getRolePresetBySlug, isBuiltinAccountRoleSlug } from "@/features/accounts/domain/accounts-domain";
 import {
   mapCheckInRowToDomain,
   mapEventRowToDomain,
@@ -185,6 +186,35 @@ function readCatalogFromOrganization(organization: Organization) {
   const resources = Array.isArray(metadata.resources) ? (metadata.resources as Resource[]) : [];
 
   return { venues, sectors, resources };
+}
+
+function normalizeWorkspaceRole(role: AccountRolePreset) {
+  if (!isBuiltinAccountRoleSlug(role.slug)) {
+    return role;
+  }
+
+  const preset = getRolePresetBySlug(role.slug);
+
+  if (role.permissions.length === preset.permissions.length && role.permissions.every((permission, index) => permission === preset.permissions[index])) {
+    return {
+      ...role,
+      name: preset.name,
+      description: preset.description,
+      permissions: [...preset.permissions],
+    };
+  }
+
+  return {
+    ...role,
+    name: preset.name,
+    description: preset.description,
+    permissions: [...preset.permissions],
+    metadata: {
+      ...(role.metadata ?? {}),
+      legacyPermissions: role.permissions,
+      permissionsSource: "preset",
+    },
+  };
 }
 
 function pickCurrentEventId(events: EventRow[], organizationId: string) {
@@ -473,7 +503,15 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
         authIdentityExists: Boolean(user.authUserId) || authIdentityEmails.has(user.email.trim().toLowerCase()),
       };
     });
-  const roles = roleRows.map((row) => mapRoleRowToDomain(row));
+  const persistedRoles = roleRows.map((row) => mapRoleRowToDomain(row));
+  const roles = persistedRoles.map((role) => normalizeWorkspaceRole(role));
+
+  await Promise.all(
+    roles
+      .map((role, index) => ({ role, source: persistedRoles[index] }))
+      .filter(({ role, source }) => isBuiltinAccountRoleSlug(role.slug) && (role.permissions.length !== source.permissions.length || role.permissions.some((permission, index) => permission !== source.permissions[index]) || JSON.stringify(role.metadata?.legacyPermissions ?? null) !== JSON.stringify(source.metadata?.legacyPermissions ?? null)))
+      .map(({ role }) => repositories.roles.update(role.id, role)),
+  );
   const profiles = profileRowsForWorkspace.map((row) => mapProfileRowToDomain(row));
   const organizations = organizationRowsForWorkspace.map((row) => mapOrganizationRowToDomain(row));
   const organizationFallback = organizations[0] ? readCatalogFromOrganization(organizations[0]) : { venues: [], sectors: [], resources: [] };

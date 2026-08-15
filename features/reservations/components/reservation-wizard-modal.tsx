@@ -213,14 +213,14 @@ export default function ReservationWizardModal({
 
       <div className="relative mx-auto flex h-full w-full max-w-[1700px] items-stretch p-0 lg:p-4">
         <div
-          className="relative flex h-full w-full flex-col overflow-hidden border border-white/10 bg-[#0b0f14] shadow-[0_32px_120px_rgba(0,0,0,0.45)] lg:rounded-[2rem]"
+          className="relative flex h-full w-full flex-col overflow-hidden surface-panel bg-[#0b0f14]"
           aria-busy={isSubmitting}
           style={{ animation: "wizardShellIn 220ms ease" }}
         >
           <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-5 sm:px-6">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">
+                <p className="kicker">
                   Crear reserva
                 </p>
                 <StatusBadge variant="info">Borrador</StatusBadge>
@@ -362,7 +362,7 @@ export default function ReservationWizardModal({
                     ) : null}
 
                     {submissionError ? (
-                      <div className="rounded-[1.5rem] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-50">
+                      <div className="surface-alert px-4 py-3 text-sm leading-6 text-red-50">
                         {submissionError}
                       </div>
                     ) : null}
@@ -444,10 +444,10 @@ export default function ReservationWizardModal({
 
               <aside className="border-t border-white/10 bg-slate-950/40 px-5 py-5 sm:px-6 lg:sticky lg:top-0 lg:h-full lg:border-l lg:border-t-0 lg:px-5 lg:py-6">
                 <div className="space-y-4">
-                  <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
+                  <div className="surface-panel p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                        <p className="kicker">
                           Resumen en vivo
                         </p>
                         <p className="mt-2 text-lg font-semibold tracking-tight text-white">
@@ -464,8 +464,8 @@ export default function ReservationWizardModal({
                     </div>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-white/10 bg-slate-950/55 p-5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                  <div className="surface-elevated p-5">
+                    <p className="kicker">
                       Progreso
                     </p>
                     <div className="mt-4 space-y-4">
@@ -490,8 +490,8 @@ export default function ReservationWizardModal({
                     </div>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                  <div className="surface-panel p-5">
+                    <p className="kicker">
                       Estado
                     </p>
                     <div className="mt-4 grid gap-3">
@@ -545,10 +545,10 @@ function WizardProgress({
   completion: number;
 }) {
   return (
-    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
+    <section className="surface-panel p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+          <p className="kicker">
             Progreso
           </p>
           <p className="mt-2 text-sm text-slate-400">
@@ -766,7 +766,7 @@ function HolderStep({
   setNotes: Dispatch<SetStateAction<string>>;
 }) {
   return (
-    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
+    <section className="surface-panel p-5">
       <div className="grid gap-4 xl:grid-cols-2">
         <Field label="Nombre">
           <input
@@ -876,7 +876,7 @@ function GuestsStep({
   updateGuest: (index: number, field: keyof GuestDraft, value: string | boolean) => void;
 }) {
   return (
-    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
+    <section className="surface-panel p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
@@ -1001,7 +1001,7 @@ function TableStep({
   resourceOptions: TableOption[];
 }) {
   return (
-    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
+    <section className="surface-panel p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
@@ -1107,7 +1107,7 @@ function PaymentStep({
   pendingNumber: number;
 }) {
   return (
-    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
+    <section className="surface-panel p-5">
       <div className="grid gap-4 xl:grid-cols-2">
         <Field label="Monto de la reserva">
           <input

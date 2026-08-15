@@ -230,8 +230,8 @@ function AuthBlockedState({
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[color:var(--background)] px-4 text-[color:var(--foreground)]">
-      <section className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-slate-500">Acceso restringido</p>
+      <section className="surface-panel w-full max-w-xl p-6">
+        <p className="kicker">Acceso restringido</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">No podemos abrir el workspace todavía.</h1>
         <p className="mt-4 text-sm leading-6 text-slate-400">{message}</p>
         <p className="mt-3 text-sm leading-6 text-slate-500">

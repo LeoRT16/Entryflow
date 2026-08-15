@@ -3,7 +3,6 @@ import type { WorkspacePriorityItem, WorkspacePrioritySnapshot } from "@/domain/
 import { getEventTypeLabel } from "@/features/events/domain";
 import type { Event as PlatformEvent } from "@/features/domain/types";
 import { isTerminalEventStatus } from "@/features/events/domain/event-rules";
-import type { ReservationSummary } from "@/features/reservations/types";
 import type { TimelineEvent } from "@/features/timeline/types";
 
 export type LiveDashboardTone = "success" | "warning" | "danger" | "info";
@@ -48,6 +47,7 @@ export type LiveDashboardModel = {
     summary: string;
     nextAction: string;
   };
+  alertCount: number;
   kpis: LiveDashboardKpi[];
   admission: {
     checkInsPerMinute: number;
@@ -65,7 +65,6 @@ export type LiveDashboardModel = {
     state: "stable" | "watch" | "blocked";
     summary: string;
   };
-  alerts: LiveDashboardAlert[];
   upcomingReservations: Array<{
     id: string;
     name: string;
@@ -88,7 +87,6 @@ type LiveDashboardInput = {
   workspaceStatus: "loading" | "ready" | "empty" | "error";
   workspaceIntelligence: Pick<WorkspaceIntelligence, "activity" | "capacity" | "flow" | "access" | "operations" | "statistics">;
   workspacePriority: Pick<WorkspacePrioritySnapshot, "criticalItems" | "attentionNow" | "summary">;
-  reservationSummaries: ReservationSummary[];
 };
 
 const ALLOWED_ALERT_MODULES = new Set(["Dashboard", "Operations", "Timeline", "Reservations", "Tables", "Check-in"]);
@@ -172,11 +170,6 @@ function mapPriorityItemToAlert(item: WorkspacePriorityItem): LiveDashboardAlert
   };
 }
 
-function compareSeverity(a: LiveDashboardAlert, b: LiveDashboardAlert) {
-  const toneWeight = (tone: LiveDashboardTone) => (tone === "danger" ? 3 : tone === "warning" ? 2 : tone === "info" ? 1 : 0);
-  return toneWeight(b.tone) - toneWeight(a.tone);
-}
-
 export function buildLiveDashboardQuickActions({
   terminalEvent = false,
 }: {
@@ -226,13 +219,9 @@ export function buildLiveDashboardModel({
   workspaceStatus,
   workspaceIntelligence,
   workspacePriority,
-  reservationSummaries,
 }: LiveDashboardInput): LiveDashboardModel {
   const checkedInGuests = workspaceIntelligence.statistics.cards.checkedInGuests;
-  const expectedGuests = workspaceIntelligence.statistics.cards.expectedGuests;
   const pendingGuests = workspaceIntelligence.statistics.cards.pendingGuests;
-  const totalReservations = workspaceIntelligence.statistics.cards.totalReservations;
-  const checkedInReservations = reservationSummaries.filter((reservation) => reservation.metrics.checkedInGuests > 0).length;
   const totalCapacity = workspaceIntelligence.capacity.used + workspaceIntelligence.capacity.remaining;
   const occupancyPercent = workspaceIntelligence.capacity.occupancyPercent;
   const recentCheckIns = workspaceIntelligence.operations.recentActivity.filter((event) => event.kind.startsWith("checkin.")).length;
@@ -276,7 +265,7 @@ export function buildLiveDashboardModel({
     .filter((item) => ALLOWED_ALERT_MODULES.has(item.module))
     .map(mapPriorityItemToAlert);
 
-  const combinedAlerts = [...coreAlerts, ...priorityAlerts.sort(compareSeverity)].reduce<LiveDashboardAlert[]>((accumulator, item) => {
+  const combinedAlerts = [...coreAlerts, ...priorityAlerts].reduce<LiveDashboardAlert[]>((accumulator, item) => {
     if (accumulator.some((existing) => existing.id === item.id)) {
       return accumulator;
     }
@@ -284,8 +273,6 @@ export function buildLiveDashboardModel({
     accumulator.push(item);
     return accumulator;
   }, []);
-
-  const sortedAlerts = combinedAlerts.slice(0, 6);
 
   return {
     header: {
@@ -304,54 +291,31 @@ export function buildLiveDashboardModel({
         ? "Evento cerrado. Revisa historial, reservas y trazabilidad sin ejecutar mutaciones."
         : workspacePriority.summary.nextBestAction,
     },
+    alertCount: combinedAlerts.length,
     kpis: [
-      {
-        label: "Invitados",
-        value: `${expectedGuests}`,
-        detail: "Esperados en el evento activo",
-        tone: "info",
-      },
       {
         label: "Ingresados",
         value: `${checkedInGuests}`,
-        detail: `Flujo actual · ${workspaceIntelligence.flow.checkInsPerMinute}/min`,
+        detail: `Confirmados en el evento activo · ${workspaceIntelligence.flow.checkInsPerMinute}/min`,
         tone: "success",
       },
       {
         label: "Pendientes",
         value: `${pendingGuests}`,
-        detail: "Todavía no han ingresado",
+        detail: "Siguen esperando ingreso",
         tone: pendingGuests > 0 ? "warning" : "success",
       },
       {
         label: "Ocupación",
-        value: `${workspaceIntelligence.capacity.used}/${totalCapacity}`,
-        detail: `${occupancyPercent}% de ocupación`,
+        value: `${occupancyPercent}%`,
+        detail: `${workspaceIntelligence.capacity.used}/${totalCapacity} ocupados`,
         tone: occupancyPercent >= 90 || workspaceIntelligence.capacity.state === "blocked" ? "danger" : occupancyPercent >= 80 ? "warning" : "info",
       },
       {
-        label: "Capacidad",
-        value: `${workspaceIntelligence.capacity.remaining}`,
-        detail: "Cupos restantes en mesas activas",
-        tone: workspaceIntelligence.capacity.remaining > 0 ? "success" : "warning",
-      },
-      {
-        label: "Ocupación %",
-        value: `${occupancyPercent}%`,
-        detail: workspaceIntelligence.capacity.summary,
-        tone: workspaceIntelligence.capacity.state === "blocked" ? "danger" : workspaceIntelligence.capacity.state === "watch" ? "warning" : "success",
-      },
-      {
-        label: "Reservas",
-        value: `${totalReservations}`,
-        detail: "Reservas activas del evento",
-        tone: "info",
-      },
-      {
-        label: "Reservas con ingreso",
-        value: `${checkedInReservations}`,
-        detail: "Reservas que ya registraron check-in",
-        tone: checkedInReservations > 0 ? "success" : "info",
+        label: "Alertas",
+        value: `${combinedAlerts.length}`,
+        detail: combinedAlerts.length > 0 ? "Requieren atención operativa" : "Sin incidencias abiertas",
+        tone: combinedAlerts.length > 0 ? "warning" : "success",
       },
     ],
     admission: {
@@ -370,8 +334,7 @@ export function buildLiveDashboardModel({
       state: capacityState,
       summary: workspaceIntelligence.capacity.summary,
     },
-    alerts: sortedAlerts,
-    upcomingReservations: workspaceIntelligence.operations.upcomingReservations.slice(0, 5).map((reservation) => ({
+    upcomingReservations: workspaceIntelligence.operations.upcomingReservations.slice(0, 3).map((reservation) => ({
       id: reservation.id,
       name: reservation.name,
       code: reservation.code,
@@ -383,7 +346,7 @@ export function buildLiveDashboardModel({
       checkedInGuests: reservation.metrics.checkedInGuests,
       pendingGuests: reservation.metrics.pendingGuests,
     })),
-    recentActivity: workspaceIntelligence.operations.recentActivity.slice(0, 6),
+    recentActivity: workspaceIntelligence.operations.recentActivity.slice(0, 3),
     quickActions: buildLiveDashboardQuickActions({ terminalEvent }),
   };
 }

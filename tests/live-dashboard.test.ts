@@ -456,16 +456,16 @@ test("buildLiveDashboardModel derives the main KPIs and keeps scanner first", ()
       venue: "Sala Principal",
       eventType: "nightlife",
     },
-    reservationSummaries: [buildReservationSummary()],
     ...buildInput(),
   });
 
   assert.equal(model.header.liveLabel, "En vivo");
-  assert.equal(model.kpis.find((item) => item.label === "Invitados")?.value, "50");
   assert.equal(model.kpis.find((item) => item.label === "Ingresados")?.value, "30");
   assert.equal(model.kpis.find((item) => item.label === "Pendientes")?.value, "20");
+  assert.equal(model.kpis.find((item) => item.label === "Ocupación")?.value, "80%");
+  assert.equal(model.kpis.find((item) => item.label === "Alertas")?.value, "4");
   assert.equal(model.capacity.occupancyPercent, 80);
-  assert.equal(model.alerts[0]?.id, "capacity-pressure");
+  assert.equal(model.alertCount, 4);
   assert.equal(model.quickActions[0]?.route, "/check-in");
   assert.equal(model.quickActions[0]?.label, "Escanear / Ingreso");
 });
@@ -480,7 +480,6 @@ test("buildLiveDashboardModel returns an empty alert state when the workspace is
       venue: "Sala Principal",
       eventType: "nightlife",
     },
-    reservationSummaries: [],
     ...buildInput({
       workspaceStatus: "loading",
       capacityState: "stable",
@@ -501,7 +500,6 @@ test("buildLiveDashboardModel returns an empty alert state when the workspace is
 
   assert.equal(model.header.liveLabel, "Sincronizando");
   assert.equal(model.capacity.state, "stable");
-  assert.equal(model.alerts.length, 0);
   assert.equal(model.admission.blockedSignals, 0);
 });
 
@@ -515,7 +513,6 @@ test("buildLiveDashboardModel updates the live state when a new check-in arrives
       venue: "Sala Principal",
       eventType: "nightlife",
     },
-    reservationSummaries: [buildReservationSummary()],
     ...buildInput({
       expectedGuests: 50,
       checkedInGuests: 30,
@@ -538,7 +535,6 @@ test("buildLiveDashboardModel updates the live state when a new check-in arrives
       venue: "Sala Principal",
       eventType: "nightlife",
     },
-    reservationSummaries: [buildReservationSummary()],
     ...buildInput({
       expectedGuests: 50,
       checkedInGuests: 31,
@@ -569,7 +565,6 @@ test("buildLiveDashboardModel keeps alert priority aligned with operations", () 
       venue: "Sala Principal",
       eventType: "nightlife",
     },
-    reservationSummaries: [buildReservationSummary()],
     ...buildInput({
       capacityState: "blocked",
       pendingGuests: 12,
@@ -599,8 +594,7 @@ test("buildLiveDashboardModel keeps alert priority aligned with operations", () 
     }),
   });
 
-  assert.equal(model.alerts[0]?.id, "capacity-pressure");
-  assert.equal(model.alerts[1]?.id, "admission-pressure");
+  assert.equal(model.alertCount, 3);
 });
 
 test("buildLiveDashboardQuickActions keeps the scanner as the first mobile-critical action", () => {
@@ -621,7 +615,6 @@ test("buildLiveDashboardModel marks terminal events as read-only while preservin
       venue: "Sala Principal",
       eventType: "nightlife",
     },
-    reservationSummaries: [buildReservationSummary()],
     ...buildInput({
       workspaceStatus: "ready",
       capacityState: "stable",

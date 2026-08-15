@@ -1,12 +1,8 @@
 "use client";
-
-import type * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import MetricCard from "@/components/metric-card";
 import Topbar from "@/components/topbar";
-import LiveSummaryRow from "@/features/reservations/components/live-summary-row";
 import ReservationWizardModal, {
   wizardSteps,
 } from "@/features/reservations/components/reservation-wizard-modal";
@@ -39,9 +35,6 @@ import type {
 } from "@/features/reservations/types";
 import { useCheckInStore } from "@/services/workspace-service";
 import { resolveCurrentEventLayout, resolveCurrentEventLayoutResource } from "@/services/workspace-layout-resolution";
-import StatusBadge from "@/components/status-badge";
-import TerminalEventBanner from "@/components/terminal-event-banner";
-import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { isTerminalEventStatus } from "@/features/events/domain";
 
@@ -65,7 +58,6 @@ type ReservationFlowWorkspaceProps = Pick<
   | "reservations"
   | "tableSummaries"
   | "workspaceIntelligence"
-  | "workspacePriority"
   | "reservationSummaries"
   | "createReservation"
   | "updateReservation"
@@ -127,7 +119,6 @@ export default function ReservationFlow() {
       reservations={store.reservations}
       tableSummaries={store.tableSummaries}
       workspaceIntelligence={store.workspaceIntelligence}
-      workspacePriority={store.workspacePriority}
       reservationSummaries={store.reservationSummaries}
       createReservation={store.createReservation}
       updateReservation={store.updateReservation}
@@ -157,7 +148,6 @@ function ReservationFlowWorkspace({
   reservations,
   tableSummaries,
   workspaceIntelligence,
-  workspacePriority,
   reservationSummaries,
   createReservation,
   updateReservation,
@@ -496,9 +486,6 @@ function ReservationFlowWorkspace({
   const pendingNumber = Math.max(amountNumber - advanceNumber, 0);
   const completion = step / wizardSteps.length;
   const reservationTotals = workspaceIntelligence.statistics.cards;
-  const reservationInsights = workspacePriority.byModule.Reservations;
-  const prioritySummary = workspacePriority.summary;
-  const capacity = workspaceIntelligence.capacity;
   const openReservationWizard = useCallback(() => {
     if (isTerminalEvent) {
       return;
@@ -536,73 +523,6 @@ function ReservationFlowWorkspace({
     prioritizedReservations.find((reservation) => reservation.id === activeReservationId) ??
     prioritizedReservations[0] ??
     null;
-  const guidedActions = useMemo(() => {
-    if (isTerminalEvent) {
-      return [];
-    }
-
-    const actions = [
-      ...(activeReservation && (activeReservation.status === "Draft" || activeReservation.status === "Pending")
-        ? [
-            {
-              id: `${activeReservation.id}-confirm`,
-              label: "Confirmar reserva",
-              reason: `${activeReservation.name} todavía no está confirmada.`,
-              impact: "Desbloquea invitados, mesa y check-in para esta reserva.",
-              priority: "critical" as const,
-              tone: "danger" as const,
-              onSelect: () => setReservationStatus(activeReservation.id, "Confirmed"),
-            },
-          ]
-        : []),
-      ...(activeReservation && (!activeReservation.tableName || activeReservation.tableName.toLowerCase().includes("sin mesa"))
-        ? [
-            {
-              id: `${activeReservation.id}-table`,
-              label: "Asignar mesa",
-              reason: `${activeReservation.name} todavía no tiene mesa asignada.`,
-              impact: "Reduce fricción y deja la reserva lista para operar.",
-              priority: "blocking" as const,
-              tone: "warning" as const,
-              href: "/tables",
-            },
-          ]
-        : []),
-      ...(activeReservation && activeReservation.metrics.pendingGuests > 0
-        ? [
-            {
-              id: `${activeReservation.id}-checkin`,
-              label: "Continuar check-in",
-              reason: `${activeReservation.metrics.pendingGuests} invitados siguen pendientes de ingreso.`,
-              impact: "Lleva el grupo al flujo de admisión sin perder contexto.",
-              priority: "quick" as const,
-              tone: "info" as const,
-              href: "/check-in",
-            },
-          ]
-        : []),
-      ...reservationInsights.slice(0, 2).map((item) =>
-        buildGuidedActionItem(item, {
-          href: item.route,
-          impact: item.description,
-        }),
-      ),
-    ];
-
-    const seen = new Set<string>();
-
-    return actions
-      .filter((item) => {
-        if (seen.has(item.id)) {
-          return false;
-        }
-
-        seen.add(item.id);
-        return true;
-      })
-      .slice(0, 3);
-  }, [activeReservation, isTerminalEvent, reservationInsights, setReservationStatus]);
-
   const keyboardShortcuts = useMemo(
     () => [
       ...(isTerminalEvent
@@ -876,174 +796,84 @@ function ReservationFlowWorkspace({
     <div className="space-y-6">
       <Topbar
         eyebrow="Reservas"
-        title="Flujo de creación"
-        description="Experiencia premium guiada para crear reservas con datos simulados y sin salir del espacio operativo."
+        title="Reservas"
+        description="Vista compacta para crear y operar reservas sin salir del flujo principal."
       />
 
-      <section className="grid gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="min-w-0 space-y-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100">
-              Borrador
-            </span>
-            <span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-slate-300">
-              Todo el flujo es simulado
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Crear una reserva premium en menos de un minuto.
-            </h1>
-            <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
-              El operador captura la información general, titular, invitados, mesa
-              y pago dentro de un flujo limpio, rápido y elegante.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <button
-              type="button"
-              onClick={openReservationWizard}
-              disabled={isTerminalEvent}
-              className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white sm:w-auto"
-            >
-              {isTerminalEvent ? "Evento cerrado" : "Crear reserva"}
-            </button>
-            <div className="w-full rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300 sm:w-auto">
-              Contexto activo: <span className="font-medium text-white">{currentEvent.name}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="min-w-0 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-5">
+      <section className="flex flex-col gap-3 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-            Resumen operativo
+            Contexto activo
           </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {workspaceIntelligence.dashboard.summaryMetrics.map((metric) => (
-              <MetricCard
-                key={metric.label}
-                label={metric.label}
-                value={metric.value}
-                detail={metric.detail}
-                tone={metric.tone}
-              />
-            ))}
-          </div>
+          <p className="mt-2 break-words text-sm font-medium text-white">{currentEvent.name}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-400">
+            {isTerminalEvent ? "Evento cerrado" : "Operación activa"}
+          </p>
         </div>
+
+        <button
+          type="button"
+          onClick={openReservationWizard}
+          disabled={isTerminalEvent}
+          className="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white"
+        >
+          {isTerminalEvent ? "Evento cerrado" : "Nueva reserva"}
+        </button>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_0.74fr]">
-        <div className="min-w-0 space-y-6">
-          {isTerminalEvent ? (
-            <TerminalEventBanner description="El evento está cerrado. La vista queda disponible para revisar reservas y trazabilidad sin ejecutar mutaciones." />
-          ) : (
-            <GuidedActionPanel
-              title="Siguiente paso"
-              description="El sistema muestra primero la acción que más desbloquea esta reserva."
-              items={guidedActions}
-            />
-          )}
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          label="OCUPACIÓN"
+          value={`${Math.round((reservationTotals.expectedGuests / Math.max(reservationTotals.expectedGuests + reservationTotals.capacityRemaining, 1)) * 100)}%`}
+          detail="Relación entre invitados esperados y capacidad restante."
+        />
+        <KpiCard
+          label="INGRESADOS"
+          value={`${reservationTotals.checkedInGuests}`}
+          detail="Ingresos ya registrados en el evento."
+        />
+        <KpiCard
+          label="PENDIENTES"
+          value={`${reservationTotals.pendingGuests}`}
+          detail="Invitados pendientes de ingreso."
+        />
+        <KpiCard
+          label="CAPACIDAD RESTANTE"
+          value={`${reservationTotals.capacityRemaining}`}
+          detail="Lugar disponible por operar."
+        />
+      </section>
 
-          <ReservationOperationsBoard
-            reservations={prioritizedReservations}
-            activeReservationId={activeReservation?.id ?? ""}
-            isTerminalEvent={isTerminalEvent}
-            onSelectReservation={setActiveReservationId}
-            onMarkConfirmed={(reservationId) => {
-              setReservationStatus(reservationId, "Confirmed");
-            }}
-            onAddGuest={(reservationId, guest) => {
-              addReservationGuest(reservationId, guest);
-            }}
-            onGuestAction={(params) => {
-              updateReservationGuest(params);
-            }}
-            onRegisterCheckIn={(reservationId, guestId) => {
-              const reservation = reservationSummaries.find((item) => item.id === reservationId);
-              const guest = reservation?.guests.find((item) => item.id === guestId);
+      <section className="min-w-0">
+        <ReservationOperationsBoard
+          reservations={prioritizedReservations}
+          activeReservationId={activeReservation?.id ?? ""}
+          isTerminalEvent={isTerminalEvent}
+          onSelectReservation={setActiveReservationId}
+          onMarkConfirmed={(reservationId) => {
+            setReservationStatus(reservationId, "Confirmed");
+          }}
+          onAddGuest={(reservationId, guest) => {
+            addReservationGuest(reservationId, guest);
+          }}
+          onGuestAction={(params) => {
+            updateReservationGuest(params);
+          }}
+          onRegisterCheckIn={(reservationId, guestId) => {
+            const reservation = reservationSummaries.find((item) => item.id === reservationId);
+            const guest = reservation?.guests.find((item) => item.id === guestId);
 
-              if (!reservation || !guest) {
-                return;
-              }
+            if (!reservation || !guest) {
+              return;
+            }
 
-              registerCheckIn({
-                query: guest.invitationCode,
-                method: "Manual",
-                operator: "Recepción",
-              });
-            }}
-            onCancelReservation={(reservationId) => {
-              setReservationStatus(reservationId, "Cancelled");
-            }}
-          />
-        </div>
-
-        <aside className="min-w-0 space-y-4">
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-              Estado general
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <LiveSummaryRow label="Reservas activas" value={`${reservationTotals.activeReservations}`} />
-              <LiveSummaryRow label="Invitados" value={`${reservationTotals.expectedGuests}`} />
-              <LiveSummaryRow label="Confirmados" value={`${reservationTotals.confirmedReservations}`} />
-              <LiveSummaryRow label="Ingresados" value={`${reservationTotals.checkedInGuests}`} />
-              <LiveSummaryRow label="Pendientes" value={`${reservationTotals.pendingGuests}`} />
-              <LiveSummaryRow label="Capacidad restante" value={`${reservationTotals.capacityRemaining}`} />
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-white/10 bg-slate-950/40 p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-              Reserva activa
-            </p>
-            <div className="mt-4 space-y-3">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-                  Reserva
-                </p>
-                <p className="mt-2 text-lg font-semibold tracking-tight text-white">
-                  {activeReservation?.name ?? reservationType} · {activeReservation?.eventName ?? eventName}
-                </p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <LiveSummaryRow label="Invitados" value={`${activeReservation?.metrics.guestCount ?? guestCount}`} />
-                <LiveSummaryRow label="Registrados" value={`${activeReservation?.metrics.checkedInGuests ?? registeredGuests}`} />
-                <LiveSummaryRow label="Recurso" value={activeReservation?.tableName ?? selectedResource?.name ?? "Sin recurso"} />
-                <LiveSummaryRow label="Pago" value={activeReservation?.paymentStatus ?? paymentStatus} />
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Prioridad operativa</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{prioritySummary.message}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">{prioritySummary.nextBestAction}</p>
-            <p className="mt-2 text-xs uppercase tracking-[0.22em] text-slate-500">{workspaceIntelligence.health.title}</p>
-            <div className="mt-4 space-y-3">
-              {reservationInsights.length ? (
-                reservationInsights.slice(0, 3).map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white">{item.title}</p>
-                        <p className="mt-1 text-sm leading-6 text-slate-400">{item.description}</p>
-                      </div>
-                      <StatusBadge variant={item.tone}>{item.priority}</StatusBadge>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
-                  Sin recomendaciones activas.
-                </div>
-              )}
-            </div>
-            <p className="mt-4 text-xs text-slate-400">{capacity.summary}</p>
-          </section>
-        </aside>
+            registerCheckIn({
+              query: guest.invitationCode,
+              method: "Manual",
+              operator: "Recepción",
+            });
+          }}
+        />
       </section>
 
       {isWizardOpen && !isTerminalEvent ? (
@@ -1115,9 +945,24 @@ function ReservationFlowWorkspace({
           submissionError={submissionError}
         />
       ) : null}
-      {isWizardOpen && isTerminalEvent ? (
-        <TerminalEventBanner description="El evento está cerrado. El asistente de reservas queda en modo lectura y no permite crear ni editar reservas." />
-      ) : null}
     </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <section className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
+      <p className="mt-3 text-sm leading-6 text-slate-400">{detail}</p>
+    </section>
   );
 }

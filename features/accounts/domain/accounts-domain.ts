@@ -1,6 +1,7 @@
 import type {
   AccountPermissionKey,
   AccountRolePreset,
+  AccountRoleSlug,
   OrganizationAccount,
 } from "@/features/accounts/types";
 
@@ -160,9 +161,7 @@ export const ACCOUNT_ROLE_PRESETS: AccountRolePreset[] = [
     name: "Puerta",
     description: "Operación centrada en admisión y check-in.",
     permissions: [
-      "reservation.view",
       "guest.view",
-      "resource.view",
       "access.view",
       "checkin.view",
       "checkin.perform",
@@ -170,6 +169,8 @@ export const ACCOUNT_ROLE_PRESETS: AccountRolePreset[] = [
     ],
   },
 ];
+
+export const BUILTIN_ACCOUNT_ROLE_SLUGS = new Set<AccountRoleSlug>(ACCOUNT_ROLE_PRESETS.map((role) => role.slug));
 
 export function getPermissionLabel(permission: AccountPermissionKey) {
   for (const group of ACCOUNT_PERMISSION_GROUPS) {
@@ -203,9 +204,115 @@ export function getAllAccountPermissionKeys() {
   return ACCOUNT_PERMISSION_GROUPS.flatMap((group) => group.permissions.map((permission) => permission.key));
 }
 
+export function hasSameAccountPermissionSet(left: AccountPermissionKey[], right: AccountPermissionKey[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+
+  if (leftSet.size !== rightSet.size) {
+    return false;
+  }
+
+  for (const permission of leftSet) {
+    if (!rightSet.has(permission)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function expandDerivedPermissions(permissions: AccountPermissionKey[]) {
+  const expanded = new Set(permissions);
+
+  if (expanded.has("venue.view") || expanded.has("venue.manage")) {
+    expanded.add("resource.view");
+  }
+
+  return [...expanded];
+}
+
+export function canonicalizeAccountPermissionsForPersistence({
+  permissions,
+  rolePermissions,
+}: {
+  permissions: unknown;
+  rolePermissions: AccountPermissionKey[];
+}) {
+  const normalizedPermissions = normalizeAccountPermissions(permissions, rolePermissions);
+  const selectedPermissions = new Set(normalizedPermissions);
+
+  if (selectedPermissions.has("venue.view") || selectedPermissions.has("venue.manage")) {
+    selectedPermissions.delete("resource.view");
+  }
+
+  return [...selectedPermissions];
+}
+
+export function getAccountEditablePermissions({
+  rolePermissions,
+  metadata,
+}: Pick<OrganizationAccount, "rolePermissions" | "metadata">) {
+  const permissionsSource = typeof metadata?.permissionsSource === "string" ? metadata.permissionsSource : null;
+
+  if (permissionsSource === "custom") {
+    return canonicalizeAccountPermissionsForPersistence({
+      permissions: metadata?.permissions,
+      rolePermissions,
+    });
+  }
+
+  return [...rolePermissions];
+}
+
+export function isBuiltinAccountRoleSlug(slug: string | undefined | null): slug is AccountRoleSlug {
+  return typeof slug === "string" && BUILTIN_ACCOUNT_ROLE_SLUGS.has(slug as AccountRoleSlug);
+}
+
+export function resolveAccountPermissions({
+  permissions,
+  rolePermissions,
+  roleMetadata,
+  accountMetadata,
+}: {
+  permissions: unknown;
+  rolePermissions: AccountPermissionKey[];
+  roleMetadata?: Record<string, unknown> | null;
+  accountMetadata?: Record<string, unknown> | null;
+}) {
+  const normalizedPermissions = normalizeAccountPermissions(permissions, rolePermissions);
+  const explicitSource = typeof accountMetadata?.permissionsSource === "string" ? accountMetadata.permissionsSource : null;
+  const legacyPermissions = normalizeAccountPermissions(roleMetadata?.legacyPermissions, rolePermissions);
+
+  if (explicitSource === "custom") {
+    return expandDerivedPermissions(normalizedPermissions);
+  }
+
+  if (!normalizedPermissions.length) {
+    return expandDerivedPermissions([...rolePermissions]);
+  }
+
+  if (explicitSource === "preset") {
+    return expandDerivedPermissions([...rolePermissions]);
+  }
+
+  if (legacyPermissions.length && hasSameAccountPermissionSet(normalizedPermissions, legacyPermissions) && !hasSameAccountPermissionSet(normalizedPermissions, rolePermissions)) {
+    return expandDerivedPermissions([...rolePermissions]);
+  }
+
+  if (hasSameAccountPermissionSet(normalizedPermissions, rolePermissions)) {
+    return expandDerivedPermissions([...rolePermissions]);
+  }
+
+  return expandDerivedPermissions(normalizedPermissions);
+}
+
 export function getEffectivePermissions(account: Pick<OrganizationAccount, "permissions" | "rolePermissions">) {
   const permissions = account.permissions.length ? account.permissions : account.rolePermissions;
-  return Array.from(new Set(permissions));
+  return expandDerivedPermissions(Array.from(new Set(permissions)));
 }
 
 export function hasPermission(account: Pick<OrganizationAccount, "permissions" | "rolePermissions">, permission: AccountPermissionKey) {

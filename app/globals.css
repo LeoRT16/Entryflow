@@ -50,14 +50,63 @@
 html {
   height: 100%;
   background: var(--background);
+  color-scheme: dark;
 }
 
 body {
   color: var(--foreground);
   background:
-    radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 32%),
+    radial-gradient(circle at 18% 0%, rgba(34, 211, 238, 0.08), transparent 26%),
+    radial-gradient(circle at 82% 8%, rgba(14, 165, 233, 0.06), transparent 24%),
+    radial-gradient(circle at 50% 100%, rgba(59, 130, 246, 0.04), transparent 32%),
     var(--background);
   font-family: var(--font-sans);
+}
+
+@layer components {
+  .surface-panel {
+    @apply rounded-[2rem] border border-white/10 bg-white/[0.03] shadow-[0_18px_70px_rgba(0,0,0,0.24)];
+  }
+
+  .surface-elevated {
+    @apply rounded-[1.75rem] border border-white/10 bg-[#101824] shadow-[0_16px_55px_rgba(0,0,0,0.28)];
+  }
+
+  .surface-quiet {
+    @apply rounded-[1.5rem] border border-white/10 bg-black/20;
+  }
+
+  .surface-interactive {
+    @apply rounded-2xl border border-white/10 bg-white/[0.04] transition hover:bg-white/[0.08];
+  }
+
+  .surface-alert {
+    @apply rounded-[1.5rem] border border-amber-400/20 bg-amber-400/10;
+  }
+
+  .kicker {
+    @apply text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500;
+  }
+
+  .context-chip {
+    @apply inline-flex h-7 items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 text-[11px] font-semibold leading-none text-slate-200;
+  }
+
+  .context-chip[data-tone="success"] {
+    @apply border-emerald-400/20 bg-emerald-400/10 text-emerald-100;
+  }
+
+  .context-chip[data-tone="warning"] {
+    @apply border-amber-400/20 bg-amber-400/10 text-amber-100;
+  }
+
+  .context-chip[data-tone="danger"] {
+    @apply border-rose-400/20 bg-rose-400/10 text-rose-100;
+  }
+
+  .context-chip[data-tone="info"] {
+    @apply border-cyan-400/20 bg-cyan-400/10 text-cyan-100;
+  }
 }
 
 @keyframes shimmer {

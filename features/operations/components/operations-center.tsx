@@ -1,383 +1,218 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
-import StatusBadge from "@/components/status-badge";
-import TerminalEventBanner from "@/components/terminal-event-banner";
-import Topbar from "@/components/topbar";
-import { ContextualCard, GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
-import LiveSummaryRow from "@/features/reservations/components/live-summary-row";
-import { isTerminalEventStatus } from "@/features/events/domain";
-import { useCheckInStore } from "@/services/workspace-service";
-import TimelineFeed from "@/features/timeline/components/timeline-feed";
 
-function accentTone(tone: "success" | "warning" | "danger" | "info") {
-  return tone === "success"
-    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-    : tone === "warning"
-      ? "border-amber-400/20 bg-amber-400/10 text-amber-100"
-      : tone === "danger"
-        ? "border-rose-400/20 bg-rose-400/10 text-rose-100"
-        : "border-sky-400/20 bg-sky-400/10 text-sky-100";
+import StatusBadge from "@/components/status-badge";
+import Topbar from "@/components/topbar";
+import type { WorkspacePriorityItem } from "@/domain/workspace-priority";
+import { useCheckInStore } from "@/services/workspace-service";
+
+type OperationsIncident = {
+  id: string;
+  title: string;
+  description: string;
+  route: string;
+  module: WorkspacePriorityItem["module"];
+  priority: "critical" | "attention";
+  tone: "danger" | "warning";
+};
+
+const MODULE_LABELS: Record<string, string> = {
+  Operations: "Operaciones",
+  Reservations: "Reservas",
+  Tables: "Espacios",
+  "Check-in": "Ingreso",
+  Timeline: "Actividad",
+  Dashboard: "Resumen",
+  Statistics: "Estadísticas",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  Operations: "Ver operaciones",
+  Reservations: "Ver reservas",
+  Tables: "Ver espacios",
+  "Check-in": "Abrir ingreso",
+  Timeline: "Ver actividad",
+  Dashboard: "Ver resumen",
+  Statistics: "Ver estadísticas",
+};
+
+function priorityRank(priority: WorkspacePriorityItem["priority"]) {
+  if (priority === "critical") return 0;
+  if (priority === "high") return 1;
+  if (priority === "medium") return 2;
+  return 3;
+}
+
+function incidentKey(item: WorkspacePriorityItem) {
+  if (item.module === "Check-in" && (item.title === "Check-in detenido" || item.title === "Puerta congestionada")) {
+    return "Check-in::Ingreso detenido";
+  }
+
+  return `${item.module}::${item.title}::${item.description}`;
+}
+
+function toIncident(item: WorkspacePriorityItem): OperationsIncident {
+  if (item.module === "Check-in" && (item.title === "Check-in detenido" || item.title === "Puerta congestionada")) {
+    return {
+      id: "checkin-stalled-visible",
+      title: "Ingreso detenido",
+      description: item.description,
+      route: "/check-in",
+      module: item.module,
+      priority: "critical",
+      tone: "danger",
+    };
+  }
+
+  const priority = item.priority === "critical" ? "critical" : "attention";
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    route: item.route,
+    module: item.module,
+    priority,
+    tone: priority === "critical" ? "danger" : "warning",
+  };
+}
+
+function getModuleLabel(module: string) {
+  return MODULE_LABELS[module] ?? module;
+}
+
+function getActionLabel(module: string) {
+  return ACTION_LABELS[module] ?? "Abrir detalle";
+}
+
+function IncidentCard({ incident }: { incident: OperationsIncident }) {
+  return (
+    <article className="rounded-2xl border border-white/10 bg-[#0f151d] p-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge variant={incident.tone}>{incident.priority === "critical" ? "CRÍTICO" : "ATENCIÓN"}</StatusBadge>
+            <StatusBadge variant="info">{getModuleLabel(incident.module)}</StatusBadge>
+          </div>
+          <h3 className="mt-3 text-sm font-semibold text-white sm:text-base">{incident.title}</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-400">{incident.description}</p>
+        </div>
+        <Link
+          href={incident.route}
+          className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-medium text-white transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+        >
+          {getActionLabel(incident.module)}
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function IncidentGroup({
+  title,
+  count,
+  tone,
+  incidents,
+}: {
+  title: string;
+  count: number;
+  tone: "danger" | "warning";
+  incidents: OperationsIncident[];
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{title}</p>
+        </div>
+        <StatusBadge variant={tone}>{count}</StatusBadge>
+      </div>
+      <div className="space-y-3">
+        {incidents.map((incident) => (
+          <IncidentCard key={incident.id} incident={incident} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StableState() {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+      <p className="text-sm font-semibold text-white">Operación estable</p>
+      <p className="mt-2 text-sm leading-6 text-slate-400">No hay incidencias que requieran atención en este momento.</p>
+    </div>
+  );
 }
 
 export default function OperationsCenter() {
-  const router = useRouter();
-  const { currentEvent, workspaceIntelligence, workspacePriority } = useCheckInStore();
-  const snapshot = workspaceIntelligence.operations;
-  const priority = workspacePriority;
-  const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
-  const guidedActions = useMemo(() => {
-    if (isTerminalEvent) {
-      return [];
+  const { workspacePriority } = useCheckInStore();
+
+  const incidents = useMemo(() => {
+    const seen = new Map<string, OperationsIncident>();
+    const orderedItems = [...workspacePriority.criticalItems, ...workspacePriority.attentionNow].sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
+
+    for (const item of orderedItems) {
+      const key = incidentKey(item);
+      const nextIncident = toIncident(item);
+      const existing = seen.get(key);
+
+      if (!existing) {
+        seen.set(key, nextIncident);
+        continue;
+      }
+
+      if (existing.id === "checkin-stalled-visible" || nextIncident.id === "checkin-stalled-visible") {
+        seen.set(key, nextIncident.id === "checkin-stalled-visible" ? nextIncident : existing);
+        continue;
+      }
+
+      if (existing.priority === "attention" && nextIncident.priority === "critical") {
+        seen.set(key, nextIncident);
+      }
     }
 
-    const candidates = [
-      ...priority.criticalItems,
-      ...priority.attentionNow,
-      ...priority.nextBestActions,
-    ].filter((item) =>
-      item.module === "Operations" || item.module === "Reservations" || item.module === "Tables" || item.module === "Check-in" || item.module === "Timeline",
-    );
+    const deduped = Array.from(seen.values());
+    return {
+      critical: deduped.filter((incident) => incident.priority === "critical"),
+      attention: deduped.filter((incident) => incident.priority === "attention"),
+    };
+  }, [workspacePriority.attentionNow, workspacePriority.criticalItems]);
 
-    const seen = new Set<string>();
-
-    return candidates
-      .filter((item) => {
-        if (seen.has(item.id)) {
-          return false;
-        }
-
-        seen.add(item.id);
-        return true;
-      })
-      .slice(0, 4)
-      .map((item) =>
-        buildGuidedActionItem(item, {
-          href: item.route,
-          impact:
-            item.priority === "critical"
-              ? "Abre el módulo que desbloquea la operación."
-              : item.priority === "high"
-                ? "Reduce la cola de alertas activas."
-                : item.priority === "medium"
-                  ? "Mantiene el flujo alineado."
-                  : "Sostiene la estabilidad del evento.",
-        }),
-      );
-  }, [isTerminalEvent, priority]);
+  const hasIncidents = incidents.critical.length > 0 || incidents.attention.length > 0;
 
   return (
     <div className="space-y-6">
       <Topbar
-        eyebrow="Centro de operaciones"
+        eyebrow="Operaciones"
         title="Operaciones"
-        description="Panel vivo para monitorear el evento completo con el mismo estado compartido."
-        primaryAction={{ label: "Ir a reservas", href: "/reservations" }}
-        secondaryAction={{ label: "Abrir check-in", href: "/check-in" }}
+        description="Control operativo en tiempo real del evento activo."
       />
 
-      {isTerminalEvent ? (
-        <TerminalEventBanner description="El evento está cerrado. Las métricas siguen visibles, pero las acciones guiadas cambian a navegación e historial de solo lectura." />
-      ) : null}
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
-        {snapshot.metrics.map((metric) => (
-          <article key={metric.label} className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{metric.label}</p>
-            <p className={`mt-3 inline-flex rounded-2xl border px-3 py-2 text-2xl font-semibold ${accentTone(metric.tone)}`}>
-              {metric.value}
-            </p>
-            <p className="mt-3 text-sm text-slate-400">{metric.detail}</p>
-          </article>
-        ))}
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-        <div className={`rounded-3xl border p-5 ${accentTone(priority.summary.critical > 0 ? "danger" : priority.summary.attention > 0 ? "warning" : "success")}`}>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Lectura operativa</p>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">{priority.summary.message}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-300">
-            {isTerminalEvent
-              ? "El evento está cerrado. Esta vista queda para revisar historial, alertas y navegación de solo lectura."
-              : priority.summary.nextBestAction}
-          </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Críticos</p>
-              <p className="mt-2 text-sm font-medium text-white">{priority.summary.critical}</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Atención</p>
-              <p className="mt-2 text-sm font-medium text-white">{priority.summary.attention}</p>
-            </div>
+      <section className="surface-panel p-5 sm:p-6">
+        <div className="flex flex-col gap-4 border-b border-white/10 pb-4">
+          <div>
+            <p className="kicker">ATENCIÓN OPERATIVA</p>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Incidencias activas</h2>
           </div>
         </div>
 
-        {isTerminalEvent ? (
-          <TerminalEventBanner description="No hay acciones operativas ejecutables para un evento cerrado. Usá las rutas de navegación para revisar el historial." />
-        ) : (
-          <GuidedActionPanel
-            title="Siguiente paso"
-            description="Acciones contextualizadas para resolver primero lo que impacta la operación."
-            items={guidedActions}
-          />
-        )}
-
-        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Prioridad operativa</p>
-          <div className="mt-4 space-y-3">
-            <PriorityBucket label="Críticos" tone="danger" items={priority.criticalItems} />
-            <PriorityBucket label="Atención" tone="warning" items={priority.attentionNow} />
-            <PriorityBucket label="Estables" tone="success" items={priority.healthySystems} />
-          </div>
+        <div className="mt-5 space-y-6">
+          {hasIncidents ? (
+            <>
+              {incidents.critical.length ? (
+                <IncidentGroup title="Críticos" count={incidents.critical.length} tone="danger" incidents={incidents.critical} />
+              ) : null}
+              {incidents.attention.length ? (
+                <IncidentGroup title="Atención" count={incidents.attention.length} tone="warning" incidents={incidents.attention} />
+              ) : null}
+            </>
+          ) : (
+            <StableState />
+          )}
         </div>
       </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="space-y-6">
-          <TimelineFeed events={snapshot.recentActivity} />
-
-          <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Próximas reservas
-                </p>
-                <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">
-                  Siguientes reservas del día
-                </h2>
-              </div>
-              <StatusBadge variant="info">{snapshot.upcomingReservations.length}</StatusBadge>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {snapshot.upcomingReservations.map((reservation) => (
-                <ContextualCard
-                  key={reservation.id}
-                  items={[
-                    {
-                      id: `${reservation.id}-open`,
-                      label: "Abrir reserva",
-                      description: "Ir a Reservas.",
-                      tone: "info" as const,
-                      onSelect: () => router.push("/reservations"),
-                    },
-                    {
-                      id: `${reservation.id}-timeline`,
-                      label: "Abrir actividad",
-                      description: "Ver actividad relacionada.",
-                      tone: "info" as const,
-                      onSelect: () => router.push("/timeline"),
-                    },
-                  ]}
-                  className="rounded-2xl border border-white/10 bg-[#0f151d] p-4"
-                >
-                  <article className="rounded-2xl">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-white">{reservation.name}</p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-500">
-                          {reservation.code} · {reservation.time} · {reservation.eventName}
-                        </p>
-                      </div>
-                      <StatusBadge variant={reservation.statusTone}>{reservation.status}</StatusBadge>
-                    </div>
-
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                      <LiveSummaryRow label="Invitados" value={`${reservation.metrics.guestCount}`} />
-                      <LiveSummaryRow label="Confirmados" value={`${reservation.metrics.confirmedGuests}`} />
-                      <LiveSummaryRow label="Ingresados" value={`${reservation.metrics.checkedInGuests}`} />
-                      <LiveSummaryRow label="Mesa" value={reservation.tableName} />
-                    </div>
-                  </article>
-                </ContextualCard>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <div className="space-y-6">
-          <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Alertas operativas
-                </p>
-                <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">
-                  Señales en vivo
-                </h2>
-              </div>
-              <StatusBadge variant="warning">{snapshot.alerts.length}</StatusBadge>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {snapshot.alerts.length ? (
-                snapshot.alerts.map((alert) => (
-                  <ContextualCard
-                    key={alert.id}
-                    items={[
-                      {
-                        id: `${alert.id}-open`,
-                        label: "Abrir alerta",
-                        description: "Ir al origen del problema.",
-                        tone: "info" as const,
-                        onSelect: () => router.push(alert.source === "Tables" ? "/tables" : alert.source === "Check-in" ? "/check-in" : "/reservations"),
-                      },
-                      {
-                        id: `${alert.id}-resolve`,
-                        label: "Resolver alerta",
-                        description: "Abrir la pantalla donde se corrige.",
-                        tone: "success" as const,
-                        onSelect: () => router.push(alert.source === "Tables" ? "/tables" : alert.source === "Check-in" ? "/check-in" : "/reservations"),
-                      },
-                    ]}
-                    className="rounded-2xl border border-white/10 bg-[#0f151d] p-4"
-                  >
-                    <article className="rounded-2xl">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-white">{alert.title}</p>
-                          <p className="mt-2 text-sm leading-6 text-slate-400">{alert.description}</p>
-                        </div>
-                        <StatusBadge variant={alert.tone}>{alert.source}</StatusBadge>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {alert.reservationName ? <StatusBadge variant="info">{alert.reservationName}</StatusBadge> : null}
-                        {alert.tableName ? <StatusBadge variant="success">{alert.tableName}</StatusBadge> : null}
-                      </div>
-                    </article>
-                  </ContextualCard>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4 text-sm text-slate-400">
-                  Sin alertas activas.
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Resumen rápido
-                </p>
-                <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">
-                  Vista compacta
-                </h2>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-2">
-              {snapshot.quickSummary.map((item) => (
-                <LiveSummaryRow key={item.label} label={item.label} value={item.value} />
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                  Mesas críticas
-                </p>
-                <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">
-                  Capacidad bajo atención
-                </h2>
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-4">
-              <CriticalGroup label="Mesas llenas" tone="warning" items={snapshot.criticalTables.full} />
-              <CriticalGroup label="Con sobrecupo" tone="danger" items={snapshot.criticalTables.overCapacity} />
-              <CriticalGroup label="Mesas vacías" tone="info" items={snapshot.criticalTables.empty} />
-            </div>
-          </section>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function CriticalGroup({
-  label,
-  tone,
-  items,
-}: {
-  label: string;
-  tone: "success" | "warning" | "danger" | "info";
-  items: Array<{
-    id: string;
-    name: string;
-    status: string;
-    capacity: number;
-    assignedGuests: number;
-    overCapacity: number;
-  }>;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-white">{label}</p>
-        <StatusBadge variant={tone}>{items.length}</StatusBadge>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        {items.length ? (
-          items.map((item) => (
-            <StatusBadge key={item.id} variant={tone}>
-              {item.name}
-            </StatusBadge>
-          ))
-        ) : (
-          <StatusBadge variant="info">Sin incidencias</StatusBadge>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PriorityBucket({
-  label,
-  tone,
-  items,
-}: {
-  label: string;
-  tone: "success" | "warning" | "danger" | "info";
-  items: Array<{
-    id: string;
-    title: string;
-    description: string;
-    route: string;
-    module: string;
-    priority: string;
-  }>;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-white">{label}</p>
-        <StatusBadge variant={tone}>{items.length}</StatusBadge>
-      </div>
-      <div className="mt-3 space-y-2">
-        {items.length ? (
-          items.slice(0, 4).map((item) => (
-            <article key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <p className="text-sm font-medium text-white">{item.title}</p>
-              <p className="mt-1 text-xs leading-5 text-slate-400">{item.description}</p>
-              <p className="mt-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                {item.module} · {item.route}
-              </p>
-            </article>
-          ))
-        ) : (
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-400">
-            Sin incidencias.
-          </div>
-        )}
-      </div>
     </div>
   );
 }

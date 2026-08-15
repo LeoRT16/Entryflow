@@ -160,7 +160,7 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
       detectorRef.current = detectorRef.current ?? new window.BarcodeDetector({ formats: ["qr_code"] });
       runningRef.current = true;
       setStatus("scanning");
-      setMessage("Apuntá al QR o al código de acceso. La validación ocurre al instante.");
+      setMessage("Apuntá al QR o al código de acceso. La validación de ingreso ocurre al instante.");
 
       const scanFrame = async () => {
         if (scannerSessionRef.current !== sessionId || !runningRef.current || !videoRef.current || !detectorRef.current) {
@@ -232,7 +232,7 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
             </div>
           </div>
           <div className="border-t border-white/10 px-4 py-3 text-xs uppercase tracking-[0.22em] text-slate-400">
-            Escaneo operativo para {eventName}
+            Ingreso operativo para {eventName}
           </div>
         </div>
 
@@ -243,8 +243,8 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
             </p>
             <div className="grid gap-3 rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
               <p>1. Activá la cámara.</p>
-              <p>2. Apuntá al QR o al access code.</p>
-              <p>3. El check-in queda validado en el evento activo.</p>
+              <p>2. Apuntá al QR o al código de acceso.</p>
+              <p>3. El ingreso queda validado en el evento activo.</p>
             </div>
             <p className="rounded-[1.35rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-200">
               {message}

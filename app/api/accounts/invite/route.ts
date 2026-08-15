@@ -11,7 +11,12 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
 import { createUuid, nowIso } from "@/lib/supabase/helpers";
-import { getRolePresetBySlug, normalizeAccountPermissions } from "@/features/accounts/domain/accounts-domain";
+import {
+  canonicalizeAccountPermissionsForPersistence,
+  getRolePresetBySlug,
+  hasSameAccountPermissionSet,
+  resolveAccountPermissions,
+} from "@/features/accounts/domain/accounts-domain";
 import { resolveWorkspaceRole } from "@/app/api/accounts/invite/helpers";
 import type { OrganizationMembership, AccountUser } from "@/features/accounts/types";
 
@@ -77,7 +82,12 @@ export async function POST(request: Request) {
   }
 
   const currentRole = workspace.roles.find((role) => role.id === currentProfile.roleId) ?? getRolePresetBySlug("administrator");
-  const effectivePermissions = normalizeAccountPermissions(currentProfile.metadata?.permissions, currentRole.permissions);
+  const effectivePermissions = resolveAccountPermissions({
+    permissions: currentProfile.metadata?.permissions,
+    rolePermissions: currentRole.permissions,
+    roleMetadata: currentRole.metadata,
+    accountMetadata: currentProfile.metadata,
+  });
 
   if (!effectivePermissions.includes("accounts.manage")) {
     return NextResponse.json(
@@ -170,8 +180,12 @@ export async function POST(request: Request) {
   }
 
   const desiredPermissions = effectivePermissions.includes("permissions.manage")
-    ? normalizeAccountPermissions(body.permissions, targetRole.permissions)
+    ? canonicalizeAccountPermissionsForPersistence({
+        permissions: body.permissions,
+        rolePermissions: targetRole.permissions,
+      })
     : targetRole.permissions;
+  const permissionsSource = hasSameAccountPermissionSet(desiredPermissions, targetRole.permissions) ? "preset" : "custom";
 
   const tempPassword = getRequestString(body.tempPassword);
   const confirmTempPassword = getRequestString(body.confirmTempPassword);
@@ -272,6 +286,7 @@ export async function POST(request: Request) {
           status: "active" as const,
         },
         permissions: desiredPermissions,
+        permissionsSource,
       },
       status: "active" as const,
       createdAt: existingMembership?.createdAt ?? nowIso(),

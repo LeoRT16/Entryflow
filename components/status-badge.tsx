@@ -17,7 +17,7 @@ export default function StatusBadge({
   return (
     <span
       className={[
-        "inline-flex h-7 items-center rounded-full border px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em]",
+        "context-chip",
         variantClasses,
       ].join(" ")}
     >
