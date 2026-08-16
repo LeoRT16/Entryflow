@@ -32,6 +32,10 @@ export type TimelineEvent = {
   tone: TimelineTone;
   title: string;
   description: string;
+  actor?: string;
+  actorRole?: string;
+  context?: string;
+  target?: string;
   reservationId?: string;
   reservationCode?: string;
   reservationName?: string;

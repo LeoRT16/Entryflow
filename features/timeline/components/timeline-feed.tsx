@@ -347,6 +347,10 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                         <p className="mt-2 text-sm leading-6 text-slate-400">{event.description}</p>
 
                         <div className="mt-3 flex flex-wrap gap-2">
+                          {event.actor ? <StatusBadge variant="info">{event.actor}</StatusBadge> : null}
+                          {event.actorRole ? <StatusBadge variant="info">{event.actorRole}</StatusBadge> : null}
+                          {event.context ? <StatusBadge variant="success">{event.context}</StatusBadge> : null}
+                          {event.target ? <StatusBadge variant={event.tone}>{event.target}</StatusBadge> : null}
                           {event.reservationCode ? <StatusBadge variant="info">{event.reservationCode}</StatusBadge> : null}
                           {event.reservationName ? <StatusBadge variant={event.tone}>{event.reservationName}</StatusBadge> : null}
                           {event.guestName ? <StatusBadge variant="warning">{event.guestName}</StatusBadge> : null}

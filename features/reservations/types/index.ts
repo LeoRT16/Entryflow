@@ -46,6 +46,10 @@ export type ReservationTimelineEntry = {
   title: string;
   detail: string;
   tone: ReservationTone;
+  actor?: string;
+  actorRole?: string;
+  context?: string;
+  target?: string;
 };
 
 export type ReservationCreationInput = {

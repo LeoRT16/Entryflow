@@ -49,6 +49,7 @@ import type {
   ReservationRecord,
   ReservationStatus,
   ReservationSummary,
+  ReservationTimelineEntry,
   ReservationUpdateInput,
 } from "@/features/reservations/types";
 import { buildTableSummaries } from "@/features/tables/domain/table-domain";
@@ -509,6 +510,42 @@ function hasWorkspaceData(snapshot?: WorkspaceBootstrap | WorkspaceSnapshot | nu
   );
 }
 
+type AuditTimelineContext = {
+  actor?: string;
+  actorRole?: string;
+  context?: string;
+  target?: string;
+};
+
+function withAuditContext<T extends { metadata?: Record<string, unknown> }>(entry: T, audit: AuditTimelineContext): T & AuditTimelineContext {
+  return {
+    ...entry,
+    ...audit,
+    metadata: {
+      ...(entry.metadata ?? {}),
+      ...audit,
+    },
+  };
+}
+
+function buildReservationTimelineEntry(
+  reservationId: string,
+  timestampIso: string,
+  title: string,
+  detail: string,
+  tone: ReservationTimelineEntry["tone"],
+  audit: AuditTimelineContext = {},
+): ReservationTimelineEntry {
+  return {
+    id: `reservation-${reservationId}-${createUuid()}`,
+    time: timestampIso.slice(11, 16),
+    title,
+    detail,
+    tone,
+    ...audit,
+  };
+}
+
 function buildAttemptTimelineEvent(attempt: CheckInAttempt, guest?: Guest): TimelineEvent {
   const kind = attempt.result === "Encontrado"
     ? attempt.method === "Manual"
@@ -543,6 +580,10 @@ function buildAttemptTimelineEvent(attempt: CheckInAttempt, guest?: Guest): Time
     guestName: guest?.guestName ?? attempt.guestName,
     tableId: guest?.tableId,
     tableName: guest?.tableName,
+    actor: attempt.actor,
+    actorRole: attempt.actorRole,
+    context: attempt.context ?? guest?.eventName,
+    target: attempt.target ?? guest?.guestName ?? attempt.query,
     metadata: {
       query: attempt.query,
       method: attempt.method,
@@ -1901,7 +1942,15 @@ export function WorkspaceServiceProvider({
         await repositories.reservations.upsert(reservation);
         for (const guest of reservationGuestsWithAccess) {
           await repositories.guests.upsert(guest);
-          const timelineEntry = buildAccessGrantTimelineEvent(guest, reservation, grantTimestamp);
+          const timelineEntry = withAuditContext(
+            buildAccessGrantTimelineEvent(guest, reservation, grantTimestamp),
+            {
+              actor: currentAccount.displayName,
+              actorRole: currentAccount.roleName,
+              context: event.name,
+              target: reservation.name,
+            },
+          );
           upsertPersistedTimelineEvent(timelineEntry);
           await repositories.timeline.upsert(timelineEntry);
         }
@@ -1993,6 +2042,17 @@ export function WorkspaceServiceProvider({
 
       if (!reservation) {
         throw new Error("Reservation not found.");
+      }
+
+      if (isTerminalReservationStatus(reservation.status)) {
+        notify({
+          title: "Reserva cerrada",
+          description: "Esta reserva ya es histórica y no admite cambios.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return undefined;
       }
 
       const selectedResource = input.selectedResource ?? input.selectedTable;
@@ -2110,13 +2170,19 @@ export function WorkspaceServiceProvider({
           status: nextStatus,
           timeline: [
             ...reservation.timeline,
-            {
-              id: `reservation-${reservation.id}-${createUuid()}`,
-              time: timestamp.slice(11, 16),
-              title: "Reserva actualizada",
-              detail: `${nextGuestCount} invitados quedan vinculados a ${selectedResource.name}.`,
-              tone: "info",
-            },
+            buildReservationTimelineEntry(
+              reservation.id,
+              timestamp,
+              "Reserva actualizada",
+              `${nextGuestCount} invitados quedan vinculados a ${selectedResource.name}.`,
+              "info",
+              {
+                actor: currentAccount.displayName,
+                actorRole: currentAccount.roleName,
+                context: currentEvent.name,
+                target: nextName,
+              },
+            ),
           ],
           updatedAt: timestamp,
         };
@@ -2130,7 +2196,15 @@ export function WorkspaceServiceProvider({
         await repositories.reservations.upsert(nextReservation);
         for (const guest of nextGuestsWithAccess) {
           await repositories.guests.upsert(guest);
-          const timelineEntry = buildAccessGrantTimelineEvent(guest, nextReservation, timestamp);
+          const timelineEntry = withAuditContext(
+            buildAccessGrantTimelineEvent(guest, nextReservation, timestamp),
+            {
+              actor: currentAccount.displayName,
+              actorRole: currentAccount.roleName,
+              context: currentEvent.name,
+              target: nextReservation.name,
+            },
+          );
           upsertPersistedTimelineEvent(timelineEntry);
           await repositories.timeline.upsert(timelineEntry);
         }
@@ -2235,13 +2309,19 @@ export function WorkspaceServiceProvider({
             guestIds: nextGuestIds,
             timeline: [
               ...nextReservation.timeline,
-              {
-                id: `reservation-${nextReservation.id}-${createUuid()}`,
-                time: nowIso().slice(11, 16),
-                title: "Manillas agregadas",
-                detail: `${guestInput.guestName} se sumó a la reserva existente.`,
-                tone: "info",
-              },
+              buildReservationTimelineEntry(
+                nextReservation.id,
+                nowIso(),
+                "Manillas agregadas",
+                `${guestInput.guestName} se sumó a la reserva existente.`,
+                "info",
+                {
+                  actor: currentAccount.displayName,
+                  actorRole: currentAccount.roleName,
+                  context: currentEvent.name,
+                  target: nextReservation.name,
+                },
+              ),
             ],
             updatedAt: nowIso(),
           };
@@ -2253,7 +2333,15 @@ export function WorkspaceServiceProvider({
         await repositories.reservations.upsert(nextReservation);
         for (const guest of nextGuests) {
           await repositories.guests.upsert(guest);
-          const timelineEntry = buildAccessGrantTimelineEvent(guest, reservation, nowIso());
+          const timelineEntry = withAuditContext(
+            buildAccessGrantTimelineEvent(guest, reservation, nowIso()),
+            {
+              actor: currentAccount.displayName,
+              actorRole: currentAccount.roleName,
+              context: currentEvent.name,
+              target: nextReservation.name,
+            },
+          );
           upsertPersistedTimelineEvent(timelineEntry);
           await repositories.timeline.upsert(timelineEntry);
         }
@@ -2344,7 +2432,19 @@ export function WorkspaceServiceProvider({
                 guestIds: [...item.guestIds, guestId],
                 timeline: [
                   ...item.timeline,
-                  { id: `reservation-${item.id}-${createUuid()}`, time: nowIso().slice(11, 16), title: "Invitado agregado", detail: `${guestInput.guestName} se sumó a la reserva.`, tone: "info" },
+                  buildReservationTimelineEntry(
+                    item.id,
+                    nowIso(),
+                    "Invitado agregado",
+                    `${guestInput.guestName} se sumó a la reserva.`,
+                    "info",
+                    {
+                      actor: currentAccount.displayName,
+                      actorRole: currentAccount.roleName,
+                      context: currentEvent.name,
+                      target: item.name,
+                    },
+                  ),
                 ],
                 updatedAt: nowIso().slice(11, 16),
               }
@@ -2353,7 +2453,15 @@ export function WorkspaceServiceProvider({
       );
 
       void repositories.guests.upsert(nextGuestWithAccess).catch(() => restoreSnapshot(snapshot));
-      const timelineEntry = buildAccessGrantTimelineEvent(nextGuestWithAccess, reservation, nowIso());
+      const timelineEntry = withAuditContext(
+        buildAccessGrantTimelineEvent(nextGuestWithAccess, reservation, nowIso()),
+        {
+          actor: currentAccount.displayName,
+          actorRole: currentAccount.roleName,
+          context: currentEvent.name,
+          target: reservation.name,
+        },
+      );
       upsertPersistedTimelineEvent(timelineEntry);
       void repositories.timeline.upsert(timelineEntry).catch(() => restoreSnapshot(snapshot));
       void repositories.reservations.upsert({
@@ -2479,27 +2587,31 @@ export function WorkspaceServiceProvider({
                 }, nextGuests),
                 timeline: [
                   ...item.timeline,
-                  {
-                    id: `reservation-${item.id}-${createUuid()}`,
-                    time: nowIso().slice(11, 16),
-                    title:
-                      action === "confirm"
-                        ? "Invitado confirmado"
-                        : action === "cancel"
-                          ? "Invitado cancelado"
-                          : action === "revert"
-                            ? "Ingreso revertido"
-                            : "Invitado eliminado",
-                    detail:
-                      action === "confirm"
-                        ? "La invitación quedó confirmada."
-                        : action === "cancel"
-                          ? "La invitación fue anulada."
-                          : action === "revert"
-                            ? "El ingreso volvió a estado pendiente."
-                            : "Se retiró un invitado del grupo.",
-                    tone: action === "cancel" ? "danger" : action === "confirm" ? "info" : "warning",
-                  },
+                  buildReservationTimelineEntry(
+                    item.id,
+                    nowIso(),
+                    action === "confirm"
+                      ? "Invitado confirmado"
+                      : action === "cancel"
+                        ? "Invitado cancelado"
+                        : action === "revert"
+                          ? "Ingreso revertido"
+                          : "Invitado eliminado",
+                    action === "confirm"
+                      ? "La invitación quedó confirmada."
+                      : action === "cancel"
+                        ? "La invitación fue anulada."
+                        : action === "revert"
+                          ? "El ingreso volvió a estado pendiente."
+                          : "Se retiró un invitado del grupo.",
+                    action === "cancel" ? "danger" : action === "confirm" ? "info" : "warning",
+                    {
+                      actor: currentAccount.displayName,
+                      actorRole: currentAccount.roleName,
+                      context: currentEvent.name,
+                      target: item.name,
+                    },
+                  ),
                 ],
               }
             : item,
@@ -2580,24 +2692,29 @@ export function WorkspaceServiceProvider({
                 tableName: status === "Cancelled" || status === "No Show" ? "Sin mesa" : item.tableName,
                 timeline: [
                   ...item.timeline,
-                  {
-                    id: `reservation-${item.id}-${createUuid()}`,
-                    time: nowIso().slice(11, 16),
-                    title:
-                      status === "Confirmed"
-                        ? "Reserva confirmada"
-                        : status === "Pending"
-                          ? "Reserva pendiente"
-                          : status === "Completed"
-                            ? "Reserva completada"
-                            : status === "Cancelled"
-                              ? "Reserva cancelada"
-                              : status === "No Show"
-                                ? "No show registrado"
-                                : "Reserva en borrador",
-                    detail: status === "Cancelled" || status === "No Show" ? "Restado al ciclo operativo" : "Estado sincronizado con el flujo",
-                    tone: status === "Cancelled" || status === "No Show" ? "danger" : status === "Pending" || status === "Draft" ? "warning" : "success",
-                  },
+                  buildReservationTimelineEntry(
+                    item.id,
+                    nowIso(),
+                    status === "Confirmed"
+                      ? "Reserva confirmada"
+                      : status === "Pending"
+                        ? "Reserva pendiente"
+                        : status === "Completed"
+                          ? "Reserva completada"
+                          : status === "Cancelled"
+                            ? "Reserva cancelada"
+                            : status === "No Show"
+                              ? "No show registrado"
+                              : "Reserva en borrador",
+                    status === "Cancelled" || status === "No Show" ? "Restado al ciclo operativo" : "Estado sincronizado con el flujo",
+                    status === "Cancelled" || status === "No Show" ? "danger" : status === "Pending" || status === "Draft" ? "warning" : "success",
+                    {
+                      actor: currentAccount.displayName,
+                      actorRole: currentAccount.roleName,
+                      context: currentEvent.name,
+                      target: item.name,
+                    },
+                  ),
                 ],
               }
             : item,
@@ -2732,7 +2849,19 @@ export function WorkspaceServiceProvider({
         eventLayoutResourceId: selectedEventLayoutResource?.id ?? reservation.eventLayoutResourceId,
         timeline: [
           ...reservation.timeline,
-          { id: `reservation-${reservation.id}-${createUuid()}`, time: nowIso().slice(11, 16), title: "Mesa asignada", detail: `${table.name} quedó vinculada a la reserva.`, tone: "info" },
+          buildReservationTimelineEntry(
+            reservation.id,
+            nowIso(),
+            "Mesa asignada",
+            `${table.name} quedó vinculada a la reserva.`,
+            "info",
+            {
+              actor: currentAccount.displayName,
+              actorRole: currentAccount.roleName,
+              context: currentEvent.name,
+              target: reservation.name,
+            },
+          ),
         ],
       };
       setReservations((current) =>
@@ -2780,7 +2909,25 @@ export function WorkspaceServiceProvider({
       setReservations((current) =>
         current.map((reservation) =>
           reservation.id === guest.reservationId
-            ? { ...reservation, timeline: [...reservation.timeline, { id: `reservation-${reservation.id}-${createUuid()}`, time: nowIso().slice(11, 16), title: "Mesa cambiada", detail: `${guest.guestName} pasó a ${table.name}.`, tone: "warning" }] }
+            ? {
+                ...reservation,
+                timeline: [
+                  ...reservation.timeline,
+                  buildReservationTimelineEntry(
+                    reservation.id,
+                    nowIso(),
+                    "Mesa cambiada",
+                    `${guest.guestName} pasó a ${table.name}.`,
+                    "warning",
+                    {
+                      actor: currentAccount.displayName,
+                      actorRole: currentAccount.roleName,
+                      context: currentEvent.name,
+                      target: reservation.name,
+                    },
+                  ),
+                ],
+              }
             : reservation,
         ),
       );
@@ -2822,7 +2969,27 @@ export function WorkspaceServiceProvider({
       setReservations((current) =>
         current.map((reservation) =>
           reservation.tableId === tableId || reservation.resourceId === tableId
-            ? { ...reservation, tableId: undefined, tableName: "Sin mesa", timeline: [...reservation.timeline, { id: `reservation-${reservation.id}-${createUuid()}`, time: nowIso().slice(11, 16), title: "Mesa liberada", detail: `${table.name} quedó disponible nuevamente.`, tone: "warning" }] }
+            ? {
+                ...reservation,
+                tableId: undefined,
+                tableName: "Sin mesa",
+                timeline: [
+                  ...reservation.timeline,
+                  buildReservationTimelineEntry(
+                    reservation.id,
+                    nowIso(),
+                    "Mesa liberada",
+                    `${table.name} quedó disponible nuevamente.`,
+                    "warning",
+                    {
+                      actor: currentAccount.displayName,
+                      actorRole: currentAccount.roleName,
+                      context: currentEvent.name,
+                      target: reservation.name,
+                    },
+                  ),
+                ],
+              }
             : reservation,
         ),
       );
@@ -2865,7 +3032,25 @@ export function WorkspaceServiceProvider({
       setReservations((current) =>
         current.map((reservation) =>
           reservation.tableId === tableId || reservation.resourceId === tableId
-            ? { ...reservation, timeline: [...reservation.timeline, { id: `reservation-${reservation.id}-${createUuid()}`, time: nowIso().slice(11, 16), title: "Mesa cerrada", detail: `${table.name} quedó fuera de servicio temporalmente.`, tone: "danger" }] }
+            ? {
+                ...reservation,
+                timeline: [
+                  ...reservation.timeline,
+                  buildReservationTimelineEntry(
+                    reservation.id,
+                    nowIso(),
+                    "Mesa cerrada",
+                    `${table.name} quedó fuera de servicio temporalmente.`,
+                    "danger",
+                    {
+                      actor: currentAccount.displayName,
+                      actorRole: currentAccount.roleName,
+                      context: currentEvent.name,
+                      target: reservation.name,
+                    },
+                  ),
+                ],
+              }
             : reservation,
         ),
       );
@@ -2937,14 +3122,26 @@ export function WorkspaceServiceProvider({
             guestId: guest?.id,
             guestName: guest?.guestName,
             note: duplicateResult.note,
+            actor: currentAccount.displayName,
+            actorRole: currentAccount.roleName,
+            context: currentEvent.name,
+            target: guest?.reservationName ?? guest?.guestName ?? query,
           };
 
           setAttempts((current) => [duplicateAttempt, ...current].slice(0, 12));
-          const duplicateTimelineEntry: TimelineEvent = buildRejectedCheckInTimelineEntry({
-            guest,
-            result: duplicateResult,
-            ticket: duplicateTicket,
-          });
+          const duplicateTimelineEntry: TimelineEvent = withAuditContext(
+            buildRejectedCheckInTimelineEntry({
+              guest,
+              result: duplicateResult,
+              ticket: duplicateTicket,
+            }),
+            {
+              actor: currentAccount.displayName,
+              actorRole: currentAccount.roleName,
+              context: currentEvent.name,
+              target: guest?.reservationName ?? guest?.guestName ?? query,
+            },
+          );
           upsertPersistedTimelineEvent(duplicateTimelineEntry);
           await repositories.timeline.upsert(duplicateTimelineEntry).catch(() => restoreSnapshot(snapshot));
           notify({
@@ -2977,11 +3174,23 @@ export function WorkspaceServiceProvider({
           guestId: guest?.id,
           guestName: guest?.guestName,
           note: result.note,
+          actor: currentAccount.displayName,
+          actorRole: currentAccount.roleName,
+          context: currentEvent.name,
+          target: guest?.reservationName ?? guest?.guestName ?? query,
         };
 
         if (!guest) {
           setAttempts((current) => [attempt, ...current].slice(0, 12));
-          const nextTimelineEntry: TimelineEvent = { ...createAdmissionTimelineEntry(result, ticket), eventId: currentEvent.id } as TimelineEvent;
+          const nextTimelineEntry: TimelineEvent = withAuditContext(
+            { ...createAdmissionTimelineEntry(result, ticket), eventId: currentEvent.id } as TimelineEvent,
+            {
+              actor: currentAccount.displayName,
+              actorRole: currentAccount.roleName,
+              context: currentEvent.name,
+              target: ticket?.guestId ?? ticket?.reservationId ?? query,
+            },
+          );
           upsertPersistedTimelineEvent(nextTimelineEntry);
           await repositories.timeline.upsert(nextTimelineEntry).catch(() => restoreSnapshot(snapshot));
           notify({
@@ -2996,7 +3205,15 @@ export function WorkspaceServiceProvider({
 
         if (result.result !== "Valid") {
           setAttempts((current) => [attempt, ...current].slice(0, 12));
-          const nextTimelineEntry: TimelineEvent = { ...createAdmissionTimelineEntry(result, ticket), eventId: currentEvent.id } as TimelineEvent;
+          const nextTimelineEntry: TimelineEvent = withAuditContext(
+            { ...createAdmissionTimelineEntry(result, ticket), eventId: currentEvent.id } as TimelineEvent,
+            {
+              actor: currentAccount.displayName,
+              actorRole: currentAccount.roleName,
+              context: currentEvent.name,
+              target: guest?.reservationName ?? guest?.guestName ?? query,
+            },
+          );
           upsertPersistedTimelineEvent(nextTimelineEntry);
           await repositories.timeline.upsert(nextTimelineEntry).catch(() => restoreSnapshot(snapshot));
           notify({
@@ -3016,6 +3233,19 @@ export function WorkspaceServiceProvider({
           method,
           operator,
           timestampIso,
+        });
+        bundle.checkIn = {
+          ...bundle.checkIn,
+          actor: currentAccount.displayName,
+          actorRole: currentAccount.roleName,
+          context: currentEvent.name,
+          target: guest.reservationName,
+        };
+        bundle.timelineEntry = withAuditContext(bundle.timelineEntry, {
+          actor: currentAccount.displayName,
+          actorRole: currentAccount.roleName,
+          context: currentEvent.name,
+          target: guest.reservationName,
         });
 
         try {
@@ -3053,14 +3283,26 @@ export function WorkspaceServiceProvider({
               guestId: guest.id,
               guestName: guest.guestName,
               note: duplicateResult.note,
+              actor: currentAccount.displayName,
+              actorRole: currentAccount.roleName,
+              context: currentEvent.name,
+              target: guest.reservationName ?? guest.guestName ?? query,
             };
 
             setAttempts((current) => [duplicateAttempt, ...current].slice(0, 12));
-            const duplicateTimelineEntry: TimelineEvent = buildRejectedCheckInTimelineEntry({
-              guest,
-              result: duplicateResult,
-              ticket: duplicateTicket,
-            });
+            const duplicateTimelineEntry: TimelineEvent = withAuditContext(
+              buildRejectedCheckInTimelineEntry({
+                guest,
+                result: duplicateResult,
+                ticket: duplicateTicket,
+              }),
+              {
+                actor: currentAccount.displayName,
+                actorRole: currentAccount.roleName,
+                context: currentEvent.name,
+                target: guest.reservationName ?? guest.guestName ?? query,
+              },
+            );
             upsertPersistedTimelineEvent(duplicateTimelineEntry);
             await repositories.timeline.upsert(duplicateTimelineEntry).catch(() => restoreSnapshot(snapshot));
             notify({

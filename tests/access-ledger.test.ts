@@ -142,3 +142,45 @@ test("qrToken resolution stays isolated to the active event", () => {
   assert.equal(resolved.grant, null);
   assert.equal(resolved.guest, null);
 });
+
+test("reassigned reservations invalidate the previous qr token and issue a new one", () => {
+  const originalGuest = buildGuest({ qrToken: undefined, accessCode: undefined });
+  const originalReservation = buildReservation();
+  const originalGrant = buildAccessGrantFromGuest(originalGuest, originalReservation);
+
+  const reassignedGuest = buildGuest({
+    qrToken: undefined,
+    accessCode: undefined,
+    reservationId: "reservation-2",
+    reservationCode: "RES-NEW-02",
+    reservationName: "Nueva reserva E2E",
+  });
+  const reassignedReservation = buildReservation({
+    id: "reservation-2",
+    code: "RES-NEW-02",
+    name: "Nueva reserva E2E",
+    guestIds: [reassignedGuest.id],
+  });
+  const reassignedGrant = buildAccessGrantFromGuest(reassignedGuest, reassignedReservation);
+
+  const oldTokenResolution = resolveAccessGrantByQuery({
+    query: originalGrant.qrToken,
+    guests: [reassignedGuest],
+    reservations: [reassignedReservation],
+    event: { id: reassignedGuest.eventId } as Event,
+  });
+
+  assert.equal(oldTokenResolution.status, "not-found");
+  assert.equal(oldTokenResolution.grant, null);
+
+  const newTokenResolution = resolveAccessGrantByQuery({
+    query: reassignedGrant.qrToken,
+    guests: [reassignedGuest],
+    reservations: [reassignedReservation],
+    event: { id: reassignedGuest.eventId } as Event,
+  });
+
+  assert.equal(newTokenResolution.status, "found");
+  assert.equal(newTokenResolution.guest?.reservationId, "reservation-2");
+  assert.equal(newTokenResolution.grant?.qrToken, reassignedGrant.qrToken);
+});

@@ -147,3 +147,48 @@ test("first use yields one success and blocked retries each add their own blocke
   assert.equal(thirdUse.filter((item) => item.kind === "checkin.success").length, 1);
   assert.equal(thirdUse.filter((item) => item.kind === "checkin.blocked").length, 2);
 });
+
+test("timeline events preserve actor, context and target metadata", () => {
+  const guest = buildGuest();
+  const reservation = buildReservation({
+    timeline: [
+      {
+        id: "timeline-1",
+        time: "19:40",
+        title: "Mesa asignada",
+        detail: "Mesa 3 asignada a la reserva.",
+        tone: "info",
+        actor: "Ana Pérez",
+        actorRole: "Owner",
+        context: "Evento E2E",
+        target: "Mesa 3",
+      },
+    ],
+  });
+  const checkIn = buildActiveCheckIn({
+    actor: "Escáner Principal",
+    actorRole: "Door",
+    context: "Evento E2E",
+    target: "Carlos Méndez",
+  });
+
+  const events = buildTimelineEvents({
+    eventId: guest.eventId,
+    reservations: [reservation],
+    guests: [guest],
+    checkIns: [checkIn],
+    attempts: [],
+  });
+
+  const reservationEvent = events.find((item) => item.kind === "table.assigned");
+  const checkInEvent = events.find((item) => item.kind === "checkin.success");
+
+  assert.equal(reservationEvent?.actor, "Ana Pérez");
+  assert.equal(reservationEvent?.actorRole, "Owner");
+  assert.equal(reservationEvent?.context, "Evento E2E");
+  assert.equal(reservationEvent?.target, "Mesa 3");
+  assert.equal(checkInEvent?.actor, "Escáner Principal");
+  assert.equal(checkInEvent?.actorRole, "Door");
+  assert.equal(checkInEvent?.context, "Evento E2E");
+  assert.equal(checkInEvent?.target, "Carlos Méndez");
+});

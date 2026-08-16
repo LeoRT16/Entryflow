@@ -174,6 +174,10 @@ export type AccessRecord = {
   lastAttemptAt?: string;
   status: AccessStatus;
   source?: string;
+  actor?: string;
+  actorRole?: string;
+  context?: string;
+  target?: string;
 };
 
 export type CheckIn = AccessRecord;
@@ -188,4 +192,8 @@ export type CheckInAttempt = {
   guestId?: string;
   guestName?: string;
   note: string;
+  actor?: string;
+  actorRole?: string;
+  context?: string;
+  target?: string;
 };

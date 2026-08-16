@@ -82,6 +82,10 @@ function reservationTimelineToEvent(
     reservationName: reservation.name,
     tableId: reservation.tableId,
     tableName: reservation.tableName,
+    actor: entry.actor,
+    actorRole: entry.actorRole,
+    context: entry.context ?? reservation.eventName,
+    target: entry.target ?? reservation.name,
   };
 }
 
@@ -153,6 +157,10 @@ function checkInToEvent(guest: Guest, checkIn: CheckIn): TimelineEvent {
     guestName: guest.guestName,
     tableId: guest.tableId,
     tableName: guest.tableName,
+    actor: checkIn.actor ?? checkIn.operator,
+    actorRole: checkIn.actorRole,
+    context: checkIn.context ?? guest.eventName,
+    target: checkIn.target ?? guest.guestName,
   };
 }
 
@@ -178,6 +186,10 @@ export function buildCheckInAttemptTimelineEvent(guest: Guest | undefined, attem
       reservationName: guest?.reservationName,
       tableId: guest?.tableId,
       tableName: guest?.tableName,
+      actor: attempt.actor,
+      actorRole: attempt.actorRole,
+      context: attempt.context ?? guest?.eventName,
+      target: attempt.target ?? guest?.guestName ?? attempt.query,
     };
   }
 
@@ -202,6 +214,10 @@ export function buildCheckInAttemptTimelineEvent(guest: Guest | undefined, attem
     reservationName: guest?.reservationName,
     tableId: guest?.tableId,
     tableName: guest?.tableName,
+    actor: attempt.actor,
+    actorRole: attempt.actorRole,
+    context: attempt.context ?? guest?.eventName,
+    target: attempt.target ?? guest?.guestName ?? attempt.query,
     metadata: {
       query: attempt.query,
       method: attempt.method,

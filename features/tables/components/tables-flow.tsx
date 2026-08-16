@@ -185,11 +185,29 @@ function TablesFlowWorkspace() {
     : 0;
 
   const startCreateSector = () => {
+    if (isTerminalEvent) {
+      showToast({
+        title: "Evento cerrado",
+        description: "No puedes crear zonas en un evento cerrado.",
+        tone: "warning",
+      });
+      return;
+    }
+
     setEditingSectorId(null);
     setSectorForm(emptySectorForm);
   };
 
   const startEditSector = (sector: Sector) => {
+    if (isTerminalEvent) {
+      showToast({
+        title: "Evento cerrado",
+        description: "No puedes editar zonas en un evento cerrado.",
+        tone: "warning",
+      });
+      return;
+    }
+
     setEditingSectorId(sector.id);
     setSelectedSectorId(sector.id);
     setSectorForm({
@@ -202,6 +220,15 @@ function TablesFlowWorkspace() {
   };
 
   const startCreateResource = (sectorId = resourceForm.sectorId || effectiveSelectedZoneId || venueSectors[0]?.id || "") => {
+    if (isTerminalEvent) {
+      showToast({
+        title: "Evento cerrado",
+        description: "No puedes crear espacios en un evento cerrado.",
+        tone: "warning",
+      });
+      return;
+    }
+
     setEditingResourceId(null);
     setResourceForm({
       ...emptyResourceForm,
@@ -210,6 +237,15 @@ function TablesFlowWorkspace() {
   };
 
   const startEditResource = (resource: Resource) => {
+    if (isTerminalEvent) {
+      showToast({
+        title: "Evento cerrado",
+        description: "No puedes editar espacios en un evento cerrado.",
+        tone: "warning",
+      });
+      return;
+    }
+
     setEditingResourceId(resource.id);
     setSelectedResourceId(resource.id);
     setResourceForm({
@@ -225,6 +261,15 @@ function TablesFlowWorkspace() {
 
   const saveSector = async () => {
     if (!venue) {
+      return;
+    }
+
+    if (isTerminalEvent) {
+      showToast({
+        title: "Evento cerrado",
+        description: "No puedes guardar zonas en un evento cerrado.",
+        tone: "warning",
+      });
       return;
     }
 
@@ -256,6 +301,15 @@ function TablesFlowWorkspace() {
 
   const saveResource = async () => {
     if (!venue) {
+      return;
+    }
+
+    if (isTerminalEvent) {
+      showToast({
+        title: "Evento cerrado",
+        description: "No puedes guardar espacios en un evento cerrado.",
+        tone: "warning",
+      });
       return;
     }
 
@@ -612,6 +666,15 @@ function TablesFlowWorkspace() {
                           <button
                             type="button"
                             onClick={() => {
+                              if (isTerminalEvent) {
+                                showToast({
+                                  title: "Evento cerrado",
+                                  description: "No puedes modificar el estado de una zona en un evento cerrado.",
+                                  tone: "warning",
+                                });
+                                return;
+                              }
+
                               const sector = venueSectors.find((item) => item.id === zone.id);
                               if (sector) {
                                 startEditSector(sector);
@@ -623,7 +686,18 @@ function TablesFlowWorkspace() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => void setSectorStatus(zone.id, zone.status === "active" ? "inactive" : "active")}
+                            onClick={() => {
+                              if (isTerminalEvent) {
+                                showToast({
+                                  title: "Evento cerrado",
+                                  description: "No puedes modificar el estado de una zona en un evento cerrado.",
+                                  tone: "warning",
+                                });
+                                return;
+                              }
+
+                              void setSectorStatus(zone.id, zone.status === "active" ? "inactive" : "active");
+                            }}
                             className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white"
                           >
                             {zone.status === "active" ? "Desactivar" : "Activar"}
@@ -762,6 +836,15 @@ function TablesFlowWorkspace() {
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
+                            if (isTerminalEvent) {
+                              showToast({
+                                title: "Evento cerrado",
+                                description: "No puedes modificar el estado de un espacio en un evento cerrado.",
+                                tone: "warning",
+                              });
+                              return;
+                            }
+
                             void setResourceStatus(resource.id, resource.status === "Closed" ? "Available" : "Closed");
                           }}
                           className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white"
