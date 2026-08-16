@@ -9,9 +9,17 @@ import {
   useRef,
   useState,
 } from "react";
+import { toPng } from "html-to-image";
 
+import InvitationCard from "@/features/access/components/invitation-card";
+import type { InvitationDesign } from "@/features/access/domain/access-domain";
+import { INVITATION_RENDER_SIZE, getInvitationDownloadFilename } from "@/features/access/domain/invitation-rendering";
+import { normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
 import StatusBadge from "@/components/status-badge";
+import { useFeedback } from "@/components/premium-feedback";
 import Topbar from "@/components/topbar";
+import type { Guest as CheckInGuest } from "@/features/check-in/types";
+import { buildGuestQuickReadSummary } from "@/features/check-in/domain/check-in-domain";
 import { formatReservationStatus, getReservationStatusTone } from "@/features/reservations/domain/reservation-domain";
 import { useCheckInStore } from "@/services/workspace-service";
 import { matchesText, normalizeText } from "@/features/customers/utils";
@@ -229,6 +237,8 @@ function GuestResultCard({
   onOpenGuest: (guest: GuestRecord, trigger?: HTMLElement | null) => void;
   isSelected: boolean;
 }) {
+  const quickRead = buildGuestQuickReadSummary(guest);
+
   return (
     <button
       type="button"
@@ -243,8 +253,8 @@ function GuestResultCard({
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="break-words text-sm font-semibold text-white">{guest.guestName}</p>
-            <p className="mt-1 break-words text-xs text-slate-400">{guest.carnet}</p>
+            <p className="break-words text-sm font-semibold text-white">{quickRead.name}</p>
+            <p className="mt-1 break-words text-xs text-slate-400">{quickRead.carnet}</p>
           </div>
           <div className="flex min-w-0 flex-wrap justify-end gap-2">
             <StatusBadge variant={statusTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
@@ -253,10 +263,10 @@ function GuestResultCard({
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2">
-          <CompactMeta label="Reserva" value={`${guest.reservationCode} · ${guest.reservationName}`} />
-          <CompactMeta label="Mesa / espacio" value={guest.tableName || "Sin mesa"} />
-          <CompactMeta label="Código" value={guest.invitationCode} />
-          <CompactMeta label="Ingreso" value={guest.checkInTime || "Pendiente"} />
+          <CompactMeta label="Reserva" value={quickRead.reservation} />
+          <CompactMeta label="Mesa / espacio" value={quickRead.space} />
+          <CompactMeta label="Ingreso" value={quickRead.entryStatus} />
+          <CompactMeta label="Entrega / invitación" value={guest.deliveryStatus} />
         </div>
       </div>
     </button>
@@ -272,12 +282,186 @@ function GuestDrawer({
   onClose: () => void;
   drawerRef: RefObject<HTMLDivElement | null>;
 }) {
+  const { showToast } = useFeedback();
+  const { currentEvent, setGuestsState } = useCheckInStore();
   const [isVisible, setIsVisible] = useState(false);
+  const [isInvitationPreviewOpen, setIsInvitationPreviewOpen] = useState(false);
+  const [isExportingInvitation, setIsExportingInvitation] = useState(false);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const exportInvitationRef = useRef<HTMLDivElement | null>(null);
+
+  const visibleInvitationCode = guest.accessCode ?? guest.invitationCode;
+  const invitationQrToken = guest.qrToken ?? visibleInvitationCode;
+  const isWhatsAppReady = Boolean(normalizeWhatsAppPhoneNumber(guest.whatsapp));
+  const invitationDateTime = useMemo(() => formatInvitationDateTime(currentEvent.startAt), [currentEvent.startAt]);
+
+  const invitation = useMemo<InvitationDesign>(
+    () => ({
+      id: guest.id,
+      eventName: currentEvent.name,
+      guestName: guest.guestName,
+      reservationName: guest.reservationName,
+      reservationCode: guest.reservationCode,
+      tableName: guest.tableName,
+      zoneName: guest.seat,
+      date: invitationDateTime.date,
+      time: invitationDateTime.time,
+      uniqueCode: visibleInvitationCode,
+      qrValue: invitationQrToken,
+      theme: "Pieza lista para compartir y validar operativamente.",
+      variant: "general",
+    }),
+    [currentEvent.name, guest.id, guest.guestName, guest.reservationCode, guest.reservationName, guest.seat, guest.tableName, invitationDateTime.date, invitationDateTime.time, invitationQrToken, visibleInvitationCode],
+  );
+
+  const handleDownloadInvitation = useCallback(async () => {
+    if (!exportInvitationRef.current || isExportingInvitation) {
+      return;
+    }
+
+    setIsExportingInvitation(true);
+
+    try {
+      const dataUrl = await toPng(exportInvitationRef.current, {
+        cacheBust: true,
+        pixelRatio: 1,
+        backgroundColor: "#0b111a",
+      });
+
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = getInvitationDownloadFilename(visibleInvitationCode);
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      showToast({
+        title: "Invitación descargada",
+        description: "Se generó el PNG con el QR real del invitado.",
+        tone: "success",
+      });
+    } catch (error) {
+      showToast({
+        title: "No se pudo descargar la invitación",
+        description: error instanceof Error ? error.message : "La exportación PNG no pudo completarse.",
+        tone: "error",
+      });
+    } finally {
+      setIsExportingInvitation(false);
+    }
+  }, [isExportingInvitation, showToast, visibleInvitationCode]);
+
+  const handleSendWhatsApp = useCallback(async () => {
+    if (!isWhatsAppReady || isSendingWhatsApp) {
+      if (!isWhatsAppReady) {
+        showToast({
+          title: "WhatsApp no válido",
+          description: "Necesitás un número válido para enviar la invitación.",
+          tone: "warning",
+        });
+      }
+
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+
+    try {
+      const response = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient: guest.whatsapp,
+          guestName: guest.guestName,
+          eventName: currentEvent.name,
+          invitationCode: visibleInvitationCode,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error?.message || "No se pudo enviar la invitación por WhatsApp.");
+      }
+
+      const timestamp = new Date().toISOString();
+      const nextDeliveryStatus =
+        guest.deliveryStatus === "Enviada" || guest.deliveryStatus === "Reenviada" || guest.deliveryStatus === "Vista"
+          ? "Reenviada"
+          : "Enviada";
+
+      const nextGuestActivity = {
+        time: timestamp.slice(11, 16),
+        title: nextDeliveryStatus,
+        detail: "Entrega por WhatsApp registrada",
+      };
+
+      setGuestsState((current) =>
+        current.map((item): CheckInGuest =>
+          item.id === guest.id
+            ? {
+                ...item,
+                deliveryStatus: nextDeliveryStatus,
+                noInvitationSent: false,
+                recentChange: true,
+                deliveryHistory: [...item.deliveryHistory, nextGuestActivity],
+              }
+            : item,
+        ),
+      );
+      showToast({
+        title: nextDeliveryStatus === "Reenviada" ? "Invitación reenviada" : "Invitación enviada",
+        description: "El estado visible se actualizó en el detalle del invitado.",
+        tone: "success",
+      });
+    } catch (error) {
+      showToast({
+        title: "No se pudo enviar la invitación",
+        description: error instanceof Error ? error.message : "Ocurrió un error inesperado.",
+        tone: "error",
+      });
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  }, [currentEvent.name, guest, isSendingWhatsApp, isWhatsAppReady, setGuestsState, showToast, visibleInvitationCode]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setIsVisible(true));
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (!isInvitationPreviewOpen) {
+      return undefined;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setIsInvitationPreviewOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape, true);
+    return () => document.removeEventListener("keydown", handleEscape, true);
+  }, [isInvitationPreviewOpen]);
+
+  useEffect(() => {
+    if (!isInvitationPreviewOpen) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isInvitationPreviewOpen]);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -347,6 +531,55 @@ function GuestDrawer({
               </div>
             </section>
 
+            <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="kicker">Invitación</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Revisa, descarga o comparte la misma invitación real que consume Ingreso.
+                  </p>
+                </div>
+                <StatusBadge variant={statusTone(guest.deliveryStatus)}>{guest.deliveryStatus}</StatusBadge>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <CompactMeta label="Código visible" value={visibleInvitationCode} />
+                <CompactMeta label="WhatsApp" value={guest.whatsapp || "Sin WhatsApp"} />
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsInvitationPreviewOpen(true)}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
+                >
+                  Visualizar invitación
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadInvitation()}
+                  disabled={isExportingInvitation}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isExportingInvitation ? "Descargando..." : "Descargar PNG"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSendWhatsApp()}
+                  disabled={isSendingWhatsApp || !isWhatsAppReady}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 text-sm font-medium text-emerald-50 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSendingWhatsApp ? "Enviando..." : "Enviar por WhatsApp"}
+                </button>
+              </div>
+
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                {isWhatsAppReady
+                  ? "El botón usa el número del invitado y el QR opaco real."
+                  : "Agrega un WhatsApp válido para habilitar el envío."}
+              </p>
+            </section>
+
             {guest.attention || guest.internalNotes ? (
               <section className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
                 <p className="kicker">Observaciones</p>
@@ -361,6 +594,20 @@ function GuestDrawer({
               </section>
             )}
           </div>
+        </div>
+      </div>
+
+      <InvitationPreviewModal
+        isOpen={isInvitationPreviewOpen}
+        invitation={invitation}
+        isExporting={isExportingInvitation}
+        onClose={() => setIsInvitationPreviewOpen(false)}
+        onDownload={() => void handleDownloadInvitation()}
+      />
+
+      <div className="pointer-events-none fixed left-[-200vw] top-0 w-[1080px] overflow-hidden" aria-hidden="true">
+        <div ref={exportInvitationRef} className="w-[1080px]">
+          <InvitationCard invitation={invitation} mode="download" />
         </div>
       </div>
     </div>
@@ -380,6 +627,140 @@ function CompactMeta({
         {label}
       </p>
       <p className="break-words text-sm font-medium text-white">{value}</p>
+    </div>
+  );
+}
+
+function InvitationPreviewModal({
+  isOpen,
+  invitation,
+  isExporting,
+  onClose,
+  onDownload,
+}: {
+  isOpen: boolean;
+  invitation: InvitationDesign;
+  isExporting: boolean;
+  onClose: () => void;
+  onDownload: () => void;
+}) {
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60]">
+      <button
+        type="button"
+        aria-label="Cerrar vista previa de invitación"
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6">
+        <div className="relative flex h-[calc(100vh-2rem)] w-full max-w-[min(94vw,520px)] flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#0b111a] shadow-[0_24px_120px_rgba(0,0,0,0.55)] sm:h-[calc(100vh-3rem)]">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+                Vista previa
+              </p>
+              <p className="mt-1 text-sm text-slate-400">La misma invitación que se descarga y se comparte.</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+            >
+              Cerrar
+            </button>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-5">
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+              <InvitationPreviewStage invitation={invitation} />
+            </div>
+
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={onDownload}
+                disabled={isExporting}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isExporting ? "Descargando..." : "Descargar PNG"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+              >
+                Volver
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvitationPreviewStage({ invitation }: { invitation: InvitationDesign }) {
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const element = stageRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect();
+      setStageSize({
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => {
+      updateSize();
+    });
+
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
+
+  const scale = useMemo(() => {
+    if (!stageSize.width || !stageSize.height) {
+      return 0.24;
+    }
+
+    const widthScale = stageSize.width / INVITATION_RENDER_SIZE.width;
+    const heightScale = stageSize.height / INVITATION_RENDER_SIZE.height;
+
+    return Math.min(widthScale, heightScale, 1);
+  }, [stageSize.height, stageSize.width]);
+
+  const renderWidth = INVITATION_RENDER_SIZE.width * scale;
+  const renderHeight = INVITATION_RENDER_SIZE.height * scale;
+
+  return (
+    <div ref={stageRef} className="flex min-h-0 w-full items-center justify-center">
+      <div className="relative shrink-0" style={{ width: renderWidth, height: renderHeight }}>
+        <div
+          className="absolute left-0 top-0 origin-top-left"
+          style={{
+            width: `${INVITATION_RENDER_SIZE.width}px`,
+            height: `${INVITATION_RENDER_SIZE.height}px`,
+            transform: `scale(${scale})`,
+          }}
+        >
+          <InvitationCard invitation={invitation} mode="preview" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -405,4 +786,30 @@ function formatEventSummary(date?: string, startsAt?: string) {
   }
 
   return [date, startsAt].filter(Boolean).join(" · ");
+}
+
+function formatInvitationDateTime(startAt: string) {
+  const parsed = new Date(startAt);
+
+  if (!Number.isNaN(parsed.getTime())) {
+    return {
+      date: parsed.toLocaleDateString("es-BO", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }),
+      time: parsed.toLocaleTimeString("es-BO", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
+    };
+  }
+
+  const [date, time] = startAt.split(" ");
+
+  return {
+    date: date || startAt,
+    time: time || "21:00",
+  };
 }

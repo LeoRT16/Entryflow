@@ -228,6 +228,21 @@ export function buildCheckInAttemptTimelineEvent(guest: Guest | undefined, attem
   };
 }
 
+export function buildTimelineQuickReadSummary(event: TimelineEvent) {
+  return {
+    action: event.title,
+    target: event.target ?? event.guestName ?? event.reservationName ?? event.tableName ?? "",
+    actorLine: event.actor
+      ? event.actorRole
+        ? `${event.actor} · ${event.actorRole}`
+        : event.actor
+      : event.actorRole ?? "",
+    context: event.context ?? "",
+    description: event.description,
+    timestamp: event.timestamp,
+  };
+}
+
 export function buildTimelineEvents({
   eventId,
   reservations,

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import StatusBadge from "@/components/status-badge";
 import { ContextualCard } from "@/components/quick-actions-menu";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { buildTimelineQuickReadSummary } from "@/features/timeline/domain/timeline-domain";
 import type { TimelineEvent } from "@/features/timeline/types";
 
 function TimelineMark({ tone }: { tone: TimelineEvent["tone"] }) {
@@ -299,6 +300,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
               {groupEvents.length ? (
                 groupEvents.slice(0, 4).map((event) => {
                   const isSelected = selectedEvent?.id === event.id;
+                  const quickRead = buildTimelineQuickReadSummary(event);
 
                   return (
                   <ContextualCard
@@ -341,16 +343,27 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
 
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-white">{event.title}</p>
-                          <StatusBadge variant={event.tone}>{formatTimelineTimestamp(event.timestamp)}</StatusBadge>
+                          <p className="text-sm font-semibold text-white">{quickRead.action}</p>
+                          <StatusBadge variant={event.tone}>{formatTimelineTimestamp(quickRead.timestamp)}</StatusBadge>
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-400">{event.description}</p>
+                        {quickRead.target ? (
+                          <p className="mt-2 break-words text-base font-medium text-white">{quickRead.target}</p>
+                        ) : null}
+                        {quickRead.actorLine ? (
+                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
+                            Realizado por: {quickRead.actorLine}
+                          </p>
+                        ) : null}
+                        {quickRead.context ? (
+                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.22em] text-slate-500">{quickRead.context}</p>
+                        ) : null}
+                        <p className="mt-2 text-sm leading-6 text-slate-400">{quickRead.description}</p>
 
                         <div className="mt-3 flex flex-wrap gap-2">
                           {event.actor ? <StatusBadge variant="info">{event.actor}</StatusBadge> : null}
                           {event.actorRole ? <StatusBadge variant="info">{event.actorRole}</StatusBadge> : null}
-                          {event.context ? <StatusBadge variant="success">{event.context}</StatusBadge> : null}
                           {event.target ? <StatusBadge variant={event.tone}>{event.target}</StatusBadge> : null}
+                          {event.context ? <StatusBadge variant="success">{event.context}</StatusBadge> : null}
                           {event.reservationCode ? <StatusBadge variant="info">{event.reservationCode}</StatusBadge> : null}
                           {event.reservationName ? <StatusBadge variant={event.tone}>{event.reservationName}</StatusBadge> : null}
                           {event.guestName ? <StatusBadge variant="warning">{event.guestName}</StatusBadge> : null}

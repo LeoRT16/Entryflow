@@ -1,5 +1,7 @@
 import type { Event as LegacyEvent, Guest, CheckInMethod, EntryStatus } from "@/features/check-in/types";
 import type { Event as PlatformEvent } from "@/features/domain/types";
+import type { ReservationRecord } from "@/features/reservations/types";
+import { resolveAccessGrantByQuery } from "@/features/access/domain/access-ledger";
 import { normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
 import type { ReservationSummary } from "@/features/reservations/types";
 import type { TableSummary } from "@/features/tables/types";
@@ -31,6 +33,74 @@ export function searchGuests(guests: Guest[], query: string) {
   }
 
   return guests.filter((guest) => buildGuestSearchIndex(guest).includes(normalizedQuery));
+}
+
+type GuestQuickReadSource = {
+  guestName: string;
+  carnet: string;
+  reservationName: string;
+  reservationCode: string;
+  tableName?: string;
+  seat?: string;
+  admissionStatus: string;
+  deliveryStatus?: string;
+  checkInTime?: string;
+  accessCode?: string;
+  invitationCode: string;
+  qrStatus?: string;
+};
+
+export function buildGuestQuickReadSummary(guest: GuestQuickReadSource) {
+  const space = guest.tableName ?? guest.seat ?? "Sin mesa";
+  const visibleCode = guest.accessCode ?? guest.invitationCode;
+
+  return {
+    name: guest.guestName,
+    carnet: guest.carnet,
+    reservation: `${guest.reservationCode} · ${guest.reservationName}`,
+    space,
+    entryStatus: guest.admissionStatus,
+    accessStatus:
+      guest.qrStatus ??
+      (guest.admissionStatus === "Ingresó"
+        ? "Usado"
+        : guest.admissionStatus === "Bloqueada"
+          ? "Bloqueado"
+          : guest.admissionStatus === "Anulada"
+            ? "Anulado"
+            : "Válido"),
+    deliveryStatus: guest.deliveryStatus,
+    checkInTime: guest.checkInTime,
+    visibleCode,
+  };
+}
+
+export function resolveCheckInGuestByQuery(params: {
+  query: string;
+  guests: Guest[];
+  reservations: ReservationRecord[];
+  event: PlatformEvent | null;
+}) {
+  const normalizedQuery = normalizeCheckInText(params.query);
+
+  if (!normalizedQuery) {
+    return null;
+  }
+
+  const accessResolution = resolveAccessGrantByQuery({
+    query: params.query,
+    guests: params.guests,
+    reservations: params.reservations,
+    event: params.event,
+  });
+
+  if (accessResolution.status === "found") {
+    return accessResolution.guest;
+  }
+
+  const matches = searchGuests(params.guests, params.query);
+
+  return matches.length === 1 ? matches[0] : null;
 }
 
 export function buildReservations(guests: Guest[], activeEvent: PlatformEvent): Array<{

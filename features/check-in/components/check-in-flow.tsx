@@ -5,7 +5,11 @@ import { useDeferredValue, useMemo, useState } from "react";
 import StatusBadge from "@/components/status-badge";
 import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
 import { buildGuestSearchIndex } from "@/features/check-in/utils";
-import { getEntryTone } from "@/features/check-in/domain/check-in-domain";
+import {
+  buildGuestQuickReadSummary,
+  getEntryTone,
+  resolveCheckInGuestByQuery,
+} from "@/features/check-in/domain/check-in-domain";
 import { isTerminalEventStatus } from "@/features/events/domain";
 import type { CheckInMethod, Guest } from "@/features/check-in/types";
 import { useCheckInStore } from "@/services/workspace-service";
@@ -38,6 +42,21 @@ function getAttemptTone(result: string) {
   if (result === "Usado") return "warning" as const;
   if (result === "Anulado" || result === "Bloqueado") return "danger" as const;
   return "danger" as const;
+}
+
+function QuickReadField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
+      <p className="mt-2 break-words text-sm font-medium text-white">{value}</p>
+    </div>
+  );
 }
 
 function getEligibilityMessage(guest: Guest) {
@@ -86,12 +105,17 @@ function CheckInWorkspace() {
   const {
     currentEvent,
     currentVenue,
+    reservations,
     guests,
     registerCheckIn,
     searchGuests: searchGuestList,
   } = useCheckInStore();
 
   const eventGuests = useMemo(() => guests.filter((guest) => guest.eventId === currentEvent.id), [currentEvent.id, guests]);
+  const eventReservations = useMemo(
+    () => reservations.filter((reservation) => reservation.eventId === currentEvent.id),
+    [currentEvent.id, reservations],
+  );
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
   const [query, setQuery] = useState("");
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
@@ -108,9 +132,21 @@ function CheckInWorkspace() {
     [currentEvent.id, normalizedQuery, searchGuestList, shouldShowResults],
   );
 
-  const selectedGuest =
-    eventGuests.find((guest) => guest.id === selectedGuestId)
-    ?? (searchResults.length === 1 ? searchResults[0] : null);
+  const resolvedGuest = useMemo(
+    () =>
+      resolveCheckInGuestByQuery({
+        query,
+        guests: eventGuests,
+        reservations: eventReservations,
+        event: currentEvent,
+      }),
+    [currentEvent, eventGuests, eventReservations, query],
+  );
+
+  const selectedGuest = eventGuests.find((guest) => guest.id === selectedGuestId) ?? resolvedGuest ?? (searchResults.length === 1 ? searchResults[0] : null);
+  const selectedGuestQuickRead = selectedGuest ? buildGuestQuickReadSummary(selectedGuest) : null;
+  const attemptGuest = attemptState.kind === "idle" ? null : attemptState.guest ?? null;
+  const attemptGuestQuickRead = attemptGuest ? buildGuestQuickReadSummary(attemptGuest) : null;
 
   const eligibility = selectedGuest ? getEligibilityMessage(selectedGuest) : null;
 
@@ -126,8 +162,13 @@ function CheckInWorkspace() {
     setValidationMethod("QR");
     setAttemptState({ kind: "idle" });
 
-    const matches = searchGuestList(value).filter((guest) => guest.eventId === currentEvent.id);
-    setSelectedGuestId(matches.length === 1 ? matches[0].id : null);
+    const match = resolveCheckInGuestByQuery({
+      query: value,
+      guests: eventGuests,
+      reservations: eventReservations,
+      event: currentEvent,
+    });
+    setSelectedGuestId(match?.id ?? null);
   };
 
   const handleSelectGuest = (guest: Guest) => {
@@ -292,6 +333,7 @@ function CheckInWorkspace() {
 
                     <div className="grid gap-3">
                       {searchResults.map((guest) => {
+                        const quickRead = buildGuestQuickReadSummary(guest);
                         const tone = getEntryTone(guest.admissionStatus);
                         return (
                           <button
@@ -301,23 +343,20 @@ function CheckInWorkspace() {
                             className="rounded-[1.35rem] border border-white/10 bg-slate-950/70 p-4 text-left transition hover:border-cyan-400/30 hover:bg-slate-950/90"
                           >
                             <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <p className="text-base font-semibold text-white">{guest.guestName}</p>
-                                <p className="mt-1 text-sm text-slate-400">
-                                  {guest.reservationCode} · {guest.reservationName}
-                                </p>
+                              <div className="min-w-0 flex-1">
+                                <p className="break-words text-base font-semibold text-white">{quickRead.name}</p>
+                                <p className="mt-1 break-words text-sm text-slate-400">{quickRead.carnet}</p>
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 <StatusBadge variant={tone}>{guest.admissionStatus}</StatusBadge>
                                 <StatusBadge variant={getEntryTone(guest.qrStatus)}>{guest.qrStatus}</StatusBadge>
                               </div>
                             </div>
-                            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
-                              <span>{guest.carnet}</span>
-                              <span>·</span>
-                              <span>{guest.tableName ?? "Sin mesa"}</span>
-                              <span>·</span>
-                              <span>{guest.invitationCode}</span>
+                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                              <QuickReadField label="Reserva" value={quickRead.reservation} />
+                              <QuickReadField label="Mesa / espacio" value={quickRead.space} />
+                              <QuickReadField label="Ingreso" value={quickRead.entryStatus} />
+                              <QuickReadField label="Acceso" value={quickRead.accessStatus} />
                             </div>
                           </button>
                         );
@@ -368,8 +407,13 @@ function CheckInWorkspace() {
                   ].join(" ")}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-white">{attemptState.title}</p>
+                      {attemptGuestQuickRead ? (
+                        <p className="mt-2 break-words text-base font-medium text-white">
+                          {attemptGuestQuickRead.name}
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-sm leading-6 text-slate-200">{attemptState.note}</p>
                     </div>
                     {attemptState.guest ? (
@@ -379,20 +423,14 @@ function CheckInWorkspace() {
                     ) : null}
                   </div>
 
-                  {attemptState.kind === "success" && attemptState.guest ? (
+                  {attemptGuestQuickRead ? (
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-[1.1rem] border border-white/10 bg-black/15 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-                          Confirmación
-                        </p>
-                        <p className="mt-2 text-sm text-white">Ingreso registrado para {attemptState.guest.guestName}.</p>
-                      </div>
-                      <div className="rounded-[1.1rem] border border-white/10 bg-black/15 px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-                          Mesa
-                        </p>
-                        <p className="mt-2 text-sm text-white">{attemptState.guest.tableName ?? "Sin mesa"}</p>
-                      </div>
+                      <QuickReadField label="Carnet" value={attemptGuestQuickRead.carnet} />
+                      <QuickReadField label="Reserva" value={attemptGuestQuickRead.reservation} />
+                      <QuickReadField label="Mesa / espacio" value={attemptGuestQuickRead.space} />
+                      <QuickReadField label="Ingreso" value={attemptGuestQuickRead.entryStatus} />
+                      <QuickReadField label="Acceso" value={attemptGuestQuickRead.accessStatus} />
+                      <QuickReadField label="Código visible" value={attemptGuestQuickRead.visibleCode} />
                     </div>
                   ) : null}
 
@@ -408,31 +446,24 @@ function CheckInWorkspace() {
                 <div className="mt-4 space-y-4">
                   <div className="rounded-[1.35rem] border border-white/10 bg-black/15 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-lg font-semibold text-white">{selectedGuest.guestName}</p>
-                        <p className="mt-1 text-sm text-slate-400">
-                          {selectedGuest.reservationCode} · {selectedGuest.reservationName}
-                        </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-lg font-semibold text-white">{selectedGuestQuickRead?.name}</p>
+                        <p className="mt-1 break-words text-sm text-slate-400">{selectedGuestQuickRead?.carnet}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <StatusBadge variant={eligibility?.tone ?? "info"}>{eligibility?.label ?? "Listo"}</StatusBadge>
                         <StatusBadge variant={getEntryTone(selectedGuest.admissionStatus)}>{selectedGuest.admissionStatus}</StatusBadge>
+                        <StatusBadge variant={getEntryTone(selectedGuest.qrStatus)}>{selectedGuest.qrStatus}</StatusBadge>
                       </div>
                     </div>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-                          Puede entrar
-                        </p>
-                        <p className="mt-2 text-sm text-white">{eligibility?.canEnter ? "Sí" : "No"}</p>
-                      </div>
-                      <div className="rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-                          Qué hacer
-                        </p>
-                        <p className="mt-2 text-sm text-white">Registrar ingreso</p>
-                      </div>
+                      <QuickReadField label="Reserva" value={selectedGuestQuickRead?.reservation ?? "Sin reserva"} />
+                      <QuickReadField label="Mesa / espacio" value={selectedGuestQuickRead?.space ?? "Sin mesa"} />
+                      <QuickReadField label="Ingreso" value={selectedGuestQuickRead?.entryStatus ?? "Sin estado"} />
+                      <QuickReadField label="Acceso" value={selectedGuestQuickRead?.accessStatus ?? "Sin estado"} />
+                      <QuickReadField label="Puede entrar" value={eligibility?.canEnter ? "Sí" : "No"} />
+                      <QuickReadField label="Qué hacer" value="Registrar ingreso" />
                     </div>
 
                     <div className="mt-4 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-300">

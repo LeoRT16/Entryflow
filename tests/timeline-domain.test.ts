@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCheckInAttemptTimelineEvent, buildTimelineEvents } from "../features/timeline/domain/timeline-domain";
+import { buildCheckInAttemptTimelineEvent, buildTimelineEvents, buildTimelineQuickReadSummary } from "../features/timeline/domain/timeline-domain";
 import type { CheckIn, CheckInAttempt, Guest } from "../features/check-in/types";
 import type { ReservationRecord } from "../features/reservations/types";
 
@@ -191,4 +191,27 @@ test("timeline events preserve actor, context and target metadata", () => {
   assert.equal(checkInEvent?.actorRole, "Door");
   assert.equal(checkInEvent?.context, "Evento E2E");
   assert.equal(checkInEvent?.target, "Carlos Méndez");
+});
+
+test("timeline quick read prioritizes action, target, actor and role", () => {
+  const quickRead = buildTimelineQuickReadSummary({
+    id: "timeline-1",
+    eventId: "event-1",
+    timestamp: "19:04",
+    kind: "checkin.success",
+    icon: "checkin",
+    tone: "success",
+    title: "Check-in exitoso",
+    description: "Ingreso registrado para Carlos Méndez.",
+    actor: "Test Door",
+    actorRole: "Puerta",
+    context: "prueba E2E Rota Carlota",
+    target: "Carlos Méndez",
+  });
+
+  assert.equal(quickRead.action, "Check-in exitoso");
+  assert.equal(quickRead.target, "Carlos Méndez");
+  assert.equal(quickRead.actorLine, "Test Door · Puerta");
+  assert.equal(quickRead.context, "prueba E2E Rota Carlota");
+  assert.equal(quickRead.timestamp, "19:04");
 });

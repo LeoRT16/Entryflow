@@ -207,14 +207,42 @@ function comparePriority(a: WorkspacePriorityItem, b: WorkspacePriorityItem) {
 }
 
 function compareTimeline(a: TimelineEvent, b: TimelineEvent) {
+  const timeDiff = timeToMinutes(b.timestamp) - timeToMinutes(a.timestamp);
+  if (timeDiff !== 0) return timeDiff;
+
   const toneWeight = (tone: TimelineEvent["tone"]) => (tone === "danger" ? 3 : tone === "warning" ? 2 : tone === "success" ? 1 : 0);
   const toneDiff = toneWeight(b.tone) - toneWeight(a.tone);
   if (toneDiff !== 0) return toneDiff;
 
-  const timeDiff = timeToMinutes(b.timestamp) - timeToMinutes(a.timestamp);
-  if (timeDiff !== 0) return timeDiff;
-
   return b.id.localeCompare(a.id);
+}
+
+function isOperationalCheckIn(event: TimelineEvent) {
+  return event.kind === "checkin.success" || event.kind === "checkin.manual";
+}
+
+function buildRecentTimelineWindow(events: TimelineEvent[], limit: number) {
+  const window = events.slice(0, limit);
+  const hasOperationalCheckIn = window.some(isOperationalCheckIn);
+
+  if (hasOperationalCheckIn) {
+    return window;
+  }
+
+  const fallbackOperationalCheckIn = events.find(isOperationalCheckIn);
+
+  if (!fallbackOperationalCheckIn) {
+    return window;
+  }
+
+  if (window.length < limit) {
+    return [...window, fallbackOperationalCheckIn].sort(compareTimeline);
+  }
+
+  const nextWindow = [...window];
+  nextWindow[nextWindow.length - 1] = fallbackOperationalCheckIn;
+
+  return nextWindow.sort(compareTimeline);
 }
 
 function mapAlertToItem(alert: WorkspaceIntelligence["alerts"][number]) {
@@ -302,9 +330,7 @@ export function buildWorkspacePrioritySnapshot(workspaceIntelligence: WorkspaceI
     .filter((item) => item.requiresAction)
     .sort(comparePriority)
     .slice(0, 6);
-  const recentChanges = [...workspaceIntelligence.timeline.events]
-    .sort(compareTimeline)
-    .slice(0, 8);
+  const recentChanges = buildRecentTimelineWindow([...workspaceIntelligence.timeline.events].sort(compareTimeline), 8);
   const healthySystems = healthItems.sort(comparePriority);
 
   const criticalCount = criticalItems.length;
