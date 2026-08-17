@@ -90,7 +90,7 @@ export function buildTimeline(guest: GuestRecord): TimelineEntry[] {
     items.push({
       time: sentEntry.time,
       title: sentEntry.title === "Reenviada" ? "Invitación reenviada" : "Invitación enviada",
-      detail: "Entrega por WhatsApp registrada",
+      detail: "Envío por WhatsApp aceptado por proveedor",
       tone: "info",
     });
   } else if (guest.noInvitationSent) {

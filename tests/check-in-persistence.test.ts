@@ -109,6 +109,14 @@ test("generated check-in id is a valid UUID", () => {
   assert.match(bundle.checkIn.id, uuidPattern);
   assert.match(bundle.checkIn.auditTrail[0].id, uuidPattern);
   assert.match(bundle.timelineEntry.id, uuidPattern);
+  assert.equal(bundle.checkIn.createdAt, "2026-08-11T22:52:00.000Z");
+  assert.equal(bundle.timelineEntry.createdAt, "2026-08-11T22:52:00.000Z");
+  assert.equal(bundle.timelineEntry.guestName, "Leonardo Rodríguez");
+  assert.equal(bundle.timelineEntry.target, "Leonardo Rodríguez");
+  assert.equal(bundle.timelineEntry.reservationCode, "RES-E2E-01");
+  assert.equal(bundle.timelineEntry.tableName, undefined);
+  assert.equal(bundle.timelineEntry.metadata?.guestCarnet, "1234567");
+  assert.equal(bundle.timelineEntry.metadata?.method, "qr");
 });
 
 test("duplicate access grants can be detected without mutating the admission state", () => {
@@ -161,6 +169,7 @@ test("rejected duplicate attempts build the canonical blocked timeline entry", (
   assert.equal(timelineEntry.title, "Segundo intento bloqueado");
   assert.equal(timelineEntry.description, "El ticket ya fue consumido.");
   assert.equal(timelineEntry.eventId, "event-1");
+  assert.equal(timelineEntry.target, "Phase C Final E2E");
   assert.equal((timelineEntry.metadata as { result?: string }).result, "Already Checked In");
 });
 

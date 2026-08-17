@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import StatusBadge from "@/components/status-badge";
 import { ContextualCard } from "@/components/quick-actions-menu";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
-import { buildTimelineQuickReadSummary } from "@/features/timeline/domain/timeline-domain";
+import { buildTimelineQuickReadSummary, formatTimelineDisplayTime, getSecondaryTimelineSectionGridClass } from "@/features/timeline/domain/timeline-domain";
 import type { TimelineEvent } from "@/features/timeline/types";
 
 function TimelineMark({ tone }: { tone: TimelineEvent["tone"] }) {
@@ -76,24 +76,21 @@ function EventIcon({ icon }: { icon: TimelineEvent["icon"] }) {
   }
 }
 
-function formatTimelineTimestamp(timestamp: string) {
-  const trimmed = timestamp.trim();
-
-  if (/^\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
-    return trimmed.slice(0, 5);
-  }
-
-  const parsed = new Date(trimmed);
-
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toLocaleTimeString("es-BO", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-  }
-
-  return trimmed;
+function TimelineField({
+  label,
+  value,
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] ${compact ? "px-3 py-2" : "px-4 py-3"}`}>
+      <p className={`font-semibold uppercase tracking-[0.26em] text-slate-500 ${compact ? "text-[9px]" : "text-[10px]"}`}>{label}</p>
+      <p className={`mt-2 whitespace-pre-line break-words font-medium text-white ${compact ? "text-xs leading-5" : "text-sm leading-6"}`}>{value || "—"}</p>
+    </div>
+  );
 }
 
 export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
@@ -139,17 +136,160 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
     () => [...groupedEvents.Critical, ...groupedEvents.Operational, ...groupedEvents.Informational, ...groupedEvents.System],
     [groupedEvents],
   );
-  const visibleGroups = useMemo(
-    () =>
-      (["Critical", "Operational", "Informational", "System"] as const).filter((group) => groupedEvents[group].length > 0),
-    [groupedEvents],
-  );
   const [selectedEventIndex, setSelectedEventIndex] = useState(0);
 
   const selectedEventIndexClamped = orderedEvents.length
     ? Math.min(selectedEventIndex, orderedEvents.length - 1)
     : 0;
   const selectedEvent = orderedEvents[selectedEventIndexClamped] ?? null;
+  const buildCardActions = useCallback(
+    (event: TimelineEvent) => [
+      {
+        id: `${event.id}-reservation`,
+        label: "Abrir reserva",
+        description: "Ir al panel de Reservas.",
+        tone: "info" as const,
+        onSelect: () => router.push("/reservations"),
+      },
+      {
+        id: `${event.id}-customer`,
+        label: "Abrir cliente",
+        description: "Ir al directorio de Invitados.",
+        tone: "info" as const,
+        onSelect: () => router.push("/customers"),
+      },
+      {
+        id: `${event.id}-table`,
+        label: "Ir a la mesa",
+        description: "Abrir el panel de Espacios.",
+        tone: "warning" as const,
+        onSelect: () => router.push("/tables"),
+      },
+    ],
+    [router],
+  );
+
+  const renderTimelineCard = useCallback(
+    (event: TimelineEvent, compact: boolean) => {
+      const isSelected = selectedEvent?.id === event.id;
+      const quickRead = buildTimelineQuickReadSummary(event);
+      const actions = buildCardActions(event);
+
+      if (compact) {
+        return (
+          <ContextualCard
+            key={event.id}
+            items={actions}
+            className={[
+              "rounded-2xl border px-4 py-4",
+              isSelected ? "border-cyan-400/40 bg-cyan-400/10" : "border-white/10 bg-[#0f151d]",
+            ].join(" ")}
+          >
+            <article
+              id={event.id}
+              tabIndex={-1}
+              className="grid gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">{quickRead.action}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">{quickRead.description}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <TimelineField label="Invitado" value={quickRead.guestLine || "Sin invitado"} compact />
+                <TimelineField
+                  label="Contexto"
+                  value={quickRead.reservationLine || quickRead.context || "Sin contexto"}
+                  compact
+                />
+                <TimelineField
+                  label="Operador"
+                  value={quickRead.operatorLine || quickRead.actorLine || "Sin operador"}
+                  compact
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {event.actor ? <StatusBadge variant="info">{event.actor}</StatusBadge> : null}
+                {event.actorRole ? <StatusBadge variant="info">{event.actorRole}</StatusBadge> : null}
+                {event.target ? <StatusBadge variant={event.tone}>{event.target}</StatusBadge> : null}
+                {event.context ? <StatusBadge variant="success">{event.context}</StatusBadge> : null}
+                {event.reservationCode ? <StatusBadge variant="info">{event.reservationCode}</StatusBadge> : null}
+                {event.reservationName ? <StatusBadge variant={event.tone}>{event.reservationName}</StatusBadge> : null}
+                {event.guestName ? <StatusBadge variant="warning">{event.guestName}</StatusBadge> : null}
+                {event.tableName ? <StatusBadge variant="success">{event.tableName}</StatusBadge> : null}
+              </div>
+            </article>
+          </ContextualCard>
+        );
+      }
+
+      return (
+        <ContextualCard
+          key={event.id}
+          items={actions}
+          className={[
+            "rounded-2xl border px-4 py-4",
+            isSelected ? "border-cyan-400/40 bg-cyan-400/10" : "border-white/10 bg-[#0f151d]",
+          ].join(" ")}
+        >
+          <article
+            id={event.id}
+            tabIndex={-1}
+            className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+          >
+            <div className="flex items-center gap-3 sm:flex-col sm:items-center sm:gap-2">
+              <TimelineMark tone={event.tone} />
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/80">
+                <EventIcon icon={event.icon} />
+              </div>
+            </div>
+
+            <div className="min-w-0 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">{quickRead.action}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">{quickRead.description}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <TimelineField label="Invitado" value={quickRead.guestLine || "Sin invitado"} />
+                <TimelineField
+                  label="Contexto"
+                  value={quickRead.reservationLine || quickRead.context || "Sin contexto"}
+                />
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <TimelineField
+                  label="Operador"
+                  value={quickRead.operatorLine || quickRead.actorLine || "Sin operador"}
+                />
+                <div className="flex min-w-0 items-start md:items-end md:justify-end">
+                  <StatusBadge variant="info">{formatTimelineDisplayTime(quickRead.timestamp)}</StatusBadge>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {event.actor ? <StatusBadge variant="info">{event.actor}</StatusBadge> : null}
+                {event.actorRole ? <StatusBadge variant="info">{event.actorRole}</StatusBadge> : null}
+                {event.target ? <StatusBadge variant={event.tone}>{event.target}</StatusBadge> : null}
+                {event.context ? <StatusBadge variant="success">{event.context}</StatusBadge> : null}
+                {event.reservationCode ? <StatusBadge variant="info">{event.reservationCode}</StatusBadge> : null}
+                {event.reservationName ? <StatusBadge variant={event.tone}>{event.reservationName}</StatusBadge> : null}
+                {event.guestName ? <StatusBadge variant="warning">{event.guestName}</StatusBadge> : null}
+                {event.tableName ? <StatusBadge variant="success">{event.tableName}</StatusBadge> : null}
+              </div>
+            </div>
+          </article>
+        </ContextualCard>
+      );
+    },
+    [buildCardActions, selectedEvent?.id],
+  );
 
   useEffect(() => {
     if (!selectedEvent) {
@@ -264,122 +404,83 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
         <StatusBadge variant="info">{events.length}</StatusBadge>
       </div>
 
-      <div className="mt-5 space-y-3">
-        {visibleGroups.map((group) => {
-          const groupEvents = groupedEvents[group];
-          const description =
-            group === "Critical"
-              ? "Bloqueos, errores y atenciones urgentes."
-              : group === "Operational"
-                ? "Acciones que impactan el flujo del evento."
-                : group === "Informational"
-                  ? "Cambios de contexto y actividad útil."
-                  : "Eventos del sistema y sincronización.";
+      <div className="mt-5 space-y-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,2.25fr)_minmax(0,1fr)] xl:items-start">
+          <section className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="kicker">Operativo</p>
+                <p className="mt-1 text-xs text-slate-500">Acciones que impactan el flujo del evento.</p>
+              </div>
+              <StatusBadge variant="warning">{groupedEvents.Operational.length}</StatusBadge>
+            </div>
 
-          const label =
-            group === "Critical"
-              ? "Crítico"
-              : group === "Operational"
-                ? "Operativo"
-                : group === "Informational"
-                  ? "Informativo"
-                  : "Sistema";
+            {groupedEvents.Operational.length ? (
+              <div className="space-y-3">
+                {groupedEvents.Operational.slice(0, 4).map((event) => renderTimelineCard(event, false))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/10 p-3">
+                <p className="text-sm text-slate-400">Sin eventos operativos por ahora.</p>
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="kicker">Crítico</p>
+                <p className="mt-1 text-xs text-slate-500">Bloqueos, errores y atenciones urgentes.</p>
+              </div>
+              <StatusBadge variant="danger">{groupedEvents.Critical.length}</StatusBadge>
+            </div>
+
+            {groupedEvents.Critical.length ? (
+              <div className="space-y-3">
+                {groupedEvents.Critical.slice(0, 4).map((event) => renderTimelineCard(event, true))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/10 p-3">
+                <p className="text-sm text-slate-400">Sin eventos críticos por ahora.</p>
+              </div>
+            )}
+          </section>
+        </div>
+
+        {(() => {
+          const secondaryGroups = (["Informational", "System"] as const).filter((group) => groupedEvents[group].length > 0);
 
           return (
-            <section key={group} className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="kicker">{label}</p>
-                  <p className="mt-1 text-xs text-slate-500">{description}</p>
-                </div>
-                <StatusBadge variant={group === "Critical" ? "danger" : group === "Operational" ? "warning" : group === "Informational" ? "info" : "success"}>
-                  {groupEvents.length}
-                </StatusBadge>
-              </div>
+            <div className={getSecondaryTimelineSectionGridClass(secondaryGroups.length)}>
+              {secondaryGroups.map((group) => {
+              const groupEvents = groupedEvents[group];
 
-              {groupEvents.length ? (
-                groupEvents.slice(0, 4).map((event) => {
-                  const isSelected = selectedEvent?.id === event.id;
-                  const quickRead = buildTimelineQuickReadSummary(event);
+              const description =
+                group === "Informational"
+                  ? "Cambios de contexto y actividad útil."
+                  : "Eventos del sistema y sincronización.";
+              const label = group === "Informational" ? "Informativo" : "Sistema";
+              const badgeVariant = group === "Informational" ? "info" : "success";
 
-                  return (
-                  <ContextualCard
-                    key={event.id}
-                    items={[
-                      {
-                        id: `${event.id}-reservation`,
-                        label: "Abrir reserva",
-                        description: "Ir al panel de Reservas.",
-                        tone: "info" as const,
-                        onSelect: () => router.push("/reservations"),
-                      },
-                      {
-                        id: `${event.id}-customer`,
-                        label: "Abrir cliente",
-                        description: "Ir al directorio de Invitados.",
-                        tone: "info" as const,
-                        onSelect: () => router.push("/customers"),
-                      },
-                      {
-                        id: `${event.id}-table`,
-                        label: "Ir a la mesa",
-                        description: "Abrir el panel de Espacios.",
-                        tone: "warning" as const,
-                        onSelect: () => router.push("/tables"),
-                      },
-                    ]}
-                    className={[
-                      "rounded-2xl border px-4 py-4",
-                      isSelected ? "border-cyan-400/40 bg-cyan-400/10" : "border-white/10 bg-[#0f151d]",
-                    ].join(" ")}
-                  >
-                    <article id={event.id} tabIndex={-1} className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
-                      <div className="flex items-center gap-3 sm:flex-col sm:items-center sm:gap-2">
-                        <TimelineMark tone={event.tone} />
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/80">
-                          <EventIcon icon={event.icon} />
-                        </div>
-                      </div>
+              return (
+                <section key={group} className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="kicker">{label}</p>
+                      <p className="mt-1 text-xs text-slate-500">{description}</p>
+                    </div>
+                    <StatusBadge variant={badgeVariant}>{groupEvents.length}</StatusBadge>
+                  </div>
 
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-white">{quickRead.action}</p>
-                          <StatusBadge variant={event.tone}>{formatTimelineTimestamp(quickRead.timestamp)}</StatusBadge>
-                        </div>
-                        {quickRead.target ? (
-                          <p className="mt-2 break-words text-base font-medium text-white">{quickRead.target}</p>
-                        ) : null}
-                        {quickRead.actorLine ? (
-                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
-                            Realizado por: {quickRead.actorLine}
-                          </p>
-                        ) : null}
-                        {quickRead.context ? (
-                          <p className="mt-1 text-xs font-medium uppercase tracking-[0.22em] text-slate-500">{quickRead.context}</p>
-                        ) : null}
-                        <p className="mt-2 text-sm leading-6 text-slate-400">{quickRead.description}</p>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {event.actor ? <StatusBadge variant="info">{event.actor}</StatusBadge> : null}
-                          {event.actorRole ? <StatusBadge variant="info">{event.actorRole}</StatusBadge> : null}
-                          {event.target ? <StatusBadge variant={event.tone}>{event.target}</StatusBadge> : null}
-                          {event.context ? <StatusBadge variant="success">{event.context}</StatusBadge> : null}
-                          {event.reservationCode ? <StatusBadge variant="info">{event.reservationCode}</StatusBadge> : null}
-                          {event.reservationName ? <StatusBadge variant={event.tone}>{event.reservationName}</StatusBadge> : null}
-                          {event.guestName ? <StatusBadge variant="warning">{event.guestName}</StatusBadge> : null}
-                          {event.tableName ? <StatusBadge variant="success">{event.tableName}</StatusBadge> : null}
-                        </div>
-                      </div>
-                    </article>
-                  </ContextualCard>
-                );
-                })
-              ) : (
-                <p className="text-sm text-slate-500">Sin eventos relevantes.</p>
-              )}
-            </section>
+                  <div className="space-y-3">
+                    {groupEvents.slice(0, 4).map((event) => renderTimelineCard(event, true))}
+                  </div>
+                </section>
+              );
+            })}
+            </div>
           );
-        })}
+        })()}
       </div>
     </section>
   );

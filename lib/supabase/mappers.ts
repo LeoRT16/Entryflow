@@ -715,6 +715,7 @@ export function mapCheckInRowToDomain(row: CheckInRow): CheckIn {
   return {
     id: row.id,
     accessGrantId: row.access_grant_id ?? undefined,
+    createdAt: row.created_at,
     guestId: row.guest_id,
     reservationId: row.reservation_id,
     eventId: row.event_id,
@@ -762,9 +763,14 @@ export function mapCheckInToRow(checkIn: CheckIn): Omit<CheckInRow, "created_at"
 }
 
 export function mapTimelineRowToDomain(row: TimelineRow): TimelineEvent {
+  const metadata = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? (row.metadata as Record<string, unknown>) : undefined;
+
+  const readString = (value: unknown) => (typeof value === "string" ? value : undefined);
+
   return {
     id: row.id,
     eventId: row.event_id,
+    createdAt: row.created_at,
     timestamp: row.timestamp,
     kind: row.kind,
     icon: row.icon,
@@ -778,11 +784,35 @@ export function mapTimelineRowToDomain(row: TimelineRow): TimelineEvent {
     guestName: row.guest_name ?? undefined,
     tableId: row.table_id ?? undefined,
     tableName: row.table_name ?? undefined,
-    metadata: (row.metadata as Record<string, unknown> | null) ?? undefined,
+    actor: readString(metadata?.actor),
+    actorRole: readString(metadata?.actorRole),
+    context: readString(metadata?.context),
+    target: readString(metadata?.target),
+    metadata,
   };
 }
 
 export function mapTimelineToRow(event: TimelineEvent, eventId: string): Omit<TimelineRow, "created_at" | "updated_at" | "deleted_at"> {
+  const metadata = {
+    ...(event.metadata && typeof event.metadata === "object" ? (event.metadata as Record<string, unknown>) : {}),
+  };
+
+  if (event.actor) {
+    metadata.actor = event.actor;
+  }
+
+  if (event.actorRole) {
+    metadata.actorRole = event.actorRole;
+  }
+
+  if (event.context) {
+    metadata.context = event.context;
+  }
+
+  if (event.target) {
+    metadata.target = event.target;
+  }
+
   return {
     id: event.id,
     event_id: event.eventId ?? eventId,
@@ -799,7 +829,7 @@ export function mapTimelineToRow(event: TimelineEvent, eventId: string): Omit<Ti
     guest_name: event.guestName ?? null,
     table_id: event.tableId ?? null,
     table_name: event.tableName ?? null,
-    metadata: (event.metadata as TimelineRow["metadata"]) ?? null,
+    metadata: Object.keys(metadata).length ? (metadata as TimelineRow["metadata"]) : null,
   };
 }
 

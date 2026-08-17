@@ -53,6 +53,30 @@ test("WhatsApp Cloud payload normalizes Bolivia numbers and builds a text messag
   );
 });
 
+test("WhatsApp Cloud payload switches to a template when one is configured", () => {
+  const { payload } = buildWhatsAppCloudMessage(
+    {
+      recipient: "+591 7737 4577",
+      guestName: "WhatsApp Delivery E2E",
+      eventName: "EntryFlow Summit",
+      invitationCode: "RES-WA-001",
+    },
+    {
+      templateName: "entryflow_invitation",
+      templateLanguage: "es",
+    },
+  );
+
+  assert.equal(payload.type, "template");
+  assert.equal(payload.template?.name, "entryflow_invitation");
+  assert.equal(payload.template?.language.code, "es");
+  assert.deepEqual(payload.template?.components[0]?.parameters, [
+    { type: "text", text: "WhatsApp Delivery E2E" },
+    { type: "text", text: "EntryFlow Summit" },
+    { type: "text", text: "RES-WA-001" },
+  ]);
+});
+
 test("WhatsApp Cloud request init uses the server token and JSON body", () => {
   const config = {
     accessToken: "super-secret",
@@ -72,6 +96,31 @@ test("WhatsApp Cloud request init uses the server token and JSON body", () => {
   assert.equal((init.headers as Record<string, string>)["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(init.body as string), payload);
   assert.equal(buildWhatsAppCloudMessagesUrl(config), "https://graph.facebook.com/v23.0/987654321/messages");
+});
+
+test("WhatsApp Cloud request init preserves template payloads when configured", () => {
+  const config = {
+    accessToken: "super-secret",
+    phoneNumberId: "987654321",
+    apiVersion: "v23.0",
+    templateName: "entryflow_invitation",
+    templateLanguage: "es",
+  };
+  const payload = buildWhatsAppCloudMessage(
+    {
+      recipient: "77374577",
+      guestName: "Guest",
+      eventName: "Event",
+      invitationCode: "RES-001",
+    },
+    config,
+  ).payload;
+  const init = buildWhatsAppCloudRequestInit(config, payload);
+
+  assert.equal(init.method, "POST");
+  assert.equal((init.headers as Record<string, string>).Authorization, "Bearer super-secret");
+  assert.deepEqual(JSON.parse(init.body as string), payload);
+  assert.equal(payload.type, "template");
 });
 
 test("WhatsApp Cloud send succeeds with a provider message id and never exposes secrets", async () => {

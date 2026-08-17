@@ -75,6 +75,24 @@ export function buildGuestQuickReadSummary(guest: GuestQuickReadSource) {
   };
 }
 
+export function formatGuestCarnetLabel(carnet: string) {
+  const trimmed = carnet.trim();
+
+  if (!trimmed) {
+    return "Carnet";
+  }
+
+  return `Carnet · ${trimmed}`;
+}
+
+export function getCheckInActionLabel(params: { canEnter: boolean; isTerminalEvent: boolean }) {
+  return params.canEnter && !params.isTerminalEvent ? "Registrar ingreso" : "Nueva lectura";
+}
+
+export function shouldAutoSubmitDetectedCheckIn(params: { canEnter: boolean; isTerminalEvent: boolean }) {
+  return !params.isTerminalEvent && !params.canEnter;
+}
+
 export function resolveCheckInGuestByQuery(params: {
   query: string;
   guests: Guest[];
@@ -166,7 +184,7 @@ export function buildDashboardSnapshot(
 ) {
   const checkedIn = guests.filter((guest) => guest.admissionStatus === "Ingresó").length;
   const expectedGuests = guests.length;
-  const pending = Math.max(expectedGuests - checkedIn, 0);
+  const pending = guests.filter((guest) => guest.admissionStatus === "Pendiente").length;
   const attention = guests.filter((guest) => Boolean(guest.attention)).length;
   const reservationsCount = reservations.length;
   const activeTables = tables.filter((table) => table.status !== "Closed").length;

@@ -4,6 +4,9 @@ import test from "node:test";
 import { buildActiveCheckIns } from "../services/workspace-loader";
 import { isAccessGrantAlreadyConsumed } from "../features/check-in/domain/check-in-persistence";
 import type { CheckInRow } from "../lib/supabase/types";
+import { mapTimelineRowToDomain, mapTimelineToRow } from "../lib/supabase/mappers";
+import type { TimelineRow } from "../lib/supabase/types";
+import type { TimelineEvent } from "../features/timeline/types";
 
 function buildCheckInRow(overrides: Partial<CheckInRow> = {}): CheckInRow {
   return {
@@ -77,4 +80,60 @@ test("active check-ins still block a second use", () => {
 
   assert.equal(isAccessGrantAlreadyConsumed("grant-active", consumed), true);
   assert.equal(isAccessGrantAlreadyConsumed("grant-new", consumed), false);
+});
+
+test("timeline rows restore canonical actor, context, target and guest references", () => {
+  const row: TimelineRow = {
+    id: "timeline-1",
+    event_id: "event-1",
+    timestamp: "19:04",
+    kind: "checkin.success",
+    icon: "checkin",
+    tone: "success",
+    title: "Check-in exitoso",
+    description: "QR validado correctamente.",
+    reservation_id: "reservation-1",
+    reservation_code: "RES-001",
+    reservation_name: "Mesa 5",
+    guest_id: "guest-1",
+    guest_name: "PPrueba 2",
+    table_id: "table-1",
+    table_name: "Mesa 5",
+    metadata: {
+      actor: "Test Door",
+      actorRole: "Puerta",
+      context: "Entrada principal",
+      target: "PPrueba 2",
+      guestCarnet: "8191256",
+      method: "QR",
+    },
+    created_at: "2026-08-16T19:04:00.000Z",
+    updated_at: "2026-08-16T19:04:00.000Z",
+    deleted_at: null,
+  };
+
+  const event = mapTimelineRowToDomain(row);
+
+  assert.equal(event.guestName, "PPrueba 2");
+  assert.equal(event.reservationCode, "RES-001");
+  assert.equal(event.reservationName, "Mesa 5");
+  assert.equal(event.actor, "Test Door");
+  assert.equal(event.actorRole, "Puerta");
+  assert.equal(event.context, "Entrada principal");
+  assert.equal(event.target, "PPrueba 2");
+  assert.equal(event.metadata?.guestCarnet, "8191256");
+  assert.equal(event.metadata?.method, "QR");
+
+  const roundTrip = mapTimelineToRow(event as TimelineEvent, "event-1");
+  const restored = mapTimelineRowToDomain({
+    ...row,
+    ...roundTrip,
+    metadata: roundTrip.metadata,
+  } as TimelineRow);
+
+  assert.equal(restored.actor, "Test Door");
+  assert.equal(restored.actorRole, "Puerta");
+  assert.equal(restored.context, "Entrada principal");
+  assert.equal(restored.target, "PPrueba 2");
+  assert.notEqual(restored.target, restored.reservationName);
 });

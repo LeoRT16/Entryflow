@@ -6,6 +6,7 @@ import type { Event as PlatformEvent, Organization, Resource, Sector, Venue } fr
 import type { ReservationRecord } from "@/features/reservations/types";
 import type { TableRecord } from "@/features/tables/types";
 import type { TimelineEvent } from "@/features/timeline/types";
+import { compareTimelineEventsDescending } from "@/features/timeline/domain/timeline-domain";
 import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl, hasSupabaseConfig } from "@/lib/supabase/helpers";
@@ -523,7 +524,9 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
   const reservations = reservationRowsForWorkspace.map((row) => mapReservationRowToDomain(row));
   const tables = tableRowsForWorkspace.map((row) => mapTableRowToDomain(row));
   const checkIns = buildActiveCheckIns(checkInRowsForWorkspace);
-  const timelineEvents = timelineRowsForWorkspace.map((row) => mapTimelineRowToDomain(row)).sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+  const timelineEvents = timelineRowsForWorkspace
+    .map((row) => mapTimelineRowToDomain(row))
+    .sort(compareTimelineEventsDescending);
 
   return {
     authState: {

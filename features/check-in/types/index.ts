@@ -156,6 +156,7 @@ export type Guest = {
 export type AccessRecord = {
   id: string;
   accessGrantId?: string;
+  createdAt?: string;
   guestId: string;
   reservationId: string;
   eventId: string;

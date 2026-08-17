@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCheckInAttemptTimelineEvent, buildTimelineEvents, buildTimelineQuickReadSummary } from "../features/timeline/domain/timeline-domain";
+import {
+  buildCheckInAttemptTimelineEvent,
+  buildTimelineEvents,
+  buildTimelineQuickReadSummary,
+  formatTimelineDisplayTime,
+  getSecondaryTimelineSectionGridClass,
+  mergeTimelineEvents,
+  refreshTimelineWorkspace,
+} from "../features/timeline/domain/timeline-domain";
 import type { CheckIn, CheckInAttempt, Guest } from "../features/check-in/types";
 import type { ReservationRecord } from "../features/reservations/types";
+import type { TimelineEvent } from "../features/timeline/types";
 
 function buildGuest(overrides: Partial<Guest> = {}): Guest {
   return {
@@ -191,6 +200,8 @@ test("timeline events preserve actor, context and target metadata", () => {
   assert.equal(checkInEvent?.actorRole, "Door");
   assert.equal(checkInEvent?.context, "Evento E2E");
   assert.equal(checkInEvent?.target, "Carlos Méndez");
+  assert.equal(checkInEvent?.metadata?.guestCarnet, "9988776");
+  assert.equal(checkInEvent?.metadata?.method, "QR");
 });
 
 test("timeline quick read prioritizes action, target, actor and role", () => {
@@ -207,11 +218,127 @@ test("timeline quick read prioritizes action, target, actor and role", () => {
     actorRole: "Puerta",
     context: "prueba E2E Rota Carlota",
     target: "Carlos Méndez",
+    guestName: "Carlos Méndez",
+    reservationName: "Mesa 3 · Sofía teste prev1 Rivas",
+    reservationCode: "RES-A0547003",
+    tableName: "Mesa 3",
+    metadata: {
+      guestCarnet: "9988776",
+      method: "QR",
+    },
   });
 
   assert.equal(quickRead.action, "Check-in exitoso");
   assert.equal(quickRead.target, "Carlos Méndez");
   assert.equal(quickRead.actorLine, "Test Door · Puerta");
   assert.equal(quickRead.context, "prueba E2E Rota Carlota");
+  assert.equal(quickRead.guestLine, "Carlos Méndez\nCarnet · 9988776");
+  assert.equal(quickRead.reservationLine, "Mesa 3\nRES-A0547003");
+  assert.equal(quickRead.operatorLine, "Test Door\nPuerta · QR");
   assert.equal(quickRead.timestamp, "19:04");
+});
+
+test("historical incomplete timeline entries degrade without leaking reservation labels into guest", () => {
+  const quickRead = buildTimelineQuickReadSummary({
+    id: "timeline-2",
+    eventId: "event-1",
+    timestamp: "2026-08-16T19:04:00.000Z",
+    kind: "checkin.invalid",
+    icon: "alert",
+    tone: "danger",
+    title: "Ingreso rechazado",
+    description: "El acceso no coincide con una invitación activa.",
+    context: "prueba E2E Rota Carlota",
+    target: "Mesa 5 · WhatsApp Delivery E2E",
+    reservationName: "Mesa 5 · WhatsApp Delivery E2E",
+    reservationCode: "RES-CB498660",
+    tableName: "Mesa 5",
+  });
+
+  assert.equal(quickRead.guestLine, "");
+  assert.equal(quickRead.reservationLine, "Mesa 5\nRES-CB498660");
+  assert.equal(quickRead.target, "Mesa 5 · WhatsApp Delivery E2E");
+});
+
+test("timeline latest event renders as a compact local clock label", () => {
+  assert.equal(formatTimelineDisplayTime("07:16"), "07:16");
+  assert.equal(formatTimelineDisplayTime("2026-08-17T15:33:19.003Z"), "11:33");
+});
+
+test("secondary timeline sections expand to full width when only one exists", () => {
+  assert.equal(getSecondaryTimelineSectionGridClass(1), "grid gap-4");
+  assert.equal(getSecondaryTimelineSectionGridClass(2), "grid gap-4 xl:grid-cols-2");
+});
+
+test("timeline mount refresh delegates to the canonical workspace reload", async () => {
+  let calls = 0;
+
+  await refreshTimelineWorkspace(async () => {
+    calls += 1;
+  });
+
+  assert.equal(calls, 1);
+});
+
+test("persisted and synthetic success events for the same check-in merge to one operative card", () => {
+  const persistedSuccess: TimelineEvent = {
+    id: "timeline-success-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    reservationId: "reservation-1",
+    createdAt: "2026-08-17T16:04:05.650Z",
+    timestamp: "2026-08-17T16:04:05.170Z",
+    kind: "checkin.success",
+    icon: "checkin",
+    tone: "success",
+    title: "Check-in exitoso",
+    description: "QR validado correctamente.",
+    metadata: {
+      guestId: "guest-1",
+      reservationId: "reservation-1",
+    },
+  } as TimelineEvent;
+
+  const syntheticSuccess: TimelineEvent = {
+    id: "checkin-checkin-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    reservationId: "reservation-1",
+    createdAt: "2026-08-17T16:04:05.172Z",
+    timestamp: "16:04",
+    kind: "checkin.success",
+    icon: "checkin",
+    tone: "success",
+    title: "Check-in exitoso",
+    description: "marce llaco validó su ingreso con QR.",
+    metadata: {
+      guestId: "guest-1",
+      reservationId: "reservation-1",
+      checkInId: "checkin-1",
+    },
+  } as TimelineEvent;
+
+  const blockedAttempt: TimelineEvent = {
+    id: "attempt-1",
+    eventId: "event-1",
+    guestId: "guest-1",
+    reservationId: "reservation-1",
+    createdAt: "2026-08-17T16:05:00.000Z",
+    timestamp: "16:05",
+    kind: "checkin.blocked",
+    icon: "alert",
+    tone: "warning",
+    title: "Segundo intento bloqueado",
+    description: "Esta invitación ya fue utilizada.",
+    metadata: {
+      guestId: "guest-1",
+      reservationId: "reservation-1",
+    },
+  } as TimelineEvent;
+
+  const merged = mergeTimelineEvents([persistedSuccess], [syntheticSuccess, blockedAttempt]);
+
+  assert.equal(merged.filter((event) => event.kind === "checkin.success").length, 1);
+  assert.equal(merged.filter((event) => event.kind === "checkin.blocked").length, 1);
+  assert.equal(merged[0]?.id, "attempt-1");
 });

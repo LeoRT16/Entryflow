@@ -1,5 +1,6 @@
 import type { WorkspaceIntelligence } from "@/domain/workspace-intelligence";
 import type { TimelineEvent } from "@/features/timeline/types";
+import { compareTimelineEventsDescending, compareTimelineTimestampsDescending } from "@/features/timeline/domain/timeline-domain";
 
 export type WorkspacePriorityLevel = "critical" | "high" | "medium" | "low";
 export type WorkspacePriorityModule =
@@ -200,14 +201,14 @@ function comparePriority(a: WorkspacePriorityItem, b: WorkspacePriorityItem) {
   const priorityDiff = priorityWeight(b.priority) - priorityWeight(a.priority);
   if (priorityDiff !== 0) return priorityDiff;
 
-  const timeDiff = timeToMinutes(b.timestamp) - timeToMinutes(a.timestamp);
+  const timeDiff = compareTimelineTimestampsDescending(a.timestamp, b.timestamp);
   if (timeDiff !== 0) return timeDiff;
 
   return b.confidence - a.confidence;
 }
 
 function compareTimeline(a: TimelineEvent, b: TimelineEvent) {
-  const timeDiff = timeToMinutes(b.timestamp) - timeToMinutes(a.timestamp);
+  const timeDiff = compareTimelineEventsDescending(a, b);
   if (timeDiff !== 0) return timeDiff;
 
   const toneWeight = (tone: TimelineEvent["tone"]) => (tone === "danger" ? 3 : tone === "warning" ? 2 : tone === "success" ? 1 : 0);
@@ -362,4 +363,8 @@ export function buildWorkspacePrioritySnapshot(workspaceIntelligence: WorkspaceI
           : "No hay sistemas saludables para priorizar.",
     },
   };
+}
+
+export function getWorkspaceActionableAlertCount(snapshot: Pick<WorkspacePrioritySnapshot, "summary">) {
+  return snapshot.summary.critical + snapshot.summary.attention;
 }

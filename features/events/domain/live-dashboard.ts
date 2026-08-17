@@ -1,5 +1,5 @@
 import type { WorkspaceIntelligence } from "@/domain/workspace-intelligence";
-import type { WorkspacePriorityItem, WorkspacePrioritySnapshot } from "@/domain/workspace-priority";
+import { getWorkspaceActionableAlertCount, type WorkspacePrioritySnapshot } from "@/domain/workspace-priority";
 import { getEventTypeLabel } from "@/features/events/domain";
 import type { Event as PlatformEvent } from "@/features/domain/types";
 import { isTerminalEventStatus } from "@/features/events/domain/event-rules";
@@ -89,8 +89,6 @@ type LiveDashboardInput = {
   workspacePriority: Pick<WorkspacePrioritySnapshot, "criticalItems" | "attentionNow" | "summary">;
 };
 
-const ALLOWED_ALERT_MODULES = new Set(["Dashboard", "Operations", "Timeline", "Reservations", "Tables", "Check-in"]);
-
 function formatEventDateTime(startAt: string) {
   const parts = startAt.trim().split(/\s+/);
   if (!parts.length) {
@@ -150,24 +148,6 @@ function getRealtimeLabel(workspaceStatus: LiveDashboardInput["workspaceStatus"]
   }
 
   return "Local";
-}
-
-function priorityToTone(priority: WorkspacePriorityItem["priority"]): LiveDashboardTone {
-  if (priority === "critical") return "danger";
-  if (priority === "high") return "warning";
-  if (priority === "medium") return "info";
-  return "success";
-}
-
-function mapPriorityItemToAlert(item: WorkspacePriorityItem): LiveDashboardAlert {
-  return {
-    id: item.id,
-    title: item.title,
-    description: item.description,
-    tone: priorityToTone(item.priority),
-    source: item.module,
-    route: item.route,
-  };
 }
 
 export function buildLiveDashboardQuickActions({
@@ -230,49 +210,10 @@ export function buildLiveDashboardModel({
     workspaceIntelligence.access.duplicateAttempts +
     workspaceIntelligence.access.blockedGrants;
   const terminalEvent = isTerminalEventStatus(currentEvent.status);
+  const alertCount = getWorkspaceActionableAlertCount(workspacePriority);
 
   const capacityState: LiveDashboardModel["capacity"]["state"] =
     workspaceIntelligence.capacity.state === "blocked" ? "blocked" : workspaceIntelligence.capacity.state === "watch" ? "watch" : "stable";
-
-  const coreAlerts: LiveDashboardAlert[] = [];
-
-  if (workspaceIntelligence.capacity.state === "blocked" || workspaceIntelligence.capacity.state === "watch") {
-    coreAlerts.push({
-      id: "capacity-pressure",
-      title: workspaceIntelligence.capacity.state === "blocked" ? "Capacidad crítica" : "Capacidad alta",
-      description: workspaceIntelligence.capacity.summary,
-      tone: workspaceIntelligence.capacity.state === "blocked" ? "danger" : "warning",
-      source: "Tables",
-      route: "/tables",
-    });
-  }
-
-  if (workspaceIntelligence.flow.pendingGuests > 0 || blockedSignals > 0) {
-    coreAlerts.push({
-      id: "admission-pressure",
-      title: blockedSignals > 0 ? "Admission con bloqueos" : "Cola de ingreso",
-      description:
-        blockedSignals > 0
-          ? workspaceIntelligence.access.summary
-          : workspaceIntelligence.flow.summary,
-      tone: blockedSignals > 0 ? "danger" : "warning",
-      source: "Check-in",
-      route: "/check-in",
-    });
-  }
-
-  const priorityAlerts = [...workspacePriority.criticalItems, ...workspacePriority.attentionNow]
-    .filter((item) => ALLOWED_ALERT_MODULES.has(item.module))
-    .map(mapPriorityItemToAlert);
-
-  const combinedAlerts = [...coreAlerts, ...priorityAlerts].reduce<LiveDashboardAlert[]>((accumulator, item) => {
-    if (accumulator.some((existing) => existing.id === item.id)) {
-      return accumulator;
-    }
-
-    accumulator.push(item);
-    return accumulator;
-  }, []);
 
   return {
     header: {
@@ -291,7 +232,7 @@ export function buildLiveDashboardModel({
         ? "Evento cerrado. Revisa historial, reservas y trazabilidad sin ejecutar mutaciones."
         : workspacePriority.summary.nextBestAction,
     },
-    alertCount: combinedAlerts.length,
+    alertCount,
     kpis: [
       {
         label: "Ingresados",
@@ -313,9 +254,9 @@ export function buildLiveDashboardModel({
       },
       {
         label: "Alertas",
-        value: `${combinedAlerts.length}`,
-        detail: combinedAlerts.length > 0 ? "Requieren atención operativa" : "Sin incidencias abiertas",
-        tone: combinedAlerts.length > 0 ? "warning" : "success",
+        value: `${alertCount}`,
+        detail: alertCount > 0 ? "Requieren atención operativa" : "Sin incidencias abiertas",
+        tone: alertCount > 0 ? "warning" : "success",
       },
     ],
     admission: {

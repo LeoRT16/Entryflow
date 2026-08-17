@@ -584,6 +584,7 @@ export function createAdmissionTimelineEntry(result: AdmissionEngineOutput, tick
   return {
     id: result.audit.id,
     eventId: ticket?.eventId,
+    createdAt: result.audit.timestamp,
     timestamp: result.audit.timestamp,
     kind,
     icon: result.result === "Valid" ? "checkin" : "alert",

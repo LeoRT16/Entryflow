@@ -430,8 +430,8 @@ function buildInput(overrides: {
       },
     ],
     summary: {
-      critical: (overrides.alerts ?? []).length || 1,
-      attention: (overrides.attention ?? []).length || 1,
+      critical: (overrides.alerts ?? []).length,
+      attention: (overrides.attention ?? []).length,
       healthy: 4,
       message: "Hay señales que requieren atención.",
       nextBestAction: "Revisar el ingreso y mantener la puerta sincronizada.",
@@ -447,6 +447,41 @@ function buildInput(overrides: {
 }
 
 test("buildLiveDashboardModel derives the main KPIs and keeps scanner first", () => {
+  const criticalItems = Array.from({ length: 3 }, (_, index) => ({
+    id: `priority-table-${index + 1}`,
+    title: `Mesa sobreocupada ${index + 1}`,
+    description: "Mesa 3 excedió su capacidad.",
+    module: "Tables",
+    category: "tables",
+    priority: "critical",
+    severity: "critical",
+    confidence: 0.98,
+    requiresAction: true,
+    blocking: true,
+    timestamp: `19:0${index + 2}`,
+    expiresAt: `19:1${index + 2}`,
+    state: "blocked",
+    tone: "danger",
+    route: "/tables",
+  })) as WorkspacePrioritySnapshot["criticalItems"];
+  const attentionItems = Array.from({ length: 7 }, (_, index) => ({
+    id: `priority-checkin-${index + 1}`,
+    title: `Segundo intento ${index + 1}`,
+    description: "Un acceso bloqueado requiere revisión.",
+    module: "Check-in",
+    category: "check-in",
+    priority: "high",
+    severity: "high",
+    confidence: 0.92,
+    requiresAction: true,
+    blocking: false,
+    timestamp: `19:1${index}`,
+    expiresAt: `19:2${index}`,
+    state: "watch",
+    tone: "warning",
+    route: "/check-in",
+  })) as WorkspacePrioritySnapshot["attentionNow"];
+
   const model = buildLiveDashboardModel({
     currentOrganizationName: "EntryFlow",
     currentEvent: {
@@ -456,16 +491,19 @@ test("buildLiveDashboardModel derives the main KPIs and keeps scanner first", ()
       venue: "Sala Principal",
       eventType: "nightlife",
     },
-    ...buildInput(),
+    ...buildInput({
+      alerts: criticalItems,
+      attention: attentionItems,
+    }),
   });
 
   assert.equal(model.header.liveLabel, "En vivo");
   assert.equal(model.kpis.find((item) => item.label === "Ingresados")?.value, "30");
   assert.equal(model.kpis.find((item) => item.label === "Pendientes")?.value, "20");
   assert.equal(model.kpis.find((item) => item.label === "Ocupación")?.value, "80%");
-  assert.equal(model.kpis.find((item) => item.label === "Alertas")?.value, "4");
+  assert.equal(model.kpis.find((item) => item.label === "Alertas")?.value, "10");
   assert.equal(model.capacity.occupancyPercent, 80);
-  assert.equal(model.alertCount, 4);
+  assert.equal(model.alertCount, 10);
   assert.equal(model.quickActions[0]?.route, "/check-in");
   assert.equal(model.quickActions[0]?.label, "Escanear / Ingreso");
 });
@@ -501,6 +539,7 @@ test("buildLiveDashboardModel returns an empty alert state when the workspace is
   assert.equal(model.header.liveLabel, "Sincronizando");
   assert.equal(model.capacity.state, "stable");
   assert.equal(model.admission.blockedSignals, 0);
+  assert.equal(model.alertCount, 0);
 });
 
 test("buildLiveDashboardModel updates the live state when a new check-in arrives", () => {
@@ -594,7 +633,7 @@ test("buildLiveDashboardModel keeps alert priority aligned with operations", () 
     }),
   });
 
-  assert.equal(model.alertCount, 3);
+  assert.equal(model.alertCount, 1);
 });
 
 test("buildLiveDashboardQuickActions keeps the scanner as the first mobile-critical action", () => {

@@ -180,6 +180,7 @@ export function buildAccessGrantTimelineEvent(
   return {
     id: grant.id,
     eventId: guest.eventId,
+    createdAt: timestamp,
     timestamp: eventTimestamp,
     kind: "timeline.note",
     icon: "guest",

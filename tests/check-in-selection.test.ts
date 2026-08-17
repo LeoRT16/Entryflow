@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { getQrToken } from "../features/access/domain/access-ledger";
-import { buildGuestQuickReadSummary, resolveCheckInGuestByQuery } from "../features/check-in/domain/check-in-domain";
+import {
+  buildGuestQuickReadSummary,
+  formatGuestCarnetLabel,
+  getCheckInActionLabel,
+  resolveCheckInGuestByQuery,
+  shouldAutoSubmitDetectedCheckIn,
+} from "../features/check-in/domain/check-in-domain";
 import type { Guest } from "../features/check-in/types";
 import type { Event } from "../features/domain/types";
 import type { ReservationRecord } from "../features/reservations/types";
@@ -131,6 +137,23 @@ test("la ficha rápida conserva identidad, carnet, reserva, mesa y estados opera
   assert.equal(quickRead.entryStatus, "Ingresó");
   assert.equal(quickRead.accessStatus, "Usado");
   assert.equal(quickRead.visibleCode, "RES-E2E-01-01");
+});
+
+test("el carnet se muestra con una etiqueta compacta y legible", () => {
+  assert.equal(formatGuestCarnetLabel("8191256"), "Carnet · 8191256");
+  assert.equal(formatGuestCarnetLabel(""), "Carnet");
+});
+
+test("la acción principal de check-in cambia a nueva lectura cuando el acceso no puede consumirse", () => {
+  assert.equal(getCheckInActionLabel({ canEnter: true, isTerminalEvent: false }), "Registrar ingreso");
+  assert.equal(getCheckInActionLabel({ canEnter: false, isTerminalEvent: false }), "Nueva lectura");
+  assert.equal(getCheckInActionLabel({ canEnter: true, isTerminalEvent: true }), "Nueva lectura");
+});
+
+test("un QR detectado de un acceso ya consumido se autoenvía si el evento sigue abierto", () => {
+  assert.equal(shouldAutoSubmitDetectedCheckIn({ canEnter: false, isTerminalEvent: false }), true);
+  assert.equal(shouldAutoSubmitDetectedCheckIn({ canEnter: true, isTerminalEvent: false }), false);
+  assert.equal(shouldAutoSubmitDetectedCheckIn({ canEnter: false, isTerminalEvent: true }), false);
 });
 
 test("un QR consumido sigue resolviendo la identidad del invitado", () => {

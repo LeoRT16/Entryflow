@@ -1,15 +1,26 @@
 "use client";
 
+import { useEffect } from "react";
+
 import Topbar from "@/components/topbar";
 import ModuleGuard from "@/components/module-guard";
 import PermissionGuard from "@/components/permission-guard";
 import TimelineFeed from "@/features/timeline/components/timeline-feed";
+import { formatTimelineDisplayTime, refreshTimelineWorkspace } from "@/features/timeline/domain/timeline-domain";
+import { getWorkspaceActionableAlertCount } from "@/domain/workspace-priority";
 import { useCheckInStore } from "@/services/workspace-service";
 
 export default function TimelinePage() {
-  const { workspaceIntelligence, workspacePriority } = useCheckInStore();
+  const { workspaceIntelligence, workspacePriority, reloadWorkspace } = useCheckInStore();
   const summary = workspaceIntelligence.timeline.summary;
+  const checkedInGuests = workspaceIntelligence.statistics.cards.checkedInGuests;
   const events = workspacePriority.recentChanges;
+  const actionableAlerts = getWorkspaceActionableAlertCount(workspacePriority);
+  const latestEvent = formatTimelineDisplayTime(summary.latest);
+
+  useEffect(() => {
+    void refreshTimelineWorkspace(reloadWorkspace);
+  }, [reloadWorkspace]);
 
   return (
     <PermissionGuard permission="timeline.view">
@@ -23,9 +34,9 @@ export default function TimelinePage() {
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard label="Eventos" value={`${summary.total}`} tone="info" detail="Entradas sincronizadas" />
-            <SummaryCard label="Ingresos" value={`${summary.checkedIn}`} tone="success" detail="Ingresos registrados" />
-            <SummaryCard label="Alertas" value={`${summary.alerts}`} tone="warning" detail="Intentos bloqueados o inválidos" />
-            <SummaryCard label="Último evento" value={summary.latest} tone="info" detail="Hora más reciente" />
+            <SummaryCard label="Ingresos" value={`${checkedInGuests}`} tone="success" detail="Ingresos registrados" />
+            <SummaryCard label="Alertas" value={`${actionableAlerts}`} tone="warning" detail="Requieren atención operativa" />
+            <SummaryCard label="Último evento" value={latestEvent} tone="info" detail="Hora más reciente" />
           </section>
 
           <TimelineFeed events={events} />

@@ -51,6 +51,10 @@ export function buildWhatsAppDeepLink(params: {
   return `https://wa.me/${params.recipient}?text=${encodeURIComponent(params.message)}`;
 }
 
+export function canSendWhatsAppInvitation(params: { isReady: boolean; isSending: boolean }) {
+  return params.isReady && !params.isSending;
+}
+
 export function canUseNativeShareWithFiles(navigatorLike: WhatsAppShareNavigator, files: File[]) {
   if (!navigatorLike?.share || !navigatorLike.canShare) {
     return false;

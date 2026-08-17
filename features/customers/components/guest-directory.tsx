@@ -14,12 +14,13 @@ import { toPng } from "html-to-image";
 import InvitationCard from "@/features/access/components/invitation-card";
 import type { InvitationDesign } from "@/features/access/domain/access-domain";
 import { INVITATION_RENDER_SIZE, getInvitationDownloadFilename } from "@/features/access/domain/invitation-rendering";
-import { normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
+import { canSendWhatsAppInvitation, normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
 import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
 import Topbar from "@/components/topbar";
 import type { Guest as CheckInGuest } from "@/features/check-in/types";
 import { buildGuestQuickReadSummary } from "@/features/check-in/domain/check-in-domain";
+import { formatGuestCarnetLabel } from "@/features/check-in/domain/check-in-domain";
 import { formatReservationStatus, getReservationStatusTone } from "@/features/reservations/domain/reservation-domain";
 import { useCheckInStore } from "@/services/workspace-service";
 import { matchesText, normalizeText } from "@/features/customers/utils";
@@ -254,7 +255,7 @@ function GuestResultCard({
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="break-words text-sm font-semibold text-white">{quickRead.name}</p>
-            <p className="mt-1 break-words text-xs text-slate-400">{quickRead.carnet}</p>
+            <p className="mt-1 break-words text-xs text-slate-400">{formatGuestCarnetLabel(quickRead.carnet)}</p>
           </div>
           <div className="flex min-w-0 flex-wrap justify-end gap-2">
             <StatusBadge variant={statusTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
@@ -353,7 +354,7 @@ function GuestDrawer({
   }, [isExportingInvitation, showToast, visibleInvitationCode]);
 
   const handleSendWhatsApp = useCallback(async () => {
-    if (!isWhatsAppReady || isSendingWhatsApp) {
+    if (!canSendWhatsAppInvitation({ isReady: isWhatsAppReady, isSending: isSendingWhatsApp })) {
       if (!isWhatsAppReady) {
         showToast({
           title: "WhatsApp no válido",
@@ -396,7 +397,7 @@ function GuestDrawer({
       const nextGuestActivity = {
         time: timestamp.slice(11, 16),
         title: nextDeliveryStatus,
-        detail: "Entrega por WhatsApp registrada",
+        detail: "Envío por WhatsApp aceptado por proveedor",
       };
 
       setGuestsState((current) =>

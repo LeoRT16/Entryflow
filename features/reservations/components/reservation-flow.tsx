@@ -37,8 +37,23 @@ import { useCheckInStore } from "@/services/workspace-service";
 import { resolveCurrentEventLayout, resolveCurrentEventLayoutResource } from "@/services/workspace-layout-resolution";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { isTerminalEventStatus } from "@/features/events/domain";
+import type { WorkspaceIntelligence } from "@/domain/workspace-intelligence";
 
 type CheckInStore = ReturnType<typeof useCheckInStore>;
+
+type ReservationFlowTotals = Pick<
+  WorkspaceIntelligence["statistics"]["cards"],
+  "checkedInGuests" | "pendingGuests" | "capacityRemaining" | "occupancyPercent"
+>;
+
+export function buildReservationFlowTotals(totals: ReservationFlowTotals) {
+  return {
+    occupancyPercent: totals.occupancyPercent,
+    checkedInGuests: totals.checkedInGuests,
+    pendingGuests: totals.pendingGuests,
+    capacityRemaining: totals.capacityRemaining,
+  };
+}
 
 type ReservationFlowWorkspaceProps = Pick<
   CheckInStore,
@@ -486,6 +501,7 @@ function ReservationFlowWorkspace({
   const pendingNumber = Math.max(amountNumber - advanceNumber, 0);
   const completion = step / wizardSteps.length;
   const reservationTotals = workspaceIntelligence.statistics.cards;
+  const reservationFlowTotals = buildReservationFlowTotals(reservationTotals);
   const openReservationWizard = useCallback(() => {
     if (isTerminalEvent) {
       return;
@@ -824,22 +840,22 @@ function ReservationFlowWorkspace({
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="OCUPACIÓN"
-          value={`${Math.round((reservationTotals.expectedGuests / Math.max(reservationTotals.expectedGuests + reservationTotals.capacityRemaining, 1)) * 100)}%`}
-          detail="Relación entre invitados esperados y capacidad restante."
+          value={`${reservationFlowTotals.occupancyPercent}%`}
+          detail="Capacidad utilizada sobre el total disponible."
         />
         <KpiCard
           label="INGRESADOS"
-          value={`${reservationTotals.checkedInGuests}`}
+          value={`${reservationFlowTotals.checkedInGuests}`}
           detail="Ingresos ya registrados en el evento."
         />
         <KpiCard
           label="PENDIENTES"
-          value={`${reservationTotals.pendingGuests}`}
+          value={`${reservationFlowTotals.pendingGuests}`}
           detail="Invitados pendientes de ingreso."
         />
         <KpiCard
           label="CAPACIDAD RESTANTE"
-          value={`${reservationTotals.capacityRemaining}`}
+          value={`${reservationFlowTotals.capacityRemaining}`}
           detail="Lugar disponible por operar."
         />
       </section>

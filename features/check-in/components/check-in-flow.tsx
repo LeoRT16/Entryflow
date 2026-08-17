@@ -7,8 +7,11 @@ import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
 import { buildGuestSearchIndex } from "@/features/check-in/utils";
 import {
   buildGuestQuickReadSummary,
+  formatGuestCarnetLabel,
+  getCheckInActionLabel,
   getEntryTone,
   resolveCheckInGuestByQuery,
+  shouldAutoSubmitDetectedCheckIn,
 } from "@/features/check-in/domain/check-in-domain";
 import { isTerminalEventStatus } from "@/features/events/domain";
 import type { CheckInMethod, Guest } from "@/features/check-in/types";
@@ -149,6 +152,11 @@ function CheckInWorkspace() {
   const attemptGuestQuickRead = attemptGuest ? buildGuestQuickReadSummary(attemptGuest) : null;
 
   const eligibility = selectedGuest ? getEligibilityMessage(selectedGuest) : null;
+  const canRegister = Boolean(selectedGuest && !isTerminalEvent);
+  const primaryActionLabel = getCheckInActionLabel({
+    canEnter: Boolean(eligibility?.canEnter),
+    isTerminalEvent,
+  });
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
@@ -169,6 +177,10 @@ function CheckInWorkspace() {
       event: currentEvent,
     });
     setSelectedGuestId(match?.id ?? null);
+
+    if (match && shouldAutoSubmitDetectedCheckIn({ canEnter: getEligibilityMessage(match).canEnter, isTerminalEvent })) {
+      void submitCheckIn(match, value, "QR");
+    }
   };
 
   const handleSelectGuest = (guest: Guest) => {
@@ -182,14 +194,22 @@ function CheckInWorkspace() {
       return;
     }
 
+    await submitCheckIn(selectedGuest, buildGuestSearchIndex(selectedGuest), validationMethod);
+  };
+
+  const submitCheckIn = async (guest: Guest, queryValue: string, method: CheckInMethod) => {
+    if (isSubmitting || isTerminalEvent) {
+      return;
+    }
+
     setIsSubmitting(true);
     setAttemptState({ kind: "idle" });
 
     try {
       const result = await registerCheckIn({
-        query: buildGuestSearchIndex(selectedGuest),
-        method: validationMethod,
-        operator: validationMethod === "Manual" ? "Recepción" : "Escáner",
+        query: queryValue,
+        method,
+        operator: method === "Manual" ? "Recepción" : "Escáner",
       });
 
       const tone = getAttemptTone(result.result);
@@ -205,7 +225,7 @@ function CheckInWorkspace() {
                 ? "Ingreso anulado"
                 : "Ingreso bloqueado",
         note: result.note,
-        guest: result.guest ?? selectedGuest,
+        guest: result.guest ?? guest,
       });
 
       if (result.result === "Encontrado") {
@@ -217,7 +237,7 @@ function CheckInWorkspace() {
         kind: "danger",
         title: "No se pudo registrar el ingreso",
         note: error instanceof Error ? error.message : "No se pudo completar la validación actual.",
-        guest: selectedGuest,
+        guest,
       });
     } finally {
       setIsSubmitting(false);
@@ -345,7 +365,9 @@ function CheckInWorkspace() {
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div className="min-w-0 flex-1">
                                 <p className="break-words text-base font-semibold text-white">{quickRead.name}</p>
-                                <p className="mt-1 break-words text-sm text-slate-400">{quickRead.carnet}</p>
+                                <p className="mt-1 break-words text-sm text-slate-400">
+                                  {formatGuestCarnetLabel(quickRead.carnet)}
+                                </p>
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 <StatusBadge variant={tone}>{guest.admissionStatus}</StatusBadge>
@@ -448,7 +470,9 @@ function CheckInWorkspace() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="break-words text-lg font-semibold text-white">{selectedGuestQuickRead?.name}</p>
-                        <p className="mt-1 break-words text-sm text-slate-400">{selectedGuestQuickRead?.carnet}</p>
+                        <p className="mt-1 break-words text-sm text-slate-400">
+                          {selectedGuestQuickRead ? formatGuestCarnetLabel(selectedGuestQuickRead.carnet) : null}
+                        </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <StatusBadge variant={eligibility?.tone ?? "info"}>{eligibility?.label ?? "Listo"}</StatusBadge>
@@ -463,7 +487,7 @@ function CheckInWorkspace() {
                       <QuickReadField label="Ingreso" value={selectedGuestQuickRead?.entryStatus ?? "Sin estado"} />
                       <QuickReadField label="Acceso" value={selectedGuestQuickRead?.accessStatus ?? "Sin estado"} />
                       <QuickReadField label="Puede entrar" value={eligibility?.canEnter ? "Sí" : "No"} />
-                      <QuickReadField label="Qué hacer" value="Registrar ingreso" />
+                      <QuickReadField label="Qué hacer" value={primaryActionLabel} />
                     </div>
 
                     <div className="mt-4 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-300">
@@ -473,11 +497,16 @@ function CheckInWorkspace() {
 
                   <button
                     type="button"
-                    onClick={() => void handleRegister()}
-                    disabled={isSubmitting || isTerminalEvent}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={canRegister ? () => void handleRegister() : resetAttempt}
+                    disabled={canRegister ? isSubmitting : false}
+                    className={[
+                      "inline-flex h-11 w-full items-center justify-center rounded-2xl border px-4 text-sm font-semibold transition",
+                      canRegister
+                        ? "border-cyan-400/25 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                        : "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]",
+                    ].join(" ")}
                   >
-                    {isSubmitting ? "Registrando ingreso..." : "Registrar ingreso"}
+                    {canRegister ? (isSubmitting ? "Registrando ingreso..." : "Registrar ingreso") : "Nueva lectura"}
                   </button>
                 </div>
               ) : (

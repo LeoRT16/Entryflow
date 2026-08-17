@@ -49,10 +49,27 @@ export function buildRejectedCheckInTimelineEntry(params: {
   ticket: Ticket | null;
 }) {
   const { guest, result, ticket } = params;
+  const timelineEntry = createAdmissionTimelineEntry(result, ticket);
 
   return {
-    ...createAdmissionTimelineEntry(result, ticket),
+    ...timelineEntry,
     eventId: guest?.eventId ?? ticket?.eventId ?? "",
+    reservationId: guest?.reservationId ?? ticket?.reservationId ?? undefined,
+    reservationCode: guest?.reservationCode ?? undefined,
+    reservationName: guest?.reservationName ?? undefined,
+    guestId: guest?.id ?? ticket?.guestId ?? undefined,
+    guestName: guest?.guestName ?? undefined,
+    tableId: guest?.tableId ?? undefined,
+    tableName: guest?.tableName ?? undefined,
+    target: guest?.guestName ?? ticket?.guestId ?? undefined,
+    metadata: {
+      ...(timelineEntry.metadata ?? {}),
+      guestCarnet: guest?.carnet ?? undefined,
+      reservationCode: guest?.reservationCode,
+      reservationName: guest?.reservationName,
+      tableId: guest?.tableId,
+      tableName: guest?.tableName,
+    },
   } as TimelineEvent;
 }
 
@@ -75,6 +92,7 @@ export function buildCompletedCheckInBundle(params: {
   const timestamp = timestampIso.slice(11, 16);
   const admissionMethod = method === "Manual" ? "manual" : "qr";
   const gate = method === "Manual" ? "Recepción" : guest.gate ?? "Principal";
+  const timelineBase = createAdmissionTimelineEntry(result, ticket);
 
   const nextGuest: Guest = {
     ...guest,
@@ -89,6 +107,7 @@ export function buildCompletedCheckInBundle(params: {
 
   const checkIn: CheckIn = {
     id: createUuid(),
+    createdAt: timestampIso,
     accessType: admissionMethod,
     guestId: guest.id,
     reservationId: guest.reservationId,
@@ -123,8 +142,29 @@ export function buildCompletedCheckInBundle(params: {
   };
 
   const timelineEntry: TimelineEvent = {
-    ...createAdmissionTimelineEntry(result, ticket),
+    ...timelineBase,
     eventId: guest.eventId,
+    createdAt: timestampIso,
+    reservationId: guest.reservationId,
+    reservationCode: guest.reservationCode,
+    reservationName: guest.reservationName,
+    guestId: guest.id,
+    guestName: guest.guestName,
+    tableId: guest.tableId,
+    tableName: guest.tableName,
+    target: guest.guestName,
+    metadata: {
+      ...(timelineBase.metadata ?? {}),
+      checkInId: checkIn.id,
+      accessGrantId: checkIn.accessGrantId ?? guest.accessGrantId ?? guest.id,
+      guestCarnet: guest.carnet,
+      reservationCode: guest.reservationCode,
+      reservationName: guest.reservationName,
+      tableId: guest.tableId,
+      tableName: guest.tableName,
+      gate,
+      method: admissionMethod,
+    },
   } as TimelineEvent;
 
   return { nextGuest, checkIn, timelineEntry } satisfies CompletedCheckInBundle;

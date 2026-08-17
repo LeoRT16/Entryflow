@@ -35,6 +35,7 @@ import {
   isTerminalEventStatus,
   pickCurrentEventCandidate,
 } from "@/features/events/domain";
+import { compareTimelineEventsDescending, mergeTimelineEvents } from "@/features/timeline/domain/timeline-domain";
 import {
   buildReservationSummaries,
   createReservationBundle,
@@ -558,6 +559,7 @@ function buildAttemptTimelineEvent(attempt: CheckInAttempt, guest?: Guest): Time
   return {
     id: attempt.id,
     eventId: guest?.eventId ?? attempt.eventId,
+    createdAt: attempt.timestamp,
     timestamp: attempt.timestamp,
     kind,
     icon: kind === "checkin.invalid" || kind === "checkin.blocked" ? "alert" : "checkin",
@@ -589,6 +591,10 @@ function buildAttemptTimelineEvent(attempt: CheckInAttempt, guest?: Guest): Time
       method: attempt.method,
       result: attempt.result,
       note: attempt.note,
+      guestCarnet: guest?.carnet,
+      reservationCode: guest?.reservationCode,
+      reservationName: guest?.reservationName,
+      tableName: guest?.tableName,
     },
   };
 }
@@ -767,7 +773,7 @@ async function loadWorkspaceFromRepositories(repositories: SupabaseWorkspaceRepo
     attempts,
     timelineEvents: [
       ...timelineEvents,
-    ].sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1)),
+    ].sort(compareTimelineEventsDescending),
     currentOrganizationId,
     currentEventId,
     currentProfileId,
@@ -928,7 +934,7 @@ export function WorkspaceServiceProvider({
         ? current.map((item) => (item.id === entry.id ? entry : item))
         : [entry, ...current];
 
-      return next.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+      return next.sort(compareTimelineEventsDescending);
     });
   }, []);
 
@@ -1302,9 +1308,12 @@ export function WorkspaceServiceProvider({
         ),
       ),
       ...currentEventCheckIns.map(
-        (checkIn) =>
-          ({
+        (checkIn) => {
+          const guest = currentEventGuests.find((item) => item.id === checkIn.guestId);
+
+          return {
             id: `checkin-${checkIn.id}`,
+            createdAt: checkIn.createdAt,
             timestamp: checkIn.checkedInAt,
             kind: checkIn.method === "Manual" ? "checkin.manual" : "checkin.success",
             icon: "checkin",
@@ -1312,15 +1321,31 @@ export function WorkspaceServiceProvider({
             title: checkIn.method === "Manual" ? "Check-in manual" : "Check-in exitoso",
             description:
               checkIn.method === "Manual"
-                ? `${currentEventGuests.find((guest) => guest.id === checkIn.guestId)?.guestName ?? "El invitado"} ingresó manualmente en ${checkIn.operator}.`
-                : `${currentEventGuests.find((guest) => guest.id === checkIn.guestId)?.guestName ?? "El invitado"} validó su ingreso con QR.`,
+                ? `${guest?.guestName ?? "El invitado"} ingresó manualmente en ${checkIn.operator}.`
+                : `${guest?.guestName ?? "El invitado"} validó su ingreso con QR.`,
             reservationId: checkIn.reservationId,
+            reservationCode: guest?.reservationCode,
+            reservationName: guest?.reservationName,
             guestId: checkIn.guestId,
-            guestName: currentEventGuests.find((guest) => guest.id === checkIn.guestId)?.guestName,
-          }) as TimelineEvent,
+            guestName: guest?.guestName,
+            tableId: guest?.tableId,
+            tableName: guest?.tableName,
+            actor: checkIn.actor ?? checkIn.operator,
+            actorRole: checkIn.actorRole,
+            context: checkIn.context ?? currentEvent.name,
+            target: checkIn.target ?? guest?.guestName ?? "El invitado",
+            metadata: {
+              method: checkIn.method,
+              gate: checkIn.gate,
+              guestCarnet: guest?.carnet,
+              checkInId: checkIn.id,
+              accessGrantId: checkIn.accessGrantId ?? checkIn.guestId,
+            },
+          } as TimelineEvent;
+        },
       ),
       ...currentEventAttempts.map((attempt) => buildAttemptTimelineEvent(attempt, currentEventGuests.find((guest) => guest.id === attempt.guestId))),
-    ].sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1)),
+    ].sort(compareTimelineEventsDescending),
     [currentEventAttempts, currentEventCheckIns, currentEventGuests, currentEventReservations],
   );
   const timelineEvents = useMemo<TimelineEvent[]>(() => {
@@ -1341,16 +1366,7 @@ export function WorkspaceServiceProvider({
 
       return false;
     });
-    const combined = [...persistedScoped, ...syntheticTimelineEvents];
-    const deduped = new Map<string, TimelineEvent>();
-
-    for (const entry of combined) {
-      if (!deduped.has(entry.id)) {
-        deduped.set(entry.id, entry);
-      }
-    }
-
-    return Array.from(deduped.values()).sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+    return mergeTimelineEvents(persistedScoped, syntheticTimelineEvents);
   }, [currentEvent.id, currentEventGuests, currentEventReservations, persistedTimelineEvents, syntheticTimelineEvents]);
 
   const workspaceIntelligence = useMemo(
@@ -3211,7 +3227,7 @@ export function WorkspaceServiceProvider({
               actor: currentAccount.displayName,
               actorRole: currentAccount.roleName,
               context: currentEvent.name,
-              target: guest?.reservationName ?? guest?.guestName ?? query,
+              target: guest.guestName ?? query,
             },
           );
           upsertPersistedTimelineEvent(nextTimelineEntry);
@@ -3239,13 +3255,13 @@ export function WorkspaceServiceProvider({
           actor: currentAccount.displayName,
           actorRole: currentAccount.roleName,
           context: currentEvent.name,
-          target: guest.reservationName,
+          target: guest.guestName,
         };
         bundle.timelineEntry = withAuditContext(bundle.timelineEntry, {
           actor: currentAccount.displayName,
           actorRole: currentAccount.roleName,
           context: currentEvent.name,
-          target: guest.reservationName,
+          target: guest.guestName,
         });
 
         try {
@@ -3286,7 +3302,7 @@ export function WorkspaceServiceProvider({
               actor: currentAccount.displayName,
               actorRole: currentAccount.roleName,
               context: currentEvent.name,
-              target: guest.reservationName ?? guest.guestName ?? query,
+              target: guest.guestName ?? query,
             };
 
             setAttempts((current) => [duplicateAttempt, ...current].slice(0, 12));
@@ -3300,7 +3316,7 @@ export function WorkspaceServiceProvider({
                 actor: currentAccount.displayName,
                 actorRole: currentAccount.roleName,
                 context: currentEvent.name,
-                target: guest.reservationName ?? guest.guestName ?? query,
+                target: guest.guestName ?? query,
               },
             );
             upsertPersistedTimelineEvent(duplicateTimelineEntry);

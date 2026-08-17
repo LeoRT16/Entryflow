@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canSendWhatsAppInvitation,
   buildInvitationWhatsAppMessage,
   buildWhatsAppDeepLink,
   canUseNativeShareWithFiles,
   normalizeWhatsAppPhoneNumber,
 } from "../features/access/domain/whatsapp-delivery";
 import { buildGuestWhatsAppUpdate } from "../features/customers/domain/customer-directory";
+import { buildTimeline } from "../features/customers/domain/customer-directory";
 import type { Guest } from "../features/check-in/types";
 
 test("Bolivia phone normalization accepts local and +591 formats", () => {
@@ -112,4 +114,39 @@ test("guest WhatsApp updates preserve QR, access and admission state", () => {
   assert.equal(nextGuest.qrStatus, guest.qrStatus);
   assert.equal(nextGuest.reservationStatus, guest.reservationStatus);
   assert.equal(nextGuest.operatorActivity.at(-1)?.action, "WhatsApp actualizado");
+});
+
+test("WhatsApp delivery helper blocks a second submit while the request is in flight", () => {
+  assert.equal(canSendWhatsAppInvitation({ isReady: true, isSending: false }), true);
+  assert.equal(canSendWhatsAppInvitation({ isReady: true, isSending: true }), false);
+  assert.equal(canSendWhatsAppInvitation({ isReady: false, isSending: false }), false);
+});
+
+test("guest timeline describes WhatsApp as accepted by provider, not delivered", () => {
+  const guest: Guest = {
+    id: "guest-2",
+    guestName: "WhatsApp Delivery E2E",
+    reservationName: "Mesa 5 · WhatsApp Delivery E2E",
+    reservationCode: "RES-CB498660",
+    reservationId: "reservation-1",
+    eventId: "event-1",
+    eventName: "Evento E2E",
+    invitationSequence: "1 de 1",
+    invitationCode: "RES-CB498660-01",
+    carnet: "WD-0001",
+    whatsapp: "+59170000097",
+    eventStatus: "Próximo",
+    deliveryStatus: "Enviada",
+    admissionStatus: "Pendiente",
+    reservationStatus: "Confirmed",
+    deliveryHistory: [{ time: "18:53", title: "Enviada", detail: "Solicitud enviada" }],
+    operatorActivity: [],
+    qrStatus: "Válido",
+  } as Guest;
+
+  const timeline = buildTimeline(guest);
+  const sentEntry = timeline.find((entry) => entry.title === "Invitación enviada");
+
+  assert.ok(sentEntry);
+  assert.equal(sentEntry?.detail, "Envío por WhatsApp aceptado por proveedor");
 });

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildWorkspacePrioritySnapshot } from "../domain/workspace-priority";
+import { buildWorkspacePrioritySnapshot, getWorkspaceActionableAlertCount } from "../domain/workspace-priority";
 import type { WorkspaceIntelligence } from "../domain/workspace-intelligence";
+import { buildTimelineSummary } from "../features/timeline/domain/timeline-domain";
 import type { TimelineEvent } from "../features/timeline/types";
 
 function buildTimelineEvent(overrides: Partial<TimelineEvent> = {}): TimelineEvent {
@@ -226,12 +227,7 @@ function buildWorkspaceIntelligence(timelineEvents: TimelineEvent[]): WorkspaceI
     timeline: {
       events: timelineEvents,
       summary: {
-        total: timelineEvents.length,
-        checkedIn: 1,
-        checkedOut: 0,
-        alerts: timelineEvents.filter((event) => event.kind === "checkin.blocked").length,
-        tableMoves: 0,
-        reservationsOpened: 0,
+        ...buildTimelineSummary(timelineEvents),
         latest: "19:12",
         lastActivity: "19:12",
         checkInsPerMinute: 1,
@@ -253,4 +249,37 @@ test("recentChanges keeps a successful check-in visible even when blocked attemp
   assert.equal(snapshot.recentChanges.length, 8);
   assert.equal(snapshot.recentChanges.some((event) => event.kind === "checkin.success"), true);
   assert.equal(snapshot.recentChanges.some((event) => event.kind === "checkin.blocked"), true);
+});
+
+test("rehydrating the workspace replaces a stale timeline snapshot with the current events", () => {
+  const staleTimelineEvents = [buildTimelineEvent({ id: "stale-reservation", kind: "reservation.updated", title: "Reserva actualizada" })];
+  const freshTimelineEvents = [buildTimelineEvent({ id: "fresh-checkin", timestamp: "19:16" }), buildBlockedEvent(1)];
+
+  const staleSnapshot = buildWorkspacePrioritySnapshot(buildWorkspaceIntelligence(staleTimelineEvents));
+  const freshIntelligence = buildWorkspaceIntelligence(freshTimelineEvents);
+  const freshSnapshot = buildWorkspacePrioritySnapshot(freshIntelligence);
+
+  assert.equal(staleSnapshot.recentChanges.some((event) => event.kind === "checkin.success"), false);
+  assert.equal(freshIntelligence.timeline.summary.checkedIn, 1);
+  assert.equal(freshIntelligence.timeline.summary.alerts, 1);
+  assert.equal(freshSnapshot.recentChanges.some((event) => event.kind === "checkin.success"), true);
+  assert.equal(freshSnapshot.recentChanges.some((event) => event.kind === "checkin.blocked"), true);
+});
+
+test("actionable alert KPI stays separate from historical activity alerts", () => {
+  const historicalTimeline = Array.from({ length: 13 }, (_, index) => buildBlockedEvent(index));
+
+  const actionableSnapshot = {
+    summary: {
+      critical: 3,
+      attention: 7,
+      healthy: 6,
+      message: "3 bloqueos requieren intervención inmediata.",
+      nextBestAction: "Revisar el ingreso y mantener la puerta sincronizada.",
+      canIgnore: "El resto del espacio está estable.",
+    },
+  };
+
+  assert.equal(buildTimelineSummary(historicalTimeline).alerts, 13);
+  assert.equal(getWorkspaceActionableAlertCount(actionableSnapshot), 10);
 });

@@ -4,6 +4,8 @@ export type WhatsAppCloudConfig = {
   accessToken: string;
   phoneNumberId: string;
   apiVersion: string;
+  templateName?: string;
+  templateLanguage?: string;
 };
 
 export type WhatsAppCloudSendInput = {
@@ -17,10 +19,23 @@ export type WhatsAppCloudMessagePayload = {
   messaging_product: "whatsapp";
   recipient_type: "individual";
   to: string;
-  type: "text";
-  text: {
+  type: "text" | "template";
+  text?: {
     preview_url: false;
     body: string;
+  };
+  template?: {
+    name: string;
+    language: {
+      code: string;
+    };
+    components: Array<{
+      type: "body";
+      parameters: Array<{
+        type: "text";
+        text: string;
+      }>;
+    }>;
   };
 };
 
@@ -50,6 +65,8 @@ export function getWhatsAppCloudConfig(env: NodeJS.ProcessEnv = process.env): Wh
   const accessToken = env.WHATSAPP_ACCESS_TOKEN?.trim();
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   const apiVersion = env.WHATSAPP_API_VERSION?.trim() || DEFAULT_WHATSAPP_API_VERSION;
+  const templateName = env.WHATSAPP_TEMPLATE_NAME?.trim();
+  const templateLanguage = env.WHATSAPP_TEMPLATE_LANGUAGE?.trim();
 
   if (!accessToken || !phoneNumberId) {
     return null;
@@ -59,6 +76,8 @@ export function getWhatsAppCloudConfig(env: NodeJS.ProcessEnv = process.env): Wh
     accessToken,
     phoneNumberId,
     apiVersion,
+    ...(templateName ? { templateName } : {}),
+    ...(templateLanguage ? { templateLanguage } : {}),
   };
 }
 
@@ -67,7 +86,7 @@ export function buildWhatsAppCloudMessage(params: {
   guestName: string;
   eventName: string;
   invitationCode: string;
-}) {
+}, templateConfig?: Pick<WhatsAppCloudConfig, "templateName" | "templateLanguage">) {
   const recipient = normalizeWhatsAppPhoneNumber(params.recipient);
 
   if (!recipient) {
@@ -76,6 +95,33 @@ export function buildWhatsAppCloudMessage(params: {
       code: "invalid_whatsapp_number",
       safeMessage: "Número de WhatsApp no válido.",
     });
+  }
+
+  if (templateConfig?.templateName && templateConfig.templateLanguage) {
+    return {
+      payload: {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: recipient,
+        type: "template",
+        template: {
+          name: templateConfig.templateName,
+          language: {
+            code: templateConfig.templateLanguage,
+          },
+          components: [
+            {
+              type: "body",
+              parameters: [
+                { type: "text", text: params.guestName },
+                { type: "text", text: params.eventName },
+                { type: "text", text: params.invitationCode },
+              ],
+            },
+          ],
+        },
+      } satisfies WhatsAppCloudMessagePayload,
+    };
   }
 
   return {
@@ -186,7 +232,7 @@ export async function sendWhatsAppCloudMessage(
     });
   }
 
-  const { payload } = buildWhatsAppCloudMessage(params);
+  const { payload } = buildWhatsAppCloudMessage(params, config);
   const response = await fetchImpl(buildWhatsAppCloudMessagesUrl(config), buildWhatsAppCloudRequestInit(config, payload));
   const responseBody = await response.json().catch(() => null);
 
