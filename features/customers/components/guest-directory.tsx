@@ -26,6 +26,10 @@ import { useCheckInStore } from "@/services/workspace-service";
 import { matchesText, normalizeText } from "@/features/customers/utils";
 import { statusTone } from "@/features/customers/domain/customer-directory";
 import type { GuestRecord } from "@/features/customers/types";
+import { getEventInvitationArtwork } from "@/features/events/domain/invitation-artwork";
+import { formatInvitationEventDateLabel, getEventInvitationOverlayLayout } from "@/features/events/domain/invitation-overlay";
+import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
+import { waitForInvitationFontsReady } from "@/features/events/domain/invitation-fonts";
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 20;
@@ -284,7 +288,7 @@ function GuestDrawer({
   drawerRef: RefObject<HTMLDivElement | null>;
 }) {
   const { showToast } = useFeedback();
-  const { currentEvent, setGuestsState } = useCheckInStore();
+  const { currentEvent, reservations, setGuestsState } = useCheckInStore();
   const [isVisible, setIsVisible] = useState(false);
   const [isInvitationPreviewOpen, setIsInvitationPreviewOpen] = useState(false);
   const [isExportingInvitation, setIsExportingInvitation] = useState(false);
@@ -294,7 +298,18 @@ function GuestDrawer({
   const visibleInvitationCode = guest.accessCode ?? guest.invitationCode;
   const invitationQrToken = guest.qrToken ?? visibleInvitationCode;
   const isWhatsAppReady = Boolean(normalizeWhatsAppPhoneNumber(guest.whatsapp));
-  const invitationDateTime = useMemo(() => formatInvitationDateTime(currentEvent.startAt), [currentEvent.startAt]);
+  const invitationDateLabel = useMemo(
+    () => formatInvitationEventDateLabel(currentEvent.startAt, currentEvent.timezone),
+    [currentEvent.startAt, currentEvent.timezone],
+  );
+  const invitationArtwork = useMemo(() => getEventInvitationArtwork(currentEvent), [currentEvent]);
+  const invitationOverlayLayout = useMemo(() => getEventInvitationOverlayLayout(currentEvent), [currentEvent]);
+  const reservationHolderName = useMemo(
+    () =>
+      reservations.find((reservation) => reservation.code === guest.reservationCode || reservation.id === guest.reservationCode)?.holderName ??
+      undefined,
+    [guest.reservationCode, reservations],
+  );
 
   const invitation = useMemo<InvitationDesign>(
     () => ({
@@ -302,17 +317,41 @@ function GuestDrawer({
       eventName: currentEvent.name,
       guestName: guest.guestName,
       reservationName: guest.reservationName,
+      reservationHolderName,
       reservationCode: guest.reservationCode,
       tableName: guest.tableName,
       zoneName: guest.seat,
-      date: invitationDateTime.date,
-      time: invitationDateTime.time,
+      venueName: currentEvent.venue || undefined,
+      date: invitationDateLabel,
+      time: formatTimelineDisplayTime(currentEvent.startAt),
       uniqueCode: visibleInvitationCode,
       qrValue: invitationQrToken,
+      artUrl: invitationArtwork?.url,
+      artPath: invitationArtwork?.path,
+      artLabel: invitationArtwork?.label,
+      overlayLayout: invitationOverlayLayout ?? undefined,
       theme: "Pieza lista para compartir y validar operativamente.",
       variant: "general",
     }),
-    [currentEvent.name, guest.id, guest.guestName, guest.reservationCode, guest.reservationName, guest.seat, guest.tableName, invitationDateTime.date, invitationDateTime.time, invitationQrToken, visibleInvitationCode],
+    [
+      currentEvent.name,
+      currentEvent.venue,
+      currentEvent.startAt,
+      guest.id,
+      guest.guestName,
+      guest.reservationCode,
+      guest.reservationName,
+      guest.seat,
+      guest.tableName,
+      invitationArtwork?.label,
+      invitationArtwork?.path,
+      invitationArtwork?.url,
+      invitationDateLabel,
+      invitationOverlayLayout,
+      invitationQrToken,
+      reservationHolderName,
+      visibleInvitationCode,
+    ],
   );
 
   const handleDownloadInvitation = useCallback(async () => {
@@ -323,6 +362,7 @@ function GuestDrawer({
     setIsExportingInvitation(true);
 
     try {
+      await waitForInvitationFontsReady();
       const dataUrl = await toPng(exportInvitationRef.current, {
         cacheBust: true,
         pixelRatio: 1,
@@ -751,16 +791,7 @@ function InvitationPreviewStage({ invitation }: { invitation: InvitationDesign }
   return (
     <div ref={stageRef} className="flex min-h-0 w-full items-center justify-center">
       <div className="relative shrink-0" style={{ width: renderWidth, height: renderHeight }}>
-        <div
-          className="absolute left-0 top-0 origin-top-left"
-          style={{
-            width: `${INVITATION_RENDER_SIZE.width}px`,
-            height: `${INVITATION_RENDER_SIZE.height}px`,
-            transform: `scale(${scale})`,
-          }}
-        >
-          <InvitationCard invitation={invitation} mode="preview" />
-        </div>
+        <InvitationCard invitation={invitation} mode="preview" className="h-full w-full" />
       </div>
     </div>
   );
@@ -787,30 +818,4 @@ function formatEventSummary(date?: string, startsAt?: string) {
   }
 
   return [date, startsAt].filter(Boolean).join(" · ");
-}
-
-function formatInvitationDateTime(startAt: string) {
-  const parsed = new Date(startAt);
-
-  if (!Number.isNaN(parsed.getTime())) {
-    return {
-      date: parsed.toLocaleDateString("es-BO", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }),
-      time: parsed.toLocaleTimeString("es-BO", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      }),
-    };
-  }
-
-  const [date, time] = startAt.split(" ");
-
-  return {
-    date: date || startAt,
-    time: time || "21:00",
-  };
 }
