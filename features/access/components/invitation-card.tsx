@@ -4,6 +4,7 @@ import StatusBadge from "@/components/status-badge";
 import type { InvitationDesign } from "@/features/access/domain/access-domain";
 import AccessQrCode from "@/features/access/components/access-qr-code";
 import { buildInvitationComposition } from "@/features/access/domain/invitation-rendering";
+import InvitationOverlayStage from "@/features/access/components/invitation-overlay-stage";
 
 export type InvitationCardMode = "preview" | "print" | "download" | "wallet";
 export type InvitationCardVariant = NonNullable<InvitationDesign["variant"]>;
@@ -43,6 +44,18 @@ export default function InvitationCard({ invitation, mode = "preview", className
   const isPrint = mode === "print";
   const composition = buildInvitationComposition(invitation, mode);
   const data = composition.data;
+  const overlayContext = {
+    eventName: data.eventName,
+    guestName: data.guestName,
+    reservationName: data.reservationName,
+    reservationHolderName: data.reservationHolderName,
+    reservationCode: data.reservationCode,
+    venueName: data.venueName,
+    date: data.date,
+    uniqueCode: data.uniqueCode,
+    qrToken: data.qrToken,
+    artLabel: data.artLabel,
+  };
   const locationLabel = data.venueName ?? data.eventName;
   const resourceLabel = data.tableName ?? data.zoneName ?? data.reservationName;
   const details = [
@@ -51,6 +64,32 @@ export default function InvitationCard({ invitation, mode = "preview", className
     { label: "Lugar", value: locationLabel },
     { label: "Recurso", value: resourceLabel },
   ];
+
+  if (data.overlayLayout?.elements.length) {
+    return (
+      <article
+        className={["relative aspect-[9/16] w-full overflow-hidden rounded-[2.5rem]", className].join(" ")}
+        data-composition-mode={composition.template.mode}
+        data-composition-variant={composition.template.variant}
+        data-composition-width={composition.template.width}
+        data-composition-height={composition.template.height}
+      >
+        {data.artUrl ? (
+          <img
+            src={data.artUrl}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : null}
+        <InvitationOverlayStage
+          layout={data.overlayLayout}
+          context={overlayContext}
+          mode="preview"
+        />
+      </article>
+    );
+  }
 
   return (
     <article
@@ -64,8 +103,17 @@ export default function InvitationCard({ invitation, mode = "preview", className
       data-composition-width={composition.template.width}
       data-composition-height={composition.template.height}
     >
+      {data.artUrl ? (
+        <img
+          src={data.artUrl}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : null}
       <div className={`absolute inset-0 bg-gradient-to-b ${palette.glow}`} />
       <div className={["absolute inset-0 opacity-70", isPrint ? "bg-[radial-gradient(circle_at_top_left,_rgba(15,23,42,0.2),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(15,23,42,0.12),_transparent_32%)]" : "bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.18),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(168,85,247,0.18),_transparent_30%)]"].join(" ")} />
+      <div className={["absolute inset-0", isPrint ? "bg-white/10" : "bg-slate-950/35"].join(" ")} />
 
       <div className="relative flex h-full flex-col">
         <div className={["flex items-start justify-between gap-4 px-8 pt-8", isPrint ? "text-slate-900" : "text-white"].join(" ")}>

@@ -11,6 +11,7 @@ import {
   getInvitationDownloadFilename,
   INVITATION_RENDER_SIZE,
 } from "../features/access/domain/invitation-rendering";
+import { getDefaultInvitationOverlayLayout } from "../features/events/domain/invitation-overlay";
 
 function buildInvitation(overrides: Partial<InvitationDesign> = {}): InvitationDesign {
   return {
@@ -19,6 +20,7 @@ function buildInvitation(overrides: Partial<InvitationDesign> = {}): InvitationD
     venueName: "Venue E2E",
     guestName: "Invitado Checkin Final",
     reservationName: "E2E checkin final Rivas",
+    reservationHolderName: "Carlota Rivas",
     reservationCode: "RES-59B30752",
     tableName: "Mesa 2",
     zoneName: "Zona A",
@@ -27,6 +29,8 @@ function buildInvitation(overrides: Partial<InvitationDesign> = {}): InvitationD
     dressCode: "Elegante oscuro",
     uniqueCode: "RES-59B30752-01",
     qrValue: "qr_1234567890abcdef",
+    artUrl: "https://cdn.example.com/invitation-art.png",
+    artPath: "organizations/org-1/events/event-1/invitation-artwork/1700000000-art.png",
     theme: "EntryFlow Invitation Designer",
     logoLabel: "EV",
     artLabel: "Rivas",
@@ -98,6 +102,7 @@ test("InvitationCard keeps the human code visible and omits qrToken from visible
   assert.ok(markup.includes("La captura de pantalla no garantiza el ingreso."));
   assert.ok(markup.includes(invitation.eventName));
   assert.ok(markup.includes(invitation.guestName));
+  assert.ok(markup.includes(invitation.artUrl as string));
   assert.equal(markup.includes(invitation.qrValue), false);
 });
 
@@ -109,11 +114,34 @@ test("Invitation rendering composition keeps the 1080x1920 contract", () => {
   assert.equal(INVITATION_RENDER_SIZE.width, 1080);
   assert.equal(INVITATION_RENDER_SIZE.height, 1920);
   assert.equal(renderData.qrToken, invitation.qrValue);
+  assert.equal(renderData.artUrl, invitation.artUrl);
+  assert.equal(renderData.artPath, invitation.artPath);
+  assert.equal(renderData.reservationHolderName, invitation.reservationHolderName);
   assert.equal(renderData.accessTypeLabel, "GENERAL");
   assert.equal(composition.template.width, 1080);
   assert.equal(composition.template.height, 1920);
   assert.equal(composition.template.mode, "download");
   assert.equal(composition.data.uniqueCode, invitation.uniqueCode);
+});
+
+test("InvitationCard renders overlay blocks when an overlay layout exists", () => {
+  const invitation = buildInvitation({
+    guestName: "Leonardo",
+    reservationName: "Reserva principal",
+    reservationHolderName: "Carlota Rivas",
+    overlayLayout: getDefaultInvitationOverlayLayout(),
+  });
+  const markup = renderToStaticMarkup(InvitationCard({ invitation, mode: "preview" }));
+
+  assert.ok(markup.includes("Leonardo, estás invitado."), "guest identity block should render");
+  assert.ok(markup.includes("Reserva de Carlota Rivas"), "event context block should render");
+  assert.ok(markup.includes("La captura de pantalla no garantiza el ingreso."), "disclaimer should render");
+  assert.ok(markup.includes(invitation.artUrl as string));
+  assert.equal(markup.includes("Código: RES-59B30752-01"), false);
+  assert.equal(markup.includes("QR listo"), false);
+  assert.equal(markup.includes("Arrastrar"), false);
+  assert.equal(markup.includes("Identidad"), false);
+  assert.equal(markup.includes("Contexto"), false);
 });
 
 test("Invitation download filename is deterministic and sanitized", () => {

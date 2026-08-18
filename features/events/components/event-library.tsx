@@ -202,6 +202,7 @@ export default function EventLibrary() {
           venues={venues}
           onClose={() => setEditorOpen(false)}
           onSave={createEvent}
+          onPatchEvent={createEvent}
         />
       ) : null}
     </div>

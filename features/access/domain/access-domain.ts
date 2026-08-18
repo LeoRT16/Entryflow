@@ -1,5 +1,6 @@
 import type { TimelineEvent } from "@/features/timeline/types";
 import { createUuid } from "@/lib/supabase/helpers";
+import type { InvitationOverlayLayout } from "@/features/events/domain/invitation-overlay";
 
 export type AccessType = "reservation" | "ticket" | "invitation" | "guest-access" | "qr" | "manual" | "staff";
 
@@ -92,6 +93,7 @@ export type InvitationDesign = {
   venueName?: string;
   guestName: string;
   reservationName: string;
+  reservationHolderName?: string;
   reservationCode: string;
   tableName?: string;
   zoneName?: string;
@@ -102,10 +104,13 @@ export type InvitationDesign = {
   uniqueCode: string;
   /** Token opaco que debe renderizarse como QR. */
   qrValue: string;
+  artUrl?: string;
+  artPath?: string;
   message?: string;
   theme?: string;
   logoLabel?: string;
   artLabel?: string;
+  overlayLayout?: InvitationOverlayLayout | null;
   variant?: "general" | "vip" | "staff" | "media" | "sponsor";
 };
 
