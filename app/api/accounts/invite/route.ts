@@ -35,8 +35,32 @@ function getRequestString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function POST(request: Request) {
-  const authUser = await getSupabaseAuthUser();
+type InviteRouteDependencies = {
+  getAuthUser: typeof getSupabaseAuthUser;
+  loadWorkspace: typeof loadWorkspaceBootstrap;
+  getClient: typeof getSupabaseServerClient;
+  createRepositories: typeof createSupabaseWorkspaceRepositories;
+  findAuthIdentityByEmail: typeof findAuthIdentityByEmail;
+  createOrUpdateTemporaryPasswordAuthIdentity: typeof createOrUpdateTemporaryPasswordAuthIdentity;
+  linkPublicUserToAuthIdentity: typeof linkPublicUserToAuthIdentity;
+  setPublicUserMustChangePassword: typeof setPublicUserMustChangePassword;
+};
+
+function createInviteRouteDependencies(): InviteRouteDependencies {
+  return {
+    getAuthUser: getSupabaseAuthUser,
+    loadWorkspace: loadWorkspaceBootstrap,
+    getClient: getSupabaseServerClient,
+    createRepositories: createSupabaseWorkspaceRepositories,
+    findAuthIdentityByEmail,
+    createOrUpdateTemporaryPasswordAuthIdentity,
+    linkPublicUserToAuthIdentity,
+    setPublicUserMustChangePassword,
+  };
+}
+
+export async function handleInvite(request: Request, dependencies = createInviteRouteDependencies()) {
+  const authUser = await dependencies.getAuthUser();
 
   if (!authUser) {
     return NextResponse.json(
@@ -51,7 +75,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const workspace = await loadWorkspaceBootstrap({ id: authUser.id, email: authUser.email });
+  const workspace = await dependencies.loadWorkspace({ id: authUser.id, email: authUser.email });
 
   if (workspace.authState.status !== "ready") {
     return NextResponse.json(
@@ -124,8 +148,9 @@ export async function POST(request: Request) {
   const organizationId = getRequestString(body.organizationId);
   const roleSlug = getRequestString(body.roleSlug);
   const area = getRequestString(body.area);
+  const currentOrganizationId = getRequestString(workspace.currentOrganizationId);
 
-  if (!email || !displayName || !organizationId || !roleSlug) {
+  if (!email || !displayName || !organizationId || !roleSlug || !currentOrganizationId) {
     return NextResponse.json(
       {
         ok: false,
@@ -138,13 +163,13 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!workspace.organizations.some((organization) => organization.id === organizationId)) {
+  if (organizationId !== currentOrganizationId) {
     return NextResponse.json(
       {
         ok: false,
         error: {
           code: "forbidden",
-          message: "No podés crear miembros en esa organización.",
+          message: "No podés crear miembros en una organización distinta a la activa.",
         },
       },
       { status: 403 },
@@ -216,8 +241,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const client = getSupabaseServerClient();
-  const repositories = createSupabaseWorkspaceRepositories(client);
+  const client = dependencies.getClient();
+  const repositories = dependencies.createRepositories(client);
 
   if (!client) {
     return NextResponse.json(
@@ -266,10 +291,10 @@ export async function POST(request: Request) {
     }
     persistedUser = nextUser;
 
-    const existingMembership = await repositories.profiles.getByOrganizationAndUser(organizationId, persistedUser.id);
+    const existingMembership = await repositories.profiles.getByOrganizationAndUser(currentOrganizationId, persistedUser.id);
     const membershipPayload = {
       id: existingMembership?.id ?? createUuid(),
-      organizationId,
+      organizationId: currentOrganizationId,
       userId: persistedUser.id,
       roleId: targetRole.id,
       displayName,
@@ -347,7 +372,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const existingAuthIdentity = await findAuthIdentityByEmail(client, email);
+  const existingAuthIdentity = await dependencies.findAuthIdentityByEmail(client, email);
 
   if (existingAuthIdentity && currentPersistedUser.authUserId && currentPersistedUser.authUserId !== existingAuthIdentity.id) {
     return NextResponse.json(
@@ -399,7 +424,7 @@ export async function POST(request: Request) {
       );
     }
   } else {
-    const authResult = await createOrUpdateTemporaryPasswordAuthIdentity(client, { email, password: tempPassword });
+    const authResult = await dependencies.createOrUpdateTemporaryPasswordAuthIdentity(client, { email, password: tempPassword });
 
     if (authResult.error || !authResult.data.user) {
       return NextResponse.json(
@@ -418,7 +443,7 @@ export async function POST(request: Request) {
   }
 
   if (resolvedAuthUserId && currentPersistedUser.authUserId !== resolvedAuthUserId) {
-    const linkedUser = await linkPublicUserToAuthIdentity(client, currentPersistedUser.id, resolvedAuthUserId);
+    const linkedUser = await dependencies.linkPublicUserToAuthIdentity(client, currentPersistedUser.id, resolvedAuthUserId);
     if (!linkedUser) {
       return NextResponse.json(
         {
@@ -435,7 +460,7 @@ export async function POST(request: Request) {
     currentPersistedUser.authUserId = linkedUser.authUserId ?? resolvedAuthUserId;
   }
 
-  const updatedUser = await setPublicUserMustChangePassword(client, currentPersistedUser.id, true);
+  const updatedUser = await dependencies.setPublicUserMustChangePassword(client, currentPersistedUser.id, true);
 
   if (updatedUser) {
     currentPersistedUser.mustChangePassword = updatedUser.mustChangePassword ?? true;
@@ -470,4 +495,8 @@ export async function POST(request: Request) {
     profile: persistedMembership,
     account,
   });
+}
+
+export async function POST(request: Request) {
+  return handleInvite(request);
 }
