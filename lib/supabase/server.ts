@@ -14,6 +14,8 @@ export function getSupabaseServerClient() {
     return null;
   }
 
+  // Server-only service role client. Tenant scope must be enforced by the
+  // caller, ideally through the canonical workspace loader.
   serverClient = createClient<Database>(getSupabaseUrl(), getSupabaseServiceRoleKey() || "", {
     auth: {
       autoRefreshToken: false,

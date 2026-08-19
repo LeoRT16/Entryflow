@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildActiveCheckIns } from "../services/workspace-loader";
+import {
+  assertEventInWorkspace,
+  assertOrganizationInWorkspace,
+  buildActiveCheckIns,
+  resolveWorkspaceAccessScope,
+} from "../services/workspace-loader";
 import { isAccessGrantAlreadyConsumed } from "../features/check-in/domain/check-in-persistence";
 import type { CheckInRow } from "../lib/supabase/types";
 import { mapTimelineRowToDomain, mapTimelineToRow } from "../lib/supabase/mappers";
 import type { TimelineRow } from "../lib/supabase/types";
 import type { TimelineEvent } from "../features/timeline/types";
+import type { WorkspaceBootstrap } from "../services/workspace-loader";
 
 function buildCheckInRow(overrides: Partial<CheckInRow> = {}): CheckInRow {
   return {
@@ -36,6 +42,158 @@ function buildCheckInRow(overrides: Partial<CheckInRow> = {}): CheckInRow {
     ...overrides,
   };
 }
+
+function buildWorkspaceScopeFixture(overrides: Partial<WorkspaceBootstrap> = {}): WorkspaceBootstrap {
+  return {
+    authState: {
+      status: "ready",
+      authUserId: "auth-owner",
+      authUserEmail: "owner@example.com",
+      publicUserId: "user-owner",
+      organizationIds: ["org-a", "org-b"],
+    },
+    currentUserId: "user-owner",
+    users: [],
+    profiles: [],
+    roles: [],
+    organizations: [
+      {
+        id: "org-a",
+        name: "Org A",
+        slug: "org-a",
+        status: "active",
+        timezone: "America/La_Paz",
+        branding: {},
+        settings: {},
+        metadata: null,
+        createdAt: "2026-08-13T00:00:00.000Z",
+        updatedAt: "2026-08-13T00:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "org-b",
+        name: "Org B",
+        slug: "org-b",
+        status: "active",
+        timezone: "America/La_Paz",
+        branding: {},
+        settings: {},
+        metadata: null,
+        createdAt: "2026-08-13T00:00:00.000Z",
+        updatedAt: "2026-08-13T00:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "org-inactive",
+        name: "Org Inactive",
+        slug: "org-inactive",
+        status: "inactive",
+        timezone: "America/La_Paz",
+        branding: {},
+        settings: {},
+        metadata: null,
+        createdAt: "2026-08-13T00:00:00.000Z",
+        updatedAt: "2026-08-13T00:00:00.000Z",
+        deletedAt: null,
+      },
+    ] as never,
+    venues: [],
+    sectors: [],
+    resources: [],
+    venueLayouts: [],
+    venueLayoutSectors: [],
+    venueLayoutResources: [],
+    eventLayouts: [],
+    eventLayoutSectors: [],
+    eventLayoutResources: [],
+    events: [
+      {
+        id: "event-a",
+        organizationId: "org-a",
+        venueId: "venue-a",
+        name: "Evento A",
+        slug: "evento-a",
+        status: "active",
+        startAt: "2026-08-13T00:00:00.000Z",
+        endAt: null,
+        timezone: "America/La_Paz",
+        metadata: {},
+        createdAt: "2026-08-13T00:00:00.000Z",
+        updatedAt: "2026-08-13T00:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "event-b",
+        organizationId: "org-b",
+        venueId: "venue-b",
+        name: "Evento B",
+        slug: "evento-b",
+        status: "active",
+        startAt: "2026-08-13T00:00:00.000Z",
+        endAt: null,
+        timezone: "America/La_Paz",
+        metadata: {},
+        createdAt: "2026-08-13T00:00:00.000Z",
+        updatedAt: "2026-08-13T00:00:00.000Z",
+        deletedAt: null,
+      },
+      {
+        id: "event-deleted",
+        organizationId: "org-a",
+        venueId: "venue-a",
+        name: "Evento Deleted",
+        slug: "evento-deleted",
+        status: "active",
+        startAt: "2026-08-13T00:00:00.000Z",
+        endAt: null,
+        timezone: "America/La_Paz",
+        metadata: {},
+        createdAt: "2026-08-13T00:00:00.000Z",
+        updatedAt: "2026-08-13T00:00:00.000Z",
+        deletedAt: "2026-08-13T00:00:00.000Z",
+      },
+    ] as never,
+    guests: [],
+    reservations: [],
+    tables: [],
+    checkIns: [],
+    attempts: [],
+    timelineEvents: [],
+    currentOrganizationId: "org-a",
+    currentEventId: "event-a",
+    currentProfileId: "profile-owner",
+    ...overrides,
+  } as WorkspaceBootstrap;
+}
+
+test("workspace scope resolves and fails closed on inactive or missing current organization", () => {
+  const scope = resolveWorkspaceAccessScope(buildWorkspaceScopeFixture());
+
+  assert.ok(scope);
+  assert.equal(scope?.authUserId, "auth-owner");
+  assert.equal(assertOrganizationInWorkspace(scope, "org-a"), "org-a");
+  assert.equal(assertOrganizationInWorkspace(scope, "org-b"), null);
+  assert.equal(assertOrganizationInWorkspace(scope, "org-inactive"), null);
+  assert.equal(assertOrganizationInWorkspace(scope, ""), null);
+});
+
+test("workspace scope rejects events from another organization and deleted events", () => {
+  const scope = resolveWorkspaceAccessScope(buildWorkspaceScopeFixture());
+
+  assert.ok(scope);
+  assert.deepEqual(assertEventInWorkspace(scope, { id: "event-a", organizationId: "org-a" }), { id: "event-a", organizationId: "org-a" });
+  assert.equal(assertEventInWorkspace(scope, { id: "event-b", organizationId: "org-b" }), null);
+  assert.equal(assertEventInWorkspace(scope, { id: "event-deleted", organizationId: "org-a" }), null);
+  assert.equal(assertEventInWorkspace(scope, null), null);
+});
+
+test("workspace scope fails closed when current organization is missing", () => {
+  const scope = resolveWorkspaceAccessScope(buildWorkspaceScopeFixture({ currentOrganizationId: "" }));
+
+  assert.equal(scope, null);
+  assert.equal(assertOrganizationInWorkspace(scope, "org-a"), null);
+  assert.equal(assertEventInWorkspace(scope, { id: "event-a", organizationId: "org-a" }), null);
+});
 
 test("soft-deleted check-ins are excluded from the bootstrap state", () => {
   const activeCheckIn = buildCheckInRow({

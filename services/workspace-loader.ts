@@ -93,6 +93,26 @@ export type WorkspaceAuthState =
       publicUserId: string;
     };
 
+export type WorkspaceAccessScope = {
+  authUserId: string;
+  currentOrganizationId: string;
+  allowedOrganizationIds: string[];
+  currentEventId: string;
+  allowedEventIds: string[];
+};
+
+type WorkspaceScopeOrganizationLike = {
+  id: string;
+  status: string;
+  deletedAt?: string | null;
+};
+
+type WorkspaceScopeEventLike = {
+  id: string;
+  organizationId: string;
+  deletedAt?: string | null;
+};
+
 type WorkspacePayload = WorkspaceBootstrap;
 
 async function fetchSupabaseTable<T>(table: string): Promise<T[]> {
@@ -263,6 +283,64 @@ export function pickCurrentOrganizationIdForUser(organizations: OrganizationRow[
     })[0]?.id ?? "";
 }
 
+export function resolveWorkspaceAccessScope(workspace: Pick<WorkspaceBootstrap, "authState" | "currentOrganizationId" | "currentEventId" | "organizations" | "events">): WorkspaceAccessScope | null {
+  if (workspace.authState.status !== "ready" || !workspace.authState.authUserId || !workspace.currentOrganizationId) {
+    return null;
+  }
+
+  const allowedOrganizationIds = [...new Set(
+    workspace.organizations
+      .filter((organization: WorkspaceScopeOrganizationLike) => organization.status === "active" && ("deletedAt" in organization ? organization.deletedAt === null : true))
+      .map((organization) => organization.id),
+  )];
+
+  if (!allowedOrganizationIds.includes(workspace.currentOrganizationId)) {
+    return null;
+  }
+
+  const allowedEventIds = [...new Set(
+    workspace.events
+      .filter((event: WorkspaceScopeEventLike) => ("deletedAt" in event ? event.deletedAt === null : true) && allowedOrganizationIds.includes(event.organizationId))
+      .map((event) => event.id),
+  )];
+
+  return {
+    authUserId: workspace.authState.authUserId,
+    currentOrganizationId: workspace.currentOrganizationId,
+    allowedOrganizationIds,
+    currentEventId: workspace.currentEventId,
+    allowedEventIds,
+  };
+}
+
+export function assertOrganizationInWorkspace(scope: WorkspaceAccessScope | null, organizationId: string) {
+  if (!scope || !organizationId) {
+    return null;
+  }
+
+  if (scope.currentOrganizationId !== organizationId) {
+    return null;
+  }
+
+  return scope.allowedOrganizationIds.includes(organizationId) ? organizationId : null;
+}
+
+export function assertEventInWorkspace(scope: WorkspaceAccessScope | null, event: { id: string; organizationId: string } | null | undefined) {
+  if (!scope || !event?.id || !event.organizationId) {
+    return null;
+  }
+
+  if (scope.currentOrganizationId !== event.organizationId) {
+    return null;
+  }
+
+  if (!scope.allowedOrganizationIds.includes(event.organizationId)) {
+    return null;
+  }
+
+  return scope.allowedEventIds.includes(event.id) ? event : null;
+}
+
 function buildAttemptsFromLogs(logs: TimelineEvent[], currentEventId: string): CheckInAttempt[] {
   return logs
     .filter((log) => log.kind === "checkin.invalid" || log.kind === "checkin.blocked")
@@ -313,6 +391,8 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     return createEmptyWorkspaceBootstrap();
   }
 
+  // Canonical privileged read path: fetch with the server client, then narrow
+  // the result to the authenticated workspace scope before returning data.
   const client = getSupabaseServerClient();
 
   if (!client) {
