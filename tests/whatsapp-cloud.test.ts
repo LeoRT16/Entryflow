@@ -7,6 +7,7 @@ import {
   buildWhatsAppCloudMessagesUrl,
   buildWhatsAppCloudRequestInit,
   getWhatsAppCloudConfig,
+  getRequiredWhatsAppTemplateConfig,
   sendWhatsAppCloudMessage,
   WhatsAppCloudError,
 } from "../features/access/domain/whatsapp-cloud";
@@ -34,12 +35,66 @@ test("WhatsApp Cloud configuration reads server env and falls back to a version"
   });
 });
 
+test("WhatsApp Cloud configuration reads template env when configured", () => {
+  const config = getWhatsAppCloudConfig(
+    buildProcessEnv({
+      WHATSAPP_ACCESS_TOKEN: "secret-token",
+      WHATSAPP_PHONE_NUMBER_ID: "123456789",
+      WHATSAPP_TEMPLATE_NAME: "entryflow_invitation",
+      WHATSAPP_TEMPLATE_LANGUAGE: "es_MX",
+    }),
+  );
+
+  assert.deepEqual(config, {
+    accessToken: "secret-token",
+    phoneNumberId: "123456789",
+    apiVersion: "v23.0",
+    templateName: "entryflow_invitation",
+    templateLanguage: "es_MX",
+  });
+});
+
+test("WhatsApp Cloud approved template config fails clearly when missing", () => {
+  assert.throws(
+    () =>
+      getRequiredWhatsAppTemplateConfig(
+        buildProcessEnv({
+          WHATSAPP_ACCESS_TOKEN: "secret-token",
+          WHATSAPP_PHONE_NUMBER_ID: "123456789",
+        }),
+      ),
+    (error: unknown) => {
+      assert.ok(error instanceof WhatsAppCloudError);
+      assert.equal((error as WhatsAppCloudError).status, 503);
+      assert.equal((error as WhatsAppCloudError).code, "whatsapp_template_not_configured");
+      assert.equal((error as WhatsAppCloudError).safeMessage, "La plantilla aprobada de WhatsApp no está disponible.");
+      return true;
+    },
+  );
+});
+
+test("WhatsApp Cloud approved template config is returned when configured", () => {
+  const config = getRequiredWhatsAppTemplateConfig(
+    buildProcessEnv({
+      WHATSAPP_ACCESS_TOKEN: "secret-token",
+      WHATSAPP_PHONE_NUMBER_ID: "123456789",
+      WHATSAPP_TEMPLATE_NAME: "entryflow_invitation",
+      WHATSAPP_TEMPLATE_LANGUAGE: "es_MX",
+    }),
+  );
+
+  assert.deepEqual(config, {
+    templateName: "entryflow_invitation",
+    templateLanguage: "es_MX",
+  });
+});
+
 test("WhatsApp Cloud payload normalizes Bolivia numbers and builds a text message", () => {
   const { payload } = buildWhatsAppCloudMessage({
     recipient: "+591 7737 4577",
     guestName: "WhatsApp Delivery E2E",
     eventName: "EntryFlow Summit",
-    invitationCode: "RES-WA-001",
+    accessCode: "RES-WA-001",
   });
 
   assert.equal(payload.to, "59177374577");
@@ -59,22 +114,26 @@ test("WhatsApp Cloud payload switches to a template when one is configured", () 
       recipient: "+591 7737 4577",
       guestName: "WhatsApp Delivery E2E",
       eventName: "EntryFlow Summit",
-      invitationCode: "RES-WA-001",
+      accessCode: "RES-WA-001",
     },
     {
       templateName: "entryflow_invitation",
-      templateLanguage: "es",
+      templateLanguage: "es_MX",
     },
   );
 
   assert.equal(payload.type, "template");
   assert.equal(payload.template?.name, "entryflow_invitation");
-  assert.equal(payload.template?.language.code, "es");
+  assert.equal(payload.template?.language.code, "es_MX");
+  assert.equal(payload.template?.components.length, 1);
+  assert.equal(payload.template?.components[0]?.type, "body");
+  assert.deepEqual(Object.keys(payload.template ?? {}).sort(), ["components", "language", "name"]);
+  assert.equal(payload.template?.components[0]?.parameters.length, 2);
   assert.deepEqual(payload.template?.components[0]?.parameters, [
     { type: "text", text: "WhatsApp Delivery E2E" },
     { type: "text", text: "EntryFlow Summit" },
-    { type: "text", text: "RES-WA-001" },
   ]);
+  assert.equal("text" in payload, false);
 });
 
 test("WhatsApp Cloud request init uses the server token and JSON body", () => {
@@ -87,7 +146,7 @@ test("WhatsApp Cloud request init uses the server token and JSON body", () => {
     recipient: "77374577",
     guestName: "Guest",
     eventName: "Event",
-    invitationCode: "RES-001",
+    accessCode: "RES-001",
   }).payload;
   const init = buildWhatsAppCloudRequestInit(config, payload);
 
@@ -104,14 +163,14 @@ test("WhatsApp Cloud request init preserves template payloads when configured", 
     phoneNumberId: "987654321",
     apiVersion: "v23.0",
     templateName: "entryflow_invitation",
-    templateLanguage: "es",
+    templateLanguage: "es_MX",
   };
   const payload = buildWhatsAppCloudMessage(
     {
       recipient: "77374577",
       guestName: "Guest",
       eventName: "Event",
-      invitationCode: "RES-001",
+      accessCode: "RES-001",
     },
     config,
   ).payload;
@@ -138,7 +197,7 @@ test("WhatsApp Cloud send succeeds with a provider message id and never exposes 
       recipient: "77374577",
       guestName: "Guest",
       eventName: "Event",
-      invitationCode: "RES-001",
+      accessCode: "RES-001",
     },
     fetchImpl,
     buildProcessEnv({
@@ -167,7 +226,7 @@ test("WhatsApp Cloud send rejects invalid numbers before calling Meta", async ()
           recipient: "abc",
           guestName: "Guest",
           eventName: "Event",
-          invitationCode: "RES-001",
+          accessCode: "RES-001",
         },
         async () => {
           fetchCalled = true;
@@ -198,7 +257,7 @@ test("WhatsApp Cloud send sanitizes provider errors", async () => {
           recipient: "77374577",
           guestName: "Guest",
           eventName: "Event",
-          invitationCode: "RES-001",
+          accessCode: "RES-001",
         },
         fetchImpl,
         buildProcessEnv({
@@ -249,7 +308,7 @@ test("WhatsApp Cloud send logs Meta error details without leaking secrets", asyn
             recipient: "77374577",
             guestName: "Guest",
             eventName: "Event",
-            invitationCode: "RES-001",
+            accessCode: "RES-001",
           },
           fetchImpl,
           buildProcessEnv({

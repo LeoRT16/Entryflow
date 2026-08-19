@@ -4,59 +4,12 @@ import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import {
-  getRequiredWhatsAppTemplateConfig,
-  sendWhatsAppCloudMessage,
+  uploadWhatsAppCloudMedia,
+  validateWhatsAppMediaUpload,
   WhatsAppCloudError,
 } from "@/features/access/domain/whatsapp-cloud";
 
-type WhatsAppSendRequestBody = {
-  recipient?: string;
-  guestName?: string;
-  eventName?: string;
-  accessCode?: string;
-  invitationCode?: string;
-};
-
-function getRequestString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 export async function POST(request: Request) {
-  let body: WhatsAppSendRequestBody;
-
-  try {
-    body = (await request.json()) as WhatsAppSendRequestBody;
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "invalid_request",
-          message: "La solicitud de WhatsApp no es válida.",
-        },
-      },
-      { status: 400 },
-    );
-  }
-
-  const recipient = getRequestString(body.recipient);
-  const guestName = getRequestString(body.guestName);
-  const eventName = getRequestString(body.eventName);
-  const accessCode = getRequestString(body.accessCode) || getRequestString(body.invitationCode);
-
-  if (!recipient || !guestName || !eventName || !accessCode) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "missing_fields",
-          message: "Faltan datos para preparar el envío por WhatsApp.",
-        },
-      },
-      { status: 400 },
-    );
-  }
-
   const authUser = await getSupabaseAuthUser();
 
   if (!authUser) {
@@ -65,7 +18,7 @@ export async function POST(request: Request) {
         ok: false,
         error: {
           code: "unauthenticated",
-          message: "Debés iniciar sesión para enviar invitaciones por WhatsApp.",
+          message: "Debés iniciar sesión para subir la imagen de WhatsApp.",
         },
       },
       { status: 401 },
@@ -88,6 +41,7 @@ export async function POST(request: Request) {
   }
 
   const currentProfile = workspace.profiles.find((profile) => profile.id === workspace.currentProfileId && !profile.deletedAt) ?? null;
+
   if (!currentProfile) {
     return NextResponse.json(
       {
@@ -115,26 +69,72 @@ export async function POST(request: Request) {
         ok: false,
         error: {
           code: "forbidden",
-          message: "No tenés permiso para enviar invitaciones por WhatsApp.",
+          message: "No tenés permiso para subir la imagen de WhatsApp.",
         },
       },
       { status: 403 },
     );
   }
 
-  try {
-    getRequiredWhatsAppTemplateConfig();
+  let formData: FormData;
 
-    const result = await sendWhatsAppCloudMessage({
-      recipient,
-      guestName,
-      eventName,
-      accessCode,
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "invalid_request",
+          message: "La solicitud de WhatsApp Media no es válida.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const fileEntry = formData.get("file");
+
+  if (!(fileEntry instanceof File)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "missing_file",
+          message: "Adjuntá una imagen válida para subir a WhatsApp.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  const validation = validateWhatsAppMediaUpload({
+    mimeType: fileEntry.type || "application/octet-stream",
+    size: fileEntry.size,
+  });
+
+  if (!validation.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "invalid_file",
+          message: validation.message,
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const result = await uploadWhatsAppCloudMedia({
+      file: fileEntry,
+      fileName: fileEntry.name || "invitation.png",
     });
 
     return NextResponse.json({
       ok: true,
-      messageId: result.messageId,
+      mediaId: result.mediaId,
     });
   } catch (error) {
     if (error instanceof WhatsAppCloudError) {
@@ -154,8 +154,8 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: {
-          code: "whatsapp_cloud_unexpected_error",
-          message: "No se pudo enviar la invitación por WhatsApp.",
+          code: "whatsapp_media_unexpected_error",
+          message: "No se pudo subir la imagen de WhatsApp.",
         },
       },
       { status: 500 },

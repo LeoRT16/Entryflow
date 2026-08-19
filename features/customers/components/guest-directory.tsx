@@ -9,10 +9,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { toPng } from "html-to-image";
 
 import InvitationCard from "@/features/access/components/invitation-card";
 import type { InvitationDesign } from "@/features/access/domain/access-domain";
+import { renderInvitationImageBlob } from "@/features/access/domain/invitation-image-export";
 import { INVITATION_RENDER_SIZE, getInvitationDownloadFilename } from "@/features/access/domain/invitation-rendering";
 import { canSendWhatsAppInvitation, normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
 import StatusBadge from "@/components/status-badge";
@@ -29,7 +29,6 @@ import type { GuestRecord } from "@/features/customers/types";
 import { getEventInvitationArtwork } from "@/features/events/domain/invitation-artwork";
 import { formatInvitationEventDateLabel, getEventInvitationOverlayLayout } from "@/features/events/domain/invitation-overlay";
 import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
-import { waitForInvitationFontsReady } from "@/features/events/domain/invitation-fonts";
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 20;
@@ -362,20 +361,18 @@ function GuestDrawer({
     setIsExportingInvitation(true);
 
     try {
-      await waitForInvitationFontsReady();
-      const dataUrl = await toPng(exportInvitationRef.current, {
-        cacheBust: true,
-        pixelRatio: 1,
-        backgroundColor: "#0b111a",
+      const { blob, filename } = await renderInvitationImageBlob(exportInvitationRef.current, {
+        filename: getInvitationDownloadFilename(visibleInvitationCode),
       });
-
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = getInvitationDownloadFilename(visibleInvitationCode);
+      link.href = objectUrl;
+      link.download = filename;
       link.rel = "noopener";
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 
       showToast({
         title: "Invitación descargada",
@@ -418,7 +415,7 @@ function GuestDrawer({
           recipient: guest.whatsapp,
           guestName: guest.guestName,
           eventName: currentEvent.name,
-          invitationCode: visibleInvitationCode,
+          accessCode: visibleInvitationCode,
         }),
       });
 
