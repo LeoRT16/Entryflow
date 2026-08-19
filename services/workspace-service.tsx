@@ -13,7 +13,11 @@ import {
 } from "@/features/accounts/domain/accounts-domain";
 import type { AccountPermissionKey, AccountRolePreset, AccountUser, OrganizationAccount, OrganizationMembership } from "@/features/accounts/types";
 import { admissionFilters, deliveryFilters, quickFilters, reservationFilters } from "@/features/customers/domain/customer-filters";
-import { buildGuestWhatsAppUpdate } from "@/features/customers/domain/customer-directory";
+import {
+  buildGuestProfileUpdate,
+  buildGuestWhatsAppUpdate,
+  validateGuestProfileUpdateInput,
+} from "@/features/customers/domain/customer-directory";
 import { searchGuests } from "@/features/check-in/domain/check-in-domain";
 import type {
   Event as PlatformEvent,
@@ -200,6 +204,12 @@ type WorkspaceServiceValue = {
   setReservationStatus: (reservationId: string, status: ReservationStatus) => void;
   assignReservationToTable: (reservationId: string, tableId: string) => void;
   moveGuestToTable: (guestId: string, tableId: string) => void;
+  updateGuestProfile: (params: {
+    guestId: string;
+    guestName: string;
+    carnet: string;
+    whatsapp: string;
+  }) => Promise<Guest>;
   updateGuestWhatsApp: (guestId: string, whatsapp: string) => Promise<Guest>;
   releaseTable: (tableId: string) => void;
   closeTable: (tableId: string) => void;
@@ -2039,6 +2049,66 @@ export function WorkspaceServiceProvider({
     [captureSnapshot, currentAccount.displayName, guests, notify, repositories.guests, requirePermission, restoreSnapshot],
   );
 
+  const updateGuestProfile = useCallback(
+    async ({ guestId, guestName, carnet, whatsapp }: { guestId: string; guestName: string; carnet: string; whatsapp: string }) => {
+      requirePermission("guest.edit");
+
+      if (currentOrganization.id !== currentEvent.organizationId) {
+        throw new Error("El contexto activo no coincide con la organización del evento.");
+      }
+
+      const snapshot = captureSnapshot();
+      const guest = guests.find((item) => item.id === guestId) ?? null;
+
+      if (!guest || guest.eventId !== currentEvent.id) {
+        throw new Error("Guest not found.");
+      }
+
+      const reservation = reservations.find((item) => item.id === guest.reservationId && item.eventId === currentEvent.id) ?? null;
+
+      if (!reservation) {
+        throw new Error("Guest not found in the active event.");
+      }
+
+      const validation = validateGuestProfileUpdateInput({ guestName, carnet, whatsapp });
+
+      if (!validation.ok) {
+        throw new Error(validation.fieldErrors.guestName ?? validation.fieldErrors.whatsapp ?? "No pudimos validar el perfil del invitado.");
+      }
+
+      const nextGuest = buildGuestProfileUpdate(guest, validation.value);
+
+      try {
+        await repositories.guests.upsert(nextGuest);
+      } catch (exception) {
+        restoreSnapshot(snapshot);
+        notify({
+          title: "No se pudo actualizar el invitado",
+          description: exception instanceof Error ? exception.message : "Supabase rechazó la actualización del invitado.",
+          tone: "danger",
+          icon: "alert",
+        });
+        throw exception;
+      }
+
+      setGuests((current) => current.map((item) => (item.id === guestId ? nextGuest : item)));
+      notify({
+        title: "Invitado actualizado",
+        description: `${nextGuest.guestName} quedó sincronizado en el workspace activo.`,
+        tone: "success",
+        icon: "guest",
+        undo: {
+          label: "Deshacer",
+          timeoutMs: 6000,
+          onUndo: () => restoreSnapshot(snapshot),
+        },
+      });
+
+      return nextGuest;
+    },
+    [captureSnapshot, currentEvent.id, currentEvent.organizationId, currentOrganization.id, guests, notify, repositories.guests, requirePermission, reservations, restoreSnapshot],
+  );
+
   const updateReservation = useCallback(
     async (input: ReservationUpdateInput) => {
       requirePermission("reservation.edit");
@@ -3465,6 +3535,7 @@ export function WorkspaceServiceProvider({
       updateReservationGuest,
       assignReservationToTable,
       moveGuestToTable,
+      updateGuestProfile,
       updateGuestWhatsApp,
       releaseTable,
       closeTable,
@@ -3527,6 +3598,7 @@ export function WorkspaceServiceProvider({
       guests,
       hasPermission,
       moveGuestToTable,
+      updateGuestProfile,
       updateGuestWhatsApp,
       organizations,
       profiles,

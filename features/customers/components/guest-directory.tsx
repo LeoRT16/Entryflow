@@ -26,6 +26,7 @@ import { useCheckInStore } from "@/services/workspace-service";
 import { matchesText, normalizeText } from "@/features/customers/utils";
 import { statusTone } from "@/features/customers/domain/customer-directory";
 import type { GuestRecord } from "@/features/customers/types";
+import GuestEditModal from "@/features/customers/components/guest-edit-modal";
 import { getEventInvitationArtwork } from "@/features/events/domain/invitation-artwork";
 import { formatInvitationEventDateLabel, getEventInvitationOverlayLayout } from "@/features/events/domain/invitation-overlay";
 import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
@@ -34,9 +35,10 @@ const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 20;
 
 export default function GuestDirectory() {
-  const { activeEvent, customers } = useCheckInStore();
+  const { activeEvent, can, customers, updateGuestProfile } = useCheckInStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+  const [editingGuestId, setEditingGuestId] = useState<string | null>(null);
 
   const searchRef = useRef<HTMLInputElement | null>(null);
   const drawerRef = useRef<HTMLDivElement | null>(null);
@@ -87,6 +89,8 @@ export default function GuestDirectory() {
   const hasMoreResults = matchedGuests.length > MAX_RESULTS;
   const selectedGuest =
     customers.guestRecords.find((guest) => guest.id === selectedGuestId) ?? null;
+  const editingGuest = customers.guestRecords.find((guest) => guest.id === editingGuestId) ?? null;
+  const canEditGuest = can("guest.edit");
 
   const closeDrawer = useCallback(() => {
     setSelectedGuestId(null);
@@ -124,6 +128,22 @@ export default function GuestDirectory() {
     lastTriggerRef.current = trigger ?? null;
     setSelectedGuestId(guest.id);
   };
+
+  const openEditGuest = (guest: GuestRecord) => {
+    setEditingGuestId(guest.id);
+  };
+
+  const handleSaveGuest = async ({
+    guestId,
+    guestName,
+    carnet,
+    whatsapp,
+  }: {
+    guestId: string;
+    guestName: string;
+    carnet: string;
+    whatsapp: string;
+  }) => updateGuestProfile({ guestId, guestName, carnet, whatsapp });
 
   const handleSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter" && visibleGuests[0]) {
@@ -225,9 +245,18 @@ export default function GuestDirectory() {
           key={selectedGuest.id}
           guest={selectedGuest}
           onClose={closeDrawer}
+          onEdit={canEditGuest ? openEditGuest : undefined}
           drawerRef={drawerRef}
         />
       ) : null}
+
+      <GuestEditModal
+        key={editingGuest ? `${editingGuest.id}-${editingGuestId ? "open" : "closed"}` : "closed"}
+        open={Boolean(editingGuest)}
+        guest={editingGuest}
+        onClose={() => setEditingGuestId(null)}
+        onSave={handleSaveGuest}
+      />
     </div>
   );
 }
@@ -280,10 +309,12 @@ function GuestResultCard({
 function GuestDrawer({
   guest,
   onClose,
+  onEdit,
   drawerRef,
 }: {
   guest: GuestRecord;
   onClose: () => void;
+  onEdit?: (guest: GuestRecord) => void;
   drawerRef: RefObject<HTMLDivElement | null>;
 }) {
   const { showToast } = useFeedback();
@@ -554,6 +585,15 @@ function GuestDrawer({
             >
               Cerrar
             </button>
+            {onEdit ? (
+              <button
+                type="button"
+                onClick={() => onEdit(guest)}
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
+              >
+                Editar
+              </button>
+            ) : null}
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto p-5">

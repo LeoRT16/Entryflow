@@ -7,6 +7,7 @@ import ReservationWizardModal, {
   wizardSteps,
 } from "@/features/reservations/components/reservation-wizard-modal";
 import ReservationOperationsBoard from "@/features/reservations/components/reservation-operations-board";
+import GuestEditModal from "@/features/customers/components/guest-edit-modal";
 import { buildGuestDraftsFromGuests, createGuestDraft } from "@/features/reservations/domain/reservation-draft";
 import {
   deriveFrequentCustomerFromHistory,
@@ -74,11 +75,13 @@ type ReservationFlowWorkspaceProps = Pick<
   | "tableSummaries"
   | "workspaceIntelligence"
   | "reservationSummaries"
+  | "can"
   | "createReservation"
   | "updateReservation"
   | "appendReservationGuests"
   | "addReservationGuest"
   | "updateReservationGuest"
+  | "updateGuestProfile"
   | "setReservationStatus"
   | "registerCheckIn"
 >;
@@ -135,11 +138,13 @@ export default function ReservationFlow() {
       tableSummaries={store.tableSummaries}
       workspaceIntelligence={store.workspaceIntelligence}
       reservationSummaries={store.reservationSummaries}
+      can={store.can}
       createReservation={store.createReservation}
       updateReservation={store.updateReservation}
       appendReservationGuests={store.appendReservationGuests}
       addReservationGuest={store.addReservationGuest}
       updateReservationGuest={store.updateReservationGuest}
+      updateGuestProfile={store.updateGuestProfile}
       setReservationStatus={store.setReservationStatus}
       registerCheckIn={store.registerCheckIn}
     />
@@ -164,11 +169,13 @@ function ReservationFlowWorkspace({
   tableSummaries,
   workspaceIntelligence,
   reservationSummaries,
+  can,
   createReservation,
   updateReservation,
   appendReservationGuests,
   addReservationGuest,
   updateReservationGuest,
+  updateGuestProfile,
   setReservationStatus,
   registerCheckIn,
 }: ReservationFlowWorkspaceProps) {
@@ -199,6 +206,7 @@ function ReservationFlowWorkspace({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(wizardDefaults.paymentMethod);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(wizardDefaults.paymentStatus);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [editingGuestId, setEditingGuestId] = useState<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -216,6 +224,7 @@ function ReservationFlowWorkspace({
   const reservationSubmissionGateRef = useRef(createReservationSubmissionGate());
   const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
   const [submissionActionLabel, setSubmissionActionLabel] = useState("Creando reserva…");
+  const canEditGuest = can("guest.edit");
 
   const eventOptions = useMemo(
     () =>
@@ -325,6 +334,22 @@ function ReservationFlowWorkspace({
     [editingReservation, reservationGuests],
   );
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
+  const editingGuest = reservationGuests.find((guest) => guest.id === editingGuestId) ?? null;
+
+  const handleSaveGuestProfile = useCallback(
+    ({
+      guestId,
+      guestName,
+      carnet,
+      whatsapp,
+    }: {
+      guestId: string;
+      guestName: string;
+      carnet: string;
+      whatsapp: string;
+    }) => updateGuestProfile({ guestId, guestName, carnet, whatsapp }),
+    [updateGuestProfile],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -889,6 +914,10 @@ function ReservationFlowWorkspace({
               operator: "Recepción",
             });
           }}
+          canEditGuest={canEditGuest}
+          onEditGuest={(guestId) => {
+            setEditingGuestId(guestId);
+          }}
         />
       </section>
 
@@ -961,6 +990,14 @@ function ReservationFlowWorkspace({
           submissionError={submissionError}
         />
       ) : null}
+
+      <GuestEditModal
+        key={editingGuest ? `${editingGuest.id}-${editingGuestId ? "open" : "closed"}` : "closed"}
+        open={Boolean(editingGuest)}
+        guest={editingGuest}
+        onClose={() => setEditingGuestId(null)}
+        onSave={handleSaveGuestProfile}
+      />
     </div>
   );
 }

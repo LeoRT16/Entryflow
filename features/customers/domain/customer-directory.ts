@@ -12,6 +12,7 @@ import type {
 } from "@/features/customers/types";
 import type { ReservationStatus } from "@/features/reservations/types";
 import { normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
+import { normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
 
 export function statusTone(status: AdmissionStatus | DeliveryStatus | ReservationStatus | string) {
   const normalizedReservationStatus = normalizeReservationStatus(status);
@@ -69,6 +70,85 @@ export function reservationFilterToStatus(filter: ReservationFilter): Reservatio
   }
 
   return null;
+}
+
+export type GuestProfileUpdateInput = {
+  guestName: string;
+  carnet: string;
+  whatsapp: string;
+};
+
+export type GuestProfileUpdateValidationResult =
+  | {
+      ok: true;
+      value: {
+        guestName: string;
+        carnet: string;
+        whatsapp: string;
+        noWhatsApp: boolean;
+      };
+    }
+  | {
+      ok: false;
+      fieldErrors: {
+        guestName?: string;
+        whatsapp?: string;
+      };
+    };
+
+type GuestProfileUpdateFieldErrors = {
+  guestName?: string;
+  whatsapp?: string;
+};
+
+export function validateGuestProfileUpdateInput(input: GuestProfileUpdateInput): GuestProfileUpdateValidationResult {
+  const guestName = input.guestName.trim();
+  const carnet = input.carnet.trim();
+  const whatsapp = input.whatsapp.trim();
+  const fieldErrors: GuestProfileUpdateFieldErrors = {};
+
+  if (!guestName) {
+    fieldErrors.guestName = "Ingresá un nombre.";
+  }
+
+  if (whatsapp && !normalizeWhatsAppPhoneNumber(whatsapp)) {
+    fieldErrors.whatsapp = "Ingresá un WhatsApp boliviano válido o dejalo vacío.";
+  }
+
+  if (Object.keys(fieldErrors).length) {
+    return {
+      ok: false,
+      fieldErrors,
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      guestName,
+      carnet,
+      whatsapp,
+      noWhatsApp: whatsapp.length === 0,
+    },
+  };
+}
+
+export function buildGuestProfileUpdate<T extends { guestName: string; carnet: string; whatsapp: string; noWhatsApp?: boolean }>(
+  guest: T,
+  input: {
+    guestName: string;
+    carnet: string;
+    whatsapp: string;
+    noWhatsApp: boolean;
+  },
+) {
+  return {
+    ...guest,
+    guestName: input.guestName,
+    carnet: input.carnet,
+    whatsapp: input.whatsapp,
+    noWhatsApp: input.noWhatsApp,
+  };
 }
 
 export function buildTimeline(guest: GuestRecord): TimelineEntry[] {
@@ -193,6 +273,8 @@ export function buildOperationalNotes(guest: GuestRecord): OperationalNote[] {
 }
 
 type WhatsAppUpdatableGuest = {
+  guestName: string;
+  carnet: string;
   whatsapp: string;
   noWhatsApp?: boolean;
   recentChange?: boolean;
@@ -213,9 +295,12 @@ export function buildGuestWhatsAppUpdate<T extends WhatsAppUpdatableGuest>(
   const nextWhatsApp = whatsapp.trim();
 
   return {
-    ...guest,
-    whatsapp: nextWhatsApp,
-    noWhatsApp: nextWhatsApp.length === 0,
+    ...buildGuestProfileUpdate(guest, {
+      guestName: guest.guestName.trim(),
+      carnet: guest.carnet.trim(),
+      whatsapp: nextWhatsApp,
+      noWhatsApp: nextWhatsApp.length === 0,
+    }),
     recentChange: true,
     operatorActivity: [
       ...guest.operatorActivity,

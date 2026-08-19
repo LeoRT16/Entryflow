@@ -19,6 +19,7 @@ type ReservationOperationsBoardProps = {
   reservations: ReservationSummary[];
   activeReservationId: string;
   isTerminalEvent?: boolean;
+  canEditGuest: boolean;
   onSelectReservation: (reservationId: string) => void;
   onMarkConfirmed: (reservationId: string) => void;
   onAddGuest: (reservationId: string, guest: ReservationGuestInput) => void;
@@ -28,6 +29,7 @@ type ReservationOperationsBoardProps = {
     action: ReservationGuestAction;
   }) => void;
   onRegisterCheckIn: (reservationId: string, guestId: string) => void;
+  onEditGuest: (guestId: string) => void;
 };
 
 export function getReservationGuestActionVisibility(
@@ -55,6 +57,8 @@ export default function ReservationOperationsBoard({
   onAddGuest,
   onGuestAction,
   onRegisterCheckIn,
+  onEditGuest,
+  canEditGuest,
   isTerminalEvent = false,
 }: ReservationOperationsBoardProps) {
   const { showToast } = useFeedback();
@@ -320,6 +324,8 @@ export default function ReservationOperationsBoard({
                   reservationStatus={activeReservation.status}
                   guest={guest}
                   eventTerminal={isTerminalEvent}
+                  canEditGuest={canEditGuest}
+                  onEdit={() => onEditGuest(guest.id)}
                   onConfirm={() => {
                     onGuestAction({ reservationId: activeReservation.id, guestId: guest.id, action: "confirm" });
                   }}
@@ -422,6 +428,8 @@ function ReservationGuestRow({
   guest,
   reservationStatus,
   eventTerminal,
+  canEditGuest,
+  onEdit,
   onConfirm,
   onCancel,
   onCheckIn,
@@ -431,6 +439,8 @@ function ReservationGuestRow({
   guest: ReservationSummary["guests"][number];
   reservationStatus: ReservationSummary["status"];
   eventTerminal: boolean;
+  canEditGuest: boolean;
+  onEdit: () => void;
   onConfirm: () => void;
   onCancel: () => void;
   onCheckIn: () => void;
@@ -482,6 +492,16 @@ function ReservationGuestRow({
         </div>
 
         <div className="flex min-w-0 flex-wrap gap-2 lg:justify-end">
+          {canEditGuest ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+            >
+              Editar
+            </button>
+          ) : null}
+
           {actionVisibility.showConfirm ? (
             <button
               type="button"
