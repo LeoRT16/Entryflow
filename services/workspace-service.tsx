@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 
 import { useFeedback } from "@/components/premium-feedback";
 import {
@@ -99,6 +99,26 @@ type WorkspaceServiceStatus = "loading" | "ready" | "empty" | "error";
 type WorkspaceSnapshot = Omit<WorkspaceBootstrap, "timelineEvents"> & {
   timelineEvents?: TimelineEvent[];
 };
+
+const WORKSPACE_REALTIME_TABLES = [
+  "organizations",
+  "venues",
+  "sectors",
+  "resources",
+  "events",
+  "guests",
+  "reservations",
+  "tables",
+  "checkins",
+  "venue_layouts",
+  "venue_layout_sectors",
+  "venue_layout_resources",
+  "event_layouts",
+  "event_layout_sectors",
+  "event_layout_resources",
+] as const;
+
+const TIMELINE_EVENTS_CHANNEL = "entryflow-timeline-events";
 
 type WorkspaceServiceValue = {
   users: AccountUser[];
@@ -838,6 +858,7 @@ export function WorkspaceServiceProvider({
   const [error, setError] = useState<Error | null>(null);
   const [browserAuthReady, setBrowserAuthReady] = useState(() => !hasSupabaseConfig());
   const hydratedRef = useRef(hasWorkspaceData(initialWorkspace) || !hasSupabaseConfig());
+  const reloadWorkspaceRef = useRef<() => Promise<void>>(async () => {});
   const checkInSubmissionInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -1031,6 +1052,10 @@ export function WorkspaceServiceProvider({
   }, [currentEventId, currentOrganizationId, currentProfileId, initialCurrentUserId, repositories]);
 
   useEffect(() => {
+    reloadWorkspaceRef.current = reloadWorkspace;
+  }, [reloadWorkspace]);
+
+  useEffect(() => {
     if (hydratedRef.current || !browserAuthReady) {
       return;
     }
@@ -1043,14 +1068,14 @@ export function WorkspaceServiceProvider({
 
     if (hasSupabaseConfig()) {
       const timeout = window.setTimeout(() => {
-        void reloadWorkspace();
+        void reloadWorkspaceRef.current();
       }, 0);
 
       return () => {
         window.clearTimeout(timeout);
       };
     }
-  }, [browserAuthReady, initialWorkspace, reloadWorkspace]);
+  }, [browserAuthReady, initialWorkspace]);
 
   useEffect(() => {
     if (!browserAuthReady) {
@@ -1063,30 +1088,44 @@ export function WorkspaceServiceProvider({
       return;
     }
 
-    const channel = client
-      .channel("entryflow-workspace")
-      .on("postgres_changes", { event: "*", schema: "public", table: "organizations" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "venues" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "sectors" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "resources" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "guests" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "tables" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "checkins" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "timeline_events" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "venue_layouts" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "venue_layout_sectors" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "venue_layout_resources" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "event_layouts" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "event_layout_sectors" }, () => void reloadWorkspace())
-      .on("postgres_changes", { event: "*", schema: "public", table: "event_layout_resources" }, () => void reloadWorkspace())
-      .subscribe();
+    const channel = client.channel("entryflow-workspace");
+
+    for (const table of WORKSPACE_REALTIME_TABLES) {
+      channel.on("postgres_changes", { event: "*", schema: "public", table }, () => {
+        void reloadWorkspaceRef.current();
+      });
+    }
+
+    channel.subscribe();
 
     return () => {
       void client.removeChannel(channel);
     };
-  }, [browserAuthReady, reloadWorkspace]);
+  }, [browserAuthReady]);
+
+  useEffect(() => {
+    if (!browserAuthReady) {
+      return;
+    }
+
+    const client = getSupabaseBrowserClient();
+
+    if (!client || !hasSupabaseConfig()) {
+      return;
+    }
+
+    const channel = client.channel(TIMELINE_EVENTS_CHANNEL);
+
+    channel.on("postgres_changes", { event: "*", schema: "public", table: "timeline_events" }, () => {
+      void reloadWorkspaceRef.current();
+    });
+
+    channel.subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [browserAuthReady]);
 
   const currentOrganization = useMemo(
     () => getOrganizationSelection(organizations, currentOrganizationId),
@@ -3644,7 +3683,11 @@ export function WorkspaceServiceProvider({
     ],
   );
 
-  return <WorkspaceServiceContext.Provider value={value}>{children}</WorkspaceServiceContext.Provider>;
+  return (
+    <WorkspaceServiceContext.Provider value={value}>
+      {children}
+    </WorkspaceServiceContext.Provider>
+  );
 }
 
 export function useWorkspaceServices() {
