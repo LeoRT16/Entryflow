@@ -27,12 +27,21 @@ export function ensureSupabaseConfig() {
   return { url, anonKey };
 }
 
-export function ensureSupabaseServiceConfig() {
-  const url = getSupabaseUrl();
-  const serviceRoleKey = getSupabaseServiceRoleKey() || getSupabaseAnonKey();
+export function ensureSupabaseServiceConfig(env: NodeJS.ProcessEnv = process.env) {
+  const url = env.NEXT_PUBLIC_SUPABASE_URL ?? env.SUPABASE_URL ?? "";
+  const serviceRoleKey = (env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
+  const missing: string[] = [];
 
-  if (!url || !serviceRoleKey) {
-    throw new Error("Supabase server environment variables are missing.");
+  if (!url) {
+    missing.push("SUPABASE_URL");
+  }
+
+  if (!serviceRoleKey) {
+    missing.push("SUPABASE_SERVICE_ROLE_KEY");
+  }
+
+  if (missing.length) {
+    throw new Error(`Missing required Supabase server configuration: ${missing.join(", ")}.`);
   }
 
   return { url, serviceRoleKey };

@@ -9,7 +9,7 @@ import type { TimelineEvent } from "@/features/timeline/types";
 import { compareTimelineEventsDescending } from "@/features/timeline/domain/timeline-domain";
 import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl, hasSupabaseConfig } from "@/lib/supabase/helpers";
+import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/supabase/helpers";
 import { getRolePresetBySlug, isBuiltinAccountRoleSlug } from "@/features/accounts/domain/accounts-domain";
 import {
   mapCheckInRowToDomain,
@@ -387,21 +387,14 @@ export function getWorkspaceAuthStateMessage(authState: WorkspaceAuthState) {
 
 export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: string | null }): Promise<WorkspaceBootstrap> {
   noStore();
-  if (!hasSupabaseConfig()) {
+
+  if (!authUser) {
     return createEmptyWorkspaceBootstrap();
   }
 
   // Canonical privileged read path: fetch with the server client, then narrow
   // the result to the authenticated workspace scope before returning data.
   const client = getSupabaseServerClient();
-
-  if (!client) {
-    return createEmptyWorkspaceBootstrap();
-  }
-
-  if (!authUser) {
-    return createEmptyWorkspaceBootstrap();
-  }
 
   const repositories = createSupabaseWorkspaceRepositories(client);
   const authIdentityEmails = await loadAuthIdentityEmailSet(client);
