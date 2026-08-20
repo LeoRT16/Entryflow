@@ -9,6 +9,7 @@ import { FeedbackProvider } from "@/components/premium-feedback";
 import StatusBadge from "@/components/status-badge";
 import KeyboardShortcutsHelp from "@/components/keyboard-shortcuts-help";
 import { focusFirstShortcutSearchInput, useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { isPublicRoute } from "@/features/navigation/public-routes";
 import { WorkspaceProvider } from "@/adapters/workspace-provider";
 import { useWorkspaceData } from "@/services/workspace-service";
 import { getWorkspaceAuthStateMessage, type WorkspaceBootstrap } from "@/services/workspace-loader";
@@ -23,9 +24,9 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
   const authState = initialWorkspace?.authState ?? { status: "signed-out" as const };
-  const isPublicRoute = pathname === "/login" || pathname.startsWith("/auth/");
+  const routeIsPublic = isPublicRoute(pathname);
 
-  if (isPublicRoute) {
+  if (routeIsPublic) {
     return <>{children}</>;
   }
 

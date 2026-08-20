@@ -11,6 +11,7 @@ import {
 import type { Event as PlatformEvent } from "../features/domain/types";
 import type { AccountPermissionKey } from "../features/accounts/types";
 import { getFirstAccessibleNavigationHref, getNavigationGroups, getNavigationPermissionForPath } from "../features/navigation/navigation";
+import { isPublicRoute } from "../features/navigation/public-routes";
 import { config as middlewareConfig } from "../middleware";
 
 const doorPermissions = new Set(getRolePresetBySlug("door").permissions);
@@ -248,4 +249,12 @@ test("middleware matcher covers private app routes and excludes only public/stat
   assert.equal(matcher.test("/_next/static/chunk.js"), false);
   assert.equal(matcher.test("/favicon.ico"), false);
   assert.deepEqual(middlewareConfig.matcher, ["/((?!_next/static|_next/image|favicon.ico|api/).*)"]);
+});
+
+test("public legal routes remain accessible without authentication", () => {
+  assert.equal(isPublicRoute("/privacy"), true);
+  assert.equal(isPublicRoute("/data-deletion"), true);
+  assert.equal(isPublicRoute("/login"), true);
+  assert.equal(isPublicRoute("/auth/setup-password"), true);
+  assert.equal(isPublicRoute("/reservations"), false);
 });

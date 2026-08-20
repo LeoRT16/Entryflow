@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getFirstAccessibleNavigationHref, getNavigationModuleForPath, getNavigationPermissionForPath } from "@/features/navigation/navigation";
+import { isPublicRoute } from "@/features/navigation/public-routes";
 import type { Database } from "@/lib/supabase/types";
 import { getSupabaseAnonKey, getSupabaseUrl, hasSupabaseConfig } from "@/lib/supabase/helpers";
 import { loadWorkspaceBootstrap } from "@/services/workspace-loader";
@@ -52,7 +53,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicRoute = pathname === "/login" || pathname.startsWith("/auth/");
+  const routeIsPublic = isPublicRoute(pathname);
 
   const workspace = user ? await loadWorkspaceBootstrap({ id: user.id, email: user.email }) : null;
 
@@ -73,7 +74,7 @@ export async function middleware(request: NextRequest) {
   const canAccessRoute = routePermission ? effectivePermissions.includes(routePermission) : true;
   const moduleAvailable = routeModule ? (!currentEvent ? false : isModuleEnabled(currentEvent, routeModule)) : true;
 
-  if (user && !isPublicRoute && workspace?.authState.status === "must-change-password") {
+  if (user && !routeIsPublic && workspace?.authState.status === "must-change-password") {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/auth/setup-password";
     redirectUrl.search = `?next=${encodeURIComponent(`${pathname}${search}` || "/")}`;
@@ -95,7 +96,7 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  if (user && !isPublicRoute && (!canAccessRoute || !moduleAvailable)) {
+  if (user && !routeIsPublic && (!canAccessRoute || !moduleAvailable)) {
     const fallbackHref = getFirstAccessibleNavigationHref((permission) => effectivePermissions.includes(permission), currentEvent ?? undefined);
 
     if (fallbackHref && fallbackHref !== pathname) {
@@ -108,7 +109,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (!user && !isPublicRoute) {
+  if (!user && !routeIsPublic) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.search = search ? `?next=${encodeURIComponent(`${pathname}${search}`)}` : "";
