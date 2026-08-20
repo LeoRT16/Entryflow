@@ -286,6 +286,32 @@ export type TimelineRow = SupabaseRowBase & {
   metadata: Json | null;
 };
 
+export type WhatsAppDeliveryAttemptRow = SupabaseRowBase & {
+  organization_id: string;
+  event_id: string;
+  guest_id: string;
+  reservation_id: string;
+  message_id: string;
+  attempt_number: number;
+  delivery_status: "accepted" | "sent" | "delivered" | "read" | "failed";
+  status_history: Array<{
+    status: "accepted" | "sent" | "delivered" | "read" | "failed";
+    timestamp: string;
+    detail?: string;
+    code?: string;
+  }>;
+  accepted_at: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  read_at: string | null;
+  failed_at: string | null;
+  failure_code: string | null;
+  failure_message: string | null;
+  failure_details: Json | null;
+  template_name: string;
+  template_language: string;
+};
+
 export type OperationRow = SupabaseRowBase & {
   event_id: string;
   timeline_event_id: string | null;
@@ -407,6 +433,11 @@ export type Database = {
         Row: TimelineRow;
         Insert: Omit<TimelineRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<TimelineRow, "created_at" | "updated_at" | "deleted_at">>;
         Update: Partial<TimelineRow>;
+      };
+      whatsapp_delivery_attempts: {
+        Row: WhatsAppDeliveryAttemptRow;
+        Insert: Omit<WhatsAppDeliveryAttemptRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<WhatsAppDeliveryAttemptRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<WhatsAppDeliveryAttemptRow>;
       };
       operations: {
         Row: OperationRow;

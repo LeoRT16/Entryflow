@@ -159,6 +159,7 @@ function buildWorkspaceScopeFixture(overrides: Partial<WorkspaceBootstrap> = {})
     checkIns: [],
     attempts: [],
     timelineEvents: [],
+    whatsappDeliveryAttempts: [],
     currentOrganizationId: "org-a",
     currentEventId: "event-a",
     currentProfileId: "profile-owner",

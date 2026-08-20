@@ -1,4 +1,5 @@
 import type { ReservationStatus } from "@/features/reservations/types";
+import type { WhatsAppDeliveryState } from "@/features/access/domain/whatsapp-delivery-tracking";
 
 export type EntryStatus = "Pendiente" | "Ingresó" | "Anulada" | "Bloqueada";
 
@@ -142,6 +143,7 @@ export type Guest = {
     title: string;
     detail: string;
   }>;
+  whatsappDelivery?: WhatsAppDeliveryState;
   operatorActivity: Array<{
     time: string;
     action: string;

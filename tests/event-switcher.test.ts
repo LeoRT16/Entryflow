@@ -34,6 +34,7 @@ function buildWorkspace(overrides: Partial<WorkspaceBootstrap> = {}): WorkspaceB
     checkIns: overrides.checkIns ?? [],
     attempts: overrides.attempts ?? [],
     timelineEvents: overrides.timelineEvents ?? [],
+    whatsappDeliveryAttempts: overrides.whatsappDeliveryAttempts ?? [],
     currentOrganizationId: overrides.currentOrganizationId ?? "org-1",
     currentEventId: overrides.currentEventId ?? "event-live",
     currentProfileId: overrides.currentProfileId ?? "profile-1",

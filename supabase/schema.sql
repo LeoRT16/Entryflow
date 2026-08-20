@@ -132,6 +132,31 @@ create table if not exists public.guests (
   deleted_at timestamptz
 );
 
+create table if not exists public.whatsapp_delivery_attempts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  event_id uuid not null references public.events(id) on delete cascade,
+  guest_id uuid not null references public.guests(id) on delete cascade,
+  reservation_id uuid not null references public.reservations(id) on delete cascade,
+  message_id text not null unique,
+  attempt_number integer not null default 1,
+  delivery_status text not null,
+  status_history jsonb not null default '[]'::jsonb,
+  accepted_at timestamptz,
+  sent_at timestamptz,
+  delivered_at timestamptz,
+  read_at timestamptz,
+  failed_at timestamptz,
+  failure_code text,
+  failure_message text,
+  failure_details jsonb,
+  template_name text not null,
+  template_language text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 create table if not exists public.reservations (
   id uuid primary key default gen_random_uuid(),
   code text not null,
@@ -297,6 +322,7 @@ create trigger set_updated_at_venues before update on public.venues for each row
 create trigger set_updated_at_sectors before update on public.sectors for each row execute function public.set_updated_at();
 create trigger set_updated_at_resources before update on public.resources for each row execute function public.set_updated_at();
 create trigger set_updated_at_guests before update on public.guests for each row execute function public.set_updated_at();
+create trigger set_updated_at_whatsapp_delivery_attempts before update on public.whatsapp_delivery_attempts for each row execute function public.set_updated_at();
 create trigger set_updated_at_reservations before update on public.reservations for each row execute function public.set_updated_at();
 create trigger set_updated_at_tables before update on public.tables for each row execute function public.set_updated_at();
 create trigger set_updated_at_checkins before update on public.checkins for each row execute function public.set_updated_at();
@@ -312,6 +338,7 @@ alter table public.venues enable row level security;
 alter table public.sectors enable row level security;
 alter table public.resources enable row level security;
 alter table public.guests enable row level security;
+alter table public.whatsapp_delivery_attempts enable row level security;
 alter table public.reservations enable row level security;
 alter table public.tables enable row level security;
 alter table public.checkins enable row level security;
@@ -327,6 +354,7 @@ create policy if not exists "Allow all access" on public.venues for all using (t
 create policy if not exists "Allow all access" on public.sectors for all using (true) with check (true);
 create policy if not exists "Allow all access" on public.resources for all using (true) with check (true);
 create policy if not exists "Allow all access" on public.guests for all using (true) with check (true);
+create policy if not exists "Allow all access" on public.whatsapp_delivery_attempts for all using (true) with check (true);
 create policy if not exists "Allow all access" on public.reservations for all using (true) with check (true);
 create policy if not exists "Allow all access" on public.tables for all using (true) with check (true);
 create policy if not exists "Allow all access" on public.checkins for all using (true) with check (true);

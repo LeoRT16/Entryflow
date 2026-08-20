@@ -96,8 +96,9 @@ import {
 } from "@/services/workspace-layout-resolution";
 
 type WorkspaceServiceStatus = "loading" | "ready" | "empty" | "error";
-type WorkspaceSnapshot = Omit<WorkspaceBootstrap, "timelineEvents"> & {
+type WorkspaceSnapshot = Omit<WorkspaceBootstrap, "timelineEvents" | "whatsappDeliveryAttempts"> & {
   timelineEvents?: TimelineEvent[];
+  whatsappDeliveryAttempts?: WorkspaceBootstrap["whatsappDeliveryAttempts"];
 };
 
 const WORKSPACE_REALTIME_TABLES = [
@@ -107,6 +108,7 @@ const WORKSPACE_REALTIME_TABLES = [
   "resources",
   "events",
   "guests",
+  "whatsapp_delivery_attempts",
   "reservations",
   "tables",
   "checkins",

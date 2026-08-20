@@ -7,6 +7,7 @@ import type { ReservationRecord } from "@/features/reservations/types";
 import type { TableRecord } from "@/features/tables/types";
 import type { TimelineEvent } from "@/features/timeline/types";
 import { compareTimelineEventsDescending } from "@/features/timeline/domain/timeline-domain";
+import { buildWhatsAppDeliveryStateIndex } from "@/features/access/domain/whatsapp-delivery-tracking";
 import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from "@/lib/supabase/helpers";
@@ -26,7 +27,7 @@ import {
   mapTimelineRowToDomain,
   mapVenueRowToDomain,
 } from "@/lib/supabase/mappers";
-import type { CheckInRow, EventRow, GuestRow, OrganizationRow, ProfileRow, ResourceRow, ReservationRow, RoleRow, SectorRow, TableRow, TimelineRow, UserRow, VenueRow } from "@/lib/supabase/types";
+import type { CheckInRow, EventRow, GuestRow, OrganizationRow, ProfileRow, ResourceRow, ReservationRow, RoleRow, SectorRow, TableRow, TimelineRow, UserRow, VenueRow, WhatsAppDeliveryAttemptRow } from "@/lib/supabase/types";
 import { createEmptyWorkspaceLayouts, loadWorkspaceLayouts, type WorkspaceLayoutCollections } from "@/services/workspace-layouts";
 import { buildEventSelectionCandidate, pickCurrentEventId as pickCurrentEventSelectionId } from "@/features/events/domain";
 
@@ -53,6 +54,7 @@ export type WorkspaceBootstrap = {
   checkIns: ReturnType<typeof mapCheckInRowToDomain>[];
   attempts: CheckInAttempt[];
   timelineEvents: TimelineEvent[];
+  whatsappDeliveryAttempts: WhatsAppDeliveryAttemptRow[];
   currentOrganizationId: string;
   currentEventId: string;
   currentProfileId: string;
@@ -191,6 +193,7 @@ function createEmptyWorkspaceBootstrap(): WorkspaceBootstrap {
     checkIns: [],
     attempts: [],
     timelineEvents: [],
+    whatsappDeliveryAttempts: [],
     currentOrganizationId: "",
     currentEventId: "",
     currentProfileId: "",
@@ -413,6 +416,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     tableRows,
     checkInRows,
     timelineRows,
+    whatsappDeliveryAttemptRows,
   ] = await Promise.all([
     fetchSupabaseTable<UserRow>("users"),
     fetchSupabaseTable<RoleRow>("roles"),
@@ -427,6 +431,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     fetchSupabaseTable<TableRow>("tables"),
     fetchSupabaseTable<CheckInRow>("checkins"),
     fetchSupabaseTable<TimelineRow>("timeline_events"),
+    fetchSupabaseTable<WhatsAppDeliveryAttemptRow>("whatsapp_delivery_attempts"),
   ]);
 
   let linkedUserRow = userRows.find((row) => row.auth_user_id === authUser.id && row.deleted_at === null) ?? null;
@@ -547,6 +552,12 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
   );
   const checkInRowsForWorkspace = checkInRows.filter((checkIn) => allowedEventIds.has(checkIn.event_id) && checkIn.deleted_at === null);
   const timelineRowsForWorkspace = timelineRows.filter((timeline) => allowedEventIds.has(timeline.event_id));
+  const whatsappDeliveryAttemptRowsForWorkspace = whatsappDeliveryAttemptRows.filter(
+    (attempt) =>
+      attempt.deleted_at === null &&
+      allowedEventIds.has(attempt.event_id) &&
+      allowedOrganizationIds.has(attempt.organization_id),
+  );
 
   const layouts = await loadWorkspaceLayouts(repositories);
   const venueLayouts = layouts.venueLayouts.filter((layout) => allowedVenueIds.has(layout.venueId) && layout.status === "active");
@@ -593,7 +604,11 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
   const sectors = sectorRowsForWorkspace.map((row) => mapSectorRowToDomain(row));
   const resources = resourceRowsForWorkspace.map((row) => mapResourceRowToDomain(row));
   const events = eventRowsForWorkspace.map((row) => mapEventRowToDomain(row));
-  const guests = guestRowsForWorkspace.map((row) => mapGuestRowToDomain(row));
+  const whatsappDeliveryStateByGuestId = buildWhatsAppDeliveryStateIndex(whatsappDeliveryAttemptRowsForWorkspace);
+  const guests = guestRowsForWorkspace.map((row) => ({
+    ...mapGuestRowToDomain(row),
+    whatsappDelivery: whatsappDeliveryStateByGuestId.get(row.id),
+  }));
   const reservations = reservationRowsForWorkspace.map((row) => mapReservationRowToDomain(row));
   const tables = tableRowsForWorkspace.map((row) => mapTableRowToDomain(row));
   const checkIns = buildActiveCheckIns(checkInRowsForWorkspace);
@@ -631,6 +646,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     checkIns,
     attempts: buildAttemptsFromLogs(timelineEvents, currentEventId),
     timelineEvents,
+    whatsappDeliveryAttempts: whatsappDeliveryAttemptRowsForWorkspace,
     currentOrganizationId,
     currentEventId,
     currentProfileId,

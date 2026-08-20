@@ -1,4 +1,5 @@
 import type { ReservationStatus } from "@/features/reservations/types";
+import type { WhatsAppDeliveryState } from "@/features/access/domain/whatsapp-delivery-tracking";
 
 export type EventOption = {
   name: string;
@@ -86,6 +87,7 @@ export type GuestRecord = {
   incidents?: GuestIncident[];
   auditRows?: AuditRow[];
   deliveryHistory: DeliveryHistoryItem[];
+  whatsappDelivery?: WhatsAppDeliveryState;
   operatorActivity: OperatorActivityItem[];
   internalNotes?: string;
 };

@@ -16,6 +16,11 @@ import { renderInvitationImageBlob } from "@/features/access/domain/invitation-i
 import { INVITATION_RENDER_SIZE, getInvitationDownloadFilename } from "@/features/access/domain/invitation-rendering";
 import { canSendWhatsAppInvitation, normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
 import { prepareWhatsAppInvitationMediaBlob } from "@/features/access/domain/whatsapp-invitation-media";
+import {
+  getWhatsAppDeliveryStatusLabel,
+  getWhatsAppDeliveryStatusTone,
+  type WhatsAppDeliveryState,
+} from "@/features/access/domain/whatsapp-delivery-tracking";
 import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
 import Topbar from "@/components/topbar";
@@ -272,6 +277,8 @@ function GuestResultCard({
   isSelected: boolean;
 }) {
   const quickRead = buildGuestQuickReadSummary(guest);
+  const deliveryStatus = getGuestDeliveryStatusLabel(guest);
+  const deliveryTone = getGuestDeliveryStatusTone(guest);
 
   return (
     <button
@@ -292,7 +299,7 @@ function GuestResultCard({
           </div>
           <div className="flex min-w-0 flex-wrap justify-end gap-2">
             <StatusBadge variant={statusTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
-            <StatusBadge variant={statusTone(guest.deliveryStatus)}>{guest.deliveryStatus}</StatusBadge>
+            <StatusBadge variant={deliveryTone}>{deliveryStatus}</StatusBadge>
           </div>
         </div>
 
@@ -300,7 +307,7 @@ function GuestResultCard({
           <CompactMeta label="Reserva" value={quickRead.reservation} />
           <CompactMeta label="Mesa / espacio" value={quickRead.space} />
           <CompactMeta label="Ingreso" value={quickRead.entryStatus} />
-          <CompactMeta label="Entrega / invitación" value={guest.deliveryStatus} />
+          <CompactMeta label="Entrega / invitación" value={deliveryStatus} />
         </div>
       </div>
     </button>
@@ -476,6 +483,7 @@ function GuestDrawer({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          guestId: guest.id,
           recipient: guest.whatsapp,
           guestName: guest.guestName,
           eventName: currentEvent.name,
@@ -484,22 +492,34 @@ function GuestDrawer({
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            error?: { message?: string };
+            providerAccepted?: boolean;
+            trackingPersisted?: boolean;
+            status?: string;
+            warning?: { message?: string };
+          }
+        | null;
 
       if (!response.ok) {
         throw new Error(payload?.error?.message || "No se pudo enviar la invitación por WhatsApp.");
       }
 
+      const trackingPersisted = payload?.trackingPersisted !== false;
       const timestamp = new Date().toISOString();
       const nextDeliveryStatus =
         guest.deliveryStatus === "Enviada" || guest.deliveryStatus === "Reenviada" || guest.deliveryStatus === "Vista"
           ? "Reenviada"
           : "Enviada";
+      const nextGuestActivityDetail = trackingPersisted
+        ? "Envío por WhatsApp aceptado por proveedor"
+        : payload?.warning?.message || "WhatsApp aceptó el mensaje, pero EntryFlow no pudo registrar su seguimiento. No lo reenvíes todavía.";
 
       const nextGuestActivity = {
         time: timestamp.slice(11, 16),
         title: nextDeliveryStatus,
-        detail: "Envío por WhatsApp aceptado por proveedor",
+        detail: nextGuestActivityDetail,
       };
 
       setGuestsState((current) =>
@@ -511,15 +531,30 @@ function GuestDrawer({
                 noInvitationSent: false,
                 recentChange: true,
                 deliveryHistory: [...item.deliveryHistory, nextGuestActivity],
+                whatsappDelivery: {
+                  messageId: item.whatsappDelivery?.messageId || visibleInvitationCode,
+                  attemptNumber: (item.whatsappDelivery?.attemptNumber ?? 0) + 1,
+                  currentStatus: "accepted",
+                  updatedAt: timestamp,
+                  acceptedAt: timestamp,
+                },
               }
             : item,
         ),
       );
-      showToast({
-        title: nextDeliveryStatus === "Reenviada" ? "Invitación reenviada" : "Invitación enviada",
-        description: "El estado visible se actualizó en el detalle del invitado.",
-        tone: "success",
-      });
+      if (trackingPersisted) {
+        showToast({
+          title: nextDeliveryStatus === "Reenviada" ? "Invitación reenviada" : "Invitación enviada",
+          description: "El estado visible se actualizó en el detalle del invitado.",
+          tone: "success",
+        });
+      } else {
+        showToast({
+          title: "WhatsApp aceptó el envío",
+          description: payload?.warning?.message || "No pudimos registrar su seguimiento. No lo reenvíes todavía.",
+          tone: "warning",
+        });
+      }
     } catch (error) {
       showToast({
         title: "No se pudo enviar la invitación",
@@ -605,7 +640,7 @@ function GuestDrawer({
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <StatusBadge variant={statusTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
-                <StatusBadge variant={statusTone(guest.deliveryStatus)}>{guest.deliveryStatus}</StatusBadge>
+                <StatusBadge variant={getGuestDeliveryStatusTone(guest)}>{getGuestDeliveryStatusLabel(guest)}</StatusBadge>
                 <StatusBadge variant={getReservationStatusTone(guest.reservationStatus)}>
                   {formatReservationStatus(guest.reservationStatus)}
                 </StatusBadge>
@@ -639,7 +674,7 @@ function GuestDrawer({
                 <CompactMeta label="Reserva" value={`${guest.reservationCode} · ${guest.reservationName}`} />
                 <CompactMeta label="Mesa / espacio" value={guest.tableName || "Sin mesa"} />
                 <CompactMeta label="Estado de ingreso" value={guest.admissionStatus} />
-                <CompactMeta label="Estado de entrega" value={guest.deliveryStatus} />
+                <CompactMeta label="Estado de entrega" value={getGuestDeliveryStatusLabel(guest)} />
               </div>
             </section>
 
@@ -651,7 +686,7 @@ function GuestDrawer({
                     Revisa, descarga o comparte la misma invitación real que consume Ingreso.
                   </p>
                 </div>
-                <StatusBadge variant={statusTone(guest.deliveryStatus)}>{guest.deliveryStatus}</StatusBadge>
+                <StatusBadge variant={getGuestDeliveryStatusTone(guest)}>{getGuestDeliveryStatusLabel(guest)}</StatusBadge>
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -724,6 +759,30 @@ function GuestDrawer({
       </div>
     </div>
   );
+}
+
+function getGuestDeliveryState(guest: GuestRecord): WhatsAppDeliveryState | undefined {
+  return guest.whatsappDelivery;
+}
+
+function getGuestDeliveryStatusLabel(guest: GuestRecord) {
+  const deliveryState = getGuestDeliveryState(guest);
+
+  if (deliveryState) {
+    return getWhatsAppDeliveryStatusLabel(deliveryState.currentStatus);
+  }
+
+  return guest.deliveryStatus;
+}
+
+function getGuestDeliveryStatusTone(guest: GuestRecord) {
+  const deliveryState = getGuestDeliveryState(guest);
+
+  if (deliveryState) {
+    return getWhatsAppDeliveryStatusTone(deliveryState.currentStatus);
+  }
+
+  return statusTone(guest.deliveryStatus);
 }
 
 function CompactMeta({

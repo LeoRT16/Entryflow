@@ -152,8 +152,11 @@ export function buildGuestProfileUpdate<T extends { guestName: string; carnet: s
 }
 
 export function buildTimeline(guest: GuestRecord): TimelineEntry[] {
-  const sentEntry = guest.deliveryHistory.find((entry) => entry.title === "Enviada" || entry.title === "Reenviada");
-  const openEntry = guest.deliveryHistory.find((entry) => entry.title === "Vista");
+  const sentEntry = guest.deliveryHistory.find((entry) =>
+    ["Aceptado", "Enviada", "Reenviada", "Enviado"].includes(entry.title),
+  );
+  const deliveredEntry = guest.deliveryHistory.find((entry) => entry.title === "Entregado");
+  const openEntry = guest.deliveryHistory.find((entry) => ["Vista", "Leída", "Leido", "Leído"].includes(entry.title));
   const transferEntry = guest.operatorActivity.find(
     (entry) => entry.action.toLowerCase().includes("transferencia") || entry.action.toLowerCase().includes("transfer"),
   );
@@ -169,8 +172,16 @@ export function buildTimeline(guest: GuestRecord): TimelineEntry[] {
   if (sentEntry) {
     items.push({
       time: sentEntry.time,
-      title: sentEntry.title === "Reenviada" ? "Invitación reenviada" : "Invitación enviada",
-      detail: "Envío por WhatsApp aceptado por proveedor",
+      title:
+        sentEntry.title === "Aceptado"
+          ? "Invitación aceptada"
+          : sentEntry.title === "Reenviada"
+            ? "Invitación reenviada"
+            : "Invitación enviada",
+      detail:
+        sentEntry.title === "Aceptado"
+          ? "Meta aceptó la solicitud de envío."
+          : "Envío por WhatsApp aceptado por proveedor",
       tone: "info",
     });
   } else if (guest.noInvitationSent) {
@@ -179,6 +190,15 @@ export function buildTimeline(guest: GuestRecord): TimelineEntry[] {
       title: "Invitación pendiente",
       detail: "Todavía no se registró el envío",
       tone: "warning",
+    });
+  }
+
+  if (deliveredEntry) {
+    items.push({
+      time: deliveredEntry.time,
+      title: "Invitación entregada",
+      detail: "El mensaje llegó al teléfono.",
+      tone: "success",
     });
   }
 

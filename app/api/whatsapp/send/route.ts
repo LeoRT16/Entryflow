@@ -1,15 +1,26 @@
 import { NextResponse } from "next/server";
 
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
+import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
 import {
+  getWhatsAppImageTemplateConfig,
   getRequiredWhatsAppTemplateConfig,
   sendWhatsAppCloudMessage,
   WhatsAppCloudError,
 } from "@/features/access/domain/whatsapp-cloud";
+import {
+  getWhatsAppDeliveryStatusDetail,
+} from "@/features/access/domain/whatsapp-delivery-tracking";
+import {
+  buildWhatsAppSendAcceptedGuestUpdate,
+  buildWhatsAppSendAcceptanceResponse,
+} from "@/features/access/domain/whatsapp-send-acceptance";
 
 type WhatsAppSendRequestBody = {
+  guestId?: string;
   recipient?: string;
   guestName?: string;
   eventName?: string;
@@ -21,6 +32,10 @@ type WhatsAppSendRequestBody = {
 function getRequestString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
+
+type WhatsAppDeliveryAttemptsTable = {
+  upsert(values: Record<string, unknown>, options: { onConflict: string }): Promise<unknown>;
+};
 
 export async function POST(request: Request) {
   let body: WhatsAppSendRequestBody;
@@ -45,6 +60,7 @@ export async function POST(request: Request) {
   const eventName = getRequestString(body.eventName);
   const accessCode = getRequestString(body.accessCode) || getRequestString(body.invitationCode);
   const mediaId = getRequestString(body.mediaId);
+  const guestId = getRequestString(body.guestId);
 
   if (!recipient || !guestName || !eventName || !accessCode) {
     return NextResponse.json(
@@ -124,10 +140,26 @@ export async function POST(request: Request) {
     );
   }
 
+  const guest =
+    (guestId ? workspace.guests.find((item) => item.id === guestId) : null) ??
+    workspace.guests.find((item) => item.accessCode === accessCode || item.invitationCode === accessCode) ??
+    null;
+
+  if (!guest) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "guest_not_found",
+          message: "No pudimos resolver el invitado para el envío de WhatsApp.",
+        },
+      },
+      { status: 404 },
+    );
+  }
+
   try {
-    if (!mediaId) {
-      getRequiredWhatsAppTemplateConfig();
-    }
+    const templateConfig = mediaId ? getWhatsAppImageTemplateConfig() : getRequiredWhatsAppTemplateConfig();
 
     const result = await sendWhatsAppCloudMessage({
       recipient,
@@ -137,10 +169,80 @@ export async function POST(request: Request) {
       ...(mediaId ? { mediaId } : {}),
     });
 
-    return NextResponse.json({
-      ok: true,
-      messageId: result.messageId,
+    const client = getSupabaseServerClient();
+    const repositories = createSupabaseWorkspaceRepositories(client);
+    const deliveryAttemptsTable = client.from("whatsapp_delivery_attempts" as never) as unknown as WhatsAppDeliveryAttemptsTable;
+    const acceptedAt = new Date().toISOString();
+    const messageId = result.messageId?.trim() || "";
+    const attemptNumber =
+      workspace.whatsappDeliveryAttempts.filter((attempt) => attempt.guest_id === guest.id && !attempt.deleted_at).reduce((max, attempt) => Math.max(max, attempt.attempt_number), 0) + 1;
+    const deliveryStatus = "accepted" as const;
+    let trackingPersisted = false;
+
+    if (messageId) {
+      try {
+        await deliveryAttemptsTable.upsert(
+          {
+            organization_id: workspace.currentOrganizationId,
+            event_id: workspace.currentEventId,
+            guest_id: guest.id,
+            reservation_id: guest.reservationId,
+            message_id: messageId,
+            attempt_number: attemptNumber,
+            delivery_status: deliveryStatus,
+            status_history: [
+              {
+                status: deliveryStatus,
+                timestamp: acceptedAt,
+                detail: getWhatsAppDeliveryStatusDetail(deliveryStatus),
+              },
+            ],
+            accepted_at: acceptedAt,
+            sent_at: null,
+            delivered_at: null,
+            read_at: null,
+            failed_at: null,
+            failure_code: null,
+            failure_message: null,
+            failure_details: null,
+            template_name: templateConfig?.templateName ?? "",
+            template_language: templateConfig?.templateLanguage ?? "",
+          },
+          { onConflict: "message_id" },
+        );
+        trackingPersisted = true;
+      } catch (error) {
+        console.error("WhatsApp delivery attempt persistence failed", {
+          guestId: guest.id,
+          eventId: workspace.currentEventId,
+          messageId,
+          error: error instanceof Error ? error.message : "unknown",
+        });
+      }
+    } else {
+      console.error("WhatsApp Cloud response missing message id", {
+        guestId: guest.id,
+        eventId: workspace.currentEventId,
+      });
+    }
+
+    const nextGuest = buildWhatsAppSendAcceptedGuestUpdate({
+      guest,
+      attemptNumber,
+      acceptedAt,
+      messageId: messageId || guest.accessCode || guest.invitationCode,
+      trackingPersisted,
     });
+
+    await repositories.guests.upsert(nextGuest).catch((error) => {
+      console.error("WhatsApp guest persistence failed", {
+        guestId: guest.id,
+        messageId: result.messageId ?? null,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+    });
+
+    return NextResponse.json(buildWhatsAppSendAcceptanceResponse(trackingPersisted));
   } catch (error) {
     if (error instanceof WhatsAppCloudError) {
       return NextResponse.json(
