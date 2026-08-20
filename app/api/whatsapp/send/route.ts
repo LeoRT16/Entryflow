@@ -37,10 +37,37 @@ function getRequestString(value: unknown) {
 type WhatsAppDeliveryAttemptsTable = {
   upsert(values: Record<string, unknown>, options: { onConflict: string }): {
     select(columns: "id"): {
-      single(): Promise<{ data: { id: string } | null; error: { code?: string; message: string } | null }>;
+      single(): Promise<{
+        data: { id: string } | null;
+        error: { code?: string; message: string; details?: string | null; hint?: string | null } | null;
+      }>;
     };
   };
 };
+
+function logWhatsAppTrackingPersistenceFailure(params: {
+  branch: string;
+  error?: { code?: string; message?: string; details?: string | null; hint?: string | null } | null;
+  hasOrganizationId: boolean;
+  hasEventId: boolean;
+  hasGuestId: boolean;
+  hasReservationId: boolean;
+  hasMessageId: boolean;
+}) {
+  console.error("[WhatsApp Tracking] persistence failed", {
+    table: "whatsapp_delivery_attempts",
+    branch: params.branch,
+    hasOrganizationId: params.hasOrganizationId,
+    hasEventId: params.hasEventId,
+    hasGuestId: params.hasGuestId,
+    hasReservationId: params.hasReservationId,
+    hasMessageId: params.hasMessageId,
+    errorCode: params.error?.code ?? null,
+    errorMessage: params.error?.message ?? null,
+    errorDetails: params.error?.details ?? null,
+    errorHint: params.error?.hint ?? null,
+  });
+}
 
 export async function POST(request: Request) {
   let body: WhatsAppSendRequestBody;
@@ -223,17 +250,36 @@ export async function POST(request: Request) {
         trackingPersisted = persistence.trackingPersisted;
 
         if (!persistence.trackingPersisted) {
-          console.error("WhatsApp delivery attempt persistence failed", {
-            eventId: workspace.currentEventId,
-            branch: persistence.branch,
-            errorCode: persistence.error?.code ?? null,
+          logWhatsAppTrackingPersistenceFailure({
+            branch: "whatsapp_tracking_persistence_failed",
+            error: persistence.error,
+            hasOrganizationId: Boolean(workspace.currentOrganizationId),
+            hasEventId: Boolean(workspace.currentEventId),
+            hasGuestId: Boolean(guest.id),
+            hasReservationId: Boolean(guest.reservationId),
+            hasMessageId: Boolean(messageId),
           });
         }
       } catch (error) {
-        console.error("WhatsApp delivery attempt persistence failed", {
-          eventId: workspace.currentEventId,
-          branch: "upsert_error",
-          errorCode: error instanceof Error ? error.name : "unknown",
+        const caughtError = error as {
+          code?: string;
+          message?: string;
+          details?: string | null;
+          hint?: string | null;
+        } | null;
+
+        console.error("[WhatsApp Tracking] persistence failed", {
+          table: "whatsapp_delivery_attempts",
+          branch: "whatsapp_tracking_persistence_failed",
+          hasOrganizationId: Boolean(workspace.currentOrganizationId),
+          hasEventId: Boolean(workspace.currentEventId),
+          hasGuestId: Boolean(guest.id),
+          hasReservationId: Boolean(guest.reservationId),
+          hasMessageId: Boolean(messageId),
+          errorCode: caughtError?.code ?? (error instanceof Error ? error.name : "unknown"),
+          errorMessage: caughtError?.message ?? (error instanceof Error ? error.message : "unknown"),
+          errorDetails: caughtError?.details ?? null,
+          errorHint: caughtError?.hint ?? null,
         });
       }
     } else {
