@@ -7,6 +7,7 @@ import Topbar from "@/components/topbar";
 import StatusBadge from "@/components/status-badge";
 import { isTerminalEventStatus } from "@/features/events/domain";
 import { buildLiveDashboardModel } from "@/features/events/domain/live-dashboard";
+import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
 import { useCheckInStore } from "@/services/workspace-service";
 
 function toneToVariant(tone: "success" | "warning" | "danger" | "info") {
@@ -224,7 +225,7 @@ export default function EventCommandCenter() {
                   key={event.id}
                   tone={event.tone}
                   href="/timeline"
-                  timestamp={event.timestamp}
+                  timestamp={formatTimelineDisplayTime(event.timestamp)}
                   title={event.title}
                   description={event.description}
                 />

@@ -15,6 +15,7 @@ import type { InvitationDesign } from "@/features/access/domain/access-domain";
 import { renderInvitationImageBlob } from "@/features/access/domain/invitation-image-export";
 import { INVITATION_RENDER_SIZE, getInvitationDownloadFilename } from "@/features/access/domain/invitation-rendering";
 import { canSendWhatsAppInvitation, normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
+import { prepareWhatsAppInvitationMediaBlob } from "@/features/access/domain/whatsapp-invitation-media";
 import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
 import Topbar from "@/components/topbar";
@@ -437,6 +438,38 @@ function GuestDrawer({
     setIsSendingWhatsApp(true);
 
     try {
+      if (!exportInvitationRef.current) {
+        throw new Error("No se pudo preparar la invitación para WhatsApp.");
+      }
+
+      const invitationImage = await renderInvitationImageBlob(exportInvitationRef.current, {
+        filename: getInvitationDownloadFilename(visibleInvitationCode),
+      });
+
+      const mediaAsset = await prepareWhatsAppInvitationMediaBlob(invitationImage.blob, invitationImage.filename);
+      const mediaFormData = new FormData();
+      mediaFormData.append("file", new File([mediaAsset.blob], mediaAsset.filename, { type: mediaAsset.mimeType }));
+
+      const mediaResponse = await fetch("/api/whatsapp/media", {
+        method: "POST",
+        body: mediaFormData,
+      });
+
+      const mediaPayload = (await mediaResponse.json().catch(() => null)) as {
+        error?: { message?: string };
+        mediaId?: string;
+      } | null;
+
+      if (!mediaResponse.ok) {
+        throw new Error(mediaPayload?.error?.message || "No se pudo subir la invitación para WhatsApp.");
+      }
+
+      const mediaId = mediaPayload?.mediaId?.trim();
+
+      if (!mediaId) {
+        throw new Error("WhatsApp Media no devolvió un identificador válido.");
+      }
+
       const response = await fetch("/api/whatsapp/send", {
         method: "POST",
         headers: {
@@ -447,6 +480,7 @@ function GuestDrawer({
           guestName: guest.guestName,
           eventName: currentEvent.name,
           accessCode: visibleInvitationCode,
+          mediaId,
         }),
       });
 

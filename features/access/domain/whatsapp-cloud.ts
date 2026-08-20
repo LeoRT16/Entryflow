@@ -15,6 +15,7 @@ export type WhatsAppCloudSendInput = {
   guestName: string;
   eventName: string;
   accessCode: string;
+  mediaId?: string;
 };
 
 export type WhatsAppCloudImageSendInput = {
@@ -394,7 +395,18 @@ export async function sendWhatsAppCloudMessage(
     });
   }
 
-  const { payload } = buildWhatsAppCloudMessage(params, config);
+  const mediaId = params.mediaId?.trim();
+  const payload = mediaId
+    ? buildWhatsAppCloudImageTemplateMessage(
+        {
+          recipient: params.recipient,
+          guestName: params.guestName,
+          eventName: params.eventName,
+          mediaId,
+        },
+        getWhatsAppImageTemplateConfig(env) ?? undefined,
+      ).payload
+    : buildWhatsAppCloudMessage(params, config).payload;
   const response = await fetchImpl(buildWhatsAppCloudMessagesUrl(config), buildWhatsAppCloudRequestInit(config, payload));
   const responseBody = await response.json().catch(() => null);
 

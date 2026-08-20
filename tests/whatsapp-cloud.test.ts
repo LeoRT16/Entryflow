@@ -136,6 +136,50 @@ test("WhatsApp Cloud payload switches to a template when one is configured", () 
   assert.equal("text" in payload, false);
 });
 
+test("WhatsApp Cloud send uses the image template when a media id is provided", async () => {
+  const calls: Array<[string, RequestInit | undefined]> = [];
+  const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push([String(input), init]);
+    return new Response(JSON.stringify({ messages: [{ id: "wamid.mock-2" }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const result = await sendWhatsAppCloudMessage(
+    {
+      recipient: "77374577",
+      guestName: "Guest",
+      eventName: "Event",
+      accessCode: "RES-001",
+      mediaId: " media-123 ",
+    },
+    fetchImpl,
+    buildProcessEnv({
+      WHATSAPP_ACCESS_TOKEN: "super-secret",
+      WHATSAPP_PHONE_NUMBER_ID: "987654321",
+      WHATSAPP_IMAGE_TEMPLATE_NAME: "entryflow_invitation_image",
+      WHATSAPP_IMAGE_TEMPLATE_LANGUAGE: "es_MX",
+    }),
+  );
+
+  assert.equal(result.messageId, "wamid.mock-2");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.[0], "https://graph.facebook.com/v23.0/987654321/messages");
+  const payload = JSON.parse(calls[0]?.[1]?.body as string) as {
+    type: string;
+    template?: {
+      name: string;
+      components: Array<{ type: string; parameters: Array<{ type: string; image?: { id: string } }> }>;
+    };
+  };
+  assert.equal(payload.type, "template");
+  assert.equal(payload.template?.name, "entryflow_invitation_image");
+  assert.equal(payload.template?.components[0]?.type, "header");
+  assert.equal(payload.template?.components[0]?.parameters[0]?.image?.id, "media-123");
+  assert.equal(payload.template?.components[1]?.type, "body");
+});
+
 test("WhatsApp Cloud request init uses the server token and JSON body", () => {
   const config = {
     accessToken: "super-secret",

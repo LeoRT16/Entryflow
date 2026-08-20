@@ -15,6 +15,7 @@ type WhatsAppSendRequestBody = {
   eventName?: string;
   accessCode?: string;
   invitationCode?: string;
+  mediaId?: string;
 };
 
 function getRequestString(value: unknown) {
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
   const guestName = getRequestString(body.guestName);
   const eventName = getRequestString(body.eventName);
   const accessCode = getRequestString(body.accessCode) || getRequestString(body.invitationCode);
+  const mediaId = getRequestString(body.mediaId);
 
   if (!recipient || !guestName || !eventName || !accessCode) {
     return NextResponse.json(
@@ -123,13 +125,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    getRequiredWhatsAppTemplateConfig();
+    if (!mediaId) {
+      getRequiredWhatsAppTemplateConfig();
+    }
 
     const result = await sendWhatsAppCloudMessage({
       recipient,
       guestName,
       eventName,
       accessCode,
+      ...(mediaId ? { mediaId } : {}),
     });
 
     return NextResponse.json({
