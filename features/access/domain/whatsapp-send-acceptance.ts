@@ -14,6 +14,24 @@ export type WhatsAppSendAcceptanceResponse = {
   };
 };
 
+export type WhatsAppDeliveryAttemptUpsertOutcome = {
+  data: { id: string } | null;
+  error: { code?: string; message: string } | null;
+};
+
+export type WhatsAppTrackingPersistenceResolution =
+  | {
+      trackingPersisted: true;
+      rowId: string;
+      branch: "persisted";
+    }
+  | {
+      trackingPersisted: false;
+      rowId?: string;
+      branch: "upsert_error" | "missing_row";
+      error?: { code?: string; message: string };
+    };
+
 export function buildWhatsAppSendAcceptedGuestUpdate(params: {
   guest: GuestRecord;
   attemptNumber: number;
@@ -66,5 +84,30 @@ export function buildWhatsAppSendAcceptanceResponse(trackingPersisted: boolean):
       code: "accepted_but_tracking_failed",
       message: "WhatsApp aceptó el mensaje, pero EntryFlow no pudo registrar su seguimiento. No lo reenvíes todavía.",
     },
+  };
+}
+
+export function resolveWhatsAppTrackingPersistence(outcome: WhatsAppDeliveryAttemptUpsertOutcome): WhatsAppTrackingPersistenceResolution {
+  if (outcome.error) {
+    return {
+      trackingPersisted: false,
+      branch: "upsert_error",
+      error: outcome.error,
+    };
+  }
+
+  const rowId = outcome.data?.id?.trim() ?? "";
+
+  if (!rowId) {
+    return {
+      trackingPersisted: false,
+      branch: "missing_row",
+    };
+  }
+
+  return {
+    trackingPersisted: true,
+    rowId,
+    branch: "persisted",
   };
 }

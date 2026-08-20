@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildWhatsAppSendAcceptedGuestUpdate,
   buildWhatsAppSendAcceptanceResponse,
+  resolveWhatsAppTrackingPersistence,
 } from "../features/access/domain/whatsapp-send-acceptance";
 import type { GuestRecord } from "../features/customers/types";
 
@@ -68,4 +69,36 @@ test("accepted WhatsApp sends expose an explicit tracking failure response witho
   assert.equal(response.status, "accepted_but_tracking_failed");
   assert.equal(response.warning?.message, "WhatsApp aceptó el mensaje, pero EntryFlow no pudo registrar su seguimiento. No lo reenvíes todavía.");
   assert.equal("failed" in response, false);
+});
+
+test("tracking persistence resolves only when Supabase returns an id", () => {
+  const persisted = resolveWhatsAppTrackingPersistence({
+    data: { id: "attempt-1" },
+    error: null,
+  });
+
+  assert.equal(persisted.trackingPersisted, true);
+  assert.equal(persisted.branch, "persisted");
+  assert.equal(persisted.rowId, "attempt-1");
+});
+
+test("tracking persistence fails when Supabase returns an error without throwing", () => {
+  const failed = resolveWhatsAppTrackingPersistence({
+    data: null,
+    error: { code: "42501", message: "row-level security violation" },
+  });
+
+  assert.equal(failed.trackingPersisted, false);
+  assert.equal(failed.branch, "upsert_error");
+  assert.equal(failed.error?.code, "42501");
+});
+
+test("tracking persistence fails when Supabase returns no row id", () => {
+  const failed = resolveWhatsAppTrackingPersistence({
+    data: { id: "" },
+    error: null,
+  });
+
+  assert.equal(failed.trackingPersisted, false);
+  assert.equal(failed.branch, "missing_row");
 });

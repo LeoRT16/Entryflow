@@ -17,6 +17,7 @@ import {
 import {
   buildWhatsAppSendAcceptedGuestUpdate,
   buildWhatsAppSendAcceptanceResponse,
+  resolveWhatsAppTrackingPersistence,
 } from "@/features/access/domain/whatsapp-send-acceptance";
 
 type WhatsAppSendRequestBody = {
@@ -34,7 +35,11 @@ function getRequestString(value: unknown) {
 }
 
 type WhatsAppDeliveryAttemptsTable = {
-  upsert(values: Record<string, unknown>, options: { onConflict: string }): Promise<unknown>;
+  upsert(values: Record<string, unknown>, options: { onConflict: string }): {
+    select(columns: "id"): {
+      single(): Promise<{ data: { id: string } | null; error: { code?: string; message: string } | null }>;
+    };
+  };
 };
 
 export async function POST(request: Request) {
@@ -181,7 +186,8 @@ export async function POST(request: Request) {
 
     if (messageId) {
       try {
-        await deliveryAttemptsTable.upsert(
+        const { data, error } = await deliveryAttemptsTable
+          .upsert(
           {
             organization_id: workspace.currentOrganizationId,
             event_id: workspace.currentEventId,
@@ -209,19 +215,29 @@ export async function POST(request: Request) {
             template_language: templateConfig?.templateLanguage ?? "",
           },
           { onConflict: "message_id" },
-        );
-        trackingPersisted = true;
+        )
+          .select("id")
+          .single();
+
+        const persistence = resolveWhatsAppTrackingPersistence({ data, error });
+        trackingPersisted = persistence.trackingPersisted;
+
+        if (!persistence.trackingPersisted) {
+          console.error("WhatsApp delivery attempt persistence failed", {
+            eventId: workspace.currentEventId,
+            branch: persistence.branch,
+            errorCode: persistence.error?.code ?? null,
+          });
+        }
       } catch (error) {
         console.error("WhatsApp delivery attempt persistence failed", {
-          guestId: guest.id,
           eventId: workspace.currentEventId,
-          messageId,
-          error: error instanceof Error ? error.message : "unknown",
+          branch: "upsert_error",
+          errorCode: error instanceof Error ? error.name : "unknown",
         });
       }
     } else {
       console.error("WhatsApp Cloud response missing message id", {
-        guestId: guest.id,
         eventId: workspace.currentEventId,
       });
     }
