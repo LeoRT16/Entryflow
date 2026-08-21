@@ -17,6 +17,13 @@ function formatEventStatusLabel(status: string) {
   return "Cancelado";
 }
 
+export function getEventSwitcherStatusTone(status: string) {
+  if (status === "live") return "success";
+  if (status === "published") return "info";
+  if (status === "draft") return "warning";
+  return "danger";
+}
+
 function matchesQuery(value: string, query: string) {
   return value.toLowerCase().includes(query.toLowerCase());
 }
@@ -82,6 +89,53 @@ export function buildEventSwitcherSections(
   ].filter((section) => section.events.length > 0 || normalizedQuery.length > 0);
 }
 
+export function getEventSwitcherSectionEmptyMessage(title: EventSwitcherSection["title"], query: string) {
+  if (query.trim()) {
+    return `No encontramos eventos para “${query.trim()}”.`;
+  }
+
+  if (title === "Eventos en curso") {
+    return "No hay eventos en curso disponibles.";
+  }
+
+  if (title === "Próximos eventos") {
+    return "No hay próximos eventos.";
+  }
+
+  return "No hay eventos históricos.";
+}
+
+export function getEventSwitcherEmptyPanelMessage(query: string) {
+  if (query.trim()) {
+    return `No encontramos eventos para “${query.trim()}”.`;
+  }
+
+  return "No hay eventos en esta organización.";
+}
+
+export function buildEventSwitcherButtonModel({
+  currentOrganizationName,
+  currentEvent,
+  compact = false,
+}: {
+  currentOrganizationName: string;
+  currentEvent: {
+    name: string;
+    eventType: EventType;
+    status: string;
+    venue: string;
+  };
+  compact?: boolean;
+}) {
+  return {
+    eyebrow: currentOrganizationName,
+    title: currentEvent.name,
+    description: compact ? getEventTypeLabel(currentEvent.eventType) : `${getEventTypeLabel(currentEvent.eventType)} · ${currentEvent.venue}`,
+    statusLabel: formatEventStatusLabel(currentEvent.status),
+    statusTone: getEventSwitcherStatusTone(currentEvent.status),
+  };
+}
+
 export default function EventSwitcher({ compact = false }: { compact?: boolean } = {}) {
   const { currentOrganization, currentEvent, events, setCurrentEventId } = useCheckInStore();
   const [open, setOpen] = useState(false);
@@ -123,6 +177,21 @@ export default function EventSwitcher({ compact = false }: { compact?: boolean }
     () => buildEventSwitcherSections(events, currentOrganization.id, query),
     [currentOrganization.id, events, query],
   );
+  const isEmpty = sections.length === 0;
+  const triggerModel = useMemo(
+    () =>
+      buildEventSwitcherButtonModel({
+        currentOrganizationName: currentOrganization.name,
+        currentEvent: {
+          name: currentEvent.name,
+          eventType: currentEvent.eventType,
+          status: currentEvent.status,
+          venue: currentEvent.venue,
+        },
+        compact,
+      }),
+    [compact, currentEvent.eventType, currentEvent.name, currentEvent.status, currentEvent.venue, currentOrganization.name],
+  );
 
   const buttonClasses = compact
     ? "w-full px-4 py-3"
@@ -139,29 +208,29 @@ export default function EventSwitcher({ compact = false }: { compact?: boolean }
         ].join(" ")}
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-label={`Cambiar evento: ${triggerModel.eyebrow}, ${triggerModel.title}`}
       >
-        {!compact ? (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-100">
-            {currentOrganization.name.slice(0, 2)}
-          </span>
-        ) : null}
-
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-            {compact ? "Evento activo" : currentOrganization.name}
+            {triggerModel.eyebrow}
           </span>
-          <span className="mt-1 block truncate text-sm font-medium text-white">
-            {currentEvent.name}
-          </span>
-          {!compact ? (
-            <span className="mt-1 block truncate text-xs text-slate-500">
-              {getEventTypeLabel(currentEvent.eventType)} · {currentEvent.venue}
-            </span>
-          ) : null}
+          <span className="mt-1 block truncate text-sm font-medium text-white">{triggerModel.title}</span>
+          <span className="mt-1 block truncate text-xs text-slate-500">{triggerModel.description}</span>
         </span>
 
-        <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
-          {formatEventStatusLabel(currentEvent.status)}
+        <span
+          className={[
+            "rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em]",
+            triggerModel.statusTone === "success"
+              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+              : triggerModel.statusTone === "warning"
+                ? "border-amber-400/20 bg-amber-400/10 text-amber-100"
+                : triggerModel.statusTone === "danger"
+                  ? "border-rose-400/20 bg-rose-400/10 text-rose-100"
+                  : "border-cyan-400/20 bg-cyan-400/10 text-cyan-100",
+          ].join(" ")}
+        >
+          {triggerModel.statusLabel}
         </span>
       </button>
 
@@ -194,18 +263,25 @@ export default function EventSwitcher({ compact = false }: { compact?: boolean }
           </div>
 
           <div className="max-h-[min(60vh,32rem)] space-y-4 overflow-y-auto p-4">
-            {sections.map((section) => (
-              <EventSection
-                key={section.title}
-                title={section.title}
-                events={section.events}
-                currentEventId={currentEvent.id}
-                onSelect={(eventId) => {
-                  setCurrentEventId(eventId);
-                  setOpen(false);
-                }}
-              />
-            ))}
+            {isEmpty ? (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm text-slate-400">
+                {getEventSwitcherEmptyPanelMessage(query)}
+              </div>
+            ) : (
+              sections.map((section) => (
+                <EventSection
+                  key={section.title}
+                  title={section.title}
+                  events={section.events}
+                  currentEventId={currentEvent.id}
+                  query={query}
+                  onSelect={(eventId) => {
+                    setCurrentEventId(eventId);
+                    setOpen(false);
+                  }}
+                />
+              ))
+            )}
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-white/10 p-4">
@@ -235,6 +311,7 @@ function EventSection({
   title,
   events,
   currentEventId,
+  query,
   onSelect,
 }: {
   title: string;
@@ -247,12 +324,13 @@ function EventSection({
     startAt: string;
   }>;
   currentEventId: string;
+  query: string;
   onSelect: (eventId: string) => void;
 }) {
   if (!events.length) {
     return (
       <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-slate-500">
-        {title === "Eventos en curso" ? "No hay eventos en curso disponibles." : title === "Próximos eventos" ? "No hay próximos eventos." : "No hay eventos históricos."}
+        {getEventSwitcherSectionEmptyMessage(title, query)}
       </div>
     );
   }
@@ -269,10 +347,12 @@ function EventSection({
               key={event.id}
               type="button"
               onClick={() => onSelect(event.id)}
+              aria-current={isCurrent ? "true" : undefined}
+              aria-pressed={isCurrent}
               className={[
-                "w-full rounded-2xl border px-4 py-3 text-left transition",
+                "w-full rounded-2xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
                 isCurrent
-                  ? "border-cyan-400/40 bg-cyan-400/10"
+                  ? "border-cyan-400/40 bg-cyan-400/10 shadow-[inset_0_1px_0_rgba(103,232,249,0.12)]"
                   : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]",
               ].join(" ")}
             >
@@ -282,17 +362,17 @@ function EventSection({
                   <p className="mt-1 text-xs text-slate-400">
                     {getEventTypeLabel(event.eventType)} · {event.venue}
                   </p>
+                  {isCurrent ? (
+                    <span className="mt-2 inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+                      Actual
+                    </span>
+                  ) : null}
                 </div>
                 <div className="flex flex-col items-end gap-1 text-[10px] uppercase tracking-[0.22em] text-slate-500">
                   <span>{formatEventStatusLabel(event.status)}</span>
                   <span>{event.startAt}</span>
                 </div>
               </div>
-              {isCurrent ? (
-                <span className="mt-3 inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
-                  Actual
-                </span>
-              ) : null}
             </button>
           );
         })}

@@ -8,6 +8,7 @@ import CommandPalette from "@/components/command-palette";
 import { FeedbackProvider } from "@/components/premium-feedback";
 import StatusBadge from "@/components/status-badge";
 import KeyboardShortcutsHelp from "@/components/keyboard-shortcuts-help";
+import { buildShellContextSummary, formatShellEventStatus, getShellEventStatusTone, getShellRouteContext } from "@/components/shell-context";
 import { focusFirstShortcutSearchInput, useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { isPublicRoute } from "@/features/navigation/public-routes";
 import { WorkspaceProvider } from "@/adapters/workspace-provider";
@@ -262,7 +263,9 @@ function AppShellContent({
   setMobileNavOpen: (value: boolean) => void;
   setCommandPaletteOpen: (value: boolean) => void;
 }) {
-  const { currentOrganization, currentEvent, currentAccount } = useWorkspaceData();
+  const pathname = usePathname();
+  const { currentOrganization, currentEvent } = useWorkspaceData();
+  const shellRoute = getShellRouteContext(pathname);
 
   return (
     <div className="min-h-screen bg-[color:var(--background)] text-[color:var(--foreground)]">
@@ -271,7 +274,7 @@ function AppShellContent({
 
         <div className="flex min-h-screen min-w-0 flex-1 flex-col md:pl-72">
           <header className="sticky top-0 z-20 border-b border-white/10 bg-[color:var(--background)]/95 px-4 py-3 backdrop-blur md:hidden">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(true)}
@@ -285,20 +288,14 @@ function AppShellContent({
                 </span>
               </button>
 
-              <div className="min-w-0 flex-1 text-right">
-                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-400">
-                  Evento activo
-                </p>
-                <p className="truncate text-sm font-medium text-white">{currentEvent.name}</p>
-                <div className="mt-2 flex flex-wrap justify-end gap-2">
-                  <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
-                  <StatusBadge variant={currentEvent.status === "live" ? "success" : currentEvent.status === "published" ? "info" : currentEvent.status === "draft" ? "warning" : "danger"}>
-                    {currentEvent.status === "live" ? "En curso" : currentEvent.status === "published" ? "Publicado" : currentEvent.status === "draft" ? "Borrador" : currentEvent.status === "finished" ? "Finalizado" : "Archivado"}
-                  </StatusBadge>
-                  <StatusBadge variant="info">Cuenta: {currentAccount.displayName}</StatusBadge>
-                  <StatusBadge variant="info">Rol: {currentAccount.roleName}</StatusBadge>
-                  <StatusBadge variant="info">Hora: {currentEvent.startAt.trim().split(/\s+/).at(-1) ?? "--:--"}</StatusBadge>
-                </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-400">{shellRoute.label}</p>
+                <p className="truncate text-sm font-semibold text-white">{buildShellContextSummary(currentOrganization.name, currentEvent.name)}</p>
+                <p className="mt-1 truncate text-xs leading-5 text-slate-500">{shellRoute.description}</p>
+              </div>
+
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <StatusBadge variant={getShellEventStatusTone(currentEvent.status)}>{formatShellEventStatus(currentEvent.status)}</StatusBadge>
               </div>
             </div>
           </header>

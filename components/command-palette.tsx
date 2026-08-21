@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import StatusBadge from "@/components/status-badge";
+import { buildShellContextSummary } from "@/components/shell-context";
 import { buildGuidedActionItem } from "@/components/quick-actions-menu";
 import { useCheckInStore } from "@/services/workspace-service";
 import { buildGuestSearchIndex, normalizeCheckInText } from "@/features/check-in/utils";
@@ -47,7 +48,7 @@ const sectionOrder: Record<PaletteSection, number> = {
 const sectionLabel: Record<PaletteSection, string> = {
   "Acciones críticas": "Críticas",
   "Acciones guiadas": "Guiadas",
-  Workspace: "Workspace",
+  Workspace: "Contexto",
   Navegación: "Navegación",
   Búsqueda: "Búsqueda",
   Recientes: "Recientes",
@@ -278,9 +279,9 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       {
         id: "workspace-snapshot",
         section: "Workspace",
-        title: "Workspace Snapshot",
+        title: "Resumen operativo",
         description: `${currentOrganization.name} · ${currentEvent.name} · ${currentState}`,
-        badge: "Snapshot",
+        badge: "Resumen",
         shortcut: "⌥S",
         icon: iconForSection("Workspace"),
         searchText: normalizeCheckInText(
@@ -303,7 +304,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       {
         id: "workspace-operator",
         section: "Workspace",
-        title: "Ver operador",
+        title: "Ver cuenta activa",
         description: `Cuenta activa: ${operator}`,
         badge: "Operador",
         shortcut: "⌥O",
@@ -318,7 +319,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       {
         id: "workspace-state",
         section: "Workspace",
-        title: "Ver estado",
+        title: "Ver estado actual",
         description: `${currentState} · ${currentEvent.status}`,
         badge: "Estado",
         shortcut: "⌥E",
@@ -687,22 +688,34 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         aria-label="Command palette"
         className="relative z-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#090d13] shadow-[0_30px_140px_rgba(0,0,0,0.7)]"
       >
-        <div className="flex items-center gap-3 border-b border-white/10 px-4 py-4 sm:px-5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-300">
-            ⌘K
+        <div className="border-b border-white/10 px-4 py-4 sm:px-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-300">
+              ⌘K
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Navegación y acciones</p>
+              <p className="mt-1 truncate text-sm text-slate-400">
+                {buildShellContextSummary(currentOrganization.name, currentEvent.name)}
+              </p>
+            </div>
+            <StatusBadge variant="info">{visibleItems.length}</StatusBadge>
           </div>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setActiveIndex(0);
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder="Buscar reservas, invitados, mesas, acciones o pantallas"
-            className="h-12 flex-1 bg-transparent text-base text-white outline-none placeholder:text-slate-500"
-          />
-          <StatusBadge variant="info">{visibleItems.length}</StatusBadge>
+
+          <div className="mt-4">
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setActiveIndex(0);
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder="Buscar reservas, invitados, mesas, acciones o módulos"
+              className="h-12 w-full bg-transparent text-base text-white outline-none placeholder:text-slate-500"
+            />
+            <p className="mt-3 text-xs text-slate-500">{currentState}</p>
+          </div>
         </div>
 
         <div className="max-h-[72vh] overflow-y-auto p-2">
@@ -764,7 +777,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
 
         <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">
           <span>↑↓ navegar · Enter ejecutar · Esc cerrar</span>
-          <span>{currentEvent.name}</span>
+          <span className="truncate">{currentEvent.name}</span>
         </div>
       </section>
     </div>

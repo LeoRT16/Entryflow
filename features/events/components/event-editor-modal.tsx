@@ -22,7 +22,7 @@ import {
   type InvitationOverlayLayout,
 } from "@/features/events/domain/invitation-overlay";
 import { getEventTypeLabel, isTerminalEventStatus } from "@/features/events/domain";
-import { shouldWarnBeforeChangingEventVenue } from "@/features/events/domain/event-venue-assignment";
+import { buildEventVenueChangeConfirmation, shouldWarnBeforeChangingEventVenue } from "@/features/events/domain/event-venue-assignment";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CheckIn } from "@/features/check-in/types";
 import type { Guest } from "@/features/check-in/types";
@@ -130,7 +130,7 @@ export default function EventEditorModal({
   onSave,
   onPatchEvent,
 }: EventEditorModalProps) {
-  const { showToast } = useFeedback();
+  const { showToast, confirm } = useFeedback();
   const [isSaving, setIsSaving] = useState(false);
   const [isArtworkBusy, setIsArtworkBusy] = useState(false);
   const [eventArtwork, setEventArtwork] = useState<EventInvitationArtwork | null>(() => getEventInvitationArtwork(event));
@@ -154,6 +154,7 @@ export default function EventEditorModal({
   const [eventCapacity, setEventCapacity] = useState(String(event.capacity));
   const [eventStartAt, setEventStartAt] = useState(event.startAt);
   const [eventStatus, setEventStatus] = useState(event.status);
+  const pendingVenueEventRef = useRef<Event | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -189,40 +190,7 @@ export default function EventEditorModal({
       nextOverlayLayout,
     );
 
-  const submit = async () => {
-    const selectedVenue = venueOptions.find((venue) => venue.id === eventVenueId) ?? defaultVenue;
-    const nextVenueId = selectedVenue?.id || eventVenueId || undefined;
-
-    const shouldWarn = shouldWarnBeforeChangingEventVenue({
-      eventId: event.id,
-      currentVenueId: event.venueId,
-      nextVenueId,
-      reservations,
-      guests,
-      tables,
-      checkIns,
-    });
-
-    if (shouldWarn) {
-      const confirmed = window.confirm("Este evento ya tiene reservas o espacios asignados. Cambiar el Venue puede dejar asignaciones incompatibles.");
-      if (!confirmed) {
-        setEventVenueId(initialVenueIdRef.current);
-        return;
-      }
-    }
-
-    const nextEvent: Event = {
-      ...event,
-      name: eventName.trim() || event.name,
-      venueId: nextVenueId,
-      venue: selectedVenue?.name || eventVenue.trim() || event.venue,
-      description: eventDescription.trim() || undefined,
-      capacity: Number.parseInt(eventCapacity, 10) || event.capacity,
-      startAt: eventStartAt,
-      status: eventStatus,
-      metadata: buildNextMetadata(),
-    };
-
+  const saveEvent = async (nextEvent: Event) => {
     setIsSaving(true);
     try {
       const savedEvent = await persistEvent(nextEvent);
@@ -246,6 +214,64 @@ export default function EventEditorModal({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const commitPendingVenueChange = () => {
+    const nextEvent = pendingVenueEventRef.current;
+    pendingVenueEventRef.current = null;
+
+    if (!nextEvent) {
+      return;
+    }
+
+    void saveEvent(nextEvent);
+  };
+
+  const submit = async () => {
+    const selectedVenue = venueOptions.find((venue) => venue.id === eventVenueId) ?? defaultVenue;
+    const nextVenueId = selectedVenue?.id || eventVenueId || undefined;
+    const nextEvent: Event = {
+      ...event,
+      name: eventName.trim() || event.name,
+      venueId: nextVenueId,
+      venue: selectedVenue?.name || eventVenue.trim() || event.venue,
+      description: eventDescription.trim() || undefined,
+      capacity: Number.parseInt(eventCapacity, 10) || event.capacity,
+      startAt: eventStartAt,
+      status: eventStatus,
+      metadata: buildNextMetadata(),
+    };
+
+    const shouldWarn = shouldWarnBeforeChangingEventVenue({
+      eventId: event.id,
+      currentVenueId: event.venueId,
+      nextVenueId,
+      reservations,
+      guests,
+      tables,
+      checkIns,
+    });
+
+    if (shouldWarn) {
+      pendingVenueEventRef.current = nextEvent;
+      const confirmation = buildEventVenueChangeConfirmation({
+        eventName: nextEvent.name,
+        currentVenueName: event.venue,
+        nextVenueName: nextEvent.venue,
+      });
+
+      confirm({
+        ...confirmation,
+        onConfirm: commitPendingVenueChange,
+        onCancel: () => {
+          pendingVenueEventRef.current = null;
+          setEventVenueId(initialVenueIdRef.current);
+        },
+      });
+      return;
+    }
+
+    await saveEvent(nextEvent);
   };
 
   const handleArtworkFile = async (file: File | null) => {

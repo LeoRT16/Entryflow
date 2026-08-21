@@ -7,6 +7,7 @@ import LogoutButton from "@/components/logout-button";
 import EventSwitcher from "@/components/event-switcher";
 import StatusBadge from "@/components/status-badge";
 import TerminalEventBanner from "@/components/terminal-event-banner";
+import { formatShellEventStatus, getShellEventStatusTone, getShellRouteContext } from "@/components/shell-context";
 import { getEventTypeLabel, isTerminalEventStatus } from "@/features/events/domain";
 import { getNavigationGroups } from "@/features/navigation/navigation";
 import { useCheckInStore } from "@/services/workspace-service";
@@ -17,14 +18,6 @@ function isActivePath(pathname: string, href: string) {
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function formatEventStatus(status: string) {
-  if (status === "live") return "En curso";
-  if (status === "published") return "Publicado";
-  if (status === "draft") return "Borrador";
-  if (status === "finished") return "Finalizado";
-  return "Cancelado";
 }
 
 function NavIcon({
@@ -171,9 +164,10 @@ export default function Sidebar({
   onCloseMobileNav: () => void;
 }) {
   const pathname = usePathname();
-  const { currentOrganization, currentEvent, currentAccount, can } = useCheckInStore();
+  const { currentEvent, currentAccount, can } = useCheckInStore();
   const canSwitchEventContext = can("event.view");
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
+  const shellRoute = getShellRouteContext(pathname);
   const navigationGroups = getNavigationGroups(can, currentEvent);
 
   const renderNavigation = (onLinkClick?: () => void) =>
@@ -220,7 +214,7 @@ export default function Sidebar({
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="border-b border-white/10 px-5 py-5">
             <p className="kicker">Contexto operativo</p>
-            <div className="mt-3 max-w-full">
+            <div className="mt-3 max-w-full space-y-3">
               {canSwitchEventContext ? (
                 <EventSwitcher compact />
               ) : (
@@ -231,23 +225,14 @@ export default function Sidebar({
                   </p>
                 </div>
               )}
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Módulo actual</p>
+                <p className="mt-2 truncate text-sm font-semibold text-white">{shellRoute.label}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{shellRoute.description}</p>
+              </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
-              <StatusBadge
-                variant={
-                  currentEvent.status === "live"
-                    ? "success"
-                    : currentEvent.status === "published"
-                      ? "info"
-                      : currentEvent.status === "draft"
-                        ? "warning"
-                        : "danger"
-                }
-              >
-                {formatEventStatus(currentEvent.status)}
-              </StatusBadge>
-              <StatusBadge variant="info">{currentAccount.roleName}</StatusBadge>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <StatusBadge variant={getShellEventStatusTone(currentEvent.status)}>{formatShellEventStatus(currentEvent.status)}</StatusBadge>
             </div>
             {isTerminalEvent ? (
               <div className="mt-3">
@@ -264,9 +249,7 @@ export default function Sidebar({
             <div className="surface-elevated p-4">
               <p className="kicker">Sesión</p>
               <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {currentOrganization.name} · {currentAccount.roleName}
-              </p>
+              <p className="mt-1 text-xs text-slate-500">{currentAccount.roleName}</p>
               <div className="mt-3">
                 <LogoutButton />
               </div>
@@ -284,9 +267,9 @@ export default function Sidebar({
       >
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-start justify-between border-b border-white/10 px-5 py-5">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="kicker">Contexto operativo</p>
-              <div className="mt-3 max-w-full">
+              <div className="mt-3 max-w-full space-y-3">
                 {canSwitchEventContext ? (
                   <EventSwitcher compact />
                 ) : (
@@ -297,23 +280,14 @@ export default function Sidebar({
                     </p>
                   </div>
                 )}
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Módulo actual</p>
+                  <p className="mt-2 truncate text-sm font-semibold text-white">{shellRoute.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">{shellRoute.description}</p>
+                </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <StatusBadge variant="info">{currentOrganization.name}</StatusBadge>
-                <StatusBadge
-                  variant={
-                    currentEvent.status === "live"
-                      ? "success"
-                      : currentEvent.status === "published"
-                        ? "info"
-                        : currentEvent.status === "draft"
-                          ? "warning"
-                          : "danger"
-                  }
-                >
-                  {formatEventStatus(currentEvent.status)}
-                </StatusBadge>
-                <StatusBadge variant="info">{currentAccount.roleName}</StatusBadge>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <StatusBadge variant={getShellEventStatusTone(currentEvent.status)}>{formatShellEventStatus(currentEvent.status)}</StatusBadge>
               </div>
               {isTerminalEvent ? (
                 <div className="mt-3">
@@ -340,9 +314,7 @@ export default function Sidebar({
             <div className="surface-elevated p-4">
               <p className="kicker">Sesión</p>
               <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {currentOrganization.name} · {currentAccount.roleName}
-              </p>
+              <p className="mt-1 text-xs text-slate-500">{currentAccount.roleName}</p>
               <div className="mt-3">
                 <LogoutButton />
               </div>

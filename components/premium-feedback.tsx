@@ -56,6 +56,7 @@ type ConfirmInput = {
   cancelLabel?: string;
   tone?: ConfirmTone;
   onConfirm: () => void;
+  onCancel?: () => void;
 };
 
 type ToastItem = Required<Pick<ToastInput, "title">> &
@@ -306,7 +307,10 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       {confirmState ? (
         <ConfirmDialog
           input={confirmState}
-          onCancel={() => setConfirmState(null)}
+          onCancel={() => {
+            confirmState.onCancel?.();
+            setConfirmState(null);
+          }}
           onConfirm={() => {
             confirmState.onConfirm();
             setConfirmState(null);
@@ -828,6 +832,7 @@ function ConfirmDialog({
   }, [onCancel]);
 
   const tone = confirmToneStyles[input.tone ?? "info"];
+  const icon = input.tone === "success" ? "✓" : input.tone === "warning" ? "!" : input.tone === "danger" ? "×" : "i";
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
@@ -851,7 +856,7 @@ function ConfirmDialog({
             "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border text-lg font-semibold",
             tone.button,
           ].join(" ")}>
-            !
+            {icon}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">

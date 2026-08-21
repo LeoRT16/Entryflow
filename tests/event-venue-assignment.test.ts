@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildEventFromDraft, buildEventDraft, getEventBlueprint } from "../features/events/domain";
-import { shouldWarnBeforeChangingEventVenue } from "../features/events/domain/event-venue-assignment";
+import { buildEventVenueChangeConfirmation, shouldWarnBeforeChangingEventVenue } from "../features/events/domain/event-venue-assignment";
 import { isTableInCurrentEventContext } from "../features/business-rules/domain/ownership-guards";
 
 function extractBlock(source: string, startMarker: string, endMarker: string) {
@@ -85,9 +85,26 @@ test("event editor modal keeps the venue selector bound to venueId and persists 
 
   assert.match(source, /value=\{eventVenueId\}/);
   assert.match(source, /venueId:\s*nextVenueId,/);
-  assert.match(source, /window\.confirm\("Este evento ya tiene reservas o espacios asignados\./);
+  assert.match(source, /confirm\(\{/);
+  assert.doesNotMatch(source, /window\.confirm\(/);
   assert.match(source, /const venueOptions = useMemo\(\(\) => venues, \[venues\]\);/);
   assert.doesNotMatch(source, /venues\.filter\(\(venue\) => venue\.organizationId === event\.organizationId\)/);
+});
+
+test("venue change confirmation copy stays on the shared confirmation pattern", () => {
+  const confirmation = buildEventVenueChangeConfirmation({
+    eventName: "Sabado 22 de Agosto",
+    currentVenueName: "La Rota Carlota",
+    nextVenueName: "Rotita",
+  });
+
+  assert.equal(confirmation.title, "Confirmar cambio de venue");
+  assert.equal(confirmation.confirmLabel, "Cambiar venue");
+  assert.equal(confirmation.cancelLabel, "Cancelar");
+  assert.equal(confirmation.tone, "warning");
+  assert.match(confirmation.description, /Sabado 22 de Agosto/);
+  assert.match(confirmation.description, /La Rota Carlota/);
+  assert.match(confirmation.description, /Rotita/);
 });
 
 test("table context does not accept a venueId that merely matches the event id", () => {

@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ACCOUNT_ROLE_PRESETS } from "../features/accounts/domain/accounts-domain";
-import { buildEventSwitcherSections, canSwitchEventContext } from "../components/event-switcher";
+import {
+  buildEventSwitcherButtonModel,
+  buildEventSwitcherSections,
+  canSwitchEventContext,
+  getEventSwitcherEmptyPanelMessage,
+  getEventSwitcherSectionEmptyMessage,
+  getEventSwitcherStatusTone,
+} from "../components/event-switcher";
 import {
   getEventSelection,
   resolveInitialCurrentEventId,
@@ -119,6 +126,40 @@ test("sidebar selector groups current organization events including historical e
 
   assert.equal(sections.some((section) => section.title === "Historial" && section.events.some((event) => event.id === "finished-1")), true);
   assert.equal(sections.some((section) => section.events.some((event) => event.id === "other-org")), false);
+});
+
+test("event switcher trigger keeps organization and event context visible in compact mode", () => {
+  const trigger = buildEventSwitcherButtonModel({
+    currentOrganizationName: "La Rota Carlota",
+    currentEvent: {
+      name: "Sabado 22 de Agosto",
+      eventType: "nightlife",
+      status: "live",
+      venue: "Rotita",
+    },
+    compact: true,
+  });
+
+  assert.equal(trigger.eyebrow, "La Rota Carlota");
+  assert.equal(trigger.title, "Sabado 22 de Agosto");
+  assert.equal(trigger.description, "Boliche");
+  assert.equal(trigger.statusLabel, "En curso");
+  assert.equal(trigger.statusTone, "success");
+});
+
+test("event switcher empty states are concise and scope-aware", () => {
+  assert.equal(getEventSwitcherEmptyPanelMessage(""), "No hay eventos en esta organización.");
+  assert.equal(getEventSwitcherEmptyPanelMessage("rotita"), "No encontramos eventos para “rotita”.");
+  assert.equal(getEventSwitcherSectionEmptyMessage("Historial", ""), "No hay eventos históricos.");
+  assert.equal(getEventSwitcherSectionEmptyMessage("Historial", "sabado"), "No encontramos eventos para “sabado”.");
+});
+
+test("terminal event status remains visually distinct from draft and live states", () => {
+  assert.equal(getEventSwitcherStatusTone("live"), "success");
+  assert.equal(getEventSwitcherStatusTone("published"), "info");
+  assert.equal(getEventSwitcherStatusTone("draft"), "warning");
+  assert.equal(getEventSwitcherStatusTone("finished"), "danger");
+  assert.equal(getEventSwitcherStatusTone("cancelled"), "danger");
 });
 
 test("explicitly selected current event survives refresh preference resolution when valid", () => {

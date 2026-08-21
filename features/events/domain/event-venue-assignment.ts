@@ -49,3 +49,24 @@ export function shouldWarnBeforeChangingEventVenue({
 
   return normalizedCurrentVenueId !== normalizedNextVenueId && hasOperationalEventData({ eventId, reservations, guests, tables, checkIns });
 }
+
+export function buildEventVenueChangeConfirmation({
+  eventName,
+  currentVenueName,
+  nextVenueName,
+}: {
+  eventName: string;
+  currentVenueName?: string;
+  nextVenueName?: string;
+}) {
+  const currentLabel = currentVenueName?.trim() || "venue actual";
+  const nextLabel = nextVenueName?.trim() || "nuevo venue";
+
+  return {
+    title: "Confirmar cambio de venue",
+    description: `${eventName} ya tiene reservas o espacios asignados. Cambiar de ${currentLabel} a ${nextLabel} puede dejar asignaciones incompatibles.`,
+    confirmLabel: "Cambiar venue",
+    cancelLabel: "Cancelar",
+    tone: "warning" as const,
+  };
+}
