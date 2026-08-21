@@ -6,6 +6,7 @@ import {
   assertEventInWorkspace,
   assertOrganizationInWorkspace,
   buildActiveCheckIns,
+  fetchSupabaseTable,
   resolveWorkspaceAccessScope,
 } from "../services/workspace-loader";
 import { isAccessGrantAlreadyConsumed } from "../features/check-in/domain/check-in-persistence";
@@ -303,6 +304,58 @@ test("workspace loader sends Supabase table requests with api key and bearer hea
   const fetchBlock = source.slice(source.indexOf("const response = await fetch("), source.indexOf("const payload = await response.json();"));
 
   assert.match(fetchBlock, /headers:\s*\{\s*apikey: key,\s*Authorization:\s*`Bearer \$\{key\}`,\s*\}/);
+});
+
+test("optional workspace datasets degrade safely when Supabase rejects them", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousEnv = {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "";
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.includes("whatsapp_delivery_attempts")) {
+      return new Response(JSON.stringify({ code: "PGRST303", message: "JWT issued at future" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (url.includes("events")) {
+      return new Response(JSON.stringify({ code: "PGRST303", message: "JWT issued at future" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify([{ id: "ok" }]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.doesNotReject(fetchSupabaseTable("whatsapp_delivery_attempts", { optional: true }));
+    await assert.rejects(fetchSupabaseTable("events"), /Failed to load events from Supabase/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = previousEnv.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = previousEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = previousEnv.SUPABASE_SERVICE_ROLE_KEY;
+  }
+});
+
+test("workspace bootstrap keeps whatsapp delivery attempts optional", () => {
+  const source = readFileSync(new URL("../services/workspace-loader.ts", import.meta.url), "utf8");
+
+  assert.match(source, /fetchSupabaseTable<WhatsAppDeliveryAttemptRow>\("whatsapp_delivery_attempts", \{ optional: true \}\)/);
 });
 
 test("workspace loader does not borrow another organization's empty catalog", () => {

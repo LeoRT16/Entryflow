@@ -117,7 +117,11 @@ type WorkspaceScopeEventLike = {
 
 type WorkspacePayload = WorkspaceBootstrap;
 
-async function fetchSupabaseTable<T>(table: string): Promise<T[]> {
+type FetchSupabaseTableOptions = {
+  optional?: boolean;
+};
+
+export async function fetchSupabaseTable<T>(table: string, options: FetchSupabaseTableOptions = {}): Promise<T[]> {
   const url = getSupabaseUrl();
   const key = getSupabaseServiceRoleKey() || getSupabaseAnonKey();
 
@@ -135,6 +139,16 @@ async function fetchSupabaseTable<T>(table: string): Promise<T[]> {
   const payload = await response.json();
 
   if (!response.ok) {
+    if (options.optional) {
+      console.warn("Optional workspace dataset failed to load", {
+        table,
+        code: typeof payload?.code === "string" ? payload.code : null,
+        message: typeof payload?.message === "string" ? payload.message : null,
+      });
+
+      return [];
+    }
+
     throw new Error(`Failed to load ${table} from Supabase: ${JSON.stringify(payload)}`);
   }
 
@@ -404,7 +418,6 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     tableRows,
     checkInRows,
     timelineRows,
-    whatsappDeliveryAttemptRows,
   ] = await Promise.all([
     fetchSupabaseTable<UserRow>("users"),
     fetchSupabaseTable<RoleRow>("roles"),
@@ -419,8 +432,8 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     fetchSupabaseTable<TableRow>("tables"),
     fetchSupabaseTable<CheckInRow>("checkins"),
     fetchSupabaseTable<TimelineRow>("timeline_events"),
-    fetchSupabaseTable<WhatsAppDeliveryAttemptRow>("whatsapp_delivery_attempts"),
   ]);
+  const whatsappDeliveryAttemptRows = await fetchSupabaseTable<WhatsAppDeliveryAttemptRow>("whatsapp_delivery_attempts", { optional: true });
 
   let linkedUserRow = userRows.find((row) => row.auth_user_id === authUser.id && row.deleted_at === null) ?? null;
   const authEmail = typeof authUser.email === "string" ? authUser.email.trim().toLowerCase() : "";
