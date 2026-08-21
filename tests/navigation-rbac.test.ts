@@ -12,7 +12,7 @@ import type { Event as PlatformEvent } from "../features/domain/types";
 import type { AccountPermissionKey } from "../features/accounts/types";
 import { getFirstAccessibleNavigationHref, getNavigationGroups, getNavigationPermissionForPath } from "../features/navigation/navigation";
 import { isPublicRoute } from "../features/navigation/public-routes";
-import { config as middlewareConfig } from "../middleware";
+import { config as proxyConfig } from "../proxy";
 
 const doorPermissions = new Set(getRolePresetBySlug("door").permissions);
 const eventContext: Pick<PlatformEvent, "enabledModules"> = {
@@ -238,7 +238,7 @@ test("path requirements resolve to the canonical permission", () => {
   assert.equal(getNavigationPermissionForPath("/unknown"), null);
 });
 
-test("middleware matcher covers private app routes and excludes only public/static assets", () => {
+test("proxy matcher covers private app routes and excludes only public/static assets", () => {
   const matcher = new RegExp("^/((?!_next/static|_next/image|favicon\\.ico|api/).*)$");
 
   assert.equal(matcher.test("/reservations"), true);
@@ -248,7 +248,7 @@ test("middleware matcher covers private app routes and excludes only public/stat
   assert.equal(matcher.test("/api/accounts/invite"), false);
   assert.equal(matcher.test("/_next/static/chunk.js"), false);
   assert.equal(matcher.test("/favicon.ico"), false);
-  assert.deepEqual(middlewareConfig.matcher, ["/((?!_next/static|_next/image|favicon.ico|api/).*)"]);
+  assert.deepEqual(proxyConfig.matcher, ["/((?!_next/static|_next/image|favicon.ico|api/).*)"]);
 });
 
 test("public legal routes remain accessible without authentication", () => {
