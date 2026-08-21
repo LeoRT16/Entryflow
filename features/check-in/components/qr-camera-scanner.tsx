@@ -30,12 +30,12 @@ type ScannerControlsProps = {
 
 export function QrCameraControls({ status, onActivate, onStop, onRestart }: ScannerControlsProps) {
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
       {status === "scanning" ? (
         <button
           type="button"
           onClick={onStop}
-          className="inline-flex h-11 items-center justify-center rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15"
+          className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 text-sm font-semibold text-amber-50 transition hover:bg-amber-400/15"
         >
           Detener cámara
         </button>
@@ -43,7 +43,7 @@ export function QrCameraControls({ status, onActivate, onStop, onRestart }: Scan
         <button
           type="button"
           onClick={onActivate}
-          className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
+          className="inline-flex h-12 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/15"
         >
           Activar cámara
         </button>
@@ -51,7 +51,7 @@ export function QrCameraControls({ status, onActivate, onStop, onRestart }: Scan
       <button
         type="button"
         onClick={onRestart}
-        className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+        className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
       >
         Reiniciar
       </button>

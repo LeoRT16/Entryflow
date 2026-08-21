@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
@@ -36,6 +36,15 @@ type ReservationOperationsBoardProps = {
   onEditGuest: (guestId: string) => void;
 };
 
+type GuestOverflowActionTone = "success" | "warning" | "danger" | "info";
+
+type GuestOverflowActionItem = {
+  id: string;
+  label: string;
+  tone?: GuestOverflowActionTone;
+  onSelect: () => void;
+};
+
 export function getReservationGuestActionVisibility(
   reservationStatus: ReservationSummary["status"],
   guest: ReservationSummary["guests"][number],
@@ -51,6 +60,16 @@ export function getReservationGuestActionVisibility(
     showCancel: !terminal && guest.canCancel,
     showRemove: !terminal && guest.canRemove,
   };
+}
+
+function guestOverflowToneClasses(tone: GuestOverflowActionTone) {
+  return tone === "success"
+    ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-50 hover:bg-emerald-400/15"
+    : tone === "warning"
+      ? "border-amber-400/20 bg-amber-400/10 text-amber-50 hover:bg-amber-400/15"
+      : tone === "danger"
+        ? "border-rose-400/20 bg-rose-400/10 text-rose-50 hover:bg-rose-400/15"
+        : "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]";
 }
 
 export default function ReservationOperationsBoard({
@@ -490,10 +509,51 @@ function ReservationGuestRow({
   onRemove: () => void;
 }) {
   const actionVisibility = getReservationGuestActionVisibility(reservationStatus, guest, eventTerminal);
+  const overflowActions: GuestOverflowActionItem[] = [
+    canEditGuest
+      ? {
+          id: "edit",
+          label: "Editar",
+          onSelect: onEdit,
+        }
+      : null,
+    actionVisibility.showConfirm
+      ? {
+          id: "confirm",
+          label: "Confirmar",
+          tone: "info",
+          onSelect: onConfirm,
+        }
+      : null,
+    actionVisibility.showRevert
+      ? {
+          id: "revert",
+          label: "Revertir ingreso",
+          tone: "warning",
+          onSelect: onRevert,
+        }
+      : null,
+    actionVisibility.showCancel
+      ? {
+          id: "cancel",
+          label: "Cancelar invitado",
+          tone: "danger",
+          onSelect: onCancel,
+        }
+      : null,
+    actionVisibility.showRemove
+      ? {
+          id: "remove",
+          label: "Eliminar",
+          tone: "danger",
+          onSelect: onRemove,
+        }
+      : null,
+  ].filter((item): item is GuestOverflowActionItem => item !== null);
 
   return (
     <div className="surface-elevated min-w-0 p-4">
-      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1">
           <p className="break-words text-sm font-semibold text-white">{guest.guestName}</p>
           <p
@@ -503,19 +563,6 @@ function ReservationGuestRow({
             {guest.invitationCode} · {guest.invitationSequence}
           </p>
           <div className="mt-3 flex min-w-0 flex-wrap gap-2">
-            <StatusBadge
-              variant={
-                guest.reservationStatus === "Cancelled"
-                  ? "danger"
-                  : guest.reservationStatus === "Pending"
-                    ? "warning"
-                    : guest.reservationStatus === "Checked In"
-                      ? "success"
-                      : "info"
-              }
-            >
-              {formatReservationStatus(guest.reservationStatus)}
-            </StatusBadge>
             <StatusBadge
               variant={
                 guest.admissionStatus === "Ingresó"
@@ -529,72 +576,135 @@ function ReservationGuestRow({
             >
               {guest.admissionStatus}
             </StatusBadge>
+            <StatusBadge
+              variant={
+                guest.reservationStatus === "Cancelled"
+                  ? "danger"
+                  : guest.reservationStatus === "Pending"
+                    ? "warning"
+                    : guest.reservationStatus === "Checked In"
+                      ? "success"
+                      : "info"
+              }
+            >
+              {formatReservationStatus(guest.reservationStatus)}
+            </StatusBadge>
             <StatusBadge variant="info">{guest.deliveryStatus}</StatusBadge>
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-wrap gap-2 lg:justify-end">
-          {canEditGuest ? (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Editar
-            </button>
-          ) : null}
-
-          {actionVisibility.showConfirm ? (
-            <button
-              type="button"
-              onClick={onConfirm}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Confirmar
-            </button>
-          ) : null}
-
+        <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
           {actionVisibility.showCheckIn ? (
             <button
               type="button"
               onClick={onCheckIn}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/15"
             >
               Registrar ingreso
             </button>
           ) : null}
-
-          {actionVisibility.showRevert ? (
-            <button
-              type="button"
-              onClick={onRevert}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15"
-            >
-              Revertir ingreso
-            </button>
-          ) : null}
-
-          {actionVisibility.showCancel ? (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 text-sm font-medium text-rose-50 transition hover:bg-rose-400/15"
-            >
-              Cancelar invitado
-            </button>
-          ) : null}
-
-          {actionVisibility.showRemove ? (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-            >
-              Eliminar
-            </button>
-          ) : null}
+          <ReservationGuestOverflowMenu actions={overflowActions} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function ReservationGuestOverflowMenu({ actions }: { actions: GuestOverflowActionItem[] }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+
+      if (rootRef.current?.contains(target)) {
+        return;
+      }
+
+      setOpen(false);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    }
+  }, [open]);
+
+  if (!actions.length) {
+    return null;
+  }
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/80 transition hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+        aria-label="Más acciones del invitado"
+        aria-controls={menuId}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <span className="text-xl leading-none">...</span>
+      </button>
+
+      {open ? (
+        <div
+          ref={menuRef}
+          id={menuId}
+          role="menu"
+          aria-label="Más acciones del invitado"
+          className="absolute right-0 top-12 z-20 w-[min(18rem,calc(100vw-2rem))] overflow-hidden surface-panel bg-[#0b0f14]"
+        >
+          <div className="border-b border-white/10 px-4 py-2.5">
+            <p className="kicker">Más acciones</p>
+          </div>
+
+          <div className="p-2">
+            {actions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  action.onSelect();
+                  setOpen(false);
+                }}
+                className={[
+                  "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50",
+                  guestOverflowToneClasses(action.tone ?? "info"),
+                ].join(" ")}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{action.label}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

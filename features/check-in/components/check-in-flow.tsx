@@ -318,6 +318,8 @@ function CheckInWorkspace() {
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-6">
+            <QrCameraScanner eventName={currentEvent.name} onDetected={handleDetected} />
+
             <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -398,8 +400,6 @@ function CheckInWorkspace() {
                 )
               ) : null}
             </section>
-
-            <QrCameraScanner eventName={currentEvent.name} onDetected={handleDetected} />
           </div>
 
           <aside className="space-y-6">

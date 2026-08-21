@@ -73,8 +73,13 @@ test("terminal event context hides guest mutation affordances even for pending r
 test("reservation operations board exposes edit and delete actions for active reservations", () => {
   const source = readFileSync(new URL("../features/reservations/components/reservation-operations-board.tsx", import.meta.url), "utf8");
 
-  assert.match(source, /Editar reserva/);
-  assert.match(source, /Eliminar reserva/);
+  assert.match(source, /Registrar ingreso/);
+  assert.match(source, /Más acciones del invitado/);
+  assert.match(source, /Editar/);
+  assert.match(source, /Confirmar/);
+  assert.match(source, /Revertir ingreso/);
+  assert.match(source, /Cancelar invitado/);
+  assert.match(source, /Eliminar/);
   assert.match(source, /confirm\(\{\s*title:\s*"Eliminar reserva"/);
   assert.match(source, /onEditReservation/);
   assert.match(source, /onDeleteReservation/);

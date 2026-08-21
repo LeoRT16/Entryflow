@@ -447,7 +447,7 @@ export default function ReservationWizardModal({
 
               <aside className="border-t border-white/10 bg-slate-950/40 px-5 py-5 sm:px-6 lg:sticky lg:top-0 lg:h-full lg:border-l lg:border-t-0 lg:px-5 lg:py-6">
                 <div className="space-y-4">
-                  <div className="surface-panel p-5">
+                  <div className="surface-panel p-4 sm:p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="kicker">
@@ -460,14 +460,14 @@ export default function ReservationWizardModal({
                       <StatusBadge variant="info">Borrador</StatusBadge>
                     </div>
 
-                    <div className="mt-5 space-y-3">
+                    <div className="mt-4 space-y-3">
                       {liveSummary.map((item) => (
                         <LiveSummaryRow key={item.label} label={item.label} value={item.value} />
                       ))}
                     </div>
                   </div>
 
-                  <div className="surface-elevated p-5">
+                  <div className="surface-elevated p-4 sm:p-5">
                     <p className="kicker">
                       Progreso
                     </p>
@@ -493,7 +493,7 @@ export default function ReservationWizardModal({
                     </div>
                   </div>
 
-                  <div className="surface-panel p-5">
+                  <div className="surface-panel p-4 sm:p-5">
                     <p className="kicker">
                       Estado
                     </p>
@@ -548,7 +548,7 @@ function WizardProgress({
   completion: number;
 }) {
   return (
-    <section className="surface-panel p-5">
+    <section className="surface-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="kicker">
@@ -662,7 +662,7 @@ function GeneralStep({
   setObservations: Dispatch<SetStateAction<string>>;
 }) {
   return (
-    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
+    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
       <div className="grid gap-4 xl:grid-cols-2">
       <Field label="Evento">
           <select
@@ -712,7 +712,7 @@ function GeneralStep({
         </Field>
       </div>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+      <div className="mt-4 grid gap-4 sm:grid-cols-3">
         <InfoCard label="Evento" value={eventName} />
         <InfoCard label="Fecha" value={date} />
         <InfoCard label="Hora" value={time} />
@@ -773,7 +773,7 @@ function HolderStep({
   const showDecorativeSignals = wizardMode !== "create";
 
   return (
-    <section className="surface-panel p-5">
+    <section className="surface-panel p-4 sm:p-5">
       <div className="grid gap-4 xl:grid-cols-2">
         <Field label="Nombre del titular">
           <input
@@ -831,7 +831,7 @@ function HolderStep({
       </div>
 
       {showDecorativeSignals ? (
-        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
           <ToggleField
             label="Marca VIP"
             active={vip}
@@ -887,7 +887,7 @@ function GuestsStep({
   updateGuest: (index: number, field: keyof GuestDraft, value: string | boolean) => void;
 }) {
   return (
-    <section className="surface-panel p-5">
+    <section className="surface-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
@@ -912,11 +912,11 @@ function GuestsStep({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4">
+      <div className="mt-4 grid gap-4">
         {guests.map((guest, index) => (
           <article
             key={guest.id}
-            className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-5"
+            className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4"
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -949,7 +949,7 @@ function GuestsStep({
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 xl:grid-cols-4">
+            <div className="mt-4 grid gap-4 xl:grid-cols-4">
               <Field label="Nombre">
                 <input
                   value={guest.name}
@@ -997,7 +997,7 @@ function GuestsStep({
         ))}
       </div>
 
-      <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+      <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
         <p className="text-sm text-slate-300">
           <span className="font-medium text-white">{registeredGuests}</span> de{" "}
           <span className="font-medium text-white">{guestCount}</span> invitados registrados ·{" "}
@@ -1018,7 +1018,7 @@ function TableStep({
   resourceOptions: TableOption[];
 }) {
   return (
-    <section className="surface-panel p-5">
+    <section className="surface-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
@@ -1031,7 +1031,7 @@ function TableStep({
         <StatusBadge variant="info">Selector visual</StatusBadge>
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
         {resourceOptions.map((table) => {
           const selected = table.id === selectedResourceId;
           const assignedGuests = table.assignedGuests ?? 0;
@@ -1124,7 +1124,7 @@ function PaymentStep({
   pendingNumber: number;
 }) {
   return (
-    <section className="surface-panel p-5">
+    <section className="surface-panel p-4 sm:p-5">
       <div className="grid gap-4 xl:grid-cols-2">
         <Field label="Monto de la reserva">
           <input
@@ -1166,18 +1166,34 @@ function PaymentStep({
         </Field>
       </div>
 
-      <div className="mt-5">
-        <p className="text-sm font-medium text-slate-200">Estado</p>
-        {paymentStatus === "Pagado" ? (
-          <p className="mt-2 text-sm text-slate-400">
-            Cuando la reserva queda pagada, el adelanto sigue automáticamente el monto total.
-          </p>
-        ) : (
-          <p className="mt-2 text-sm text-slate-400">
-            Puedes ajustar el adelanto manualmente mientras el estado no sea Pagado.
-          </p>
-        )}
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <LiveSummaryRow label="Monto" value={formatCurrency(amount)} />
+        <LiveSummaryRow label="Adelanto" value={formatCurrency(advance)} />
+        <LiveSummaryRow label="Pendiente" value={formatCurrency(String(pendingNumber))} />
+        <LiveSummaryRow label="Método" value={paymentMethod} />
+        <LiveSummaryRow label="Estado" value={paymentStatus} />
+      </div>
+
+      <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Estado de pago</p>
+            {paymentStatus === "Pagado" ? (
+              <p className="mt-2 text-sm text-slate-400">
+                Cuando la reserva queda pagada, el adelanto sigue automáticamente el monto total.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-slate-400">
+                Puedes ajustar el adelanto manualmente mientras el estado no sea Pagado.
+              </p>
+            )}
+          </div>
+          <StatusBadge variant={paymentStatus === "Pagado" ? "success" : paymentStatus === "Parcial" ? "warning" : "info"}>
+            {paymentStatus}
+          </StatusBadge>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
           {paymentStatuses.map((status) => {
             const selected = paymentStatus === status;
             return (
@@ -1200,17 +1216,17 @@ function PaymentStep({
                       ? "Cobro parcial capturado"
                       : "Reserva financiada"}
                 </p>
-              </button>
+                </button>
             );
           })}
         </div>
       </div>
 
-      <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
+      <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
           Historial de pagos simulados
         </p>
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 space-y-2">
           {reservationPaymentHistory.map((entry) => (
             <div
               key={`${entry.time}-${entry.title}`}
@@ -1362,8 +1378,8 @@ function SummaryStep({
   ];
 
   return (
-    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
-      <div className="rounded-[1.75rem] border border-emerald-400/20 bg-emerald-400/10 p-5">
+    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+      <div className="rounded-[1.75rem] border border-emerald-400/20 bg-emerald-400/10 p-4 sm:p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-200">
           Confirmación premium
         </p>
@@ -1377,7 +1393,7 @@ function SummaryStep({
       </div>
 
       {selectedActiveReservation && wizardMode === "create" ? (
-        <div className="mt-4 rounded-[1.5rem] border border-amber-400/20 bg-amber-400/10 p-5">
+        <div className="mt-4 rounded-[1.5rem] border border-amber-400/20 bg-amber-400/10 p-4 sm:p-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-100">
             Mesa con reserva activa
           </p>
@@ -1414,16 +1430,16 @@ function SummaryStep({
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-4">
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
         {summaryCards.map((section) => (
           <div
             key={section.title}
-            className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-5"
+            className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4"
           >
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
               {section.title}
             </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {section.rows.map(([label, value]) => (
                 <DetailBadge key={label} label={label} value={value} />
               ))}

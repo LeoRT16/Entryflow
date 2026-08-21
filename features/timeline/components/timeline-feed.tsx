@@ -181,14 +181,14 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
             key={event.id}
             items={actions}
             className={[
-              "rounded-2xl border px-4 py-4",
+              "rounded-2xl border px-3.5 py-3.5",
               isSelected ? "border-cyan-400/40 bg-cyan-400/10" : "border-white/10 bg-[#0f151d]",
             ].join(" ")}
           >
             <article
               id={event.id}
               tabIndex={-1}
-              className="grid gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+              className="grid gap-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -230,15 +230,15 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
         <ContextualCard
           key={event.id}
           items={actions}
-          className={[
-            "rounded-2xl border px-4 py-4",
+            className={[
+            "rounded-2xl border px-3.5 py-3.5",
             isSelected ? "border-cyan-400/40 bg-cyan-400/10" : "border-white/10 bg-[#0f151d]",
           ].join(" ")}
         >
           <article
             id={event.id}
             tabIndex={-1}
-            className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+            className="grid gap-3.5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
           >
             <div className="flex items-center gap-3 sm:flex-col sm:items-center sm:gap-2">
               <TimelineMark tone={event.tone} />
@@ -374,8 +374,8 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
 
   if (!orderedEvents.length) {
     return (
-      <section className="surface-panel p-5 sm:p-6">
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+    <section className="surface-panel p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div>
             <p className="kicker">
               Actividad reciente
@@ -385,7 +385,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
           <StatusBadge variant="info">0</StatusBadge>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-slate-950/20 p-4">
+        <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-slate-950/20 p-4">
           <p className="text-sm text-slate-400">No hay actividad reciente.</p>
         </div>
       </section>
@@ -393,8 +393,8 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
   }
 
   return (
-    <section className="surface-panel p-5 sm:p-6">
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+    <section className="surface-panel p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
         <div>
           <p className="kicker">
             Actividad reciente
@@ -404,9 +404,9 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
         <StatusBadge variant="info">{events.length}</StatusBadge>
       </div>
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-4 space-y-3">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2.25fr)_minmax(0,1fr)] xl:items-start">
-          <section className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
+          <section className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-3.5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="kicker">Operativo</p>
@@ -426,7 +426,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
             )}
           </section>
 
-          <section className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
+          <section className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-3.5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="kicker">Crítico</p>
@@ -463,7 +463,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
               const badgeVariant = group === "Informational" ? "info" : "success";
 
               return (
-                <section key={group} className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-4">
+                <section key={group} className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/20 p-3.5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="kicker">{label}</p>

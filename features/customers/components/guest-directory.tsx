@@ -278,7 +278,6 @@ function GuestResultCard({
   isSelected: boolean;
 }) {
   const quickRead = buildGuestQuickReadSummary(guest);
-  const deliveryStatus = getGuestDeliveryStatusLabel(guest);
   const deliveryTone = getGuestDeliveryStatusTone(guest);
 
   return (
@@ -300,7 +299,7 @@ function GuestResultCard({
           </div>
           <div className="flex min-w-0 flex-wrap justify-end gap-2">
             <StatusBadge variant={statusTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
-            <StatusBadge variant={deliveryTone}>{deliveryStatus}</StatusBadge>
+            <StatusBadge variant={deliveryTone}>{getGuestDeliveryStatusLabel(guest)}</StatusBadge>
           </div>
         </div>
 
@@ -308,7 +307,7 @@ function GuestResultCard({
           <CompactMeta label="Reserva" value={quickRead.reservation} />
           <CompactMeta label="Mesa / espacio" value={quickRead.space} />
           <CompactMeta label="Ingreso" value={quickRead.entryStatus} />
-          <CompactMeta label="Entrega / invitación" value={deliveryStatus} />
+          <CompactMeta label="WhatsApp" value={guest.whatsapp || "Sin WhatsApp"} />
         </div>
       </div>
     </button>
@@ -672,14 +671,20 @@ function GuestDrawer({
 
           <div className="flex-1 space-y-4 overflow-y-auto p-5">
             <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-              <p className="kicker">Información</p>
+              <p className="kicker">Quién es</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <CompactMeta label="Carnet" value={guest.carnet} />
                 <CompactMeta label="WhatsApp" value={guest.whatsapp || "Sin WhatsApp"} />
-                <CompactMeta label="Reserva" value={`${guest.reservationCode} · ${guest.reservationName}`} />
-                <CompactMeta label="Mesa / espacio" value={guest.tableName || "Sin mesa"} />
                 <CompactMeta label="Estado de ingreso" value={guest.admissionStatus} />
                 <CompactMeta label="Estado de entrega" value={getGuestDeliveryStatusLabel(guest)} />
+              </div>
+            </section>
+
+            <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+              <p className="kicker">Dónde pertenece</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <CompactMeta label="Reserva" value={`${guest.reservationCode} · ${guest.reservationName}`} />
+                <CompactMeta label="Mesa / espacio" value={guest.tableName || "Sin mesa"} />
               </div>
             </section>
 
@@ -696,7 +701,6 @@ function GuestDrawer({
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <CompactMeta label="Código visible" value={visibleInvitationCode} />
-                <CompactMeta label="WhatsApp" value={guest.whatsapp || "Sin WhatsApp"} />
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
