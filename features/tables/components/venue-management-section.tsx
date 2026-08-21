@@ -204,7 +204,7 @@ function VenueEditorForm({
 
   return (
     <div className="md:col-span-2 xl:col-span-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Input label="Nombre" value={venueName} onChange={setVenueName} placeholder="La Rota Carlota" />
         <Input label="Ciudad" value={venueCity} onChange={setVenueCity} placeholder="La Paz" />
         <Input label="Dirección" value={venueAddress} onChange={setVenueAddress} placeholder="Av. principal 123" />
@@ -356,7 +356,7 @@ export default function VenueManagementSection({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {canManageVenue && mode === "edit" ? (
           <VenueEditorForm
             key={`${mode}:${selectedVenue.id}`}

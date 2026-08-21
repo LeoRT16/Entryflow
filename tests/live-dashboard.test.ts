@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildLiveDashboardModel, buildLiveDashboardQuickActions } from "../features/events/domain/live-dashboard";
@@ -498,12 +499,25 @@ test("buildLiveDashboardModel derives the main KPIs and keeps scanner first", ()
   });
 
   assert.equal(model.header.liveLabel, "En vivo");
-  assert.equal(model.kpis.find((item) => item.label === "Ingresados")?.value, "30");
-  assert.equal(model.kpis.find((item) => item.label === "Pendientes")?.value, "20");
+  assert.equal(model.kpis.length, 8);
+  assert.deepEqual(model.kpis.map((item) => item.label), [
+    "Reservas activas",
+    "Reservas confirmadas",
+    "Reservas pendientes",
+    "Invitados esperados",
+    "Invitados ingresados",
+    "Invitados pendientes",
+    "Ocupación",
+    "Check-ins/min",
+  ]);
+  assert.equal(model.kpis.find((item) => item.label === "Invitados ingresados")?.value, "30");
+  assert.equal(model.kpis.find((item) => item.label === "Invitados pendientes")?.value, "20");
   assert.equal(model.kpis.find((item) => item.label === "Ocupación")?.value, "80%");
-  assert.equal(model.kpis.find((item) => item.label === "Alertas")?.value, "10");
+  assert.equal(model.kpis.find((item) => item.label === "Check-ins/min")?.value, "2");
   assert.equal(model.capacity.occupancyPercent, 80);
   assert.equal(model.alertCount, 10);
+  assert.equal(model.alerts.length, 6);
+  assert.equal(model.alerts[0]?.route, "/tables");
   assert.equal(model.quickActions[0]?.route, "/check-in");
   assert.equal(model.quickActions[0]?.label, "Escanear / Ingreso");
 });
@@ -540,6 +554,7 @@ test("buildLiveDashboardModel returns an empty alert state when the workspace is
   assert.equal(model.capacity.state, "stable");
   assert.equal(model.admission.blockedSignals, 0);
   assert.equal(model.alertCount, 0);
+  assert.equal(model.alerts.length, 0);
 });
 
 test("buildLiveDashboardModel prefers the canonical venue name over the denormalized event label", () => {
@@ -607,8 +622,8 @@ test("buildLiveDashboardModel updates the live state when a new check-in arrives
     }),
   });
 
-  assert.equal(before.kpis.find((item) => item.label === "Ingresados")?.value, "30");
-  assert.equal(after.kpis.find((item) => item.label === "Ingresados")?.value, "31");
+  assert.equal(before.kpis.find((item) => item.label === "Invitados ingresados")?.value, "30");
+  assert.equal(after.kpis.find((item) => item.label === "Invitados ingresados")?.value, "31");
   assert.equal(before.admission.recentCheckIns, 1);
   assert.equal(after.admission.recentCheckIns, 2);
   assert.equal(after.capacity.occupancyPercent, 82);
@@ -694,4 +709,11 @@ test("buildLiveDashboardModel marks terminal events as read-only while preservin
   assert.equal(model.header.nextAction, "Evento cerrado. Revisa historial, reservas y trazabilidad sin ejecutar mutaciones.");
   assert.equal(quickActions[0]?.label, "Ingreso · solo lectura");
   assert.equal(quickActions[0]?.route, "/check-in");
+});
+
+test("event command center keeps quick actions out of the overview shell", () => {
+  const source = readFileSync(new URL("../features/events/components/event-command-center.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /dashboard-quick-actions/i);
+  assert.doesNotMatch(source, /Acciones rápidas/);
 });

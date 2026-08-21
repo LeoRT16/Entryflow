@@ -252,7 +252,7 @@ function LibrarySection({
         <StatusBadge variant={accent}>{events.length}</StatusBadge>
       </div>
 
-      <div className="mt-3 space-y-2.5">
+      <div className="mt-3 grid gap-2.5 xl:grid-cols-2">
         {events.map((event) => (
           <EventCard
             key={event.id}
@@ -285,7 +285,7 @@ function EventCard({
 
   return (
     <article
-      className={`surface-elevated flex h-full flex-col gap-3 p-3 sm:p-4 transition ${
+      className={`surface-elevated flex h-full flex-col gap-3 p-3 transition sm:p-4 ${
         current
           ? "border-cyan-400/50 bg-cyan-400/8 shadow-[0_0_0_1px_rgba(34,211,238,0.14)]"
           : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]"
@@ -308,9 +308,15 @@ function EventCard({
         {current ? <StatusBadge variant="info">En uso</StatusBadge> : null}
       </div>
 
-      <div className="space-y-1.5 text-sm leading-6 text-slate-300">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm leading-6 text-slate-300">
         <p className="min-w-0 break-words">
-          <span className="text-slate-500">Modelo</span> {getOperationalModelLabel(event.operationalModel)} · {event.capacity} personas · {event.venue}
+          <span className="text-slate-500">Modelo</span> {getOperationalModelLabel(event.operationalModel)}
+        </p>
+        <p className="min-w-0 break-words">
+          <span className="text-slate-500">Capacidad</span> {event.capacity}
+        </p>
+        <p className="min-w-0 break-words">
+          <span className="text-slate-500">Venue</span> {event.venue}
         </p>
         {resourceLabel ? (
           <p className="min-w-0 break-words">

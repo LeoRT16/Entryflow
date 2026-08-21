@@ -7,6 +7,7 @@ import {
   getVenueContextStorageKey,
   readVenueContextPreference,
   resolveTablesVenueContext,
+  resolveVenueSectorName,
   writeVenueContextPreference,
 } from "../features/tables/domain/venue-context";
 import {
@@ -190,6 +191,17 @@ test("venue context keeps both venues selectable after creation without mixing d
   assert.deepEqual(context.currentVenueResources.map((resource) => resource.id), ["resource-b"]);
 });
 
+test("venue sector names resolve canonically from sector ids", () => {
+  const sectors = [
+    buildSector({ id: "sector-a", name: "Patio Principal" }),
+    buildSector({ id: "sector-b", name: "Terraza" }),
+  ];
+
+  assert.equal(resolveVenueSectorName(sectors, "sector-a"), "Patio Principal");
+  assert.equal(resolveVenueSectorName(sectors, "missing"), "Sin zona");
+  assert.equal(resolveVenueSectorName(sectors, null), "Sin zona");
+});
+
 test("tables flow exposes the venue context bar and the create-venue empty state", () => {
   const source = readFileSync(new URL("../features/tables/components/tables-flow.tsx", import.meta.url), "utf8");
 
@@ -207,6 +219,9 @@ test("tables flow exposes the venue context bar and the create-venue empty state
   assert.match(source, /resolveCurrentVenueResources/);
   assert.match(source, /resolveCurrentEventLayout/);
   assert.match(source, /resolveCurrentVenueLayout/);
+  assert.match(source, /resolveVenueSectorName/);
+  assert.match(source, /grid gap-3 sm:grid-cols-2 xl:grid-cols-3/);
+  assert.match(source, /lg:grid-cols-2 2xl:grid-cols-3/);
   assert.doesNotMatch(source, /inline-flex h-11 items-center rounded-2xl border border-white\/10 bg-white\/\[0\.04\] px-4 text-sm font-medium text-white/);
 });
 
@@ -230,5 +245,7 @@ test("venue management section reuses the old editable venue fields and keeps ma
   assert.match(source, /Solo lectura/);
   assert.match(source, /mode === "create"/);
   assert.match(source, /mode === "edit"/);
+  assert.match(source, /xl:grid-cols-4/);
+  assert.match(source, /xl:grid-cols-3/);
   assert.doesNotMatch(source, /coordinates|latitude|longitude|map link|map preview/i);
 });

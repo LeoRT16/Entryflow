@@ -279,7 +279,7 @@ export default function EventCreationWizard({
                   <h3 className="mt-2 text-xl font-semibold text-white">Información general</h3>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <Field
                     label="Nombre del evento"
                     value={draft.name}
@@ -342,7 +342,7 @@ export default function EventCreationWizard({
                     onChange={(value) => updateDraft((current) => ({ ...current, capacity: value }))}
                     type="number"
                   />
-                  <div className="md:col-span-2">
+                  <div className="xl:col-span-3">
                     <label className="mb-2 block text-sm font-medium text-slate-300">Descripción opcional</label>
                     <textarea
                       value={draft.description}

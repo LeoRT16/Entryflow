@@ -431,7 +431,7 @@ export default function EventEditorModal({
         )}
 
         <div className="mt-6 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Field label="Nombre del evento" value={eventName} onChange={setEventName} placeholder="Evento principal" disabled={!canEditEvent} />
             <Field label="Fecha y hora" value={eventStartAt} onChange={setEventStartAt} type="datetime-local" disabled={!canEditEvent} />
             <Field label="Capacidad" value={eventCapacity} onChange={setEventCapacity} placeholder="800" type="number" disabled={!canEditEvent} />

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildShellContextSummary, formatShellEventStatus, getShellEventStatusTone, getShellRouteContext } from "../components/shell-context";
@@ -8,6 +9,16 @@ test("shell context makes the current module immediately visible", () => {
 
   assert.equal(route.label, "Espacios");
   assert.match(route.description, /espacios físicos/i);
+});
+
+test("sidebar no longer renders a redundant current module block", () => {
+  const source = readFileSync(new URL("../components/sidebar.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /Módulo actual/);
+  assert.doesNotMatch(source, /shellRoute\.label/);
+  assert.doesNotMatch(source, /shellRoute\.description/);
+  assert.match(source, /Contexto operativo/);
+  assert.match(source, /EventSwitcher/);
 });
 
 test("shell context keeps organization and event hierarchy compact", () => {

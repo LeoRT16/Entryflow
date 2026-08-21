@@ -1,5 +1,9 @@
 import type { WorkspaceIntelligence } from "@/domain/workspace-intelligence";
-import { getWorkspaceActionableAlertCount, type WorkspacePrioritySnapshot } from "@/domain/workspace-priority";
+import {
+  getWorkspaceActionableAlertCount,
+  type WorkspacePriorityItem,
+  type WorkspacePrioritySnapshot,
+} from "@/domain/workspace-priority";
 import { getEventTypeLabel } from "@/features/events/domain";
 import { resolveEventVenueDisplayName } from "@/features/events/domain/event-venue-boundary";
 import type { Event as PlatformEvent } from "@/features/domain/types";
@@ -49,6 +53,8 @@ export type LiveDashboardModel = {
     nextAction: string;
   };
   alertCount: number;
+  alerts: LiveDashboardAlert[];
+  statisticsCards: WorkspaceIntelligence["statistics"]["cards"];
   kpis: LiveDashboardKpi[];
   admission: {
     checkInsPerMinute: number;
@@ -152,6 +158,17 @@ function getRealtimeLabel(workspaceStatus: LiveDashboardInput["workspaceStatus"]
   return "Local";
 }
 
+function mapPriorityItemToAlert(item: WorkspacePriorityItem): LiveDashboardAlert {
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    tone: item.tone,
+    source: item.module,
+    route: item.route,
+  };
+}
+
 export function buildLiveDashboardQuickActions({
   terminalEvent = false,
 }: {
@@ -203,8 +220,6 @@ export function buildLiveDashboardModel({
   workspaceIntelligence,
   workspacePriority,
 }: LiveDashboardInput): LiveDashboardModel {
-  const checkedInGuests = workspaceIntelligence.statistics.cards.checkedInGuests;
-  const pendingGuests = workspaceIntelligence.statistics.cards.pendingGuests;
   const totalCapacity = workspaceIntelligence.capacity.used + workspaceIntelligence.capacity.remaining;
   const occupancyPercent = workspaceIntelligence.capacity.occupancyPercent;
   const recentCheckIns = workspaceIntelligence.operations.recentActivity.filter((event) => event.kind.startsWith("checkin.")).length;
@@ -214,6 +229,14 @@ export function buildLiveDashboardModel({
     workspaceIntelligence.access.blockedGrants;
   const terminalEvent = isTerminalEventStatus(currentEvent.status);
   const alertCount = getWorkspaceActionableAlertCount(workspacePriority);
+  const alertItems = [...workspacePriority.criticalItems, ...workspacePriority.attentionNow];
+  const alerts = alertItems
+    .filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index)
+    .slice(0, 6)
+    .map(mapPriorityItemToAlert);
+
+  const statisticsCards = workspaceIntelligence.statistics.cards;
+  const totalReservations = statisticsCards.totalReservations;
 
   const capacityState: LiveDashboardModel["capacity"]["state"] =
     workspaceIntelligence.capacity.state === "blocked" ? "blocked" : workspaceIntelligence.capacity.state === "watch" ? "watch" : "stable";
@@ -239,18 +262,44 @@ export function buildLiveDashboardModel({
         : workspacePriority.summary.nextBestAction,
     },
     alertCount,
+    alerts,
+    statisticsCards: workspaceIntelligence.statistics.cards,
     kpis: [
       {
-        label: "Ingresados",
-        value: `${checkedInGuests}`,
-        detail: `Confirmados en el evento activo · ${workspaceIntelligence.flow.checkInsPerMinute}/min`,
+        label: "Reservas activas",
+        value: `${statisticsCards.activeReservations}`,
+        detail: "Reservas confirmadas o en curso.",
+        tone: "info",
+      },
+      {
+        label: "Reservas confirmadas",
+        value: `${statisticsCards.confirmedReservations}`,
+        detail: "Reservas listas para operar.",
         tone: "success",
       },
       {
-        label: "Pendientes",
-        value: `${pendingGuests}`,
-        detail: "Siguen esperando ingreso",
-        tone: pendingGuests > 0 ? "warning" : "success",
+        label: "Reservas pendientes",
+        value: `${statisticsCards.pendingReservations}`,
+        detail: "Reservas todavía abiertas.",
+        tone: statisticsCards.pendingReservations > 0 ? "warning" : "success",
+      },
+      {
+        label: "Invitados esperados",
+        value: `${statisticsCards.expectedGuests}`,
+        detail: "Total de invitados del evento activo.",
+        tone: "info",
+      },
+      {
+        label: "Invitados ingresados",
+        value: `${statisticsCards.checkedInGuests}`,
+        detail: "Accesos confirmados.",
+        tone: "success",
+      },
+      {
+        label: "Invitados pendientes",
+        value: `${statisticsCards.pendingGuests}`,
+        detail: "Invitados por ingresar.",
+        tone: statisticsCards.pendingGuests > 0 ? "warning" : "success",
       },
       {
         label: "Ocupación",
@@ -259,10 +308,10 @@ export function buildLiveDashboardModel({
         tone: occupancyPercent >= 90 || workspaceIntelligence.capacity.state === "blocked" ? "danger" : occupancyPercent >= 80 ? "warning" : "info",
       },
       {
-        label: "Alertas",
-        value: `${alertCount}`,
-        detail: alertCount > 0 ? "Requieren atención operativa" : "Sin incidencias abiertas",
-        tone: alertCount > 0 ? "warning" : "success",
+        label: "Check-ins/min",
+        value: `${workspaceIntelligence.flow.checkInsPerMinute}`,
+        detail: totalReservations > 0 ? `${totalReservations} reservas en el evento activo` : "Promedio derivado del flujo activo.",
+        tone: workspaceIntelligence.flow.checkInsPerMinute > 0 ? "success" : "info",
       },
     ],
     admission: {

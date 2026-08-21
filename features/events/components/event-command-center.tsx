@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import Topbar from "@/components/topbar";
 import StatusBadge from "@/components/status-badge";
 import { isTerminalEventStatus } from "@/features/events/domain";
-import { buildLiveDashboardModel } from "@/features/events/domain/live-dashboard";
+import { buildLiveDashboardModel, type LiveDashboardAlert } from "@/features/events/domain/live-dashboard";
 import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
 import { useCheckInStore } from "@/services/workspace-service";
 
@@ -26,24 +26,6 @@ function valueToneClass(tone: "success" | "warning" | "danger" | "info") {
   if (tone === "warning") return "border-amber-400/20 bg-amber-400/10 text-amber-100";
   if (tone === "danger") return "border-rose-400/20 bg-rose-400/10 text-rose-100";
   return "border-sky-400/20 bg-sky-400/10 text-sky-100";
-}
-
-function getReservationStatusLabel(status: string) {
-  if (status === "Confirmed") return "Confirmada";
-  if (status === "Checked In") return "Ingresada";
-  if (status === "Pending") return "Pendiente";
-  if (status === "Completed") return "Completada";
-  if (status === "Cancelled") return "Cancelada";
-  if (status === "No Show") return "No asistió";
-  if (status === "Draft") return "Borrador";
-  return status;
-}
-
-function getReservationStatusTone(status: string) {
-  if (status === "Confirmed" || status === "Checked In" || status === "Completed") return "success";
-  if (status === "Pending") return "warning";
-  if (status === "Cancelled" || status === "No Show") return "danger";
-  return "info";
 }
 
 function MiniMetric({
@@ -117,42 +99,182 @@ function ActivityEntry({
   );
 }
 
-function ReservationEntry({
-  href,
-  time,
-  title,
-  status,
-  tableName,
-  guestCount,
+function CompactStat({
+  label,
+  value,
+  tone,
+  detail,
 }: {
-  href: string;
-  time: string;
-  title: string;
-  status: string;
-  tableName: string;
-  guestCount: number;
+  label: string;
+  value: string;
+  tone: "success" | "warning" | "danger" | "info";
+  detail: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="block rounded-2xl border border-white/10 bg-[#0f151d] p-4 transition hover:bg-white/[0.06]"
-    >
-      <div className="flex items-start justify-between gap-3">
+    <article className={`rounded-2xl border p-4 ${valueToneClass(tone)}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-400">{label}</p>
+      <p className="mt-3 text-2xl font-semibold tracking-tight text-white">{value}</p>
+      <p className="mt-2 text-xs leading-5 text-slate-400">{detail}</p>
+    </article>
+  );
+}
+
+function AdmissionCapacityBlock({ model }: { model: ReturnType<typeof buildLiveDashboardModel> }) {
+  const capacityTone =
+    model.capacity.state === "blocked" ? "danger" : model.capacity.state === "watch" ? "warning" : "success";
+
+  return (
+    <section className="surface-panel p-5 sm:p-6">
+      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge variant="info">{time}</StatusBadge>
-            <StatusBadge variant={getReservationStatusTone(status)}>{getReservationStatusLabel(status)}</StatusBadge>
-          </div>
-          <p className="mt-3 text-sm font-semibold text-white">{title}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">
-            {tableName} · {guestCount} invitados
-          </p>
+          <p className="kicker">Admisión + capacidad</p>
+          <h2 className="mt-2 text-lg font-semibold tracking-tight text-white">Pulso operativo del evento</h2>
         </div>
-        <span className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-medium text-white">
-          Ver
-        </span>
+        <StatusBadge variant={capacityTone}>{model.capacity.state === "blocked" ? "Crítica" : model.capacity.state === "watch" ? "En vigilancia" : "Estable"}</StatusBadge>
       </div>
-    </Link>
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4">
+          <p className="kicker">Admisión</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <CompactStat label="Esperados" value={String(model.statisticsCards.expectedGuests)} tone="info" detail="Total de invitados del evento activo." />
+            <CompactStat label="Ingresados" value={String(model.statisticsCards.checkedInGuests)} tone="success" detail="Accesos confirmados en la puerta." />
+            <CompactStat label="Pendientes" value={String(model.statisticsCards.pendingGuests)} tone={model.statisticsCards.pendingGuests > 0 ? "warning" : "success"} detail="Invitados por ingresar." />
+            <CompactStat label="Check-ins/min" value={String(model.statisticsCards.checkInsPerMinute)} tone={model.statisticsCards.checkInsPerMinute > 0 ? "success" : "info"} detail="Promedio derivado del flujo activo." />
+          </div>
+          <p className="mt-4 text-sm leading-6 text-slate-400">{model.admission.summary}</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4">
+          <p className="kicker">Capacidad</p>
+          <div className="mt-4 flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-3xl font-semibold tracking-tight text-white">{model.capacity.occupancyPercent}%</p>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                {model.capacity.used}/{model.capacity.total} ocupados · {model.capacity.remaining} libres
+              </p>
+            </div>
+            <StatusBadge variant={capacityTone}>{model.capacity.state === "blocked" ? "Bloqueada" : model.capacity.state === "watch" ? "Vigilar" : "Estable"}</StatusBadge>
+          </div>
+
+          <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/5">
+            <div
+              className={[
+                "h-full rounded-full",
+                capacityTone === "danger"
+                  ? "bg-rose-400"
+                  : capacityTone === "warning"
+                    ? "bg-amber-400"
+                    : "bg-emerald-400",
+              ].join(" ")}
+              style={{ width: `${Math.min(Math.max(model.capacity.occupancyPercent, 0), 100)}%` }}
+            />
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <CompactStat label="Bloqueos" value={String(model.admission.blockedSignals)} tone={model.admission.blockedSignals > 0 ? "danger" : "success"} detail="Señales de acceso bloqueado o duplicado." />
+            <CompactStat label="Cola" value={String(model.admission.pendingQueue)} tone={model.admission.pendingQueue > 0 ? "warning" : "success"} detail="Invitados esperando en el acceso." />
+          </div>
+
+          <p className="mt-4 text-sm leading-6 text-slate-400">{model.capacity.summary}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CompactAlertCenter({ alerts, alertCount }: { alerts: LiveDashboardAlert[]; alertCount: number }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const panelId = useId();
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+
+      if (rootRef.current?.contains(target)) {
+        return;
+      }
+
+      setOpen(false);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0f151d] px-4 py-4 text-left transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-haspopup="dialog"
+        aria-label={`Centro de alertas operativas${alertCount > 0 ? `, ${alertCount} alertas activas` : ""}`}
+      >
+        <div className="min-w-0">
+          <p className="kicker">Centro de alertas</p>
+          <p className="mt-2 text-sm font-medium text-white">Incidencias y prioridades</p>
+          <p className="mt-1 text-xs leading-5 text-slate-400">{alertCount > 0 ? "Abre el panel para revisar señales activas." : "Sin alertas activas."}</p>
+        </div>
+        <StatusBadge variant={alertCount > 0 ? "warning" : "success"}>{alertCount > 0 ? `${alertCount}` : "0"}</StatusBadge>
+      </button>
+
+      {open ? (
+        <div
+          id={panelId}
+          className="absolute right-0 top-[calc(100%+0.75rem)] z-20 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#0b0f14] shadow-[0_30px_90px_rgba(0,0,0,0.45)]"
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+            <p className="kicker">Alertas activas</p>
+            <StatusBadge variant={alertCount > 0 ? "warning" : "success"}>{alertCount > 0 ? `${alertCount} activas` : "Sin alertas"}</StatusBadge>
+          </div>
+
+          <div className="max-h-[24rem] space-y-2 overflow-y-auto p-2">
+            {alerts.length ? (
+              alerts.map((alert) => (
+                <Link
+                  key={alert.id}
+                  href={alert.route}
+                  onClick={() => setOpen(false)}
+                  className="block rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-white/20 hover:bg-white/[0.06]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white">{alert.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{alert.description}</p>
+                      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{alert.source}</p>
+                    </div>
+                    <StatusBadge variant={alert.tone}>{alert.source}</StatusBadge>
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm leading-6 text-slate-400">
+                No hay alertas activas. La operación está limpia.
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -178,30 +300,33 @@ export default function EventCommandCenter() {
       <Topbar eyebrow="Resumen" title="Resumen" />
 
       <section className="surface-panel overflow-hidden p-5 sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="min-w-0">
             <p className="kicker">{model.header.organizationName}</p>
             <h2 className="mt-2 truncate text-2xl font-semibold tracking-tight text-white sm:text-3xl">{model.header.eventName}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-400 sm:text-[0.95rem]">
               {model.header.eventType} · {model.header.timestampLabel} · {model.header.venue}
             </p>
+            <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-300">{model.header.summary}</p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <StatusBadge variant={toneToVariant(model.header.liveTone)}>{model.header.liveLabel}</StatusBadge>
               <StatusBadge variant="info">{model.header.statusLabel}</StatusBadge>
+              <StatusBadge variant={model.alertCount > 0 ? "warning" : "success"}>{model.alertCount > 0 ? `${model.alertCount} alertas` : "Sin alertas"}</StatusBadge>
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 lg:items-end">
+          <div className="space-y-3 xl:justify-self-end">
+            <CompactAlertCenter alerts={model.alerts} alertCount={model.alertCount} />
             {!isTerminalEvent ? (
               <button
                 type="button"
                 onClick={() => setEventStatus(currentEvent.id, "finished")}
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+                className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
               >
                 Cerrar evento
               </button>
             ) : (
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Evento cerrado</p>
                 <p className="mt-2 text-sm text-slate-300">La vista permanece en lectura.</p>
               </div>
@@ -216,7 +341,9 @@ export default function EventCommandCenter() {
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+      <section className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+        <AdmissionCapacityBlock model={model} />
+
         <section className="surface-panel p-5 sm:p-6">
           <PreviewHeader title="Actividad reciente" action={{ label: "Ver actividad", href: "/timeline" }} />
           <div className="mt-5 space-y-3">
@@ -234,29 +361,6 @@ export default function EventCommandCenter() {
             ) : (
               <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4 text-sm text-slate-400">
                 No hay actividad reciente para mostrar.
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="surface-panel p-5 sm:p-6">
-          <PreviewHeader title="Próximas reservas" action={{ label: "Ver reservas", href: "/reservations" }} />
-          <div className="mt-5 space-y-3">
-            {model.upcomingReservations.length ? (
-              model.upcomingReservations.map((reservation) => (
-                <ReservationEntry
-                  key={reservation.id}
-                  href="/reservations"
-                  time={reservation.time}
-                  title={reservation.name}
-                  status={reservation.status}
-                  tableName={reservation.tableName}
-                  guestCount={reservation.guestCount}
-                />
-              ))
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4 text-sm text-slate-400">
-                No hay reservas próximas para mostrar.
               </div>
             )}
           </div>

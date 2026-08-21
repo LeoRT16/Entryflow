@@ -67,3 +67,7 @@ export function resolveTablesVenueContext({
     currentVenueResources: currentVenueId ? resources.filter((resource) => resource.venueId === currentVenueId) : [],
   };
 }
+
+export function resolveVenueSectorName(sectors: Sector[], sectorId?: string | null) {
+  return sectors.find((sector) => sector.id === sectorId)?.name ?? "Sin zona";
+}

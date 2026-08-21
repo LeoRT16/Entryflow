@@ -7,7 +7,7 @@ import LogoutButton from "@/components/logout-button";
 import EventSwitcher from "@/components/event-switcher";
 import StatusBadge from "@/components/status-badge";
 import TerminalEventBanner from "@/components/terminal-event-banner";
-import { formatShellEventStatus, getShellEventStatusTone, getShellRouteContext } from "@/components/shell-context";
+import { formatShellEventStatus, getShellEventStatusTone } from "@/components/shell-context";
 import { getEventTypeLabel, isTerminalEventStatus } from "@/features/events/domain";
 import { getNavigationGroups } from "@/features/navigation/navigation";
 import { useCheckInStore } from "@/services/workspace-service";
@@ -167,7 +167,6 @@ export default function Sidebar({
   const { currentEvent, currentAccount, can } = useCheckInStore();
   const canSwitchEventContext = can("event.view");
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
-  const shellRoute = getShellRouteContext(pathname);
   const navigationGroups = getNavigationGroups(can, currentEvent);
 
   const renderNavigation = (onLinkClick?: () => void) =>
@@ -225,11 +224,6 @@ export default function Sidebar({
                   </p>
                 </div>
               )}
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Módulo actual</p>
-                <p className="mt-2 truncate text-sm font-semibold text-white">{shellRoute.label}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{shellRoute.description}</p>
-              </div>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <StatusBadge variant={getShellEventStatusTone(currentEvent.status)}>{formatShellEventStatus(currentEvent.status)}</StatusBadge>
@@ -270,7 +264,7 @@ export default function Sidebar({
             <div className="min-w-0 flex-1">
               <p className="kicker">Contexto operativo</p>
               <div className="mt-3 max-w-full space-y-3">
-                {canSwitchEventContext ? (
+              {canSwitchEventContext ? (
                   <EventSwitcher compact />
                 ) : (
                   <div className="surface-interactive px-4 py-3">
@@ -280,11 +274,6 @@ export default function Sidebar({
                     </p>
                   </div>
                 )}
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Módulo actual</p>
-                  <p className="mt-2 truncate text-sm font-semibold text-white">{shellRoute.label}</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">{shellRoute.description}</p>
-                </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <StatusBadge variant={getShellEventStatusTone(currentEvent.status)}>{formatShellEventStatus(currentEvent.status)}</StatusBadge>

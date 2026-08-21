@@ -12,6 +12,7 @@ import { getVenuesForOrganization } from "@/features/domain/selectors";
 import {
   getVenueContextStorageKey,
   readVenueContextPreference,
+  resolveVenueSectorName,
   resolveTablesVenueContext,
 } from "@/features/tables/domain/venue-context";
 import VenueManagementSection from "@/features/tables/components/venue-management-section";
@@ -855,7 +856,7 @@ function TablesFlowWorkspace() {
               <StatusBadge variant="info">{zoneOptions.length} zonas</StatusBadge>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {zoneOptions.length ? (
                 zoneOptions.map((zone) => {
                   const isSelected = zone.id === effectiveSelectedZoneId;
@@ -867,20 +868,25 @@ function TablesFlowWorkspace() {
                     <div
                       key={zone.id}
                       className={[
-                        "flex min-w-0 items-center gap-2 rounded-[1.15rem] border px-3 py-2",
+                        "flex min-w-0 flex-col gap-2 rounded-[1.15rem] border px-3 py-3",
                         isSelected ? "border-cyan-400/35 bg-cyan-400/10" : "border-white/10 bg-black/15",
                       ].join(" ")}
                     >
-                      <button
-                        type="button"
-                        onClick={() => setSelectedSectorId(zone.id)}
-                        className="min-w-0 text-left"
-                      >
-                        <p className="truncate text-sm font-medium text-white">{zone.name}</p>
-                        <p className="mt-1 text-xs text-slate-400">{zoneResourceCount} espacios</p>
-                      </button>
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSectorId(zone.id)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="truncate text-sm font-semibold text-white">{zone.name}</p>
+                          <p className="mt-1 text-xs text-slate-400">{zoneResourceCount} espacios</p>
+                        </button>
+                        {!zone.isUnassigned ? (
+                          <StatusBadge variant="info">{zone.status === "active" ? "Activa" : "Inactiva"}</StatusBadge>
+                        ) : null}
+                      </div>
                       {!zone.isUnassigned ? (
-                        <>
+                        <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => {
@@ -920,7 +926,7 @@ function TablesFlowWorkspace() {
                           >
                             {zone.status === "active" ? "Desactivar" : "Activar"}
                           </button>
-                        </>
+                        </div>
                       ) : null}
                     </div>
                   );
@@ -944,7 +950,7 @@ function TablesFlowWorkspace() {
               <StatusBadge variant="info">{venueSectors.length} zonas</StatusBadge>
             </div>
 
-            <div className="mt-5 grid gap-3">
+            <div className="mt-5 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
               {visibleResources.length ? (
                 visibleResources.map((resource) => {
                   const summary = resourceSummaryMap.get(resource.id);
@@ -985,8 +991,7 @@ function TablesFlowWorkspace() {
                         <div className="min-w-0">
                           <p className="truncate text-lg font-semibold tracking-tight text-white">{resource.name}</p>
                           <p className="mt-1 break-words text-sm text-slate-400">
-                            {resourceTypeLabels[resource.type]} · Zona{" "}
-                            {venueSectors.find((sector) => sector.id === resource.sectorId)?.name ?? "Sin zona"}
+                            {resourceTypeLabels[resource.type]} · Zona {resolveVenueSectorName(venueSectors, resource.sectorId)}
                           </p>
                         </div>
                         <StatusBadge variant={resourceTone(summary?.status ?? resource.status)}>
@@ -1091,7 +1096,7 @@ function TablesFlowWorkspace() {
         summary={selectedReservationResource ? resourceSummaryMap.get(selectedReservationResource.id) ?? null : null}
         sectorName={
           selectedReservationResource
-            ? venueSectors.find((sector) => sector.id === selectedReservationResource.sectorId)?.name ?? "Sin zona"
+            ? resolveVenueSectorName(venueSectors, selectedReservationResource.sectorId)
             : "Sin zona"
         }
         conflictCount={selectedReservationConflictCount}
