@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import AuthBrandHeader from "@/components/auth/auth-brand-header";
 import LoginForm from "@/app/login/login-form";
 import { getLoginNoticeMessage } from "@/app/login/login-notice";
-import StatusBadge from "@/components/status-badge";
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 
 export const metadata: Metadata = {
@@ -37,14 +37,7 @@ export default async function LoginPage({
   return (
     <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.14),_transparent_34%),linear-gradient(180deg,_#0b0f14_0%,_#080b10_100%)] px-4 py-10 text-[color:var(--foreground)]">
       <section className="w-full max-w-md rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur">
-        <div className="space-y-3">
-          <StatusBadge variant="info">EntryFlow</StatusBadge>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-slate-500">Acceso operativo</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Ingresá a tu equipo</h1>
-          <p className="text-sm leading-6 text-slate-400">
-            Usá tu correo y contraseña para abrir el workspace autorizado de EntryFlow.
-          </p>
-        </div>
+        <AuthBrandHeader description="Usá tu correo y contraseña para abrir el workspace autorizado." />
 
         <div className="mt-6">
           <LoginForm next={next} noticeMessage={noticeMessage} />

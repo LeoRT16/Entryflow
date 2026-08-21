@@ -58,6 +58,32 @@ function emptyFormState(): AccountFormState {
   };
 }
 
+function SummaryPill({
+  label,
+  value,
+  tone = "info",
+}: {
+  label: string;
+  value: string | number;
+  tone?: "success" | "warning" | "danger" | "info";
+}) {
+  const toneClasses =
+    tone === "danger"
+      ? "border-rose-400/20 bg-rose-400/8 text-rose-100"
+      : tone === "warning"
+        ? "border-amber-400/20 bg-amber-400/8 text-amber-100"
+        : tone === "success"
+          ? "border-emerald-400/20 bg-emerald-400/8 text-emerald-100"
+          : "border-cyan-400/20 bg-cyan-400/8 text-cyan-100";
+
+  return (
+    <div className={`rounded-[1.25rem] border px-4 py-3 ${toneClasses}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/70">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-white">{value}</p>
+    </div>
+  );
+}
+
 export default function OrganizationMembersPanel({ newMemberRequest }: OrganizationMembersPanelProps) {
   const {
     accounts,
@@ -368,59 +394,67 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
 
   return (
     <section className="surface-panel mx-auto w-full max-w-[1140px] p-4 sm:p-5">
-      <div className="grid gap-4 xl:grid-cols-[0.34fr_0.66fr]">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="kicker">Miembros</p>
-            {!canManageAccounts ? (
-              <StatusBadge variant="warning">Solo lectura</StatusBadge>
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            {model.empty ? (
-              <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
-                Esta organización todavía no tiene miembros visibles.
-              </div>
-            ) : (
-              model.members.map((member) => {
-                const selected = member.id === selectedId;
-
-                return (
-                  <button
-                    key={member.id}
-                    type="button"
-                    onClick={() => selectAccount(member.id)}
-                    className={[
-                      "w-full rounded-[1.25rem] border px-4 py-3 text-left transition",
-                      selected
-                        ? "border-cyan-400/40 bg-cyan-400/10"
-                        : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{member.displayName}</p>
-                        <p className="mt-1 truncate text-xs text-slate-500">{member.userEmail || "Sin email"}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {member.roleName} · {member.area || "Sin área"}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-2">
-                        <StatusBadge variant={member.status === "inactive" ? "warning" : member.isOwner ? "success" : "info"}>
-                          {getAccountStatusLabel(member.status)}
-                        </StatusBadge>
-                        {member.protectedOwner ? <StatusBadge variant="danger">Owner protegido</StatusBadge> : null}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
+      <div className="grid gap-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryPill label="Visibles" value={model.totalMembers} tone="info" />
+          <SummaryPill label="Activos" value={model.activeMembers} tone="success" />
+          <SummaryPill label="Inactivos" value={model.inactiveMembers} tone="warning" />
+          <SummaryPill label="Owners" value={model.ownerMembers} tone="danger" />
         </div>
 
-        <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4 pb-6">
+        <div className="grid gap-4 xl:grid-cols-[0.34fr_0.66fr]">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="kicker">Miembros</p>
+              {!canManageAccounts ? (
+                <StatusBadge variant="warning">Solo lectura</StatusBadge>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              {model.empty ? (
+                <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
+                  Esta organización todavía no tiene miembros visibles.
+                </div>
+              ) : (
+                model.members.map((member) => {
+                  const selected = member.id === selectedId;
+
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => selectAccount(member.id)}
+                      className={[
+                        "w-full rounded-[1.25rem] border px-4 py-3 text-left transition",
+                        selected
+                          ? "border-cyan-400/40 bg-cyan-400/10"
+                          : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-white">{member.displayName}</p>
+                          <p className="mt-1 truncate text-xs text-slate-500">{member.userEmail || "Sin email"}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {member.roleName} · {member.area || "Sin área"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-2">
+                          <StatusBadge variant={member.status === "inactive" ? "warning" : member.isOwner ? "success" : "info"}>
+                            {getAccountStatusLabel(member.status)}
+                          </StatusBadge>
+                          {member.protectedOwner ? <StatusBadge variant="danger">Owner protegido</StatusBadge> : null}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4 pb-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="kicker">Detalle del miembro</p>
@@ -517,7 +551,7 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
             </div>
 
             {!permissionsOpen ? (
-              <div className="mt-3 text-sm text-slate-400">Configuración avanzada.</div>
+              <div className="mt-3 text-sm text-slate-400">Configuración avanzada, disponible cuando necesitás granularidad.</div>
             ) : (
               <div className="mt-4 grid gap-4 xl:grid-cols-2">
                 {ACCOUNT_PERMISSION_GROUPS.map((group) => (
@@ -646,12 +680,12 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
             </div>
           )}
 
-          <div className="flex flex-wrap gap-3 pb-1">
+          <div className="grid gap-3 pb-1 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
             <button
               type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? "Guardando..." : selectedId === "new" ? "Crear miembro" : "Guardar cambios"}
             </button>
@@ -693,6 +727,7 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
           {saveError ? <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{saveError}</p> : null}
           {resetSuccess ? <p className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">{resetSuccess}</p> : null}
           {resetError ? <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{resetError}</p> : null}
+        </div>
         </div>
       </div>
     </section>

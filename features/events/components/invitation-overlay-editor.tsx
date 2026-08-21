@@ -473,6 +473,24 @@ export default function InvitationOverlayEditor({
                             </button>
                           ))}
                         </div>
+
+                        <div className="rounded-[1rem] border border-white/10 bg-slate-950/35 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Variables disponibles</p>
+                            <p className="text-[10px] uppercase tracking-[0.24em] text-slate-600">Tokens canónicos</p>
+                          </div>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            {INVITATION_OVERLAY_TEXT_TEMPLATE_VARIABLES.map((variable) => (
+                              <div key={variable.key} className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                                <p className="font-mono text-[11px] text-cyan-100">{`{{${variable.key}}}`}</p>
+                                <p className="mt-1 text-sm font-medium text-white">{variable.label}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="mt-3 text-xs leading-5 text-slate-400">
+                            Estas variables se resuelven en runtime y mantienen el texto alineado con el evento y la reserva.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}

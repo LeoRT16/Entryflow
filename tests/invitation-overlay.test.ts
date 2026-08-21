@@ -211,6 +211,9 @@ test("invitation overlay editor sample data is neutral", () => {
 
   assert.ok(markup.includes("Juan Pérez"));
   assert.ok(markup.includes("Carlos Mendoza"));
+  assert.ok(markup.includes("Variables disponibles"));
+  assert.ok(markup.includes("{{guestName}}"));
+  assert.ok(markup.includes("Nombre invitado"));
   assert.equal(markup.includes("Llaco Gay"), false);
 });
 

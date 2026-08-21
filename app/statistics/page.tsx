@@ -2,21 +2,68 @@
 
 import Topbar from "@/components/topbar";
 import StatusBadge from "@/components/status-badge";
-import { GuidedActionPanel, buildGuidedActionItem } from "@/components/quick-actions-menu";
 import { useCheckInStore } from "@/services/workspace-service";
 import PermissionGuard from "@/components/permission-guard";
 
 function StatCard({
   label,
   value,
+  hint,
+  tone = "info",
 }: {
   label: string;
   value: string | number;
+  hint?: string;
+  tone?: "success" | "warning" | "danger" | "info";
 }) {
+  const toneClasses =
+    tone === "danger"
+      ? "border-rose-400/20 bg-rose-400/8"
+      : tone === "warning"
+        ? "border-amber-400/20 bg-amber-400/8"
+        : tone === "success"
+          ? "border-emerald-400/20 bg-emerald-400/8"
+          : "border-cyan-400/20 bg-cyan-400/8";
+
   return (
-    <div className="surface-panel flex min-h-[108px] min-w-0 flex-col justify-between p-4">
+    <div className={`surface-panel flex min-h-[108px] min-w-0 flex-col justify-between border ${toneClasses} p-4`}>
       <p className="kicker">{label}</p>
       <p className="min-w-0 break-words text-3xl font-semibold tracking-tight text-white">{value}</p>
+      {hint ? <p className="mt-2 text-xs leading-5 text-slate-400">{hint}</p> : null}
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "success" | "warning" | "danger" | "info";
+}) {
+  const toneClasses =
+    tone === "danger"
+      ? "border-rose-400/20 bg-rose-400/8 text-rose-100"
+      : tone === "warning"
+        ? "border-amber-400/20 bg-amber-400/8 text-amber-100"
+        : tone === "success"
+          ? "border-emerald-400/20 bg-emerald-400/8 text-emerald-100"
+          : "border-cyan-400/20 bg-cyan-400/8 text-cyan-100";
+
+  return (
+    <div className={`rounded-[1.25rem] border p-4 ${toneClasses}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-white">{label}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
+        </div>
+        <StatusBadge variant={tone}>{tone === "danger" ? "Crítico" : tone === "warning" ? "Atención" : tone === "success" ? "Saludable" : "Info"}</StatusBadge>
+      </div>
+      <p className="mt-3 text-sm leading-6 text-slate-300">{detail}</p>
     </div>
   );
 }
@@ -54,16 +101,11 @@ function StatisticsContent() {
   const tableInsight = workspaceIntelligence.tables;
   const dashboard = workspaceIntelligence.dashboard;
   const occupancy = tableInsight.occupancyPercent;
+  const statistics = workspaceIntelligence.statistics;
   const statisticsInsights = workspacePriority.byModule.Statistics;
   const health = workspaceIntelligence.health;
   const activity = workspaceIntelligence.activity;
   const prioritySummary = workspacePriority.summary;
-  const guidedActions = statisticsInsights.slice(0, 3).map((item) =>
-    buildGuidedActionItem(item, {
-      href: item.route,
-      impact: item.description,
-    }),
-  );
 
   return (
     <div className="space-y-6">
@@ -94,32 +136,120 @@ function StatisticsContent() {
         />
       </section>
 
-      <GuidedActionPanel
-        title="Recomendaciones"
-        description="Las recomendaciones operativas se ordenan por el impacto inmediato que tienen sobre la operación."
-        items={guidedActions}
-      />
+      <section className="surface-panel p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="kicker">Métricas canónicas</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Lectura analítica del evento</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+              Esta superficie resume el comportamiento del evento activo con los indicadores que ya alimentan el workspace.
+            </p>
+          </div>
+          <StatusBadge variant="info">{statistics.metrics.length} métricas</StatusBadge>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {statistics.metrics.map((metric) => (
+            <MetricCard key={metric.label} label={metric.label} value={metric.value} detail={metric.detail} tone={metric.tone} />
+          ))}
+        </div>
+      </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <div className="surface-panel p-5">
           <p className="kicker">Lectura inteligente</p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{health.title}</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">{health.description}</p>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {health.modules.slice(0, 4).map((module) => (
+              <div key={module.module} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">{module.label}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-500">{module.module}</p>
+                  </div>
+                  <StatusBadge variant={module.tone}>{module.state}</StatusBadge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-400">{module.detail}</p>
+              </div>
+            ))}
+          </div>
+
+          {health.blockers.length ? (
+            <div className="mt-5 rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
+              <p className="kicker">Bloqueadores</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {health.blockers.map((blocker) => (
+                  <span key={blocker} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">
+                    {blocker}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="surface-panel p-5">
-          <p className="kicker">Recomendaciones</p>
-          <div className="mt-4 space-y-3">
+          <p className="kicker">Ritmo reciente</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Actividad y capacidad</h2>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Último ingreso</p>
+              <p className="mt-2 text-lg font-semibold text-white">{statistics.cards.lastCheckInAt}</p>
+              <p className="mt-1 text-sm text-slate-400">Marca el último movimiento de check-in del evento.</p>
+            </div>
+            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Última reserva</p>
+              <p className="mt-2 text-lg font-semibold text-white">{statistics.cards.lastReservationAt}</p>
+              <p className="mt-1 text-sm text-slate-400">Ayuda a entender el ritmo de entrada de demanda.</p>
+            </div>
+            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Pico de check-ins</p>
+              <p className="mt-2 text-lg font-semibold text-white">{statistics.cards.peakCheckInMinute}</p>
+              <p className="mt-1 text-sm text-slate-400">
+                {statistics.cards.checkInsPerMinute} ingresos por minuto en promedio.
+              </p>
+            </div>
+            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Actividad reciente</p>
+              <p className="mt-2 text-lg font-semibold text-white">{statistics.cards.recentActivity}</p>
+              <p className="mt-1 text-sm text-slate-400">{statistics.cards.averageCheckInIntervalMinutes} min entre ingresos en promedio.</p>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-white">Operadores activos</p>
+              <StatusBadge variant={statistics.cards.activeOperators.length ? "success" : "info"}>
+                {statistics.cards.activeOperators.length}
+              </StatusBadge>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {statistics.cards.activeOperators.length ? (
+                statistics.cards.activeOperators.map((operator) => (
+                  <span key={operator} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">
+                    {operator}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-slate-400">No se registraron operadores activos.</span>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-3">
             {statisticsInsights.length ? (
               statisticsInsights.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div key={item.id} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-white">{item.title}</p>
-                        <p className="mt-1 text-sm leading-6 text-slate-400">{item.description}</p>
-                        <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-slate-500">
-                          {item.module} · {item.route}
-                        </p>
+                      <p className="mt-1 text-sm leading-6 text-slate-400">{item.description}</p>
+                      <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-slate-500">
+                        {item.module} · {item.route}
+                      </p>
                     </div>
                     <StatusBadge variant={item.tone}>{item.priority}</StatusBadge>
                   </div>
@@ -127,7 +257,7 @@ function StatisticsContent() {
               ))
             ) : (
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
-                No hay recomendaciones activas.
+                No hay señales de foco activas.
               </div>
             )}
           </div>
