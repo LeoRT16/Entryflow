@@ -717,3 +717,14 @@ test("event command center keeps quick actions out of the overview shell", () =>
   assert.doesNotMatch(source, /dashboard-quick-actions/i);
   assert.doesNotMatch(source, /Acciones rápidas/);
 });
+
+test("event command center renders the alert popover in a portal with fixed viewport positioning", () => {
+  const source = readFileSync(new URL("../features/events/components/event-command-center.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /createPortal\(/);
+  assert.match(source, /document\.body/);
+  assert.match(source, /className="fixed z-\[70\] overflow-hidden rounded-\[1\.5rem\]/);
+  assert.match(source, /role="dialog"/);
+  assert.match(source, /buttonRef\.current\?\.contains\(target\) \|\| panelRef\.current\?\.contains\(target\)/);
+  assert.doesNotMatch(source, /className="absolute right-0 top-\[calc\(100%\+0\.75rem\)\] z-20/);
+});

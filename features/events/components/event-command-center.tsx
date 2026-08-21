@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import Topbar from "@/components/topbar";
 import StatusBadge from "@/components/status-badge";
@@ -26,6 +27,47 @@ function valueToneClass(tone: "success" | "warning" | "danger" | "info") {
   if (tone === "warning") return "border-amber-400/20 bg-amber-400/10 text-amber-100";
   if (tone === "danger") return "border-rose-400/20 bg-rose-400/10 text-rose-100";
   return "border-sky-400/20 bg-sky-400/10 text-sky-100";
+}
+
+type AlertCenterFloatingStyle = {
+  left: number;
+  top: number;
+  width: number;
+  maxHeight: number;
+};
+
+const ALERT_CENTER_POPUP_GAP = 12;
+const ALERT_CENTER_POPUP_MARGIN = 12;
+const ALERT_CENTER_POPUP_MAX_WIDTH = 448;
+const ALERT_CENTER_POPUP_MAX_HEIGHT = 384;
+function getAlertCenterFloatingStyle(triggerRect: DOMRect, viewportWidth: number, viewportHeight: number): AlertCenterFloatingStyle {
+  const width = Math.min(ALERT_CENTER_POPUP_MAX_WIDTH, Math.max(0, viewportWidth - ALERT_CENTER_POPUP_MARGIN * 2));
+  const left = Math.min(
+    Math.max(triggerRect.right - width, ALERT_CENTER_POPUP_MARGIN),
+    Math.max(ALERT_CENTER_POPUP_MARGIN, viewportWidth - ALERT_CENTER_POPUP_MARGIN - width),
+  );
+
+  const belowTop = triggerRect.bottom + ALERT_CENTER_POPUP_GAP;
+  const aboveTop = triggerRect.top - ALERT_CENTER_POPUP_GAP;
+  const spaceBelow = viewportHeight - ALERT_CENTER_POPUP_MARGIN - belowTop;
+  const spaceAbove = aboveTop - ALERT_CENTER_POPUP_MARGIN;
+  const showBelow = spaceBelow >= spaceAbove;
+
+  if (showBelow) {
+    return {
+      left,
+      top: belowTop,
+      width,
+      maxHeight: Math.min(ALERT_CENTER_POPUP_MAX_HEIGHT, Math.max(0, spaceBelow)),
+    };
+  }
+
+  return {
+    left,
+    top: Math.max(ALERT_CENTER_POPUP_MARGIN, triggerRect.top - ALERT_CENTER_POPUP_GAP - Math.min(ALERT_CENTER_POPUP_MAX_HEIGHT, Math.max(0, spaceAbove))),
+    width,
+    maxHeight: Math.min(ALERT_CENTER_POPUP_MAX_HEIGHT, Math.max(0, spaceAbove)),
+  };
 }
 
 function MiniMetric({
@@ -185,18 +227,29 @@ function AdmissionCapacityBlock({ model }: { model: ReturnType<typeof buildLiveD
 
 function CompactAlertCenter({ alerts, alertCount }: { alerts: LiveDashboardAlert[]; alertCount: number }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [floatingStyle, setFloatingStyle] = useState<AlertCenterFloatingStyle | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const panelId = useId();
+  const portalTarget = typeof document !== "undefined" ? document.body : null;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) {
       return;
     }
 
+    const updateFloatingStyle = () => {
+      if (!buttonRef.current) {
+        return;
+      }
+
+      setFloatingStyle(getAlertCenterFloatingStyle(buttonRef.current.getBoundingClientRect(), window.innerWidth, window.innerHeight));
+    };
+
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
 
-      if (rootRef.current?.contains(target)) {
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) {
         return;
       }
 
@@ -209,18 +262,24 @@ function CompactAlertCenter({ alerts, alertCount }: { alerts: LiveDashboardAlert
       }
     };
 
+    updateFloatingStyle();
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", updateFloatingStyle);
+    window.addEventListener("scroll", updateFloatingStyle, true);
 
     return () => {
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", updateFloatingStyle);
+      window.removeEventListener("scroll", updateFloatingStyle, true);
     };
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
         className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0f151d] px-4 py-4 text-left transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
@@ -237,43 +296,55 @@ function CompactAlertCenter({ alerts, alertCount }: { alerts: LiveDashboardAlert
         <StatusBadge variant={alertCount > 0 ? "warning" : "success"}>{alertCount > 0 ? `${alertCount}` : "0"}</StatusBadge>
       </button>
 
-      {open ? (
-        <div
-          id={panelId}
-          className="absolute right-0 top-[calc(100%+0.75rem)] z-20 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#0b0f14] shadow-[0_30px_90px_rgba(0,0,0,0.45)]"
-        >
-          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-            <p className="kicker">Alertas activas</p>
-            <StatusBadge variant={alertCount > 0 ? "warning" : "success"}>{alertCount > 0 ? `${alertCount} activas` : "Sin alertas"}</StatusBadge>
-          </div>
-
-          <div className="max-h-[24rem] space-y-2 overflow-y-auto p-2">
-            {alerts.length ? (
-              alerts.map((alert) => (
-                <Link
-                  key={alert.id}
-                  href={alert.route}
-                  onClick={() => setOpen(false)}
-                  className="block rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-white/20 hover:bg-white/[0.06]"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-white">{alert.title}</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-400">{alert.description}</p>
-                      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{alert.source}</p>
-                    </div>
-                    <StatusBadge variant={alert.tone}>{alert.source}</StatusBadge>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm leading-6 text-slate-400">
-                No hay alertas activas. La operación está limpia.
+      {open && floatingStyle && portalTarget
+        ? createPortal(
+            <div
+              ref={panelRef}
+              id={panelId}
+              role="dialog"
+              aria-label="Alertas activas"
+              className="fixed z-[70] overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#0b0f14] shadow-[0_30px_90px_rgba(0,0,0,0.45)]"
+              style={{
+                left: `${floatingStyle.left}px`,
+                top: `${floatingStyle.top}px`,
+                width: `${floatingStyle.width}px`,
+                maxHeight: `${floatingStyle.maxHeight}px`,
+              }}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                <p className="kicker">Alertas activas</p>
+                <StatusBadge variant={alertCount > 0 ? "warning" : "success"}>{alertCount > 0 ? `${alertCount} activas` : "Sin alertas"}</StatusBadge>
               </div>
-            )}
-          </div>
-        </div>
-      ) : null}
+
+              <div className="overflow-y-auto p-2" style={{ maxHeight: `${Math.max(0, floatingStyle.maxHeight - 48)}px` }}>
+                {alerts.length ? (
+                  alerts.map((alert) => (
+                    <Link
+                      key={alert.id}
+                      href={alert.route}
+                      onClick={() => setOpen(false)}
+                      className="block rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-white/20 hover:bg-white/[0.06]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-white">{alert.title}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-400">{alert.description}</p>
+                          <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{alert.source}</p>
+                        </div>
+                        <StatusBadge variant={alert.tone}>{alert.source}</StatusBadge>
+                      </div>
+                    </Link>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm leading-6 text-slate-400">
+                    No hay alertas activas. La operación está limpia.
+                  </div>
+                )}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
