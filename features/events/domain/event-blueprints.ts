@@ -386,7 +386,7 @@ export function buildEventDraft(blueprint: EventBlueprint): EventDraft {
     endTime: "03:00",
     timezone: getDefaultTimezone(),
     venueId: "",
-    venue: blueprint.label === "Personalizado" ? "Sede principal" : "La Rota Carlota",
+    venue: "",
     capacity: blueprint.capacityRequired ? "200" : "0",
     operationalModel: blueprint.operationalModel,
     enabledModules: [...blueprint.enabledModules],

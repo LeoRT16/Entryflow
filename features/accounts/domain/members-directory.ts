@@ -75,7 +75,7 @@ export function buildOrganizationMembersModel({
   canManagePermissions: boolean;
 }): OrganizationMembersModel {
   const members = accounts
-    .filter((account) => account.organizationId === organizationId && account.id !== "bootstrap-account")
+    .filter((account) => account.organizationId === organizationId && account.id !== "bootstrap-account" && account.metadata?.removed !== true)
     .sort((left, right) => {
       if (left.isOwner !== right.isOwner) {
         return left.isOwner ? -1 : 1;

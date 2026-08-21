@@ -22,12 +22,21 @@ import {
   type InvitationOverlayLayout,
 } from "@/features/events/domain/invitation-overlay";
 import { getEventTypeLabel, isTerminalEventStatus } from "@/features/events/domain";
+import { shouldWarnBeforeChangingEventVenue } from "@/features/events/domain/event-venue-assignment";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { CheckIn } from "@/features/check-in/types";
+import type { Guest } from "@/features/check-in/types";
+import type { ReservationRecord } from "@/features/reservations/types";
+import type { TableRecord } from "@/features/tables/types";
 
 type EventEditorModalProps = {
   open: boolean;
   event: Event;
   venues: Venue[];
+  reservations: ReservationRecord[];
+  guests: Guest[];
+  tables: TableRecord[];
+  checkIns: CheckIn[];
   onClose: () => void;
   onSave: (event: Event) => Promise<Event | undefined>;
   onPatchEvent?: (event: Event) => Promise<Event | undefined>;
@@ -109,7 +118,18 @@ function TextArea({
   );
 }
 
-export default function EventEditorModal({ open, event, venues, onClose, onSave, onPatchEvent }: EventEditorModalProps) {
+export default function EventEditorModal({
+  open,
+  event,
+  venues,
+  reservations,
+  guests,
+  tables,
+  checkIns,
+  onClose,
+  onSave,
+  onPatchEvent,
+}: EventEditorModalProps) {
   const { showToast } = useFeedback();
   const [isSaving, setIsSaving] = useState(false);
   const [isArtworkBusy, setIsArtworkBusy] = useState(false);
@@ -118,15 +138,17 @@ export default function EventEditorModal({ open, event, venues, onClose, onSave,
   const [overlayEditorOpen, setOverlayEditorOpen] = useState(false);
   const artworkInputRef = useRef<HTMLInputElement | null>(null);
 
-  const venueOptions = useMemo(() => venues.filter((venue) => venue.organizationId === event.organizationId), [event.organizationId, venues]);
+  const venueOptions = useMemo(() => venues, [venues]);
   const defaultVenue = useMemo(() => venueOptions.find((venue) => venue.status === "active") ?? venueOptions[0] ?? null, [venueOptions]);
   const matchedVenue = useMemo(
     () => venueOptions.find((venue) => venue.id === event.venueId) ?? venueOptions.find((venue) => venue.name === event.venue),
     [event.venue, event.venueId, venueOptions],
   );
+  const initialVenueId = event.venueId ?? matchedVenue?.id ?? defaultVenue?.id ?? "";
+  const initialVenueIdRef = useRef(initialVenueId);
   const canEditEvent = !isTerminalEventStatus(event.status);
   const [eventName, setEventName] = useState(event.name);
-  const [eventVenueId, setEventVenueId] = useState(event.venueId ?? matchedVenue?.id ?? defaultVenue?.id ?? "");
+  const [eventVenueId, setEventVenueId] = useState(initialVenueId);
   const [eventVenue, setEventVenue] = useState(event.venue);
   const [eventDescription, setEventDescription] = useState(event.description ?? "");
   const [eventCapacity, setEventCapacity] = useState(String(event.capacity));
@@ -169,10 +191,30 @@ export default function EventEditorModal({ open, event, venues, onClose, onSave,
 
   const submit = async () => {
     const selectedVenue = venueOptions.find((venue) => venue.id === eventVenueId) ?? defaultVenue;
+    const nextVenueId = selectedVenue?.id || eventVenueId || undefined;
+
+    const shouldWarn = shouldWarnBeforeChangingEventVenue({
+      eventId: event.id,
+      currentVenueId: event.venueId,
+      nextVenueId,
+      reservations,
+      guests,
+      tables,
+      checkIns,
+    });
+
+    if (shouldWarn) {
+      const confirmed = window.confirm("Este evento ya tiene reservas o espacios asignados. Cambiar el Venue puede dejar asignaciones incompatibles.");
+      if (!confirmed) {
+        setEventVenueId(initialVenueIdRef.current);
+        return;
+      }
+    }
+
     const nextEvent: Event = {
       ...event,
       name: eventName.trim() || event.name,
-      venueId: selectedVenue?.id || eventVenueId || undefined,
+      venueId: nextVenueId,
       venue: selectedVenue?.name || eventVenue.trim() || event.venue,
       description: eventDescription.trim() || undefined,
       capacity: Number.parseInt(eventCapacity, 10) || event.capacity,
@@ -524,7 +566,7 @@ export default function EventEditorModal({ open, event, venues, onClose, onSave,
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Contexto</p>
               <p className="mt-2 text-sm text-slate-300">
-                {event.venue} · {event.capacity} personas
+                {matchedVenue?.name ?? defaultVenue?.name ?? event.venue} · {event.capacity} personas
               </p>
               <p className="mt-1 text-xs text-slate-500">La edición del evento ya no vive en Ajustes.</p>
             </div>

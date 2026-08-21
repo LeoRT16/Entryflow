@@ -14,6 +14,7 @@ import {
   shouldAutoSubmitDetectedCheckIn,
 } from "@/features/check-in/domain/check-in-domain";
 import { isTerminalEventStatus } from "@/features/events/domain";
+import { resolveEventVenueDisplayName } from "@/features/events/domain/event-venue-boundary";
 import type { CheckInMethod, Guest } from "@/features/check-in/types";
 import { useCheckInStore } from "@/services/workspace-service";
 
@@ -297,7 +298,12 @@ function CheckInWorkspace() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
                 Sede
               </p>
-              <p className="mt-2 text-sm font-medium text-white">{currentEvent.venue || currentVenue?.name || "Sin sede"}</p>
+              <p className="mt-2 text-sm font-medium text-white">
+                {resolveEventVenueDisplayName({
+                  currentVenueName: currentVenue?.name,
+                  eventVenue: currentEvent.venue,
+                })}
+              </p>
             </div>
             <div className="rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">

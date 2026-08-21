@@ -4,11 +4,15 @@ import test from "node:test";
 import { ACCOUNT_ROLE_PRESETS } from "../features/accounts/domain/accounts-domain";
 import { buildEventSwitcherSections, canSwitchEventContext } from "../components/event-switcher";
 import {
+  getEventSelection,
   resolveInitialCurrentEventId,
   resolveInitialCurrentOrganizationId,
   resolveInitialCurrentProfileId,
+  resolveWorkspacePreferenceSelection,
+  resolveWorkspaceBootstrapSelection,
 } from "../services/workspace-service";
 import type { WorkspaceBootstrap } from "../services/workspace-loader";
+import type { Event } from "../features/domain/types";
 
 function buildWorkspace(overrides: Partial<WorkspaceBootstrap> = {}): WorkspaceBootstrap {
   return {
@@ -41,27 +45,30 @@ function buildWorkspace(overrides: Partial<WorkspaceBootstrap> = {}): WorkspaceB
   };
 }
 
-function withLocalStorage(entries: Record<string, string | undefined>, run: () => void) {
-  type WindowStub = {
-    localStorage: {
-      getItem(key: string): string | null;
-    };
-  };
-
-  const globalWithWindow = globalThis as unknown as { window?: WindowStub };
+function withLocalStorage(entries: Record<string, string | undefined>, run: (storage: {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}) => void) {
+  const globalWithWindow = globalThis as unknown as { window?: unknown };
   const previousWindow = globalWithWindow.window;
   const storage = new Map(Object.entries(entries).filter(([, value]) => typeof value === "string")) as Map<string, string>;
-
-  globalWithWindow.window = {
-    localStorage: {
-      getItem(key: string) {
-        return storage.get(key) ?? null;
-      },
+  const storageApi = {
+    getItem(key: string) {
+      return storage.get(key) ?? null;
     },
-  } as never;
+    setItem(key: string, value: string) {
+      storage.set(key, value);
+    },
+    removeItem(key: string) {
+      storage.delete(key);
+    },
+  };
+
+  globalWithWindow.window = { localStorage: storageApi };
 
   try {
-    run();
+    run(storageApi);
   } finally {
     if (previousWindow === undefined) {
       globalWithWindow.window = undefined;
@@ -170,4 +177,119 @@ test("stale or wrong-organization local selections are ignored", () => {
       assert.equal(resolveInitialCurrentProfileId(workspace, "org-1", "user-1"), "profile-1");
     },
   );
+});
+
+test("workspace preference restore resolves organization first and rejects foreign event and profile ids", () => {
+  const workspace = buildWorkspace({
+    organizations: [
+      { id: "org-1", name: "Org 1", slug: "org-1", status: "active", timezone: "America/La_Paz", branding: {}, settings: {} },
+      { id: "org-2", name: "Org 2", slug: "org-2", status: "active", timezone: "America/La_Paz", branding: {}, settings: {} },
+    ],
+    profiles: [
+      { id: "profile-1", organizationId: "org-1", userId: "user-1", roleId: "role-1", displayName: "Owner A", attributes: {}, status: "active", createdAt: "2026-08-14T10:00:00.000Z", updatedAt: "2026-08-14T10:00:00.000Z" },
+      { id: "profile-2", organizationId: "org-2", userId: "user-1", roleId: "role-1", displayName: "Owner B", attributes: {}, status: "active", createdAt: "2026-08-14T10:00:00.000Z", updatedAt: "2026-08-14T10:00:00.000Z" },
+    ],
+    events: [
+      { id: "event-a", organizationId: "org-1", name: "Live A", eventType: "custom", status: "live", startAt: "2026-08-14 20:00", timezone: "America/La_Paz", venue: "Venue A", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] },
+      { id: "event-b", organizationId: "org-2", name: "Live B", eventType: "custom", status: "live", startAt: "2026-08-14 21:00", timezone: "America/La_Paz", venue: "Venue B", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] },
+    ],
+    currentOrganizationId: "org-2",
+    currentEventId: "event-b",
+    currentProfileId: "profile-2",
+  });
+
+  withLocalStorage(
+    {
+      "entryflow.currentOrganizationId": "org-1",
+      "entryflow.currentEventId": "event-b",
+      "entryflow.currentProfileId": "profile-2",
+    },
+    () => {
+      const selection = resolveWorkspacePreferenceSelection(workspace, "user-1");
+
+      assert.equal(selection.currentOrganizationId, "org-1");
+      assert.equal(selection.currentEventId, "event-a");
+      assert.equal(selection.currentProfileId, "profile-1");
+    },
+  );
+});
+
+test("workspace preference restore keeps organization when event is foreign and the target organization has no events", () => {
+  const workspace = buildWorkspace({
+    organizations: [
+      { id: "org-1", name: "Org 1", slug: "org-1", status: "active", timezone: "America/La_Paz", branding: {}, settings: {} },
+    ],
+    profiles: [
+      { id: "profile-1", organizationId: "org-1", userId: "user-1", roleId: "role-1", displayName: "Owner A", attributes: {}, status: "active", createdAt: "2026-08-14T10:00:00.000Z", updatedAt: "2026-08-14T10:00:00.000Z" },
+    ],
+    events: [],
+    currentOrganizationId: "org-1",
+    currentEventId: "",
+    currentProfileId: "profile-1",
+  });
+
+  withLocalStorage(
+    {
+      "entryflow.currentOrganizationId": "org-1",
+      "entryflow.currentEventId": "event-b",
+      "entryflow.currentProfileId": "profile-1",
+    },
+    () => {
+      const selection = resolveWorkspacePreferenceSelection(workspace, "user-1");
+
+      assert.equal(selection.currentOrganizationId, "org-1");
+      assert.equal(selection.currentEventId, "");
+      assert.equal(selection.currentProfileId, "profile-1");
+    },
+  );
+});
+
+test("bootstrap selection stays deterministic while persisted selection can be restored later", () => {
+  const workspace = buildWorkspace({
+    organizations: [
+      { id: "org-1", name: "Org 1", slug: "org-1", status: "active", timezone: "America/La_Paz", branding: {}, settings: {} },
+      { id: "org-2", name: "Org 2", slug: "org-2", status: "active", timezone: "America/La_Paz", branding: {}, settings: {} },
+    ],
+    profiles: [
+      { id: "profile-1", organizationId: "org-1", userId: "user-1", roleId: "role-1", displayName: "Owner", attributes: {}, status: "active", createdAt: "2026-08-14T10:00:00.000Z", updatedAt: "2026-08-14T10:00:00.000Z" },
+      { id: "profile-2", organizationId: "org-2", userId: "user-1", roleId: "role-1", displayName: "Owner", attributes: {}, status: "active", createdAt: "2026-08-14T10:00:00.000Z", updatedAt: "2026-08-14T10:00:00.000Z" },
+    ],
+    events: [
+      { id: "event-1", organizationId: "org-1", name: "Org 1 live", eventType: "custom", status: "live", startAt: "2026-08-14 20:00", timezone: "America/La_Paz", venue: "Venue 1", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] },
+      { id: "event-2", organizationId: "org-2", name: "Org 2 live", eventType: "custom", status: "live", startAt: "2026-08-14 21:00", timezone: "America/La_Paz", venue: "Venue 2", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] },
+    ],
+    currentOrganizationId: "org-1",
+    currentEventId: "event-1",
+    currentProfileId: "profile-1",
+  });
+
+  withLocalStorage(
+    {
+      "entryflow.currentOrganizationId": "org-2",
+      "entryflow.currentEventId": "event-2",
+      "entryflow.currentProfileId": "profile-2",
+    },
+    () => {
+      const bootstrapSelection = resolveWorkspaceBootstrapSelection(workspace, "user-1");
+
+      assert.equal(bootstrapSelection.currentOrganizationId, "org-1");
+      assert.equal(bootstrapSelection.currentEventId, "event-1");
+      assert.equal(bootstrapSelection.currentProfileId, "profile-1");
+      assert.equal(resolveInitialCurrentOrganizationId(workspace), "org-2");
+      assert.equal(resolveInitialCurrentEventId(workspace, "org-2"), "event-2");
+      assert.equal(resolveInitialCurrentProfileId(workspace, "org-2", "user-1"), "profile-2");
+    },
+  );
+});
+
+test("event selection never falls back to another organization", () => {
+  const events: Event[] = [
+    { id: "event-a", organizationId: "org-a", name: "A", eventType: "custom", status: "live", startAt: "2026-08-14 20:00", timezone: "America/La_Paz", venue: "Venue A", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] } as Event,
+  ];
+
+  const selection = getEventSelection(events, "org-b", "event-a");
+
+  assert.equal(selection.id, "");
+  assert.equal(selection.organizationId, "org-b");
+  assert.equal(selection.venue, "");
 });

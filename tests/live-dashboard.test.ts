@@ -542,6 +542,26 @@ test("buildLiveDashboardModel returns an empty alert state when the workspace is
   assert.equal(model.alertCount, 0);
 });
 
+test("buildLiveDashboardModel prefers the canonical venue name over the denormalized event label", () => {
+  const model = buildLiveDashboardModel({
+    currentOrganizationName: "EntryFlow",
+    currentVenueName: "La Rota Carlota",
+    currentEvent: {
+      name: "Live Event",
+      status: "published",
+      startAt: "13 de agosto de 2026 21:00",
+      venue: "La Rota Carlota - 6 de Agosto",
+      eventType: "nightlife",
+    },
+    ...buildInput({
+      alerts: [],
+      attention: [],
+    }),
+  });
+
+  assert.equal(model.header.venue, "La Rota Carlota");
+});
+
 test("buildLiveDashboardModel updates the live state when a new check-in arrives", () => {
   const before = buildLiveDashboardModel({
     currentOrganizationName: "EntryFlow",

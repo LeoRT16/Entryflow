@@ -41,7 +41,7 @@ export default function EventCreationWizard({
   const [blueprint, setBlueprint] = useState<EventBlueprint>(() => getEventBlueprint("custom"));
   const [draft, setDraft] = useState<EventDraft>(() => buildEventDraft(getEventBlueprint("custom")));
   const preferredTimezone = getDefaultTimezone(organizationTimezone);
-  const venueOptions = useMemo(() => venues.filter((venue) => venue.organizationId === organizationId), [organizationId, venues]);
+  const venueOptions = useMemo(() => venues, [venues]);
   const defaultVenue = useMemo(() => venueOptions.find((venue) => venue.status === "active") ?? venueOptions[0] ?? null, [venueOptions]);
 
   useEffect(() => {

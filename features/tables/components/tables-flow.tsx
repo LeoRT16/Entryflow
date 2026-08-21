@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { startTransition, useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import StatusBadge from "@/components/status-badge";
@@ -8,9 +8,22 @@ import { useFeedback } from "@/components/premium-feedback";
 import ResourceReservationModal from "@/features/tables/components/resource-reservation-modal";
 import { getPrimaryActiveTableReservation } from "@/features/tables/domain/table-domain";
 import { canPersistResourceName } from "@/features/tables/domain/resource-validation";
+import { getVenuesForOrganization } from "@/features/domain/selectors";
+import {
+  getVenueContextStorageKey,
+  readVenueContextPreference,
+  resolveTablesVenueContext,
+} from "@/features/tables/domain/venue-context";
+import VenueManagementSection from "@/features/tables/components/venue-management-section";
 import { isTerminalEventStatus } from "@/features/events/domain";
 import type { Event as PlatformEvent, Resource, ResourceType, Sector } from "@/features/domain/types";
 import { createUuid, nowIso } from "@/lib/supabase/helpers";
+import {
+  resolveCurrentEventLayout,
+  resolveCurrentVenueLayout,
+  resolveCurrentVenueResources,
+  resolveCurrentVenueSectors,
+} from "@/services/workspace-layout-resolution";
 import { useCheckInStore } from "@/services/workspace-service";
 
 const resourceTypeLabels: Record<ResourceType, string> = {
@@ -72,16 +85,23 @@ export default function TablesFlow() {
 function TablesFlowWorkspace() {
   const { showToast } = useFeedback();
   const {
+    currentOrganization,
     currentEvent,
-    currentVenue,
-    currentVenueSectors,
-    currentVenueResources,
+    can,
+    venueLayouts,
+    eventLayouts,
+    venueLayoutSectors,
+    venueLayoutResources,
+    eventLayoutSectors,
+    eventLayoutResources,
     reservations,
     guests,
     tableSummaries,
     venues,
     sectors,
     resources,
+    createVenue,
+    updateVenue,
     createSector,
     updateSector,
     setSectorStatus,
@@ -92,8 +112,15 @@ function TablesFlowWorkspace() {
   } = useCheckInStore();
   const router = useRouter();
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
-
-  const [selectedResourceId, setSelectedResourceId] = useState(currentVenueResources[0]?.id ?? "");
+  const canManageVenue = can("venue.manage");
+  const venueContextStorageKey = getVenueContextStorageKey(currentOrganization.id);
+  const organizationVenues = useMemo(() => getVenuesForOrganization(currentOrganization.id, venues), [currentOrganization.id, venues]);
+  const [isVenueCreateOpen, setIsVenueCreateOpen] = useState(false);
+  const [venueNameDraft, setVenueNameDraft] = useState("");
+  const [isCreatingVenue, setIsCreatingVenue] = useState(false);
+  const [hasHydratedVenuePreference, setHasHydratedVenuePreference] = useState(false);
+  const [selectedVenueId, setSelectedVenueId] = useState(currentEvent.venueId ?? "");
+  const [selectedResourceId, setSelectedResourceId] = useState("");
   const [selectedSectorId, setSelectedSectorId] = useState("");
   const [editingSectorId, setEditingSectorId] = useState<string | null>(null);
   const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
@@ -101,13 +128,80 @@ function TablesFlowWorkspace() {
   const [sectorForm, setSectorForm] = useState<SectorFormState>(emptySectorForm);
   const [resourceForm, setResourceForm] = useState<ResourceFormState>(emptyResourceForm);
 
-  const venue = currentVenue ?? venues.find((item) => item.id === currentEvent.venueId) ?? venues[0] ?? null;
-  const venueSectors = currentVenueSectors.length
-    ? currentVenueSectors
-    : sectors.filter((sector) => !venue || sector.venueId === venue.id);
-  const venueResources = currentVenueResources.length
-    ? currentVenueResources
-    : resources.filter((resource) => !venue || resource.venueId === venue.id);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const storedVenueId = readVenueContextPreference(window.localStorage, currentOrganization.id);
+    const validStoredVenueId = organizationVenues.some((venue) => venue.id === storedVenueId) ? storedVenueId : "";
+    const validEventVenueId = organizationVenues.some((venue) => venue.id === currentEvent.venueId) ? currentEvent.venueId : "";
+    const nextVenueId = validStoredVenueId || validEventVenueId || organizationVenues[0]?.id || "";
+
+    startTransition(() => {
+      setSelectedVenueId(nextVenueId);
+      setHasHydratedVenuePreference(true);
+    });
+  }, [currentEvent.venueId, currentOrganization.id, organizationVenues]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedVenuePreference) {
+      return;
+    }
+
+    if (!selectedVenueId) {
+      window.localStorage.removeItem(venueContextStorageKey);
+      return;
+    }
+    window.localStorage.setItem(venueContextStorageKey, selectedVenueId);
+  }, [hasHydratedVenuePreference, selectedVenueId, venueContextStorageKey]);
+
+  const venueContext = useMemo(
+    () =>
+      resolveTablesVenueContext({
+        venues: organizationVenues,
+        sectors,
+        resources,
+        preferredVenueId: selectedVenueId || undefined,
+        fallbackVenueId: currentEvent.venueId,
+      }),
+    [currentEvent.venueId, organizationVenues, resources, sectors, selectedVenueId],
+  );
+  const venue = venueContext.currentVenue;
+  const venueOptions = venueContext.venueOptions;
+  const currentVenueId = venue?.id ?? "";
+  const currentEventLayout = useMemo(
+    () => resolveCurrentEventLayout({ currentEventId: currentEvent.id, currentVenueId, eventLayouts }),
+    [currentEvent.id, currentVenueId, eventLayouts],
+  );
+  const currentVenueLayout = useMemo(
+    () => resolveCurrentVenueLayout({ currentVenueId, currentEventLayout, venueLayouts }),
+    [currentEventLayout, currentVenueId, venueLayouts],
+  );
+  const venueSectors = useMemo(
+    () =>
+      resolveCurrentVenueSectors({
+        currentVenueId,
+        currentEventLayout,
+        venueLayout: currentVenueLayout,
+        sectors,
+        venueLayoutSectors,
+        eventLayoutSectors,
+      }),
+    [currentEventLayout, currentVenueId, currentVenueLayout, eventLayoutSectors, sectors, venueLayoutSectors],
+  );
+  const venueResources = useMemo(
+    () =>
+      resolveCurrentVenueResources({
+        currentVenueId,
+        currentEventLayout,
+        venueLayout: currentVenueLayout,
+        resources,
+        venueLayoutResources,
+        eventLayoutResources,
+      }),
+    [currentEventLayout, currentVenueId, currentVenueLayout, eventLayoutResources, resources, venueLayoutResources],
+  );
   const hasUnassignedResources = venueResources.some((resource) => !resource.sectorId);
   const zoneOptions = useMemo(() => {
     const baseZones = venueSectors.map((sector) => ({
@@ -396,20 +490,106 @@ function TablesFlowWorkspace() {
     return (
       <div className="space-y-6">
         <section className="surface-panel p-5 sm:p-6">
-          <p className="kicker">ESPACIOS</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-[2.6rem]">
-            Espacios
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-            Gestiona los espacios y su capacidad en el evento activo.
-          </p>
+          <div className="space-y-3">
+            <p className="kicker">ESPACIOS</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2.6rem]">Espacios</h1>
+            <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-[0.95rem]">
+              Gestiona los espacios y su capacidad en el venue activo.
+            </p>
+          </div>
         </section>
 
-        <section className="surface-quiet flex flex-wrap items-center gap-2 p-4">
-          <StatusBadge variant="warning">Sin sede disponible</StatusBadge>
-          <StatusBadge variant="info">Evento: {currentEvent.name}</StatusBadge>
-          <StatusBadge variant="info">Tipo: {formatEventType(currentEvent.eventType)}</StatusBadge>
+        <section className="surface-quiet flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="kicker">VENUE</p>
+            <p className="mt-2 text-lg font-semibold tracking-tight text-white">Ningún venue activo</p>
+            <p className="mt-1 text-sm text-slate-400">Necesitas al menos un venue para ver zonas, espacios y layouts.</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {canManageVenue ? (
+              <button
+                type="button"
+                onClick={() => setIsVenueCreateOpen(true)}
+                className="inline-flex h-11 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+              >
+                Crear Venue
+              </button>
+            ) : (
+              <StatusBadge variant="warning">Sin permiso para crear venues</StatusBadge>
+            )}
+          </div>
         </section>
+
+        {isVenueCreateOpen && canManageVenue ? (
+          <section className="surface-panel p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="kicker">Nuevo venue</p>
+                <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Crear venue</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsVenueCreateOpen(false)}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_auto]">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-200">Nombre del venue</span>
+                <input
+                  value={venueNameDraft}
+                  onChange={(event) => setVenueNameDraft(event.target.value)}
+                  placeholder="La Rota Carlota"
+                  className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06]"
+                />
+              </label>
+
+              <div className="flex items-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => void (async () => {
+                    if (!canManageVenue || !venueNameDraft.trim()) {
+                      return;
+                    }
+
+                    setIsCreatingVenue(true);
+
+                    try {
+                      const timestamp = nowIso();
+                      const nextVenue = await createVenue({
+                        id: createUuid(),
+                        organizationId: currentOrganization.id,
+                        name: venueNameDraft.trim(),
+                        status: "active",
+                        createdAt: timestamp,
+                        updatedAt: timestamp,
+                      });
+
+                      setSelectedVenueId(nextVenue.id);
+                      setIsVenueCreateOpen(false);
+                      setVenueNameDraft("");
+                      showToast({
+                        title: "Venue creado",
+                        description: `${nextVenue.name} quedó activo en Espacios.`,
+                        tone: "success",
+                      });
+                    } finally {
+                      setIsCreatingVenue(false);
+                    }
+                  })()}
+                  disabled={!venueNameDraft.trim() || isCreatingVenue}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isCreatingVenue ? "Creando..." : "Crear Venue"}
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
       </div>
     );
   }
@@ -429,11 +609,49 @@ function TablesFlowWorkspace() {
 
         <div className="surface-quiet mt-5 flex flex-wrap items-center gap-2 p-4">
           <StatusBadge variant="info">Evento: {currentEvent.name}</StatusBadge>
-          <StatusBadge variant="info">Sede: {currentEvent.venue || venue.name}</StatusBadge>
+          <StatusBadge variant="info">Venue: {venue.name}</StatusBadge>
           <StatusBadge variant="info">Tipo: {formatEventType(currentEvent.eventType)}</StatusBadge>
           {isTerminalEvent ? <StatusBadge variant="warning">Evento cerrado</StatusBadge> : null}
         </div>
       </section>
+
+      <section className="surface-quiet flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="kicker">VENUE</p>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="truncate text-lg font-semibold tracking-tight text-white sm:text-xl">{venue.name}</h2>
+            <p className="text-sm text-slate-400">
+              {venueSectors.length} zonas · {venueResources.length} espacios
+            </p>
+          </div>
+        </div>
+
+        <div className="flex min-w-0 items-center gap-3">
+          <label className="min-w-0">
+            <span className="sr-only">Seleccionar venue</span>
+            <select
+              value={venue.id}
+              onChange={(event) => setSelectedVenueId(event.target.value)}
+              className="h-11 min-w-[16rem] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/50 focus:bg-white/[0.06]"
+            >
+              {venueOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
+
+        <VenueManagementSection
+          currentOrganizationId={currentOrganization.id}
+          selectedVenue={venue}
+          canManageVenue={canManageVenue}
+          onSelectVenueId={setSelectedVenueId}
+          createVenue={createVenue}
+          updateVenue={updateVenue}
+      />
 
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="min-w-0 space-y-6">

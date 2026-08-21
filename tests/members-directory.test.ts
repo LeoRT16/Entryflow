@@ -97,7 +97,10 @@ test("the last active owner is protected from deactivation", () => {
 
 test("read-only members model keeps the surface visible but non editable", () => {
   const model = buildOrganizationMembersModel({
-    accounts: [buildAccount({ id: "member-1" })],
+    accounts: [
+      buildAccount({ id: "member-1" }),
+      buildAccount({ id: "member-2", displayName: "Inactivo", userDisplayName: "Inactivo", userEmail: "inactive@example.com", status: "inactive" }),
+    ],
     organizationId: "org-1",
     canManageAccounts: false,
     canManagePermissions: false,
@@ -106,7 +109,29 @@ test("read-only members model keeps the surface visible but non editable", () =>
   assert.equal(model.readOnly, true);
   assert.equal(model.canManageAccounts, false);
   assert.equal(model.canManagePermissions, false);
-  assert.equal(model.members[0]?.permissionSummary.length > 0, true);
+  assert.equal(model.activeMembers, 1);
+  assert.equal(model.inactiveMembers, 1);
+  assert.equal(model.members.find((member) => member.id === "member-2")?.status, "inactive");
+});
+
+test("removed members are hidden from the organization members surface", () => {
+  const model = buildOrganizationMembersModel({
+    accounts: [
+      buildAccount({ id: "member-visible", displayName: "Visible", userDisplayName: "Visible", userEmail: "visible@example.com" }),
+      buildAccount({
+        id: "member-removed",
+        displayName: "Removed",
+        userDisplayName: "Removed",
+        userEmail: "removed@example.com",
+        metadata: { removed: true },
+      }),
+    ],
+    organizationId: "org-1",
+    canManageAccounts: true,
+    canManagePermissions: true,
+  });
+
+  assert.deepEqual(model.members.map((member) => member.id), ["member-visible"]);
 });
 
 test("role intents stay aligned with the fixed MVP role presets", () => {

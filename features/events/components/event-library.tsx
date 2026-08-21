@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import StatusBadge from "@/components/status-badge";
 import type { Event, ResourceType } from "@/features/domain/types";
+import { getEventsForOrganization, getVenuesForOrganization } from "@/features/domain/selectors";
 import { getEventTypeLabel, getOperationalModelLabel, isTerminalEventStatus } from "@/features/events/domain";
 import EventEditorModal from "@/features/events/components/event-editor-modal";
 import EventCreationWizard from "@/features/events/components/event-creation-wizard";
@@ -58,14 +59,21 @@ export default function EventLibrary() {
     currentEventId,
     currentEvent,
     currentOrganization,
+    reservations,
+    guests,
+    tables,
+    checkIns,
     createEvent,
+    updateEvent,
     setCurrentEventId,
     setEventStatus,
     venues,
   } = useCheckInStore();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardOrganizationId, setWizardOrganizationId] = useState(currentOrganization.id);
-  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorEventId, setEditorEventId] = useState<string | null>(null);
+  const organizationEvents = useMemo(() => getEventsForOrganization(currentOrganization.id, events), [currentOrganization.id, events]);
+  const organizationVenues = useMemo(() => getVenuesForOrganization(currentOrganization.id, venues), [currentOrganization.id, venues]);
 
   const groupedEvents = useMemo(() => {
     const groups: Record<EventStatusGroup, Event[]> = {
@@ -74,7 +82,7 @@ export default function EventLibrary() {
       finished: [],
     };
 
-    events.forEach((event) => {
+    organizationEvents.forEach((event) => {
       if (event.status === "live") {
         groups.live.push(event);
         return;
@@ -89,7 +97,7 @@ export default function EventLibrary() {
     });
 
     return groups;
-  }, [events]);
+  }, [organizationEvents]);
 
   const visibleSections = useMemo(
     () =>
@@ -121,8 +129,13 @@ export default function EventLibrary() {
     setWizardOpen(true);
   };
 
-  const openEventEditor = () => {
-    setEditorOpen(true);
+  const editorEvent = useMemo(
+    () => organizationEvents.find((event) => event.id === editorEventId) ?? null,
+    [editorEventId, organizationEvents],
+  );
+
+  const openEventEditor = (event: Event) => {
+    setEditorEventId(event.id);
   };
 
   const currentEventAction: EventAction | null =
@@ -173,7 +186,7 @@ export default function EventLibrary() {
               currentEventId={currentEventId}
               currentEventAction={currentEventAction}
               onSelectEvent={setCurrentEventId}
-              onEditCurrentEvent={openEventEditor}
+              onEditEvent={openEventEditor}
             />
           ))
         ) : (
@@ -190,19 +203,23 @@ export default function EventLibrary() {
           onCreate={createEvent}
           organizationId={wizardOrganizationId}
           organizationTimezone={currentOrganization.timezone}
-          venues={venues}
+          venues={organizationVenues}
         />
       ) : null}
 
-      {editorOpen ? (
+      {editorEvent ? (
         <EventEditorModal
-          key={currentEvent.id}
-          open={editorOpen}
-          event={currentEvent}
-          venues={venues}
-          onClose={() => setEditorOpen(false)}
+          key={editorEvent.id}
+          open={Boolean(editorEvent)}
+          event={editorEvent}
+          venues={organizationVenues}
+          reservations={reservations}
+          guests={guests}
+          tables={tables}
+          checkIns={checkIns}
+          onClose={() => setEditorEventId(null)}
           onSave={createEvent}
-          onPatchEvent={createEvent}
+          onPatchEvent={updateEvent}
         />
       ) : null}
     </div>
@@ -216,7 +233,7 @@ function LibrarySection({
   currentEventId,
   currentEventAction,
   onSelectEvent,
-  onEditCurrentEvent,
+  onEditEvent,
 }: {
   title: string;
   events: Event[];
@@ -224,7 +241,7 @@ function LibrarySection({
   currentEventId: string;
   currentEventAction: EventAction | null;
   onSelectEvent: (eventId: string) => void;
-  onEditCurrentEvent: () => void;
+  onEditEvent: (event: Event) => void;
 }) {
   return (
     <section className="surface-panel p-4 sm:p-5">
@@ -243,7 +260,7 @@ function LibrarySection({
             current={event.id === currentEventId}
             currentEventAction={event.id === currentEventId ? currentEventAction : null}
             onSelect={() => onSelectEvent(event.id)}
-            onEditCurrentEvent={onEditCurrentEvent}
+            onEditEvent={() => onEditEvent(event)}
           />
         ))}
       </div>
@@ -256,13 +273,13 @@ function EventCard({
   current,
   currentEventAction,
   onSelect,
-  onEditCurrentEvent,
+  onEditEvent,
 }: {
   event: Event;
   current: boolean;
   currentEventAction: EventAction | null;
   onSelect: () => void;
-  onEditCurrentEvent: () => void;
+  onEditEvent: () => void;
 }) {
   const resourceLabel = event.resourceTypes.length ? formatResourceTypes(event.resourceTypes.slice(0, 3)) : "";
 
@@ -303,41 +320,40 @@ function EventCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        {current ? (
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {current ? null : (
             <button
               type="button"
-              onClick={onEditCurrentEvent}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+              onClick={onSelect}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
             >
-              Editar evento
+              Seleccionar evento
             </button>
-            {currentEventAction ? (
-              <button
-                type="button"
-                onClick={currentEventAction.onClick}
-                className={[
-                  "inline-flex h-9 items-center justify-center rounded-xl border px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
-                  currentEventAction.tone === "warning"
-                    ? "border-amber-400/25 bg-amber-400/10 text-amber-50 hover:bg-amber-400/15"
-                    : currentEventAction.tone === "success"
-                      ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-50 hover:bg-emerald-400/15"
-                      : "border-cyan-400/25 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/15",
-                ].join(" ")}
-              >
-                {currentEventAction.label}
-              </button>
-            ) : null}
-          </div>
-        ) : (
+          )}
           <button
             type="button"
-            onClick={onSelect}
-            className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+            onClick={onEditEvent}
+            className="inline-flex h-9 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
           >
-            Seleccionar evento
+            Editar evento
           </button>
-        )}
+          {current && currentEventAction ? (
+            <button
+              type="button"
+              onClick={currentEventAction.onClick}
+              className={[
+                "inline-flex h-9 items-center justify-center rounded-xl border px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                currentEventAction.tone === "warning"
+                  ? "border-amber-400/25 bg-amber-400/10 text-amber-50 hover:bg-amber-400/15"
+                  : currentEventAction.tone === "success"
+                    ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-50 hover:bg-emerald-400/15"
+                    : "border-cyan-400/25 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/15",
+              ].join(" ")}
+            >
+              {currentEventAction.label}
+            </button>
+          ) : null}
+        </div>
       </div>
     </article>
   );

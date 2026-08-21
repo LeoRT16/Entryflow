@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 
 import { useFeedback } from "@/components/premium-feedback";
 import PermissionGuard from "@/components/permission-guard";
-import StatusBadge from "@/components/status-badge";
+import OrganizationCreationModal from "@/features/events/components/organization-creation-modal";
 import TimezoneSelect from "@/components/timezone-select";
 import Topbar from "@/components/topbar";
-import type { Venue } from "@/features/domain/types";
 import { useCheckInStore } from "@/services/workspace-service";
+import { buildOrganizationSwitcherOptions } from "@/features/settings/domain/organization-settings";
 import { buildSlugFromName } from "@/lib/slug";
 import { formatTimezoneLabel, getDefaultTimezone } from "@/lib/timezone";
 
@@ -61,9 +61,8 @@ function ReadOnlyField({
 }
 
 export default function SettingsPage() {
-  const { status, error, organizations, can } = useCheckInStore();
+  const { status, error, organizations, can, currentOrganization } = useCheckInStore();
   const canManageOrganization = can("organization.manage");
-  const canManageVenue = can("venue.manage");
 
   if (status === "loading") {
     return <PanelShell title="Cargando ajustes" description="Estamos preparando la configuración de la organización." />;
@@ -89,9 +88,8 @@ export default function SettingsPage() {
       <Topbar eyebrow="Ajustes" title="Ajustes" description="Configuración general de tu organización." />
 
       <PermissionGuard permission="settings.view">
-        <section className="grid gap-4 xl:grid-cols-[0.34fr_0.66fr]">
-          <OrganizationSettingsCard canManage={canManageOrganization} />
-          <VenueSettingsCard canManage={canManageVenue} />
+        <section className="grid gap-4">
+          <OrganizationSettingsCard key={currentOrganization.id} canManage={canManageOrganization} />
         </section>
       </PermissionGuard>
     </div>
@@ -100,10 +98,34 @@ export default function SettingsPage() {
 
 function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
   const { showToast } = useFeedback();
-  const { currentOrganization, createOrganization, setCurrentOrganizationId } = useCheckInStore();
+  const {
+    currentOrganization,
+    currentAccount,
+    currentUser,
+    currentProfile,
+    currentOrganizationId,
+    organizations,
+    profiles,
+    roles,
+    setCurrentOrganizationId,
+    createOrganization,
+  } = useCheckInStore();
   const [organizationName, setOrganizationName] = useState(currentOrganization.name);
   const [organizationTimezone, setOrganizationTimezone] = useState(() => getDefaultTimezone(currentOrganization.timezone));
   const [isSaving, setIsSaving] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  const organizationOptions = useMemo(
+    () =>
+      buildOrganizationSwitcherOptions({
+        organizations,
+        profiles,
+        roles,
+        currentUserId: currentUser?.id ?? "",
+        currentOrganizationId,
+      }),
+    [currentOrganizationId, currentUser?.id, organizations, profiles, roles],
+  );
 
   const saveOrganization = async () => {
     setIsSaving(true);
@@ -116,12 +138,17 @@ function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
     };
 
     try {
-      await createOrganization(nextOrganization);
-      setCurrentOrganizationId(nextOrganization.id);
+      const savedOrganization = await createOrganization(nextOrganization);
       showToast({
         title: "Organización actualizada",
-        description: `${nextOrganization.name} quedó sincronizada.`,
+        description: `${savedOrganization.name} quedó sincronizada.`,
         tone: "success",
+      });
+    } catch (error) {
+      showToast({
+        title: "No pudimos guardar la organización",
+        description: error instanceof Error && error.message ? error.message : "Revisá la conexión con Supabase.",
+        tone: "error",
       });
     } finally {
       setIsSaving(false);
@@ -137,23 +164,57 @@ function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
       </div>
 
       <div className="mt-5 grid gap-4">
-        {canManage ? (
-          <>
-            <Input label="Nombre de la organización" value={organizationName} onChange={setOrganizationName} placeholder="Nombre de la organización" />
-            <TimezoneSelect
-              label="Zona horaria"
-              value={organizationTimezone}
-              onChange={setOrganizationTimezone}
-              preferredTimezone={currentOrganization.timezone}
-              helperText="Define los horarios utilizados por la organización."
-            />
-          </>
-        ) : (
-          <>
-            <ReadOnlyField label="Nombre de la organización" value={currentOrganization.name} hint="Solo lectura para este perfil." />
-            <ReadOnlyField label="Zona horaria" value={formatTimezoneLabel(currentOrganization.timezone)} hint="Solo lectura para este perfil." />
-          </>
-        )}
+        <div className="space-y-2">
+          <span className="text-sm font-medium text-slate-200">Organización activa</span>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+            <label className="block">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-1.5 transition focus-within:border-cyan-400/60 focus-within:bg-white/[0.06]">
+                <select
+                  value={currentOrganization.id}
+                  onChange={(event) => setCurrentOrganizationId(event.target.value)}
+                  className="h-9 w-full bg-transparent text-sm text-white outline-none"
+                >
+                  {organizationOptions.map((organization) => (
+                    <option key={organization.id} value={organization.id} className="bg-slate-950 text-white">
+                      {organization.isCurrent ? `${organization.name} · ${organization.roleName} · Actual` : `${organization.name} · ${organization.roleName}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">{currentAccount ? `Rol actual: ${currentAccount.roleName}` : "Cambiar organización actualiza el contexto completo."}</p>
+            </label>
+
+            {canManage ? (
+              <button
+                type="button"
+                onClick={() => setIsCreateOpen(true)}
+                className="inline-flex h-11 items-center justify-center self-start rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]"
+              >
+                + Crear organización
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid gap-4">
+          {canManage ? (
+            <>
+              <Input label="Nombre de la organización" value={organizationName} onChange={setOrganizationName} placeholder="Nombre de la organización" />
+              <TimezoneSelect
+                label="Zona horaria"
+                value={organizationTimezone}
+                onChange={setOrganizationTimezone}
+                preferredTimezone={currentOrganization.timezone}
+                helperText="Define los horarios utilizados por la organización."
+              />
+            </>
+          ) : (
+            <>
+              <ReadOnlyField label="Nombre de la organización" value={currentOrganization.name} hint={currentProfile ? `Membresía: ${currentProfile.displayName}` : "Solo lectura para este perfil."} />
+              <ReadOnlyField label="Zona horaria" value={formatTimezoneLabel(currentOrganization.timezone)} hint="Solo lectura para este perfil." />
+            </>
+          )}
+        </div>
       </div>
 
       {canManage ? (
@@ -166,201 +227,14 @@ function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
           {isSaving ? "Guardando..." : "Guardar organización"}
         </button>
       ) : null}
-    </section>
-  );
-}
 
-function VenueSettingsCard({ canManage }: { canManage: boolean }) {
-  const { showToast } = useFeedback();
-  const { currentOrganization, venues, createVenue, updateVenue } = useCheckInStore();
-  const venueOptions = useMemo(() => venues.filter((venue) => venue.organizationId === currentOrganization.id), [currentOrganization.id, venues]);
-  const [isCreatingNew, setIsCreatingNew] = useState(false);
-  const [selectedVenueId, setSelectedVenueId] = useState(venueOptions[0]?.id ?? "");
-  const selectedVenue = useMemo(() => {
-    if (isCreatingNew) {
-      return null;
-    }
-
-    return venueOptions.find((venue) => venue.id === selectedVenueId) ?? venueOptions[0] ?? null;
-  }, [isCreatingNew, selectedVenueId, venueOptions]);
-  const [venueName, setVenueName] = useState(selectedVenue?.name ?? "");
-  const [venueDescription, setVenueDescription] = useState(selectedVenue?.description ?? "");
-  const [venueAddress, setVenueAddress] = useState(selectedVenue?.address ?? "");
-  const [venueCity, setVenueCity] = useState(selectedVenue?.city ?? "");
-  const [venueCountry, setVenueCountry] = useState(selectedVenue?.country ?? "");
-  const [venueStatusValue, setVenueStatusValue] = useState<Venue["status"]>(selectedVenue?.status ?? "active");
-
-  const saveVenue = async () => {
-    const now = new Date().toISOString();
-    const nextVenue: Venue = {
-      id: selectedVenue?.id ?? `venue-${venueName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "new"}`,
-      organizationId: currentOrganization.id,
-      name: venueName.trim() || selectedVenue?.name || "Espacio nuevo",
-      description: venueDescription.trim() || undefined,
-      address: venueAddress.trim() || undefined,
-      city: venueCity.trim() || undefined,
-      country: venueCountry.trim() || undefined,
-      status: venueStatusValue,
-      createdAt: selectedVenue?.createdAt ?? now,
-      updatedAt: now,
-      metadata: selectedVenue?.metadata,
-    };
-
-    if (selectedVenue) {
-      await updateVenue(nextVenue);
-    } else {
-      await createVenue(nextVenue);
-    }
-
-    setIsCreatingNew(false);
-    setSelectedVenueId(nextVenue.id);
-    showToast({
-      title: selectedVenue ? "Espacio actualizado" : "Espacio creado",
-      description: `${nextVenue.name} quedó sincronizado.`,
-      tone: "success",
-    });
-  };
-
-  return (
-    <section className="surface-panel p-4 sm:p-5">
-      <div className="space-y-2">
-        <p className="kicker">Espacio</p>
-        <h2 className="text-2xl font-semibold tracking-tight text-white">Identidad del espacio</h2>
-        <p className="text-sm text-slate-400">Edita la identidad básica del espacio seleccionado.</p>
-      </div>
-
-      <div className="mt-5 grid gap-4 xl:grid-cols-[0.32fr_0.68fr]">
-        <div className="space-y-2 rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="kicker">Espacios</p>
-            {canManage ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCreatingNew(true);
-                  setSelectedVenueId("");
-                  setVenueName("");
-                  setVenueDescription("");
-                  setVenueAddress("");
-                  setVenueCity("");
-                  setVenueCountry("");
-                  setVenueStatusValue("active");
-                }}
-                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.22em] text-slate-300 transition hover:bg-white/[0.08]"
-              >
-                Nuevo
-              </button>
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            {venueOptions.length ? (
-              venueOptions.map((venue) => {
-                const selected = venue.id === selectedVenue?.id;
-
-                return (
-                  <button
-                    key={venue.id}
-                    type="button"
-                    onClick={() => {
-                      setIsCreatingNew(false);
-                      setSelectedVenueId(venue.id);
-                    }}
-                    className={[
-                      "w-full rounded-[1rem] border px-3 py-2.5 text-left transition",
-                      selected
-                        ? "border-cyan-400/40 bg-cyan-400/10"
-                        : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{venue.name}</p>
-                        <p className="mt-1 truncate text-xs text-slate-500">{venue.city ?? venue.address ?? "Sin detalle"}</p>
-                      </div>
-                      <StatusBadge variant={venue.status === "inactive" ? "warning" : "info"}>
-                        {venue.status === "inactive" ? "Inactivo" : "Activo"}
-                      </StatusBadge>
-                    </div>
-                  </button>
-                );
-              })
-            ) : (
-              <div className="rounded-[1rem] border border-dashed border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
-                Todavía no hay espacios configurados.
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="surface-elevated p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {canManage ? (
-              <>
-                <Input label="Nombre" value={venueName} onChange={setVenueName} placeholder="La Rota Carlota" />
-                <Input label="Ciudad" value={venueCity} onChange={setVenueCity} placeholder="La Paz" />
-                <Input label="Dirección" value={venueAddress} onChange={setVenueAddress} placeholder="Av. principal 123" />
-                <Input label="País" value={venueCountry} onChange={setVenueCountry} placeholder="Bolivia" />
-              </>
-            ) : (
-              <>
-                <ReadOnlyField label="Nombre" value={selectedVenue?.name ?? "Sin espacio"} />
-                <ReadOnlyField label="Ciudad" value={selectedVenue?.city ?? "-"} />
-                <ReadOnlyField label="Dirección" value={selectedVenue?.address ?? "-"} />
-                <ReadOnlyField label="País" value={selectedVenue?.country ?? "-"} />
-              </>
-            )}
-          </div>
-
-          <label className="mt-4 block">
-            <span className="text-sm font-medium text-slate-200">Descripción</span>
-            {canManage ? (
-              <textarea
-                value={venueDescription}
-                onChange={(event) => setVenueDescription(event.target.value)}
-                placeholder="Resumen breve del espacio"
-                className="mt-2 min-h-24 w-full rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06]"
-              />
-            ) : (
-              <div className="mt-2 rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
-                {selectedVenue?.description ?? "Sin descripción"}
-              </div>
-            )}
-          </label>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-200">Estado</span>
-              {canManage ? (
-                <select
-                  value={venueStatusValue}
-                  onChange={(event) => setVenueStatusValue(event.target.value as Venue["status"])}
-                  className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/60 focus:bg-white/[0.06]"
-                >
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
-                </select>
-              ) : (
-                <div className="mt-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
-                  {selectedVenue?.status ?? "active"}
-                </div>
-              )}
-            </label>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            {canManage ? (
-              <button
-                type="button"
-                onClick={saveVenue}
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
-              >
-                Guardar espacio
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
+      <OrganizationCreationModal
+        key={`${currentOrganization.id}-${isCreateOpen ? "open" : "closed"}`}
+        open={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreate={createOrganization}
+        templateOrganization={currentOrganization}
+      />
     </section>
   );
 }

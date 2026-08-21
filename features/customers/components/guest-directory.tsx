@@ -35,6 +35,7 @@ import type { GuestRecord } from "@/features/customers/types";
 import GuestEditModal from "@/features/customers/components/guest-edit-modal";
 import { getEventInvitationArtwork } from "@/features/events/domain/invitation-artwork";
 import { formatInvitationEventDateLabel, getEventInvitationOverlayLayout } from "@/features/events/domain/invitation-overlay";
+import { resolveEventVenueDisplayName } from "@/features/events/domain/event-venue-boundary";
 import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
 
 const MIN_QUERY_LENGTH = 2;
@@ -326,7 +327,7 @@ function GuestDrawer({
   drawerRef: RefObject<HTMLDivElement | null>;
 }) {
   const { showToast } = useFeedback();
-  const { currentEvent, reservations, setGuestsState } = useCheckInStore();
+  const { currentEvent, currentVenue, reservations, setGuestsState } = useCheckInStore();
   const [isVisible, setIsVisible] = useState(false);
   const [isInvitationPreviewOpen, setIsInvitationPreviewOpen] = useState(false);
   const [isExportingInvitation, setIsExportingInvitation] = useState(false);
@@ -359,7 +360,10 @@ function GuestDrawer({
       reservationCode: guest.reservationCode,
       tableName: guest.tableName,
       zoneName: guest.seat,
-      venueName: currentEvent.venue || undefined,
+      venueName: resolveEventVenueDisplayName({
+        currentVenueName: currentVenue?.name,
+        eventVenue: currentEvent.venue,
+      }),
       date: invitationDateLabel,
       time: formatTimelineDisplayTime(currentEvent.startAt),
       uniqueCode: visibleInvitationCode,
@@ -373,6 +377,7 @@ function GuestDrawer({
     }),
     [
       currentEvent.name,
+      currentVenue?.name,
       currentEvent.venue,
       currentEvent.startAt,
       guest.id,

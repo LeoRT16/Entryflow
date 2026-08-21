@@ -157,7 +157,7 @@ function ReservationEntry({
 }
 
 export default function EventCommandCenter() {
-  const { currentOrganization, currentEvent, workspaceIntelligence, workspacePriority, status, setEventStatus } = useCheckInStore();
+  const { currentOrganization, currentEvent, currentVenue, workspaceIntelligence, workspacePriority, status, setEventStatus } = useCheckInStore();
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
 
   const model = useMemo(
@@ -165,11 +165,12 @@ export default function EventCommandCenter() {
       buildLiveDashboardModel({
         currentOrganizationName: currentOrganization.name,
         currentEvent,
+        currentVenueName: currentVenue?.name,
         workspaceStatus: status,
         workspaceIntelligence,
         workspacePriority,
       }),
-    [currentEvent, currentOrganization.name, status, workspaceIntelligence, workspacePriority],
+    [currentEvent, currentOrganization.name, currentVenue?.name, status, workspaceIntelligence, workspacePriority],
   );
 
   return (

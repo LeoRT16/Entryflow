@@ -323,6 +323,54 @@ export function isOwnerAccount(account: Pick<OrganizationAccount, "roleSlug" | "
   return account.roleSlug === "owner" || Boolean(account.metadata?.bootstrap) || account.rolePermissions.length === getAllAccountPermissionKeys().length;
 }
 
+export function getCriticalSelfMutationBlockReason({
+  currentAccount,
+  targetAccountId,
+  targetUserId,
+  nextStatus,
+  nextRoleSlug,
+  nextPermissions,
+  action = "status",
+}: {
+  currentAccount: Pick<OrganizationAccount, "id" | "userId" | "isOwner"> & {
+    permissions: ReadonlyArray<AccountPermissionKey>;
+  };
+  targetAccountId: string;
+  targetUserId?: string;
+  nextStatus: "active" | "inactive";
+  nextRoleSlug: AccountRoleSlug;
+  nextPermissions: ReadonlyArray<AccountPermissionKey>;
+  action?: "status" | "delete";
+}) {
+  const isSelfMutation = currentAccount.id === targetAccountId || (targetUserId ? currentAccount.userId === targetUserId : false);
+
+  if (!isSelfMutation) {
+    return null;
+  }
+
+  if (action === "delete") {
+    return "No podés eliminar tu propia cuenta.";
+  }
+
+  if (nextStatus === "inactive") {
+    return "No podés desactivarte a vos mismo.";
+  }
+
+  if (currentAccount.isOwner && nextRoleSlug !== "owner") {
+    return "No podés quitarte el rol Owner de tu propia cuenta.";
+  }
+
+  if (currentAccount.permissions.includes("accounts.manage") && !nextPermissions.includes("accounts.manage")) {
+    return "No podés quitarte accounts.manage de tu propia cuenta.";
+  }
+
+  if (currentAccount.permissions.includes("permissions.manage") && !nextPermissions.includes("permissions.manage")) {
+    return "No podés quitarte permissions.manage de tu propia cuenta.";
+  }
+
+  return null;
+}
+
 export function getAccountStatusLabel(status: "active" | "inactive") {
   return status === "active" ? "Activo" : "Inactivo";
 }

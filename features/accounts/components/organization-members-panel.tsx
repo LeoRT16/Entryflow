@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import StatusBadge from "@/components/status-badge";
+import { useFeedback } from "@/components/premium-feedback";
 import {
   ACCOUNT_PERMISSION_GROUPS,
   getAccountEditablePermissions,
@@ -63,11 +64,13 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
     currentAccount,
     currentOrganization,
     createAccount,
+    deleteAccount,
     reloadWorkspace,
     updateAccount,
     setAccountStatus,
     can,
   } = useCheckInStore();
+  const { confirm } = useFeedback();
   const canManageAccounts = can("accounts.manage") || currentAccount.isOwner;
   const canManagePermissions = can("permissions.manage") || currentAccount.isOwner;
 
@@ -96,6 +99,11 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
   const [resetError, setResetError] = useState<string | null>(null);
   const lastRequestRef = useRef<number | undefined>(newMemberRequest);
 
+  function clearResetNotice() {
+    setResetSuccess(null);
+    setResetError(null);
+  }
+
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === selectedId && account.organizationId === currentOrganization.id && account.id !== "bootstrap-account") ?? null,
     [accounts, currentOrganization.id, selectedId],
@@ -122,11 +130,6 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
     setResetTempPassword("");
     setResetConfirmTempPassword("");
   }, [newMemberRequest]);
-
-  const clearResetNotice = () => {
-    setResetSuccess(null);
-    setResetError(null);
-  };
 
   const selectAccount = (accountId: string) => {
     setSelectedId(accountId);
@@ -266,6 +269,49 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleDeleteAccount = () => {
+    if (!selectedAccount || selectedAccount.id === "bootstrap-account") {
+      return;
+    }
+
+    confirm({
+      title: "Eliminar usuario",
+      description: `Vas a eliminar a ${selectedAccount.displayName}. Su acceso quedará retirado y la membresía dejará de mostrarse en el equipo.`,
+      confirmLabel: "Eliminar usuario",
+      cancelLabel: "Cancelar",
+      tone: "danger",
+      onConfirm: () => {
+        void (async () => {
+          setIsSaving(true);
+          setSaveError(null);
+
+          try {
+            await deleteAccount(selectedAccount.id);
+
+            const nextVisibleAccount = model.members.find((member) => member.id !== selectedAccount.id) ?? null;
+            const nextAccount = nextVisibleAccount ? accounts.find((account) => account.id === nextVisibleAccount.id) ?? null : null;
+
+            if (nextAccount) {
+              setSelectedId(nextAccount.id);
+              setForm(toFormState(nextAccount));
+            } else {
+              setSelectedId("new");
+              setForm(emptyFormState());
+            }
+
+            setPermissionsOpen(false);
+            setResetOpen(false);
+            clearResetNotice();
+          } catch (error) {
+            setSaveError(error instanceof Error && error.message ? error.message : "No se pudo eliminar al usuario.");
+          } finally {
+            setIsSaving(false);
+          }
+        })();
+      },
+    });
   };
 
   const handleResetTemporaryPassword = async () => {
@@ -610,24 +656,35 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
               {isSaving ? "Guardando..." : selectedId === "new" ? "Crear miembro" : "Guardar cambios"}
             </button>
             {selectedAccount && selectedAccount.id !== "bootstrap-account" ? (
-              selectedModel?.canDeactivate ? (
+              <>
+                {selectedModel?.canDeactivate ? (
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(selectedAccount.status === "active" ? "inactive" : "active")}
+                    disabled={isSaving}
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {selectedAccount.status === "active" ? "Desactivar" : "Reactivar"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-slate-500"
+                  >
+                    Owner protegido
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => handleStatusChange(selectedAccount.status === "active" ? "inactive" : "active")}
-                  disabled={isSaving}
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={handleDeleteAccount}
+                  disabled={isSaving || Boolean(selectedModel?.protectedOwner)}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 text-sm font-medium text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {selectedAccount.status === "active" ? "Desactivar" : "Reactivar"}
+                  Eliminar usuario
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm font-medium text-slate-500"
-                >
-                  Owner protegido
-                </button>
-              )
+              </>
             ) : null}
           </div>
 

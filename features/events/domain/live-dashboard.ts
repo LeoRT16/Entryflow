@@ -1,6 +1,7 @@
 import type { WorkspaceIntelligence } from "@/domain/workspace-intelligence";
 import { getWorkspaceActionableAlertCount, type WorkspacePrioritySnapshot } from "@/domain/workspace-priority";
 import { getEventTypeLabel } from "@/features/events/domain";
+import { resolveEventVenueDisplayName } from "@/features/events/domain/event-venue-boundary";
 import type { Event as PlatformEvent } from "@/features/domain/types";
 import { isTerminalEventStatus } from "@/features/events/domain/event-rules";
 import type { TimelineEvent } from "@/features/timeline/types";
@@ -84,6 +85,7 @@ export type LiveDashboardModel = {
 type LiveDashboardInput = {
   currentOrganizationName: string;
   currentEvent: Pick<PlatformEvent, "name" | "status" | "startAt" | "venue" | "eventType">;
+  currentVenueName?: string;
   workspaceStatus: "loading" | "ready" | "empty" | "error";
   workspaceIntelligence: Pick<WorkspaceIntelligence, "activity" | "capacity" | "flow" | "access" | "operations" | "statistics">;
   workspacePriority: Pick<WorkspacePrioritySnapshot, "criticalItems" | "attentionNow" | "summary">;
@@ -196,6 +198,7 @@ export function buildLiveDashboardQuickActions({
 export function buildLiveDashboardModel({
   currentOrganizationName,
   currentEvent,
+  currentVenueName,
   workspaceStatus,
   workspaceIntelligence,
   workspacePriority,
@@ -224,7 +227,10 @@ export function buildLiveDashboardModel({
       liveLabel: getRealtimeLabel(workspaceStatus, currentEvent.status),
       liveTone: toLiveTone(getRealtimeTone(workspaceStatus, currentEvent.status)),
       timestampLabel: formatEventDateTime(currentEvent.startAt),
-      venue: currentEvent.venue,
+      venue: resolveEventVenueDisplayName({
+        currentVenueName,
+        eventVenue: currentEvent.venue,
+      }),
       summary: terminalEvent
         ? "Este evento está cerrado. La información permanece disponible en modo lectura."
         : workspacePriority.summary.message,
