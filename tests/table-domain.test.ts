@@ -121,3 +121,31 @@ test("duplicate active reservations remain visible only for the current event an
   assert.equal(summary.reservationIds.length, 2);
   assert.equal(primaryReservation?.id, "reservation-newer");
 });
+
+test("resourceId-only reservations still count toward occupancy after reload reconstruction", () => {
+  const table = buildTable({
+    capacity: 10,
+    id: "resource-1",
+  });
+  const reservation = buildReservation({
+    id: "reservation-resource-only",
+    tableId: undefined,
+    resourceId: "resource-1",
+    tableCapacity: 10,
+    status: "Confirmed",
+  });
+  const guests = [
+    { id: "guest-1", reservationId: "reservation-resource-only", guestName: "A", admissionStatus: "Pendiente" },
+    { id: "guest-2", reservationId: "reservation-resource-only", guestName: "B", admissionStatus: "Pendiente" },
+    { id: "guest-3", reservationId: "reservation-resource-only", guestName: "C", admissionStatus: "Pendiente" },
+    { id: "guest-4", reservationId: "reservation-resource-only", guestName: "D", admissionStatus: "Pendiente" },
+    { id: "guest-5", reservationId: "reservation-resource-only", guestName: "E", admissionStatus: "Pendiente" },
+  ] as never;
+
+  const summary = buildTableSummary(table, [reservation], guests, [], "event-current");
+
+  assert.equal(summary.metrics.assignedGuests, 5);
+  assert.equal(summary.metrics.capacityRemaining, 5);
+  assert.equal(summary.metrics.occupancyPercent, 50);
+  assert.equal(summary.status, "Partially Occupied");
+});

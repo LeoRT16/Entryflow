@@ -19,22 +19,46 @@ function isVipTaggedGuest(guest: Guest) {
   return attention.includes("vip") || notes.includes("vip") || gate === "vip" || method === "vip";
 }
 
-export function createGuestDraft(index: number, presets: Array<Partial<GuestDraft>>) {
-  const preset = presets[index] ?? {};
-
+export function createGuestDraft(index: number): GuestDraft {
   return {
     id: `guest-${index + 1}`,
-    name: preset.name ?? "",
-    whatsapp: preset.whatsapp ?? "",
-    document: preset.document ?? "",
-    invitationState: preset.invitationState ?? "Pendiente",
-    vip: preset.vip ?? false,
-    transferBadge: preset.transferBadge ?? "Transferible",
+    name: "",
+    whatsapp: "",
+    document: "",
+    invitationState: "Pendiente",
+    vip: false,
+    transferBadge: index === 0 ? "Titular" : "Transferible",
   };
 }
 
-export function buildGuestList(count: number, presets: Array<Partial<GuestDraft>>) {
-  return Array.from({ length: count }, (_, index) => createGuestDraft(index, presets));
+export function buildGuestList(count: number) {
+  return Array.from({ length: count }, (_, index) => createGuestDraft(index));
+}
+
+export function syncGuestDraftsWithHolder(
+  guestDrafts: GuestDraft[],
+  holder: {
+    holderName: string;
+    holderLastName: string;
+    documentValue: string;
+    whatsapp: string;
+  },
+) {
+  const holderName = [holder.holderName, holder.holderLastName].filter(Boolean).join(" ").trim();
+
+  return guestDrafts.map((guest, index) =>
+    index === 0
+      ? {
+          ...guest,
+          name: holderName,
+          document: holder.documentValue,
+          whatsapp: holder.whatsapp,
+          invitationState: guest.invitationState || "Pendiente",
+          vip: false,
+          transferBadge: "Titular",
+        }
+      : guest,
+  );
 }
 
 export function buildGuestDraftsFromGuests(guests: Guest[]) {

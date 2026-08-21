@@ -209,7 +209,6 @@ export type ReservationRow = SupabaseRowBase & {
   event_layout_id: string | null;
   event_layout_resource_id: string | null;
   resource_id?: string | null;
-  resource_name?: string | null;
   sector_id?: string | null;
   sector_name?: string | null;
   venue_id?: string | null;

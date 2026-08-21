@@ -1,17 +1,20 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import Topbar from "@/components/topbar";
+import { useFeedback } from "@/components/premium-feedback";
 import ReservationWizardModal, {
   wizardSteps,
 } from "@/features/reservations/components/reservation-wizard-modal";
 import ReservationOperationsBoard from "@/features/reservations/components/reservation-operations-board";
 import GuestEditModal from "@/features/customers/components/guest-edit-modal";
-import { buildGuestDraftsFromGuests, createGuestDraft } from "@/features/reservations/domain/reservation-draft";
+import { buildGuestDraftsFromGuests, createGuestDraft, syncGuestDraftsWithHolder } from "@/features/reservations/domain/reservation-draft";
 import {
   deriveFrequentCustomerFromHistory,
+  describeReservationSubmissionError,
   normalizeReservationStatus,
+  resolveReservationPaymentDraft,
 } from "@/features/reservations/domain/reservation-domain";
 import {
   countDraftPendingGuests,
@@ -22,7 +25,6 @@ import {
   resolveReservationCapacityViolation,
   runReservationSubmission,
 } from "@/features/reservations/domain/reservation-wizard";
-import { reservationGuestPresets } from "@/features/reservations/domain/reservation-presets";
 import { clampGuestCount } from "@/features/reservations/utils/reservation-utils";
 import type {
   GuestDraft,
@@ -78,6 +80,7 @@ type ReservationFlowWorkspaceProps = Pick<
   | "can"
   | "createReservation"
   | "updateReservation"
+  | "deleteReservation"
   | "appendReservationGuests"
   | "addReservationGuest"
   | "updateReservationGuest"
@@ -141,6 +144,7 @@ export default function ReservationFlow() {
       can={store.can}
       createReservation={store.createReservation}
       updateReservation={store.updateReservation}
+      deleteReservation={store.deleteReservation}
       appendReservationGuests={store.appendReservationGuests}
       addReservationGuest={store.addReservationGuest}
       updateReservationGuest={store.updateReservationGuest}
@@ -172,6 +176,7 @@ function ReservationFlowWorkspace({
   can,
   createReservation,
   updateReservation,
+  deleteReservation,
   appendReservationGuests,
   addReservationGuest,
   updateReservationGuest,
@@ -179,6 +184,7 @@ function ReservationFlowWorkspace({
   setReservationStatus,
   registerCheckIn,
 }: ReservationFlowWorkspaceProps) {
+  const { showToast } = useFeedback();
   const wizardDefaults = useMemo(
     () => createReservationWizardDefaults(currentEvent),
     [currentEvent],
@@ -243,6 +249,128 @@ function ReservationFlowWorkspace({
         eventId: currentEvent.id,
       }),
     [currentEvent.id, documentValue, holderLastName, holderName, reservations, whatsapp],
+  );
+
+  const syncCreateHolderDrafts = useCallback(
+    (nextHolder: {
+      holderName: string;
+      holderLastName: string;
+      documentValue: string;
+      whatsapp: string;
+    }) => {
+      if (wizardMode !== "create") {
+        return;
+      }
+
+      setGuestDrafts((current) => syncGuestDraftsWithHolder(current, nextHolder));
+    },
+    [wizardMode],
+  );
+
+  const setHolderNameForWizard = useCallback<Dispatch<SetStateAction<string>>>(
+    (value) => {
+      setHolderName((current) => {
+        const next = typeof value === "function" ? value(current) : value;
+        syncCreateHolderDrafts({
+          holderName: next,
+          holderLastName,
+          documentValue,
+          whatsapp,
+        });
+        return next;
+      });
+    },
+    [documentValue, holderLastName, setHolderName, syncCreateHolderDrafts, whatsapp],
+  );
+
+  const setHolderLastNameForWizard = useCallback<Dispatch<SetStateAction<string>>>(
+    (value) => {
+      setHolderLastName((current) => {
+        const next = typeof value === "function" ? value(current) : value;
+        syncCreateHolderDrafts({
+          holderName,
+          holderLastName: next,
+          documentValue,
+          whatsapp,
+        });
+        return next;
+      });
+    },
+    [documentValue, holderName, setHolderLastName, syncCreateHolderDrafts, whatsapp],
+  );
+
+  const setDocumentValueForWizard = useCallback<Dispatch<SetStateAction<string>>>(
+    (value) => {
+      setDocumentValue((current) => {
+        const next = typeof value === "function" ? value(current) : value;
+        syncCreateHolderDrafts({
+          holderName,
+          holderLastName,
+          documentValue: next,
+          whatsapp,
+        });
+        return next;
+      });
+    },
+    [holderLastName, holderName, setDocumentValue, syncCreateHolderDrafts, whatsapp],
+  );
+
+  const setWhatsappForWizard = useCallback<Dispatch<SetStateAction<string>>>(
+    (value) => {
+      setWhatsapp((current) => {
+        const next = typeof value === "function" ? value(current) : value;
+        syncCreateHolderDrafts({
+          holderName,
+          holderLastName,
+          documentValue,
+          whatsapp: next,
+        });
+        return next;
+      });
+    },
+    [documentValue, holderLastName, holderName, setWhatsapp, syncCreateHolderDrafts],
+  );
+
+  const setAmountForWizard = useCallback<Dispatch<SetStateAction<string>>>(
+    (value) => {
+      setAmount((current) => {
+        const next = typeof value === "function" ? value(current) : value;
+
+        if (paymentStatus === "Pagado") {
+          setAdvance(resolveReservationPaymentDraft(next, advance, paymentStatus).advance);
+        }
+
+        return next;
+      });
+    },
+    [advance, paymentStatus, setAdvance, setAmount],
+  );
+
+  const setAdvanceForWizard = useCallback<Dispatch<SetStateAction<string>>>(
+    (value) => {
+      if (paymentStatus === "Pagado") {
+        setAdvance(resolveReservationPaymentDraft(amount, advance, paymentStatus).advance);
+        return;
+      }
+
+      setAdvance(value);
+    },
+    [amount, advance, paymentStatus, setAdvance],
+  );
+
+  const setPaymentStatusForWizard = useCallback<Dispatch<SetStateAction<PaymentStatus>>>(
+    (value) => {
+      setPaymentStatus((current) => {
+        const next = typeof value === "function" ? value(current) : value;
+
+        if (next === "Pagado") {
+          setAdvance(resolveReservationPaymentDraft(amount, advance, next).advance);
+        }
+
+        return next;
+      });
+    },
+    [advance, amount, setAdvance, setPaymentStatus],
   );
 
   const selectedResourceContext = useMemo(() => {
@@ -521,9 +649,12 @@ function ReservationFlowWorkspace({
 
   const pendingGuests = countDraftPendingGuests(guestCount, registeredGuests);
 
-  const amountNumber = Number(amount || 0);
-  const advanceNumber = Number(advance || 0);
-  const pendingNumber = Math.max(amountNumber - advanceNumber, 0);
+  const paymentDraft = useMemo(
+    () => resolveReservationPaymentDraft(amount, advance, paymentStatus),
+    [advance, amount, paymentStatus],
+  );
+
+  const pendingNumber = paymentDraft.pendingNumber;
   const completion = step / wizardSteps.length;
   const reservationTotals = workspaceIntelligence.statistics.cards;
   const reservationFlowTotals = buildReservationFlowTotals(reservationTotals);
@@ -637,12 +768,12 @@ function ReservationFlowWorkspace({
       }
 
       if (sanitizedCount > currentGuests.length) {
-      return [
-        ...currentGuests,
-        ...Array.from({ length: sanitizedCount - currentGuests.length }, (_, index) =>
-          createGuestDraft(currentGuests.length + index, reservationGuestPresets),
-        ),
-      ];
+        return [
+          ...currentGuests,
+          ...Array.from({ length: sanitizedCount - currentGuests.length }, (_, index) =>
+            createGuestDraft(currentGuests.length + index),
+          ),
+        ];
       }
 
       return currentGuests.slice(0, sanitizedCount);
@@ -670,11 +801,15 @@ function ReservationFlowWorkspace({
     setGuestCount(nextCount);
     setGuestDrafts((currentGuests) => [
       ...currentGuests,
-      createGuestDraft(currentGuests.length, reservationGuestPresets),
+      createGuestDraft(currentGuests.length),
     ]);
   };
 
   const removeGuest = (index: number) => {
+    if (wizardMode === "create" && index === 0) {
+      return;
+    }
+
     if (guestDrafts.length <= 1) {
       return;
     }
@@ -740,8 +875,9 @@ function ReservationFlowWorkspace({
         finalizeWizardClose();
       });
     } catch (error) {
-      setSubmissionError(error instanceof Error ? error.message : "No se pudo crear la reserva. Intenta nuevamente.");
-      console.error("Failed to create reservation:", error);
+      const errorMessage = describeReservationSubmissionError(error, "No se pudo crear la reserva. Intenta nuevamente.");
+      setSubmissionError(errorMessage);
+      console.error("Failed to create reservation:", errorMessage);
     }
   };
 
@@ -776,8 +912,9 @@ function ReservationFlowWorkspace({
         finalizeWizardClose();
       });
     } catch (error) {
-      setSubmissionError(error instanceof Error ? error.message : "No se pudo guardar la reserva. Intenta nuevamente.");
-      console.error("Failed to update reservation:", error);
+      const errorMessage = describeReservationSubmissionError(error, "No se pudo guardar la reserva. Intenta nuevamente.");
+      setSubmissionError(errorMessage);
+      console.error("Failed to update reservation:", errorMessage);
     }
   };
 
@@ -828,10 +965,55 @@ function ReservationFlowWorkspace({
         finalizeWizardClose();
       });
     } catch (error) {
-      setSubmissionError(error instanceof Error ? error.message : "No se pudieron agregar las manillas. Intenta nuevamente.");
-      console.error("Failed to append reservation guests:", error);
+      const errorMessage = describeReservationSubmissionError(error, "No se pudieron agregar las manillas. Intenta nuevamente.");
+      setSubmissionError(errorMessage);
+      console.error("Failed to append reservation guests:", errorMessage);
     }
   };
+
+  const handleEditReservation = useCallback(
+    (reservationId: string) => {
+      if (isTerminalEvent) {
+        return;
+      }
+
+      setActiveReservationId(reservationId);
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.set("editReservationId", reservationId);
+      nextParams.set("action", "edit");
+      const nextQuery = nextParams.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    },
+    [isTerminalEvent, pathname, router, searchParams],
+  );
+
+  const handleDeleteReservation = useCallback(
+    async (reservationId: string) => {
+      try {
+        const deletedReservation = await deleteReservation(reservationId);
+
+        if (!deletedReservation) {
+          return;
+        }
+
+        const nextActiveReservationId = prioritizedReservations.find((item) => item.id !== reservationId)?.id ?? "";
+        setActiveReservationId(nextActiveReservationId);
+        showToast({
+          title: "Reserva eliminada",
+          description: `${deletedReservation.name} se eliminó y liberó su recurso.`,
+          tone: "success",
+        });
+      } catch (error) {
+        showToast({
+          title: "No se pudo eliminar la reserva",
+          description: error instanceof Error ? error.message : "Supabase rechazó la eliminación.",
+          tone: "error",
+        });
+        return undefined;
+      }
+    },
+    [deleteReservation, prioritizedReservations, setActiveReservationId, showToast],
+  );
 
   return (
     <div className="space-y-6">
@@ -891,6 +1073,8 @@ function ReservationFlowWorkspace({
           activeReservationId={activeReservation?.id ?? ""}
           isTerminalEvent={isTerminalEvent}
           onSelectReservation={setActiveReservationId}
+          onEditReservation={handleEditReservation}
+          onDeleteReservation={handleDeleteReservation}
           onMarkConfirmed={(reservationId) => {
             setReservationStatus(reservationId, "Confirmed");
           }}
@@ -918,6 +1102,8 @@ function ReservationFlowWorkspace({
           onEditGuest={(guestId) => {
             setEditingGuestId(guestId);
           }}
+          canEditReservation={can("reservation.edit")}
+          canDeleteReservation={can("reservation.cancel")}
         />
       </section>
 
@@ -941,13 +1127,13 @@ function ReservationFlowWorkspace({
           observations={observations}
           setObservations={setObservations}
           holderName={holderName}
-          setHolderName={setHolderName}
+          setHolderName={setHolderNameForWizard}
           holderLastName={holderLastName}
-          setHolderLastName={setHolderLastName}
+          setHolderLastName={setHolderLastNameForWizard}
           documentValue={documentValue}
-          setDocumentValue={setDocumentValue}
+          setDocumentValue={setDocumentValueForWizard}
           whatsapp={whatsapp}
-          setWhatsapp={setWhatsapp}
+          setWhatsapp={setWhatsappForWizard}
           email={email}
           setEmail={setEmail}
           preferences={preferences}
@@ -970,13 +1156,13 @@ function ReservationFlowWorkspace({
           setSelectedResourceId={setSelectedResourceId}
           resourceOptions={resourceOptions}
           amount={amount}
-          setAmount={setAmount}
+          setAmount={setAmountForWizard}
           advance={advance}
-          setAdvance={setAdvance}
+          setAdvance={setAdvanceForWizard}
           paymentMethod={paymentMethod}
           setPaymentMethod={setPaymentMethod}
           paymentStatus={paymentStatus}
-          setPaymentStatus={setPaymentStatus}
+          setPaymentStatus={setPaymentStatusForWizard}
           pendingNumber={pendingNumber}
           completion={completion}
           registeredGuests={registeredGuests}

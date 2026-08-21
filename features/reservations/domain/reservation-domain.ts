@@ -1,9 +1,11 @@
 import type { CheckIn, Guest } from "@/features/check-in/types";
+import type { TableRecord } from "@/features/tables/types";
 import type {
   ReservationCreationInput,
   ReservationGuestSummary,
   ReservationMetrics,
   ReservationRecord,
+  PaymentStatus,
   ReservationStatus,
   ReservationSummary,
   ReservationTimelineEntry,
@@ -42,6 +44,11 @@ function normalizeIdentityText(value: string) {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .replace(/\s+/g, " ");
+}
+
+function parseMoneyValue(value: string) {
+  const numeric = Number(value.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
 }
 
 export function normalizeReservationStatus(status: string): ReservationStatus {
@@ -91,6 +98,20 @@ export function isReservationOperational(status: ReservationStatus | string) {
 
 export function getReservationStatusTone(status: ReservationStatus | string) {
   return reservationToneForStatus(normalizeReservationStatus(status));
+}
+
+export function resolveReservationPaymentDraft(amount: string, advance: string, paymentStatus: PaymentStatus) {
+  const amountNumber = parseMoneyValue(amount);
+  const advanceNumber = paymentStatus === "Pagado" ? amountNumber : Math.min(parseMoneyValue(advance), amountNumber);
+  const pendingNumber = Math.max(amountNumber - advanceNumber, 0);
+
+  return {
+    amountNumber,
+    advanceNumber,
+    pendingNumber,
+    advance: String(advanceNumber),
+    pending: String(pendingNumber),
+  };
 }
 
 export function deriveFrequentCustomerFromHistory(
@@ -504,9 +525,54 @@ function getSelectedReservationResource(input: ReservationCreationInput) {
   return input.selectedResource ?? input.selectedTable;
 }
 
+export function resolvePersistedReservationTableId(tables: Pick<TableRecord, "id">[], selectedTableId: string) {
+  return tables.some((table) => table.id === selectedTableId) ? selectedTableId : undefined;
+}
+
+export function prependUniqueById<T extends { id: string }>(current: T[], nextItems: T[]) {
+  const nextUniqueItems = Array.from(new Map(nextItems.map((item) => [item.id, item])).values());
+  const nextIds = new Set(nextUniqueItems.map((item) => item.id));
+  const retainedCurrentItems = current.filter((item) => !nextIds.has(item.id));
+
+  return [...nextUniqueItems, ...retainedCurrentItems];
+}
+
+function readErrorField(error: unknown, field: "code" | "details" | "hint" | "message") {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+
+  const value = (error as Record<string, unknown>)[field];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+export function describeReservationSubmissionError(error: unknown, fallback = "No se pudo crear la reserva.") {
+  const message = readErrorField(error, "message");
+  const code = readErrorField(error, "code");
+  const details = readErrorField(error, "details");
+  const hint = readErrorField(error, "hint");
+
+  const parts = [message, code ? `code ${code}` : "", details, hint].filter(Boolean);
+
+  if (parts.length) {
+    return parts.join(" · ");
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return fallback;
+}
+
 export function createReservationBundle(input: ReservationCreationInput) {
   const createdAt = createTimeStamp();
   const selectedResource = getSelectedReservationResource(input);
+  const paymentDraft = resolveReservationPaymentDraft(input.amount, input.advance, input.paymentStatus);
 
   if (!selectedResource) {
     throw new Error("A reservation resource is required.");
@@ -539,7 +605,7 @@ export function createReservationBundle(input: ReservationCreationInput) {
     reservationType: input.reservationType,
     paymentStatus: input.paymentStatus,
     amount: input.amount,
-    advance: input.advance,
+    advance: paymentDraft.advance,
     notes: [input.observations, input.preferences, input.notes].filter(Boolean).join(" · "),
     guestIds: [],
     status,

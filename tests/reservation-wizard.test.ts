@@ -10,6 +10,12 @@ import {
   resolveReservationCapacityViolation,
   runReservationSubmission,
 } from "../features/reservations/domain/reservation-wizard";
+import {
+  buildGuestList,
+  createGuestDraft,
+  syncGuestDraftsWithHolder,
+} from "../features/reservations/domain/reservation-draft";
+import { resolveReservationPaymentDraft } from "../features/reservations/domain/reservation-domain";
 import type { GuestDraft } from "../features/reservations/types";
 
 test("reservation guest progress is scoped to the draft", () => {
@@ -68,7 +74,60 @@ test("create defaults always start blank for the selected resource", () => {
   assert.equal(defaults.selectedResourceId, "");
   assert.equal(defaults.guestCount, 5);
   assert.equal(defaults.guestDrafts.length, 5);
-  assert.equal(defaults.paymentStatus, "Parcial");
+  assert.equal(defaults.holderName, "");
+  assert.equal(defaults.holderLastName, "");
+  assert.equal(defaults.amount, "");
+  assert.equal(defaults.advance, "");
+  assert.equal(defaults.paymentStatus, "Pendiente");
+  assert.equal(defaults.guestDrafts[0]?.transferBadge, "Titular");
+  assert.equal(defaults.guestDrafts[0]?.name, "");
+  assert.equal(defaults.guestDrafts[1]?.transferBadge, "Transferible");
+});
+
+test("guest drafts stay blank except for the holder slot", () => {
+  const guestDrafts = buildGuestList(3);
+
+  assert.deepEqual(guestDrafts, [
+    { id: "guest-1", name: "", whatsapp: "", document: "", invitationState: "Pendiente", vip: false, transferBadge: "Titular" },
+    { id: "guest-2", name: "", whatsapp: "", document: "", invitationState: "Pendiente", vip: false, transferBadge: "Transferible" },
+    { id: "guest-3", name: "", whatsapp: "", document: "", invitationState: "Pendiente", vip: false, transferBadge: "Transferible" },
+  ]);
+});
+
+test("holder data syncs only into guest slot one", () => {
+  const guestDrafts = [
+    createGuestDraft(0),
+    createGuestDraft(1),
+    createGuestDraft(2),
+  ];
+
+  const synced = syncGuestDraftsWithHolder(guestDrafts, {
+    holderName: "Ana",
+    holderLastName: "Torrez",
+    documentValue: "123",
+    whatsapp: "+59170000000",
+  });
+
+  assert.equal(synced[0]?.name, "Ana Torrez");
+  assert.equal(synced[0]?.document, "123");
+  assert.equal(synced[0]?.whatsapp, "+59170000000");
+  assert.equal(synced[0]?.transferBadge, "Titular");
+  assert.equal(synced[1]?.name, "");
+  assert.equal(synced[2]?.name, "");
+});
+
+test("paid reservations force the advance to match the total and never go negative", () => {
+  const paid = resolveReservationPaymentDraft("850", "300", "Pagado");
+  assert.equal(paid.advance, "850");
+  assert.equal(paid.pendingNumber, 0);
+
+  const partial = resolveReservationPaymentDraft("850", "1000", "Parcial");
+  assert.equal(partial.advance, "850");
+  assert.equal(partial.pendingNumber, 0);
+
+  const pending = resolveReservationPaymentDraft("850", "", "Pendiente");
+  assert.equal(pending.advance, "0");
+  assert.equal(pending.pendingNumber, 850);
 });
 
 test("reservation capacity validation blocks only over-capacity drafts", () => {

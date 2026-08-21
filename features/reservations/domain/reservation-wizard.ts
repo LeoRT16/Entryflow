@@ -2,7 +2,6 @@ import type { GuestDraft } from "@/features/reservations/types";
 import type { Resource } from "@/features/domain/types";
 import type { PaymentMethod, PaymentStatus, ReservationType } from "@/features/reservations/types";
 import { buildGuestList } from "@/features/reservations/domain/reservation-draft";
-import { reservationGuestPresets } from "@/features/reservations/domain/reservation-presets";
 
 export type ReservationWizardDefaults = {
   eventName: string;
@@ -78,21 +77,21 @@ export function createReservationWizardDefaults(currentEvent: Pick<{ name: strin
     time: eventTime ?? "",
     guestCount: 5,
     reservationType: "Mesa",
-    observations: "Mesa cerca de pista, acceso preferente y confirmación por WhatsApp.",
-    holderName: "Sofía",
-    holderLastName: "Rivas",
-    documentValue: "1234567",
-    whatsapp: "+591 70000011",
-    email: "sofia.rivas@ejemplo.com",
-    preferences: "Mesa tranquila, música moderada",
-    vip: true,
-    notes: "Celebración de cumpleaños con grupo cerrado.",
-    guestDrafts: buildGuestList(5, reservationGuestPresets),
+    observations: "",
+    holderName: "",
+    holderLastName: "",
+    documentValue: "",
+    whatsapp: "",
+    email: "",
+    preferences: "",
+    vip: false,
+    notes: "",
+    guestDrafts: buildGuestList(5),
     selectedResourceId: "",
-    amount: "850",
-    advance: "300",
-    paymentMethod: "Transferencia",
-    paymentStatus: "Parcial",
+    amount: "",
+    advance: "",
+    paymentMethod: "Efectivo",
+    paymentStatus: "Pendiente",
   };
 }
 

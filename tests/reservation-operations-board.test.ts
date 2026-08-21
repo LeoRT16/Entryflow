@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { getReservationGuestActionVisibility } from "../features/reservations/components/reservation-operations-board";
@@ -67,4 +68,14 @@ test("terminal event context hides guest mutation affordances even for pending r
   assert.equal(visibility.showRevert, false);
   assert.equal(visibility.showCancel, false);
   assert.equal(visibility.showRemove, false);
+});
+
+test("reservation operations board exposes edit and delete actions for active reservations", () => {
+  const source = readFileSync(new URL("../features/reservations/components/reservation-operations-board.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /Editar reserva/);
+  assert.match(source, /Eliminar reserva/);
+  assert.match(source, /confirm\(\{\s*title:\s*"Eliminar reserva"/);
+  assert.match(source, /onEditReservation/);
+  assert.match(source, /onDeleteReservation/);
 });

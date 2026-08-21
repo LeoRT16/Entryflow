@@ -200,18 +200,6 @@ function createEmptyWorkspaceBootstrap(): WorkspaceBootstrap {
   };
 }
 
-function readCatalogFromOrganization(organization: Organization) {
-  const metadata = organization.metadata && typeof organization.metadata === "object" && !Array.isArray(organization.metadata)
-    ? (organization.metadata as Record<string, unknown>)
-    : {};
-
-  const venues = Array.isArray(metadata.venues) ? (metadata.venues as Venue[]) : [];
-  const sectors = Array.isArray(metadata.sectors) ? (metadata.sectors as Sector[]) : [];
-  const resources = Array.isArray(metadata.resources) ? (metadata.resources as Resource[]) : [];
-
-  return { venues, sectors, resources };
-}
-
 function normalizeWorkspaceRole(role: AccountRolePreset) {
   if (!isBuiltinAccountRoleSlug(role.slug)) {
     return role;
@@ -599,7 +587,6 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
   );
   const profiles = profileRowsForWorkspace.map((row) => mapProfileRowToDomain(row));
   const organizations = organizationRowsForWorkspace.map((row) => mapOrganizationRowToDomain(row));
-  const organizationFallback = organizations[0] ? readCatalogFromOrganization(organizations[0]) : { venues: [], sectors: [], resources: [] };
   const venues = venueRowsForWorkspace.map((row) => mapVenueRowToDomain(row));
   const sectors = sectorRowsForWorkspace.map((row) => mapSectorRowToDomain(row));
   const resources = resourceRowsForWorkspace.map((row) => mapResourceRowToDomain(row));
@@ -629,9 +616,9 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     profiles,
     roles,
     organizations,
-    venues: venues.length ? venues : organizationFallback.venues,
-    sectors: sectors.length ? sectors : organizationFallback.sectors,
-    resources: resources.length ? resources : organizationFallback.resources,
+    venues,
+    sectors,
+    resources,
     ...layouts,
     venueLayouts,
     venueLayoutSectors,

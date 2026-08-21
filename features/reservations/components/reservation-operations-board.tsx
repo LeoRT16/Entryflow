@@ -20,7 +20,11 @@ type ReservationOperationsBoardProps = {
   activeReservationId: string;
   isTerminalEvent?: boolean;
   canEditGuest: boolean;
+  canEditReservation: boolean;
+  canDeleteReservation: boolean;
   onSelectReservation: (reservationId: string) => void;
+  onEditReservation: (reservationId: string) => void;
+  onDeleteReservation: (reservationId: string) => Promise<void>;
   onMarkConfirmed: (reservationId: string) => void;
   onAddGuest: (reservationId: string, guest: ReservationGuestInput) => void;
   onGuestAction: (params: {
@@ -53,15 +57,19 @@ export default function ReservationOperationsBoard({
   reservations,
   activeReservationId,
   onSelectReservation,
+  onEditReservation,
+  onDeleteReservation,
   onMarkConfirmed,
   onAddGuest,
   onGuestAction,
   onRegisterCheckIn,
   onEditGuest,
   canEditGuest,
+  canEditReservation,
+  canDeleteReservation,
   isTerminalEvent = false,
 }: ReservationOperationsBoardProps) {
-  const { showToast } = useFeedback();
+  const { showToast, confirm } = useFeedback();
   const [query, setQuery] = useState("");
   const [isAddGuestFormOpen, setIsAddGuestFormOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
@@ -173,6 +181,7 @@ export default function ReservationOperationsBoard({
   }
 
   const canConfirmReservation = activeReservation.status === "Draft" || activeReservation.status === "Pending";
+  const canMutateReservation = !isTerminalReservation && (canEditReservation || canDeleteReservation);
 
   return (
     <section className="grid min-w-0 gap-6 xl:grid-cols-[0.92fr_1.08fr]">
@@ -279,6 +288,39 @@ export default function ReservationOperationsBoard({
               <span className="inline-flex h-11 items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-400">
                 Reserva terminal
               </span>
+            ) : null}
+            {canMutateReservation ? (
+              <>
+                {canEditReservation ? (
+                  <button
+                    type="button"
+                    onClick={() => onEditReservation(activeReservation.id)}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                  >
+                    Editar reserva
+                  </button>
+                ) : null}
+                {canDeleteReservation ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      confirm({
+                        title: "Eliminar reserva",
+                        description: `Vas a eliminar ${activeReservation.name}. Se liberará ${activeReservation.tableName} y los invitados asociados dejarán de mostrarse.`,
+                        confirmLabel: "Eliminar reserva",
+                        cancelLabel: "Cancelar",
+                        tone: "danger",
+                        onConfirm: () => {
+                          void onDeleteReservation(activeReservation.id);
+                        },
+                      })
+                    }
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 text-sm font-medium text-rose-50 transition hover:bg-rose-400/15"
+                  >
+                    Eliminar reserva
+                  </button>
+                ) : null}
+              </>
             ) : null}
           </div>
         </div>

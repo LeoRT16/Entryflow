@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -295,4 +296,21 @@ test("timeline rows restore canonical actor, context, target and guest reference
   assert.equal(restored.context, "Entrada principal");
   assert.equal(restored.target, "PPrueba 2");
   assert.notEqual(restored.target, restored.reservationName);
+});
+
+test("workspace loader sends Supabase table requests with api key and bearer header", () => {
+  const source = readFileSync(new URL("../services/workspace-loader.ts", import.meta.url), "utf8");
+  const fetchBlock = source.slice(source.indexOf("const response = await fetch("), source.indexOf("const payload = await response.json();"));
+
+  assert.match(fetchBlock, /headers:\s*\{\s*apikey: key,\s*Authorization:\s*`Bearer \$\{key\}`,\s*\}/);
+});
+
+test("workspace loader does not borrow another organization's empty catalog", () => {
+  const source = readFileSync(new URL("../services/workspace-loader.ts", import.meta.url), "utf8");
+
+  assert.match(source, /\n\s+venues,\n\s+sectors,\n\s+resources,\n/);
+  assert.doesNotMatch(source, /organizationFallback/);
+  assert.doesNotMatch(source, /venues\.length \? venues : organizationFallback\.venues/);
+  assert.doesNotMatch(source, /sectors\.length \? sectors : organizationFallback\.sectors/);
+  assert.doesNotMatch(source, /resources\.length \? resources : organizationFallback\.resources/);
 });

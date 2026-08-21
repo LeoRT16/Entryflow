@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 
 import { useFeedback } from "@/components/premium-feedback";
 import {
@@ -35,6 +35,13 @@ import type {
 import { mapEventToLegacyEvent } from "@/features/domain/compatibility";
 import { getAdmissionsForEvent, getAttendeesForEvent, getReservationsForEvent } from "@/features/domain/selectors";
 import {
+  assertEventWriteOwnership,
+  assertGuestInCurrentEvent,
+  assertReservationInCurrentEvent,
+  assertTableInCurrentEventContext,
+  findTableInCurrentEventContext,
+} from "@/features/business-rules/domain/ownership-guards";
+import {
   buildEventSelectionCandidate,
   isTerminalEventStatus,
   pickCurrentEventCandidate,
@@ -45,6 +52,9 @@ import {
   createReservationBundle,
   isTerminalReservationStatus,
   normalizeReservationStatus,
+  prependUniqueById,
+  resolvePersistedReservationTableId,
+  resolveReservationPaymentDraft,
   updateReservationStatusFromGuests,
 } from "@/features/reservations/domain/reservation-domain";
 import type {
@@ -100,6 +110,94 @@ type WorkspaceSnapshot = Omit<WorkspaceBootstrap, "timelineEvents" | "whatsappDe
   timelineEvents?: TimelineEvent[];
   whatsappDeliveryAttempts?: WorkspaceBootstrap["whatsappDeliveryAttempts"];
 };
+
+type OrganizationBootstrapResponse = {
+  ok: true;
+  created: boolean;
+  organization: Organization;
+  profile: OrganizationMembership;
+};
+
+type AccountMutationResponse = {
+  ok: true;
+  user: AccountUser;
+  profile: OrganizationMembership;
+  account: OrganizationAccount;
+};
+
+async function saveOrganizationOnServer(organization: Organization): Promise<OrganizationBootstrapResponse> {
+  const response = await fetch("/api/organizations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(organization),
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | OrganizationBootstrapResponse
+    | {
+        ok?: false;
+        error?: {
+          message?: string;
+        };
+      }
+    | null;
+
+  if (!response.ok) {
+    const errorMessage =
+      payload && typeof payload === "object" && "error" in payload
+        ? (payload as { error?: { message?: string } }).error?.message
+        : undefined;
+    throw new Error(errorMessage || "No se pudo guardar la organización.");
+  }
+
+  if (!payload || !payload.ok || !payload.organization) {
+    throw new Error("No se pudo guardar la organización.");
+  }
+
+  return payload;
+}
+
+async function saveAccountMutationOnServer(
+  profileId: string,
+  options: {
+    method: "PATCH" | "DELETE";
+    body?: Record<string, unknown>;
+  },
+): Promise<AccountMutationResponse> {
+  const response = await fetch(`/api/accounts/${profileId}`, {
+    method: options.method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | AccountMutationResponse
+    | {
+        ok?: false;
+        error?: {
+          message?: string;
+        };
+      }
+    | null;
+
+  if (!response.ok) {
+    const errorMessage =
+      payload && typeof payload === "object" && "error" in payload
+        ? (payload as { error?: { message?: string } }).error?.message
+        : undefined;
+    throw new Error(errorMessage || "No se pudo guardar al miembro.");
+  }
+
+  if (!payload || !payload.ok || !payload.user || !payload.profile || !payload.account) {
+    throw new Error("No se pudo guardar al miembro.");
+  }
+
+  return payload;
+}
 
 const WORKSPACE_REALTIME_TABLES = [
   "organizations",
@@ -191,6 +289,7 @@ type WorkspaceServiceValue = {
   }) => Promise<OrganizationAccount>;
   updateAccount: (account: OrganizationAccount) => Promise<OrganizationAccount>;
   setAccountStatus: (profileId: string, status: "active" | "inactive") => Promise<void>;
+  deleteAccount: (profileId: string) => Promise<void>;
   createVenue: (venue: Venue) => Promise<Venue>;
   updateVenue: (venue: Venue) => Promise<Venue>;
   setVenueStatus: (venueId: string, status: Venue["status"]) => Promise<void>;
@@ -215,6 +314,7 @@ type WorkspaceServiceValue = {
   }>;
   createReservation: (input: ReservationCreationInput) => Promise<ReservationRecord | undefined>;
   updateReservation: (input: ReservationUpdateInput) => Promise<ReservationRecord | undefined>;
+  deleteReservation: (reservationId: string) => Promise<ReservationRecord | undefined>;
   createOrganization: (organization: Organization) => Promise<Organization>;
   addReservationGuest: (reservationId: string, guest: ReservationGuestInput) => void;
   appendReservationGuests: (reservationId: string, guests: ReservationGuestInput[]) => Promise<ReservationRecord | undefined>;
@@ -236,6 +336,7 @@ type WorkspaceServiceValue = {
   releaseTable: (tableId: string) => void;
   closeTable: (tableId: string) => void;
   createEvent: (event: PlatformEvent) => Promise<PlatformEvent | undefined>;
+  updateEvent: (event: PlatformEvent) => Promise<PlatformEvent | undefined>;
   setEventStatus: (eventId: string, status: PlatformEvent["status"]) => void;
   setOrganizationsState: Dispatch<SetStateAction<Organization[]>>;
   setVenuesState: Dispatch<SetStateAction<Venue[]>>;
@@ -273,7 +374,6 @@ export function getEventSelection(events: PlatformEvent[], organizationId: strin
   // Preserve the hydrated selection first so the first post-refresh render does
   // not re-key the workspace while the router is trying to navigate.
   const current = events.find((event) => event.id === currentEventId && (!organizationId || event.organizationId === organizationId))
-    ?? events.find((event) => event.id === currentEventId)
     ?? events.find((event) => event.organizationId === organizationId && event.status === "live")
     ?? events.find((event) => event.organizationId === organizationId);
 
@@ -338,13 +438,7 @@ function hasAccessibleProfile(
   );
 }
 
-export function resolveInitialCurrentOrganizationId(initialWorkspace: WorkspaceBootstrap | null | undefined) {
-  const storedOrganizationId = readWorkspacePreference("entryflow.currentOrganizationId");
-
-  if (hasAccessibleOrganization(initialWorkspace, storedOrganizationId)) {
-    return storedOrganizationId;
-  }
-
+function resolveBootstrapCurrentOrganizationId(initialWorkspace: WorkspaceBootstrap | null | undefined) {
   if (hasAccessibleOrganization(initialWorkspace, initialWorkspace?.currentOrganizationId ?? "")) {
     return initialWorkspace?.currentOrganizationId ?? "";
   }
@@ -354,13 +448,7 @@ export function resolveInitialCurrentOrganizationId(initialWorkspace: WorkspaceB
     ?? "";
 }
 
-export function resolveInitialCurrentEventId(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string) {
-  const storedEventId = readWorkspacePreference("entryflow.currentEventId");
-
-  if (hasAccessibleEvent(initialWorkspace, organizationId, storedEventId)) {
-    return storedEventId;
-  }
-
+function resolveBootstrapCurrentEventId(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string) {
   if (hasAccessibleEvent(initialWorkspace, organizationId, initialWorkspace?.currentEventId ?? "")) {
     return initialWorkspace?.currentEventId ?? "";
   }
@@ -368,6 +456,55 @@ export function resolveInitialCurrentEventId(initialWorkspace: WorkspaceBootstra
   return initialWorkspace?.events.find((event) => event.organizationId === organizationId && event.status === "live")?.id
     ?? initialWorkspace?.events.find((event) => event.organizationId === organizationId)?.id
     ?? "";
+}
+
+function resolveBootstrapCurrentProfileId(
+  initialWorkspace: WorkspaceBootstrap | null | undefined,
+  organizationId: string,
+  currentUserId = "",
+) {
+  if (hasAccessibleProfile(initialWorkspace, organizationId, initialWorkspace?.currentProfileId ?? "", currentUserId)) {
+    return initialWorkspace?.currentProfileId ?? "";
+  }
+
+  const userProfiles = (initialWorkspace?.profiles ?? []).filter(
+    (profile) => profile.organizationId === organizationId && !profile.deletedAt && (!currentUserId || profile.userId === currentUserId),
+  );
+
+  return userProfiles[0]?.id
+    ?? (initialWorkspace?.profiles ?? []).find((profile) => profile.organizationId === organizationId && !profile.deletedAt)?.id
+    ?? (initialWorkspace?.profiles ?? []).find((profile) => !profile.deletedAt)?.id
+    ?? "";
+}
+
+export function resolveWorkspaceBootstrapSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "") {
+  const currentOrganizationId = resolveBootstrapCurrentOrganizationId(initialWorkspace);
+
+  return {
+    currentOrganizationId,
+    currentEventId: resolveBootstrapCurrentEventId(initialWorkspace, currentOrganizationId),
+    currentProfileId: resolveBootstrapCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
+  };
+}
+
+export function resolveInitialCurrentOrganizationId(initialWorkspace: WorkspaceBootstrap | null | undefined) {
+  const storedOrganizationId = readWorkspacePreference("entryflow.currentOrganizationId");
+
+  if (hasAccessibleOrganization(initialWorkspace, storedOrganizationId)) {
+    return storedOrganizationId;
+  }
+
+  return resolveBootstrapCurrentOrganizationId(initialWorkspace);
+}
+
+export function resolveInitialCurrentEventId(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string) {
+  const storedEventId = readWorkspacePreference("entryflow.currentEventId");
+
+  if (hasAccessibleEvent(initialWorkspace, organizationId, storedEventId)) {
+    return storedEventId;
+  }
+
+  return resolveBootstrapCurrentEventId(initialWorkspace, organizationId);
 }
 
 export function resolveInitialCurrentProfileId(
@@ -381,18 +518,73 @@ export function resolveInitialCurrentProfileId(
     return storedProfileId;
   }
 
-  if (hasAccessibleProfile(initialWorkspace, organizationId, initialWorkspace?.currentProfileId ?? "", currentUserId)) {
-    return initialWorkspace?.currentProfileId ?? "";
+  return resolveBootstrapCurrentProfileId(initialWorkspace, organizationId, currentUserId);
+}
+
+export function resolveWorkspacePreferenceSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "") {
+  const currentOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
+
+  return {
+    currentOrganizationId,
+    currentEventId: resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId),
+    currentProfileId: resolveInitialCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
+  };
+}
+
+export function resolveOrganizationSwitchState({
+  organizationId,
+  events,
+  profiles,
+  currentEventId,
+  currentProfileId,
+  currentUserId,
+}: {
+  organizationId: string;
+  events: PlatformEvent[];
+  profiles: OrganizationMembership[];
+  currentEventId: string;
+  currentProfileId: string;
+  currentUserId: string;
+}) {
+  const nextEventCandidate = pickCurrentEventCandidate(
+    events.map((event) =>
+      buildEventSelectionCandidate({
+        id: event.id,
+        organizationId: event.organizationId,
+        status: event.status,
+        startAt: event.startAt,
+      }),
+    ),
+    organizationId,
+    currentEventId,
+  );
+  const nextEventId = nextEventCandidate?.id ?? "";
+  const organizationProfiles = profiles.filter((profile) => profile.organizationId === organizationId && profile.userId === currentUserId && !profile.deletedAt);
+  const nextProfileId = organizationProfiles.find((profile) => profile.id === currentProfileId)?.id ?? organizationProfiles[0]?.id ?? "";
+
+  return {
+    currentOrganizationId: organizationId,
+    currentEventId: nextEventId,
+    currentProfileId: nextProfileId,
+  };
+}
+
+function persistWorkspaceSelection({
+  currentOrganizationId,
+  currentEventId,
+  currentProfileId,
+}: {
+  currentOrganizationId: string;
+  currentEventId: string;
+  currentProfileId: string;
+}) {
+  if (typeof window === "undefined") {
+    return;
   }
 
-  const userProfiles = (initialWorkspace?.profiles ?? []).filter(
-    (profile) => profile.organizationId === organizationId && !profile.deletedAt && (!currentUserId || profile.userId === currentUserId),
-  );
-
-  return userProfiles[0]?.id
-    ?? (initialWorkspace?.profiles ?? []).find((profile) => profile.organizationId === organizationId && !profile.deletedAt)?.id
-    ?? (initialWorkspace?.profiles ?? []).find((profile) => !profile.deletedAt)?.id
-    ?? "";
+  window.localStorage.setItem("entryflow.currentOrganizationId", currentOrganizationId);
+  window.localStorage.setItem("entryflow.currentEventId", currentEventId);
+  window.localStorage.setItem("entryflow.currentProfileId", currentProfileId);
 }
 
 function getAccountSelection({
@@ -474,7 +666,7 @@ function getAccountSelection({
   });
   const permissions = profilePermissions.length ? profilePermissions : role.permissions;
   const isOwner = selectedProfile.roleId === role.id && role.slug === "owner";
-  const accountStatus: "active" | "inactive" = selectedProfile.deletedAt ? "inactive" : selectedProfile.attributes.status === "inactive" ? "inactive" : "active";
+  const accountStatus: "active" | "inactive" = selectedProfile.status;
   const attributes = {
     area: typeof selectedProfile.attributes.area === "string" ? selectedProfile.attributes.area : undefined,
     title: typeof selectedProfile.attributes.title === "string" ? selectedProfile.attributes.title : undefined,
@@ -843,35 +1035,64 @@ export function WorkspaceServiceProvider({
   const [attempts, setAttempts] = useState<CheckInAttempt[]>(initialWorkspace?.attempts ?? []);
   const [persistedTimelineEvents, setPersistedTimelineEvents] = useState<TimelineEvent[]>(initialWorkspace?.timelineEvents ?? []);
   const consumedAccessGrantIdsRef = useRef<Set<string>>(new Set());
-  const initialOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
+  const initialCurrentUserId = initialWorkspace?.currentUserId ?? "";
+  const initialSelection = resolveWorkspaceBootstrapSelection(initialWorkspace, initialCurrentUserId);
   const [currentOrganizationId, setCurrentOrganizationIdState] = useState(() => {
-    return initialOrganizationId;
+    return initialSelection.currentOrganizationId;
   });
   const [currentEventId, setCurrentEventIdState] = useState(() => {
-    return resolveInitialCurrentEventId(initialWorkspace, initialOrganizationId);
+    return initialSelection.currentEventId;
   });
   const [currentProfileId, setCurrentProfileIdState] = useState(() => {
-    return resolveInitialCurrentProfileId(initialWorkspace, initialOrganizationId);
+    return initialSelection.currentProfileId;
   });
-  const initialCurrentUserId = initialWorkspace?.currentUserId ?? "";
   const [status, setStatus] = useState<WorkspaceServiceStatus>(
     hasWorkspaceData(initialWorkspace) ? "ready" : hasSupabaseConfig() ? "loading" : "empty",
   );
   const [error, setError] = useState<Error | null>(null);
   const [browserAuthReady, setBrowserAuthReady] = useState(() => !hasSupabaseConfig());
   const hydratedRef = useRef(hasWorkspaceData(initialWorkspace) || !hasSupabaseConfig());
+  const restoredWorkspacePreferenceRef = useRef(false);
   const reloadWorkspaceRef = useRef<() => Promise<void>>(async () => {});
   const checkInSubmissionInFlightRef = useRef(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !restoredWorkspacePreferenceRef.current) {
       return;
     }
 
-    window.localStorage.setItem("entryflow.currentOrganizationId", currentOrganizationId);
-    window.localStorage.setItem("entryflow.currentEventId", currentEventId);
-    window.localStorage.setItem("entryflow.currentProfileId", currentProfileId);
+    persistWorkspaceSelection({
+      currentOrganizationId,
+      currentEventId,
+      currentProfileId,
+    });
   }, [currentEventId, currentOrganizationId, currentProfileId]);
+
+  useEffect(() => {
+    if (restoredWorkspacePreferenceRef.current || !browserAuthReady || !organizations.length) {
+      return;
+    }
+
+    const restoredSelection = resolveWorkspacePreferenceSelection(
+      {
+        organizations,
+        profiles,
+        events,
+        currentOrganizationId,
+        currentEventId,
+        currentProfileId,
+      } as WorkspaceBootstrap,
+      initialCurrentUserId,
+    );
+
+    restoredWorkspacePreferenceRef.current = true;
+    startTransition(() => {
+      setCurrentOrganizationIdState(restoredSelection.currentOrganizationId);
+      setCurrentEventIdState(restoredSelection.currentEventId);
+      setCurrentProfileIdState(restoredSelection.currentProfileId);
+    });
+    persistWorkspaceSelection(restoredSelection);
+  }, [browserAuthReady, currentEventId, currentOrganizationId, currentProfileId, events, initialCurrentUserId, organizations, profiles]);
 
   useEffect(() => {
     consumedAccessGrantIdsRef.current = new Set(
@@ -1187,7 +1408,7 @@ export function WorkspaceServiceProvider({
           ...membership.attributes,
           permissions: permissions.length ? permissions : role.permissions,
         },
-        status: membership.deletedAt ? "inactive" : "active",
+        status: membership.status,
         isOwner: isOwnerAccount({ roleSlug: role.slug, metadata: membership.metadata, rolePermissions: role.permissions }),
         createdAt: membership.createdAt,
         updatedAt: membership.updatedAt,
@@ -1460,33 +1681,18 @@ export function WorkspaceServiceProvider({
 
   const setCurrentOrganizationId = useCallback(
     (organizationId: string) => {
-      setCurrentOrganizationIdState(organizationId);
-      const nextEventCandidate = pickCurrentEventCandidate(
-        events.map((event) =>
-          buildEventSelectionCandidate({
-            id: event.id,
-            organizationId: event.organizationId,
-            status: event.status,
-            startAt: event.startAt,
-          }),
-        ),
+      const nextSelection = resolveOrganizationSwitchState({
         organizationId,
+        events,
+        profiles,
         currentEventId,
-      );
-      const nextEvent = nextEventCandidate
-        ? events.find((event) => event.id === nextEventCandidate.id && event.organizationId === nextEventCandidate.organizationId)
-        : undefined;
-      const organizationProfiles = profiles.filter((profile) => profile.organizationId === organizationId && profile.userId === (currentUser?.id ?? initialCurrentUserId) && !profile.deletedAt);
-      const nextProfile =
-        organizationProfiles.find((profile) => profile.id === currentProfileId)
-        ?? organizationProfiles[0];
+        currentProfileId,
+        currentUserId: currentUser?.id ?? initialCurrentUserId,
+      });
 
-      setCurrentProfileIdState(nextProfile?.id ?? "");
-      if (nextEvent) {
-        setCurrentEventIdState(nextEvent.id);
-      } else {
-        setCurrentEventIdState("");
-      }
+      setCurrentOrganizationIdState(nextSelection.currentOrganizationId);
+      setCurrentProfileIdState(nextSelection.currentProfileId);
+      setCurrentEventIdState(nextSelection.currentEventId);
     },
     [currentEventId, currentProfileId, currentUser?.id, events, initialCurrentUserId, profiles],
   );
@@ -1519,6 +1725,17 @@ export function WorkspaceServiceProvider({
       }
     },
     [can],
+  );
+
+  const reconcileAccountMutationResponse = useCallback(
+    (payload: AccountMutationResponse) => {
+      setUsers((current) => current.map((user) => (user.id === payload.user.id ? payload.user : user)));
+      setProfiles((current) => current.map((profile) => (profile.id === payload.profile.id ? payload.profile : profile)));
+
+      const role = roles.find((item) => item.id === payload.profile.roleId) ?? getRolePresetBySlug(payload.account.roleSlug);
+      return buildAccountFromEntities(payload.user, payload.profile, role);
+    },
+    [buildAccountFromEntities, roles, setProfiles, setUsers],
   );
 
   const createAccount = useCallback(
@@ -1594,134 +1811,61 @@ export function WorkspaceServiceProvider({
   const updateAccount = useCallback(
     async (account: OrganizationAccount) => {
       requirePermission("accounts.manage");
-      const snapshot = captureSnapshot();
-      try {
-        const existingMembership = profiles.find((profile) => profile.id === account.id);
-        if (!existingMembership) {
-          throw new Error("La cuenta no existe.");
-        }
-
-        const existingRole = roles.find((role) => role.id === existingMembership.roleId) ?? getRolePresetBySlug("administrator");
-        const targetRole = roles.find((role) => role.id === account.roleId || role.slug === account.roleSlug) ?? getRolePresetBySlug(account.roleSlug);
-        const ownerCount = profiles.filter((profile) => {
-          const profileRole = roles.find((role) => role.id === profile.roleId);
-          return profile.organizationId === existingMembership.organizationId && !profile.deletedAt && profileRole?.slug === "owner";
-        }).length;
-
-        if (existingRole.slug === "owner" && targetRole.slug !== "owner" && ownerCount <= 1) {
-          throw new Error("No puedes retirar el único Owner activo de la organización.");
-        }
-
-        const existingUser = users.find((user) => user.id === existingMembership.userId);
-        if (!existingUser) {
-          throw new Error("El usuario de la cuenta no existe.");
-        }
-
-        const desiredPermissions = canonicalizeAccountPermissionsForPersistence({
+      const response = await saveAccountMutationOnServer(account.id, {
+        method: "PATCH",
+        body: {
+          userEmail: account.userEmail,
+          userDisplayName: account.userDisplayName,
+          displayName: account.displayName,
+          area: account.attributes.area ?? "",
+          status: account.status,
+          roleSlug: account.roleSlug,
           permissions: account.permissions,
-          rolePermissions: targetRole.permissions,
-        });
-        const permissionsSource = hasSameAccountPermissionSet(desiredPermissions, targetRole.permissions) ? "preset" : "custom";
-        const persistedUser = await repositories.users.update(existingUser.id, {
-          ...existingUser,
-          email: account.userEmail.trim() || existingUser.email,
-          displayName: account.userDisplayName.trim() || existingUser.displayName,
-        });
-        if (!persistedUser) {
-          throw new Error("No se pudo actualizar el usuario.");
-        }
+        },
+      });
 
-        const persistedMembership = await repositories.profiles.update(existingMembership.id, {
-          ...existingMembership,
-          roleId: targetRole.id,
-          displayName: account.displayName.trim() || existingMembership.displayName,
-          attributes: {
-            ...existingMembership.attributes,
-            area: account.attributes.area?.trim() || "",
-            status: account.status,
-            permissions: desiredPermissions,
-          },
-          metadata: {
-            ...(existingMembership.metadata ?? {}),
-            attributes: {
-              ...(existingMembership.attributes ?? {}),
-              area: account.attributes.area?.trim() || "",
-              status: account.status,
-            },
-            permissions: desiredPermissions,
-            permissionsSource,
-          },
-          deletedAt: account.status === "inactive" ? nowIso() : null,
-        });
+      const updatedAccount = reconcileAccountMutationResponse(response);
 
-        if (!persistedMembership) {
-          throw new Error("No se pudo actualizar la membresía.");
-        }
-
-        setUsers((current) => current.map((user) => (user.id === persistedUser.id ? persistedUser : user)));
-        setProfiles((current) => current.map((profile) => (profile.id === persistedMembership.id ? persistedMembership : profile)));
-        if (currentProfile?.id === persistedMembership.id && account.status === "inactive") {
-          const fallbackProfile = profiles.find((profile) => profile.organizationId === persistedMembership.organizationId && profile.id !== persistedMembership.id && !profile.deletedAt);
-          setCurrentProfileIdState(fallbackProfile?.id ?? "");
-        }
-        return buildAccountFromEntities(persistedUser, persistedMembership, targetRole);
-      } catch (exception) {
-        restoreSnapshot(snapshot);
-        throw exception;
+      if (currentProfile?.id === response.profile.id && response.profile.status === "inactive") {
+        const fallbackProfile = profiles.find((profile) => profile.organizationId === response.profile.organizationId && profile.id !== response.profile.id && !profile.deletedAt);
+        setCurrentProfileIdState(fallbackProfile?.id ?? "");
       }
+
+      return updatedAccount;
     },
-    [buildAccountFromEntities, captureSnapshot, currentProfile, profiles, repositories.profiles, repositories.users, requirePermission, restoreSnapshot, roles, users],
+    [currentProfile, profiles, reconcileAccountMutationResponse, requirePermission],
   );
 
   const setAccountStatus = useCallback(
     async (profileId: string, status: "active" | "inactive") => {
       requirePermission("accounts.manage");
-      const snapshot = captureSnapshot();
-      try {
-        const membership = profiles.find((profile) => profile.id === profileId);
-        if (!membership) {
-          return;
-        }
+      const response = await saveAccountMutationOnServer(profileId, {
+        method: "PATCH",
+        body: {
+          status,
+        },
+      });
 
-        const role = roles.find((item) => item.id === membership.roleId) ?? getRolePresetBySlug("administrator");
-        const ownerCount = profiles.filter((profile) => {
-          const profileRole = roles.find((item) => item.id === profile.roleId);
-          return profile.organizationId === membership.organizationId && !profile.deletedAt && profileRole?.slug === "owner";
-        }).length;
+      reconcileAccountMutationResponse(response);
 
-        if (role.slug === "owner" && status === "inactive" && ownerCount <= 1) {
-          throw new Error("No puedes desactivar el único Owner activo.");
-        }
-
-        const persistedMembership = await repositories.profiles.update(profileId, {
-          ...membership,
-          deletedAt: status === "inactive" ? nowIso() : null,
-          attributes: {
-            ...membership.attributes,
-            status,
-          },
-          metadata: {
-            ...(membership.metadata ?? {}),
-            attributes: {
-              ...(membership.attributes ?? {}),
-              status,
-            },
-          },
-        });
-        if (!persistedMembership) {
-          throw new Error("No se pudo actualizar la membresía.");
-        }
-        setProfiles((current) => current.map((profile) => (profile.id === persistedMembership.id ? persistedMembership : profile)));
-        if (currentProfile?.id === profileId && status === "inactive") {
-          const fallbackProfile = profiles.find((profile) => profile.organizationId === membership.organizationId && profile.id !== profileId && !profile.deletedAt);
-          setCurrentProfileIdState(fallbackProfile?.id ?? "");
-        }
-      } catch (exception) {
-        restoreSnapshot(snapshot);
-        throw exception;
+      if (currentProfile?.id === profileId && status === "inactive") {
+        const fallbackProfile = profiles.find((profile) => profile.organizationId === response.profile.organizationId && profile.id !== profileId && !profile.deletedAt);
+        setCurrentProfileIdState(fallbackProfile?.id ?? "");
       }
     },
-    [captureSnapshot, currentProfile, profiles, repositories.profiles, requirePermission, restoreSnapshot, roles],
+    [currentProfile, profiles, reconcileAccountMutationResponse, requirePermission],
+  );
+
+  const deleteAccount = useCallback(
+    async (profileId: string) => {
+      requirePermission("accounts.manage");
+      const response = await saveAccountMutationOnServer(profileId, {
+        method: "DELETE",
+      });
+
+      reconcileAccountMutationResponse(response);
+    },
+    [reconcileAccountMutationResponse, requirePermission],
   );
 
   const persist = useCallback(
@@ -1731,7 +1875,7 @@ export function WorkspaceServiceProvider({
     ) => {
       try {
         if (kind === "organization") {
-          await repositories.organizations.upsert(value as Organization);
+          await saveOrganizationOnServer(value as Organization);
         } else if (kind === "venue") {
           await repositories.venues.upsert(value as Venue);
         } else if (kind === "sector") {
@@ -1764,6 +1908,12 @@ export function WorkspaceServiceProvider({
     async (event: PlatformEvent) => {
       requirePermission(events.some((item) => item.id === event.id) ? "event.edit" : "event.create");
       const existingEvent = events.find((item) => item.id === event.id);
+
+      assertEventWriteOwnership(event, currentOrganization.id, venues);
+      if (existingEvent) {
+        assertEventWriteOwnership(existingEvent, currentOrganization.id, venues);
+      }
+
       if (existingEvent && isTerminalEventStatus(existingEvent.status)) {
         notify({
           title: "Evento cerrado",
@@ -1787,7 +1937,43 @@ export function WorkspaceServiceProvider({
         throw exception;
       }
     },
-    [captureSnapshot, events, notify, persist, requirePermission, restoreSnapshot],
+    [captureSnapshot, currentOrganization.id, events, notify, persist, requirePermission, restoreSnapshot, venues],
+  );
+
+  const updateEvent = useCallback(
+    async (event: PlatformEvent) => {
+      requirePermission("event.edit");
+      const existingEvent = events.find((item) => item.id === event.id);
+
+      if (!existingEvent) {
+        throw new Error("Event not found.");
+      }
+
+      assertEventWriteOwnership(existingEvent, currentOrganization.id, venues);
+      assertEventWriteOwnership(event, currentOrganization.id, venues);
+
+      if (isTerminalEventStatus(existingEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "Este evento ya está cerrado y no admite cambios operativos.",
+          tone: "warning",
+          icon: "alert",
+          href: "/events",
+        });
+        return undefined;
+      }
+
+      const snapshot = captureSnapshot();
+      try {
+        setEvents((current) => current.map((item) => (item.id === event.id ? event : item)));
+        await persist("event", event);
+        return event;
+      } catch (exception) {
+        restoreSnapshot(snapshot);
+        throw exception;
+      }
+    },
+    [captureSnapshot, currentOrganization.id, events, notify, persist, requirePermission, restoreSnapshot, venues],
   );
 
   const createOrganization = useCallback(
@@ -1795,17 +1981,40 @@ export function WorkspaceServiceProvider({
       requirePermission("organization.manage");
       const snapshot = captureSnapshot();
       try {
-        setOrganizations((current) => (current.some((item) => item.id === organization.id) ? current.map((item) => (item.id === organization.id ? organization : item)) : [organization, ...current]));
-        await persist("organization", organization);
-        setCurrentOrganizationIdState(organization.id);
-        setCurrentEventIdState("");
-        return organization;
+        const persistedOrganization = await saveOrganizationOnServer(organization);
+        const nextProfile = persistedOrganization.profile;
+
+        setOrganizations((current) => {
+          const next = current.filter(
+            (item) => item.id !== organization.id && item.id !== persistedOrganization.organization.id,
+          );
+          return [persistedOrganization.organization, ...next];
+        });
+        if (nextProfile) {
+          setProfiles((current) => {
+            const next = current.filter((item) => item.id !== nextProfile.id);
+            return [nextProfile, ...next];
+          });
+        }
+        const nextSelection = resolveOrganizationSwitchState({
+          organizationId: persistedOrganization.organization.id,
+          events,
+          profiles: nextProfile ? [nextProfile, ...profiles.filter((item) => item.id !== nextProfile.id)] : profiles,
+          currentEventId,
+          currentProfileId,
+          currentUserId: currentUser?.id ?? initialCurrentUserId,
+        });
+
+        setCurrentOrganizationIdState(nextSelection.currentOrganizationId);
+        setCurrentProfileIdState(nextSelection.currentProfileId || nextProfile?.id || "");
+        setCurrentEventIdState(nextSelection.currentEventId);
+        return persistedOrganization.organization;
       } catch (exception) {
         restoreSnapshot(snapshot);
         throw exception;
       }
     },
-    [captureSnapshot, persist, requirePermission, restoreSnapshot],
+    [captureSnapshot, requirePermission, restoreSnapshot],
   );
 
   const createVenue = useCallback(
@@ -1979,14 +2188,17 @@ export function WorkspaceServiceProvider({
           throw new Error("A resource is required to create a reservation.");
         }
 
+        const selectedTable = findTableInCurrentEventContext(currentEventTables, selectedResource.id, currentEvent, currentVenue);
+        const persistedTableId = resolvePersistedReservationTableId(tables, selectedTable.id);
         const selectedEventLayoutResource = resolveCurrentEventLayoutResource({
           currentEventLayout,
-          resourceId: selectedResource.id,
+          resourceId: selectedTable.id,
           venueLayoutResources,
           eventLayoutResources,
         });
-        const tableId = bundle.reservation.tableId ?? selectedResource.id;
-        const tableName = bundle.reservation.tableName ?? selectedResource.name;
+        const canonicalVenueId = currentVenue?.id ?? currentEvent.venueId ?? selectedResource.venueId ?? undefined;
+        const tableId = persistedTableId;
+        const tableName = bundle.reservation.tableName ?? selectedTable.name;
         const reservation: ReservationRecord = {
           ...bundle.reservation,
           eventId: event.id,
@@ -1995,6 +2207,12 @@ export function WorkspaceServiceProvider({
           eventLayoutResourceId: selectedEventLayoutResource?.id ?? undefined,
           tableId,
           tableName,
+          resourceId: selectedTable.id,
+          resourceName: bundle.reservation.resourceName ?? selectedTable.name,
+          sectorId: bundle.reservation.sectorId ?? selectedTable.sectorId,
+          sectorName: bundle.reservation.sectorName ?? selectedTable.location,
+          venueId: canonicalVenueId,
+          tableCapacity: selectedTable.capacity,
         };
         const reservationGuests = bundle.guests.map((guest) => ({
           ...guest,
@@ -2022,8 +2240,8 @@ export function WorkspaceServiceProvider({
           await repositories.timeline.upsert(timelineEntry);
         }
 
-        setReservations((current) => [reservation, ...current]);
-        setGuests((current) => [...reservationGuestsWithAccess, ...current]);
+        setReservations((current) => prependUniqueById(current, [reservation]));
+        setGuests((current) => prependUniqueById(current, reservationGuestsWithAccess));
 
         notify({
           title: "Reserva creada",
@@ -2044,7 +2262,7 @@ export function WorkspaceServiceProvider({
         throw exception;
       }
     },
-    [captureSnapshot, currentEvent, currentEventLayout, eventLayoutResources, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, restoreSnapshot, upsertPersistedTimelineEvent, venueLayoutResources],
+    [captureSnapshot, currentEvent, currentEventLayout, currentEventTables, currentVenue, eventLayoutResources, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, restoreSnapshot, upsertPersistedTimelineEvent, venueLayoutResources],
   );
 
   const updateGuestWhatsApp = useCallback(
@@ -2056,6 +2274,8 @@ export function WorkspaceServiceProvider({
       if (!guest) {
         throw new Error("Guest not found.");
       }
+
+      assertGuestInCurrentEvent(guest, currentEvent, reservations);
 
       const nextGuest = buildGuestWhatsAppUpdate(guest, whatsapp, currentAccount.displayName || "Operación");
 
@@ -2087,7 +2307,7 @@ export function WorkspaceServiceProvider({
 
       return nextGuest;
     },
-    [captureSnapshot, currentAccount.displayName, guests, notify, repositories.guests, requirePermission, restoreSnapshot],
+    [captureSnapshot, currentAccount.displayName, currentEvent, guests, notify, repositories.guests, requirePermission, reservations, restoreSnapshot],
   );
 
   const updateGuestProfile = useCallback(
@@ -2171,6 +2391,8 @@ export function WorkspaceServiceProvider({
         throw new Error("Reservation not found.");
       }
 
+      assertReservationInCurrentEvent(reservation, currentEvent);
+
       if (isTerminalReservationStatus(reservation.status)) {
         notify({
           title: "Reserva cerrada",
@@ -2189,9 +2411,12 @@ export function WorkspaceServiceProvider({
       }
 
       try {
+        const selectedTable = findTableInCurrentEventContext(currentEventTables, selectedResource.id, currentEvent, currentVenue);
+        const persistedTableId = resolvePersistedReservationTableId(tables, selectedTable.id);
+        const paymentDraft = resolveReservationPaymentDraft(input.amount, input.advance, input.paymentStatus);
         const selectedEventLayoutResource = resolveCurrentEventLayoutResource({
           currentEventLayout,
-          resourceId: selectedResource.id,
+          resourceId: selectedTable.id,
           venueLayoutResources,
           eventLayoutResources,
         });
@@ -2221,10 +2446,10 @@ export function WorkspaceServiceProvider({
               reservationName: nextName,
               reservationCode: reservation.code,
               reservationId: reservation.id,
-              eventId: input.eventId,
-              eventName: input.eventName,
-              tableId: selectedResource.id,
-              tableName: selectedResource.name,
+              eventId: currentEvent.id,
+              eventName: currentEvent.name,
+              tableId: persistedTableId,
+              tableName: selectedTable.name,
               eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
               invitationSequence,
               invitationCode,
@@ -2244,10 +2469,10 @@ export function WorkspaceServiceProvider({
             reservationName: nextName,
             reservationCode: reservation.code,
             reservationId: reservation.id,
-            eventId: input.eventId,
-            eventName: input.eventName,
-            tableId: selectedResource.id,
-            tableName: selectedResource.name,
+            eventId: currentEvent.id,
+            eventName: currentEvent.name,
+            tableId: persistedTableId,
+            tableName: selectedTable.name,
             eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
             invitationSequence,
             invitationCode,
@@ -2270,20 +2495,20 @@ export function WorkspaceServiceProvider({
         const removedGuests = existingGuests.slice(nextGuestCount);
         const nextReservation: ReservationRecord = {
           ...reservation,
-          eventId: input.eventId,
-          eventName: input.eventName,
+          eventId: currentEvent.id,
+          eventName: currentEvent.name,
           date: input.date,
           time: input.time,
           eventLayoutId: selectedEventLayoutResource?.eventLayoutId ?? currentEventLayout?.id ?? reservation.eventLayoutId,
           eventLayoutResourceId: selectedEventLayoutResource?.id ?? reservation.eventLayoutResourceId,
-          resourceId: selectedResource.id,
-          resourceName: selectedResource.name,
-          sectorId: selectedResource.sectorId,
-          sectorName: selectedResource.location,
-          venueId: selectedResource.venueId,
-          tableName: selectedResource.name,
-          tableId: selectedResource.id,
-          tableCapacity: selectedResource.capacity,
+          resourceId: selectedTable.id,
+          resourceName: selectedTable.name,
+          sectorId: selectedTable.sectorId,
+          sectorName: selectedTable.location,
+          venueId: currentVenue?.id ?? currentEvent.venueId ?? selectedResource.venueId ?? undefined,
+          tableName: selectedTable.name,
+          tableId: persistedTableId,
+          tableCapacity: selectedTable.capacity,
           holderName: `${input.holderName} ${input.holderLastName}`.trim(),
           holderDocument: input.documentValue,
           holderWhatsapp: input.whatsapp,
@@ -2291,7 +2516,7 @@ export function WorkspaceServiceProvider({
           reservationType: input.reservationType,
           paymentStatus: input.paymentStatus,
           amount: input.amount,
-          advance: input.advance,
+          advance: paymentDraft.advance,
           notes: [input.observations, input.preferences, input.notes].filter(Boolean).join(" · "),
           guestIds: nextGuestIds,
           status: nextStatus,
@@ -2358,7 +2583,74 @@ export function WorkspaceServiceProvider({
         throw exception;
       }
     },
-    [captureSnapshot, currentEvent.status, currentEventLayout, eventLayoutResources, guests, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent, venueLayoutResources],
+    [captureSnapshot, currentEvent, currentEvent.status, currentEventLayout, currentEventTables, currentVenue, eventLayoutResources, guests, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent, venueLayoutResources],
+  );
+
+  const deleteReservation = useCallback(
+    async (reservationId: string) => {
+      requirePermission("reservation.cancel");
+      const reservation = reservations.find((item) => item.id === reservationId);
+
+      if (!reservation) {
+        return undefined;
+      }
+
+      assertReservationInCurrentEvent(reservation, currentEvent);
+
+      if (isTerminalEventStatus(currentEvent.status)) {
+        notify({
+          title: "Evento cerrado",
+          description: "No podés eliminar reservas sobre un evento cerrado.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return undefined;
+      }
+
+      if (isTerminalReservationStatus(reservation.status)) {
+        notify({
+          title: "Reserva cerrada",
+          description: "Esta reserva ya es histórica y no admite eliminación operativa.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return undefined;
+      }
+
+      const snapshot = captureSnapshot();
+      const reservationGuests = guests.filter((guest) => guest.reservationId === reservationId);
+      const resourceId = reservation.resourceId ?? reservation.tableId ?? undefined;
+      const remainingReservationsOnResource = resourceId
+        ? reservations.some(
+            (item) =>
+              item.id !== reservationId &&
+              item.eventId === currentEvent.id &&
+              !isTerminalReservationStatus(item.status) &&
+              (item.resourceId === resourceId || item.tableId === resourceId),
+          )
+        : false;
+
+      setReservations((current) => current.filter((item) => item.id !== reservationId));
+      setGuests((current) => current.filter((guest) => guest.reservationId !== reservationId));
+      if (resourceId && !remainingReservationsOnResource) {
+        setTables((current) => current.map((table) => (table.id === resourceId ? { ...table, status: "Available", closed: false } : table)));
+      }
+
+      try {
+        await repositories.reservations.delete(reservationId);
+        await Promise.all([
+          ...reservationGuests.map((guest) => repositories.guests.delete(guest.id)),
+          resourceId && !remainingReservationsOnResource ? repositories.tables.release(resourceId) : Promise.resolve(),
+        ]);
+        return reservation;
+      } catch (exception) {
+        restoreSnapshot(snapshot);
+        throw exception;
+      }
+    },
+    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, repositories.tables, requirePermission, reservations, restoreSnapshot],
   );
 
   const appendReservationGuests = useCallback(
@@ -2369,6 +2661,8 @@ export function WorkspaceServiceProvider({
       if (!reservation) {
         return undefined;
       }
+
+      assertReservationInCurrentEvent(reservation, currentEvent);
 
       if (isTerminalEventStatus(currentEvent.status)) {
         notify({
@@ -2454,7 +2748,7 @@ export function WorkspaceServiceProvider({
           };
         }
 
-        setGuests((current) => [...nextGuests, ...current]);
+        setGuests((current) => prependUniqueById(current, nextGuests));
         setReservations((current) => current.map((item) => (item.id === reservationId ? nextReservation : item)));
 
         await repositories.reservations.upsert(nextReservation);
@@ -2492,7 +2786,7 @@ export function WorkspaceServiceProvider({
         throw exception;
       }
     },
-    [captureSnapshot, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
+    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
   );
 
   const addReservationGuest = useCallback(
@@ -2500,6 +2794,7 @@ export function WorkspaceServiceProvider({
       requirePermission("reservation.edit");
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) return;
+      assertReservationInCurrentEvent(reservation, currentEvent);
       if (isTerminalEventStatus(currentEvent.status)) {
         notify({
           title: "Evento cerrado",
@@ -2609,7 +2904,7 @@ export function WorkspaceServiceProvider({
         },
       });
     },
-    [captureSnapshot, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
+    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
   );
 
   const updateReservationGuest = useCallback(
@@ -2625,6 +2920,7 @@ export function WorkspaceServiceProvider({
       requirePermission("reservation.edit");
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) return;
+      assertReservationInCurrentEvent(reservation, currentEvent);
       if (isTerminalEventStatus(currentEvent.status)) {
         notify({
           title: "Evento cerrado",
@@ -2647,6 +2943,11 @@ export function WorkspaceServiceProvider({
       }
 
       const snapshot = captureSnapshot();
+      const targetGuest = guests.find((guest) => guest.id === guestId);
+
+      if (targetGuest && (targetGuest.reservationId !== reservationId || targetGuest.eventId !== currentEvent.id)) {
+        return;
+      }
 
       const nextGuests: Guest[] =
         action === "remove"
@@ -2778,7 +3079,7 @@ export function WorkspaceServiceProvider({
         },
       });
     },
-    [captureSnapshot, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
+    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
   );
 
   const setReservationStatus = useCallback(
@@ -2786,6 +3087,7 @@ export function WorkspaceServiceProvider({
       requirePermission("reservation.edit");
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) return;
+      assertReservationInCurrentEvent(reservation, currentEvent);
       if (isTerminalEventStatus(currentEvent.status)) {
         notify({
           title: "Evento cerrado",
@@ -2925,7 +3227,7 @@ export function WorkspaceServiceProvider({
         undo: status === "Cancelled" || status === "No Show" ? { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } : undefined,
       });
     },
-    [captureSnapshot, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
+    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
   );
 
   const assignReservationToTable = useCallback(
@@ -2934,6 +3236,8 @@ export function WorkspaceServiceProvider({
       const reservation = reservations.find((item) => item.id === reservationId);
       const table = tables.find((item) => item.id === tableId);
       if (!reservation || !table) return;
+      assertReservationInCurrentEvent(reservation, currentEvent);
+      assertTableInCurrentEventContext(table, currentEvent, currentVenue);
       if (isTerminalEventStatus(currentEvent.status)) {
         notify({
           title: "Evento cerrado",
@@ -2962,13 +3266,14 @@ export function WorkspaceServiceProvider({
         venueLayoutResources,
         eventLayoutResources,
       });
+      const canonicalVenueId = currentVenue?.id ?? currentEvent.venueId ?? undefined;
       const nextReservation: ReservationRecord = {
         ...reservation,
         resourceId: table.id,
         resourceName: table.name,
         sectorId: table.sectorId,
         sectorName: table.location,
-        venueId: table.venueId,
+        venueId: canonicalVenueId,
         tableId: table.id,
         tableName: table.name,
         tableCapacity: table.capacity,
@@ -3000,7 +3305,7 @@ export function WorkspaceServiceProvider({
       void repositories.tables.update(tableId, { status: "Reserved", closed: false } as never).catch(() => restoreSnapshot(snapshot));
       notify({ title: "Mesa asignada", description: `${table.name} quedó vinculada a la reserva.`, tone: "info", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
     },
-    [captureSnapshot, currentEvent.status, currentEventLayout, eventLayoutResources, notify, repositories.reservations, repositories.tables, requirePermission, reservations, restoreSnapshot, tables, venueLayoutResources],
+    [captureSnapshot, currentEvent, currentEvent.status, currentEventLayout, currentVenue, eventLayoutResources, notify, repositories.reservations, repositories.tables, requirePermission, reservations, restoreSnapshot, tables, venueLayoutResources],
   );
 
   const moveGuestToTable = useCallback(
@@ -3009,6 +3314,8 @@ export function WorkspaceServiceProvider({
       const table = tables.find((item) => item.id === tableId);
       const guest = guests.find((item) => item.id === guestId);
       if (!table || !guest) return;
+      assertTableInCurrentEventContext(table, currentEvent, currentVenue);
+      assertGuestInCurrentEvent(guest, currentEvent, reservations);
       const reservation = reservations.find((item) => item.id === guest.reservationId);
       if (isTerminalEventStatus(currentEvent.status)) {
         notify({
@@ -3061,7 +3368,7 @@ export function WorkspaceServiceProvider({
       void repositories.guests.moveToTable(guestId, tableId).catch(() => restoreSnapshot(snapshot));
       notify({ title: "Mesa cambiada", description: `${guest.guestName} pasó a ${table.name}.`, tone: "warning", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
     },
-    [captureSnapshot, currentEvent.status, guests, notify, repositories.guests, requirePermission, reservations, restoreSnapshot, tables],
+    [captureSnapshot, currentEvent, currentEvent.status, currentVenue, guests, notify, repositories.guests, requirePermission, reservations, restoreSnapshot, tables],
   );
 
   const releaseTable = useCallback(
@@ -3069,6 +3376,7 @@ export function WorkspaceServiceProvider({
       requirePermission("resource.manage");
       const table = tables.find((item) => item.id === tableId);
       if (!table) return;
+      assertTableInCurrentEventContext(table, currentEvent, currentVenue);
       const affectedReservations = reservations.filter((reservation) => reservation.tableId === tableId || reservation.resourceId === tableId);
       if (isTerminalEventStatus(currentEvent.status)) {
         notify({
@@ -3124,7 +3432,7 @@ export function WorkspaceServiceProvider({
       void repositories.tables.release(tableId).catch(() => restoreSnapshot(snapshot));
       notify({ title: "Mesa liberada", description: `${table.name} quedó disponible nuevamente.`, tone: "warning", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
     },
-    [captureSnapshot, currentEvent.status, notify, repositories.tables, requirePermission, reservations, restoreSnapshot, tables],
+    [captureSnapshot, currentEvent, currentEvent.status, currentVenue, notify, repositories.tables, requirePermission, reservations, restoreSnapshot, tables],
   );
 
   const closeTable = useCallback(
@@ -3132,6 +3440,7 @@ export function WorkspaceServiceProvider({
       requirePermission("resource.manage");
       const table = tables.find((item) => item.id === tableId);
       if (!table) return;
+      assertTableInCurrentEventContext(table, currentEvent, currentVenue);
       const affectedReservations = reservations.filter((reservation) => reservation.tableId === tableId || reservation.resourceId === tableId);
       if (isTerminalEventStatus(currentEvent.status)) {
         notify({
@@ -3184,7 +3493,7 @@ export function WorkspaceServiceProvider({
       void repositories.tables.close(tableId).catch(() => restoreSnapshot(snapshot));
       notify({ title: "Mesa cerrada", description: `${table.name} quedó fuera de servicio temporalmente.`, tone: "danger", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
     },
-    [captureSnapshot, currentEvent.status, notify, repositories.tables, requirePermission, reservations, restoreSnapshot, tables],
+    [captureSnapshot, currentEvent, currentEvent.status, currentVenue, notify, repositories.tables, requirePermission, reservations, restoreSnapshot, tables],
   );
 
   const registerCheckIn = useCallback(
@@ -3554,6 +3863,7 @@ export function WorkspaceServiceProvider({
       createAccount,
       updateAccount,
       setAccountStatus,
+      deleteAccount,
       createVenue,
       updateVenue,
       setVenueStatus,
@@ -3570,6 +3880,7 @@ export function WorkspaceServiceProvider({
       registerCheckIn,
       createReservation,
       updateReservation,
+      deleteReservation,
       createOrganization,
       appendReservationGuests,
       addReservationGuest,
@@ -3581,6 +3892,7 @@ export function WorkspaceServiceProvider({
       releaseTable,
       closeTable,
       createEvent,
+      updateEvent,
       setEventStatus,
       setOrganizationsState: setOrganizations,
       setVenuesState: setVenues,
@@ -3613,8 +3925,10 @@ export function WorkspaceServiceProvider({
       createAccount,
       createReservation,
       updateReservation,
+      deleteReservation,
       currentEvent,
       currentEventId,
+      updateEvent,
       currentProfile,
       currentProfileId,
       currentOrganization,
@@ -3657,6 +3971,7 @@ export function WorkspaceServiceProvider({
       setResourceStatus,
       moveResourceToSector,
       setAccountStatus,
+      deleteAccount,
       createVenue,
       updateVenue,
       createSector,

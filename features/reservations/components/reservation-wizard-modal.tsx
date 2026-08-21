@@ -50,7 +50,7 @@ export const wizardSteps: Array<{ step: WizardStep; title: string; subtitle: str
   {
     step: 6,
     title: "Resumen",
-    subtitle: "Vista final antes de crear la reserva.",
+    subtitle: "Vista final antes de confirmar la reserva.",
   },
 ];
 
@@ -192,6 +192,9 @@ export default function ReservationWizardModal({
   eventOptions: string[];
 }) {
   const currentStep = wizardSteps.find((item) => item.step === step) ?? wizardSteps[0];
+  const isCreateMode = wizardMode === "create";
+  const modeLabel =
+    wizardMode === "edit" ? "Editar reserva" : wizardMode === "append" ? "Agregar manillas" : "Crear reserva";
 
   const liveSummary = [
     { label: "Código", value: "RES-0108-DB" },
@@ -220,10 +223,8 @@ export default function ReservationWizardModal({
           <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-5 sm:px-6">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <p className="kicker">
-                  Crear reserva
-                </p>
-                <StatusBadge variant="info">Borrador</StatusBadge>
+                <p className="kicker">{modeLabel}</p>
+                <StatusBadge variant="info">{isCreateMode ? "Borrador" : wizardMode === "edit" ? "Edición" : "Manillas"}</StatusBadge>
               </div>
               <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-[2rem]">
                 {currentStep.title}
@@ -276,6 +277,7 @@ export default function ReservationWizardModal({
 
                     {step === 2 ? (
                       <HolderStep
+                        wizardMode={wizardMode}
                         holderName={holderName}
                         setHolderName={setHolderName}
                         holderLastName={holderLastName}
@@ -298,6 +300,7 @@ export default function ReservationWizardModal({
 
                     {step === 3 ? (
                       <GuestsStep
+                        wizardMode={wizardMode}
                         guests={guests}
                         guestCount={guestCount}
                         registeredGuests={registeredGuests}
@@ -332,6 +335,7 @@ export default function ReservationWizardModal({
 
                     {step === 6 ? (
                       <SummaryStep
+                        wizardMode={wizardMode}
                         eventName={eventName}
                         date={date}
                         time={time}
@@ -352,7 +356,6 @@ export default function ReservationWizardModal({
                         selectedResourceSummary={selectedResourceSummary}
                         selectedActiveReservation={selectedActiveReservation}
                         selectedReservationConflictCount={selectedReservationConflictCount}
-                        wizardMode={wizardMode}
                         amount={amount}
                         advance={advance}
                         pendingNumber={pendingNumber}
@@ -729,6 +732,7 @@ function GeneralStep({
 }
 
 function HolderStep({
+  wizardMode,
   holderName,
   setHolderName,
   holderLastName,
@@ -747,6 +751,7 @@ function HolderStep({
   notes,
   setNotes,
 }: {
+  wizardMode: "create" | "edit" | "append";
   holderName: string;
   setHolderName: Dispatch<SetStateAction<string>>;
   holderLastName: string;
@@ -765,37 +770,39 @@ function HolderStep({
   notes: string;
   setNotes: Dispatch<SetStateAction<string>>;
 }) {
+  const showDecorativeSignals = wizardMode !== "create";
+
   return (
     <section className="surface-panel p-5">
       <div className="grid gap-4 xl:grid-cols-2">
-        <Field label="Nombre">
+        <Field label="Nombre del titular">
           <input
             value={holderName}
             onChange={(event) => setHolderName(event.target.value)}
             className={inputClassName}
-            placeholder="Sofía"
+            placeholder="Nombre del titular"
           />
         </Field>
 
-        <Field label="Apellido">
+        <Field label="Apellido del titular">
           <input
             value={holderLastName}
             onChange={(event) => setHolderLastName(event.target.value)}
             className={inputClassName}
-            placeholder="Rivas"
+            placeholder="Apellido del titular"
           />
         </Field>
 
-        <Field label="Documento">
+        <Field label="Documento del titular">
           <input
             value={documentValue}
             onChange={(event) => setDocumentValue(event.target.value)}
             className={inputClassName}
-            placeholder="1234567"
+            placeholder="Documento del titular"
           />
         </Field>
 
-        <Field label="WhatsApp">
+        <Field label="WhatsApp del titular">
           <input
             value={whatsapp}
             onChange={(event) => setWhatsapp(event.target.value)}
@@ -804,7 +811,7 @@ function HolderStep({
           />
         </Field>
 
-        <Field label="Email">
+        <Field label="Email del titular">
           <input
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -823,27 +830,29 @@ function HolderStep({
         </Field>
       </div>
 
-      <div className="mt-5 grid gap-4 xl:grid-cols-2">
-        <ToggleField
-          label="Marca VIP"
-          active={vip}
-          onToggle={() => setVip((current) => !current)}
-        />
-        <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-            Cliente frecuente
-          </p>
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-white">
-              {frequent ? "Sí, por historial" : "No detectado en historial"}
+      {showDecorativeSignals ? (
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <ToggleField
+            label="Marca VIP"
+            active={vip}
+            onToggle={() => setVip((current) => !current)}
+          />
+          <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Cliente frecuente
             </p>
-            <StatusBadge variant={frequent ? "success" : "info"}>{frequent ? "Derivado" : "Nuevo"}</StatusBadge>
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-white">
+                {frequent ? "Sí, por historial" : "No detectado en historial"}
+              </p>
+              <StatusBadge variant={frequent ? "success" : "info"}>{frequent ? "Derivado" : "Nuevo"}</StatusBadge>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-400">
+              Calculado automáticamente desde reservas y asistencias previas; no se edita manualmente.
+            </p>
           </div>
-          <p className="mt-2 text-xs leading-5 text-slate-400">
-            Calculado automáticamente desde reservas y asistencias previas; no se edita manualmente.
-          </p>
         </div>
-      </div>
+      ) : null}
 
       <Field label="Notas" className="mt-5">
         <textarea
@@ -859,6 +868,7 @@ function HolderStep({
 }
 
 function GuestsStep({
+  wizardMode,
   guests,
   guestCount,
   registeredGuests,
@@ -867,6 +877,7 @@ function GuestsStep({
   removeGuest,
   updateGuest,
 }: {
+  wizardMode: "create" | "edit" | "append";
   guests: GuestDraft[];
   guestCount: number;
   registeredGuests: number;
@@ -910,10 +921,14 @@ function GuestsStep({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-lg font-semibold tracking-tight text-white">
-                  Invitado {index + 1}
+                  {index === 0 ? "Titular" : `Invitado ${index + 1}`}
                 </p>
                 <p className="mt-1 text-sm text-slate-400">
-                  {index < registeredGuests ? "Registro completado" : "Aún pendiente"}
+                  {index === 0
+                    ? "Sincronizado con el titular de la reserva"
+                    : index < registeredGuests
+                      ? "Registro completado"
+                      : "Aún pendiente"}
                 </p>
               </div>
 
@@ -922,13 +937,15 @@ function GuestsStep({
                   {guest.vip ? "VIP" : "General"}
                 </StatusBadge>
                 <StatusBadge variant="info">{guest.transferBadge}</StatusBadge>
-                <button
-                  type="button"
-                  onClick={() => removeGuest(index)}
-                  className="inline-flex h-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-white transition hover:bg-white/[0.08]"
-                >
-                  Eliminar
-                </button>
+                {wizardMode === "create" && index === 0 ? null : (
+                  <button
+                    type="button"
+                    onClick={() => removeGuest(index)}
+                    className="inline-flex h-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-white transition hover:bg-white/[0.08]"
+                  >
+                    Eliminar
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1124,6 +1141,7 @@ function PaymentStep({
             type="number"
             value={advance}
             onChange={(event) => setAdvance(event.target.value)}
+            readOnly={paymentStatus === "Pagado"}
             className={inputClassName}
             placeholder="300"
           />
@@ -1150,6 +1168,15 @@ function PaymentStep({
 
       <div className="mt-5">
         <p className="text-sm font-medium text-slate-200">Estado</p>
+        {paymentStatus === "Pagado" ? (
+          <p className="mt-2 text-sm text-slate-400">
+            Cuando la reserva queda pagada, el adelanto sigue automáticamente el monto total.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-slate-400">
+            Puedes ajustar el adelanto manualmente mientras el estado no sea Pagado.
+          </p>
+        )}
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           {paymentStatuses.map((status) => {
             const selected = paymentStatus === status;
@@ -1222,6 +1249,7 @@ function PaymentStep({
 }
 
 function SummaryStep({
+  wizardMode,
   eventName,
   date,
   time,
@@ -1242,13 +1270,13 @@ function SummaryStep({
   selectedResourceSummary,
   selectedActiveReservation,
   selectedReservationConflictCount,
-  wizardMode,
   amount,
   advance,
   pendingNumber,
   paymentMethod,
   paymentStatus,
 }: {
+  wizardMode: "create" | "edit" | "append";
   eventName: string;
   date: string;
   time: string;
@@ -1269,14 +1297,25 @@ function SummaryStep({
   selectedResourceSummary: TableSummary | null;
   selectedActiveReservation: ReservationRecord | null;
   selectedReservationConflictCount: number;
-  wizardMode: "create" | "edit" | "append";
   amount: string;
   advance: string;
   pendingNumber: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
 }) {
-  const summaryCards = [
+  const showDecorativeSignals = wizardMode !== "create";
+  const invitationRows: Array<[string, string]> = [
+    ["Cantidad", `${guestCount}`],
+    ["Registrados", `${guests.filter((guest) => guest.name.trim()).length}`],
+  ];
+
+  if (showDecorativeSignals) {
+    invitationRows.push(["VIP", vip ? "Sí" : "No"], ["Historial frecuente", frequent ? "Sí" : "No"]);
+  }
+
+  invitationRows.push(["Notas", notes || "Sin notas"]);
+
+  const summaryCards: Array<{ title: string; rows: Array<[string, string]> }> = [
     {
       title: "General",
       rows: [
@@ -1299,13 +1338,7 @@ function SummaryStep({
     },
     {
       title: "Invitados",
-      rows: [
-        ["Cantidad", `${guestCount}`],
-        ["Registrados", `${guests.filter((guest) => guest.name.trim()).length}`],
-        ["VIP", vip ? "Sí" : "No"],
-        ["Historial frecuente", frequent ? "Sí" : "No"],
-        ["Notas", notes || "Sin notas"],
-      ],
+      rows: invitationRows,
     },
     {
       title: "Recurso",
@@ -1335,10 +1368,10 @@ function SummaryStep({
           Confirmación premium
         </p>
         <h3 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-          Reserva lista para crear.
+          {wizardMode === "edit" ? "Reserva lista para guardar." : "Reserva lista para crear."}
         </h3>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-          Todo está agrupado por contexto operativo. El botón final registra la reserva en
+          Todo está agrupado por contexto operativo. El botón final registra los cambios en
           el estado compartido.
         </p>
       </div>
