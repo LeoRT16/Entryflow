@@ -108,8 +108,11 @@ function normalizeMutationBody(body: AccountMutationBody) {
   };
 }
 
-async function loadActorContext(workspace: WorkspaceBootstrap) {
-  const currentProfile = workspace.profiles.find((profile) => profile.id === workspace.currentProfileId && profile.organizationId === workspace.currentOrganizationId && !profile.deletedAt) ?? null;
+async function loadActorContext(workspace: WorkspaceBootstrap, organizationId: string) {
+  const currentProfile =
+    workspace.profiles.find((profile) => profile.id === workspace.currentProfileId && profile.organizationId === organizationId && !profile.deletedAt)
+    ?? workspace.profiles.find((profile) => profile.userId === workspace.currentUserId && profile.organizationId === organizationId && !profile.deletedAt)
+    ?? null;
   if (!currentProfile) {
     return null;
   }
@@ -162,7 +165,17 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
     );
   }
 
-  const actorContext = await loadActorContext(workspace);
+  const { profileId } = await context.params;
+  const targetProfile = workspace.profiles.find((profile) => profile.id === profileId && !profile.deletedAt) ?? null;
+
+  if (!targetProfile) {
+    return NextResponse.json(
+      { ok: false, error: { code: "not_found", message: "No pudimos encontrar ese miembro en la organización activa." } },
+      { status: 404 },
+    );
+  }
+
+  const actorContext = await loadActorContext(workspace, targetProfile.organizationId);
   if (!actorContext) {
     return NextResponse.json(
       { ok: false, error: { code: "forbidden", message: "No pudimos resolver tu cuenta activa." } },
@@ -174,16 +187,6 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
     return NextResponse.json(
       { ok: false, error: { code: "forbidden", message: "No tenés permiso para editar miembros." } },
       { status: 403 },
-    );
-  }
-
-  const { profileId } = await context.params;
-  const targetProfile = workspace.profiles.find((profile) => profile.id === profileId && !profile.deletedAt) ?? null;
-
-  if (!targetProfile || targetProfile.organizationId !== workspace.currentOrganizationId) {
-    return NextResponse.json(
-      { ok: false, error: { code: "not_found", message: "No pudimos encontrar ese miembro en la organización activa." } },
-      { status: 404 },
     );
   }
 
@@ -284,7 +287,7 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
 
   const activeOwnerCount = workspace.profiles.filter((profile) => {
     const profileRole = workspace.roles.find((role) => role.id === profile.roleId);
-    return profile.organizationId === workspace.currentOrganizationId && profile.deletedAt === null && profile.status === "active" && profileRole?.slug === "owner";
+    return profile.organizationId === targetProfile.organizationId && profile.deletedAt === null && profile.status === "active" && profileRole?.slug === "owner";
   }).length;
 
   const targetRoleIsOwner = targetRole.slug === "owner";
@@ -384,7 +387,16 @@ async function deleteAccount(request: Request, context: { params: Promise<{ prof
     );
   }
 
-  const actorContext = await loadActorContext(workspace);
+  const { profileId } = await context.params;
+  const targetProfile = workspace.profiles.find((profile) => profile.id === profileId && !profile.deletedAt) ?? null;
+  if (!targetProfile) {
+    return NextResponse.json(
+      { ok: false, error: { code: "not_found", message: "No pudimos encontrar ese miembro en la organización activa." } },
+      { status: 404 },
+    );
+  }
+
+  const actorContext = await loadActorContext(workspace, targetProfile.organizationId);
   if (!actorContext) {
     return NextResponse.json(
       { ok: false, error: { code: "forbidden", message: "No pudimos resolver tu cuenta activa." } },
@@ -396,15 +408,6 @@ async function deleteAccount(request: Request, context: { params: Promise<{ prof
     return NextResponse.json(
       { ok: false, error: { code: "forbidden", message: "No tenés permiso para eliminar miembros." } },
       { status: 403 },
-    );
-  }
-
-  const { profileId } = await context.params;
-  const targetProfile = workspace.profiles.find((profile) => profile.id === profileId && !profile.deletedAt) ?? null;
-  if (!targetProfile || targetProfile.organizationId !== workspace.currentOrganizationId) {
-    return NextResponse.json(
-      { ok: false, error: { code: "not_found", message: "No pudimos encontrar ese miembro en la organización activa." } },
-      { status: 404 },
     );
   }
 
@@ -436,7 +439,7 @@ async function deleteAccount(request: Request, context: { params: Promise<{ prof
 
   const activeOwnerCount = workspace.profiles.filter((profile) => {
     const profileRole = workspace.roles.find((role) => role.id === profile.roleId);
-    return profile.organizationId === workspace.currentOrganizationId && profile.deletedAt === null && profile.status === "active" && profileRole?.slug === "owner";
+    return profile.organizationId === targetProfile.organizationId && profile.deletedAt === null && profile.status === "active" && profileRole?.slug === "owner";
   }).length;
 
   if (targetRole.slug === "owner" && activeOwnerCount <= 1) {

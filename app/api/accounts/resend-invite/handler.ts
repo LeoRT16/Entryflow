@@ -93,6 +93,31 @@ function buildOrganizationAccount(workspace: WorkspaceBootstrap, memberId: strin
   return { membership, user, account };
 }
 
+function loadActorContext(workspace: WorkspaceBootstrap, organizationId: string) {
+  const currentProfile =
+    workspace.profiles.find((profile) => profile.id === workspace.currentProfileId && profile.organizationId === organizationId && !profile.deletedAt)
+    ?? workspace.profiles.find((profile) => profile.userId === workspace.currentUserId && profile.organizationId === organizationId && !profile.deletedAt)
+    ?? null;
+
+  if (!currentProfile) {
+    return null;
+  }
+
+  const currentRole = workspace.roles.find((role) => role.id === currentProfile.roleId) ?? getRolePresetBySlug("administrator");
+  const effectivePermissions = resolveAccountPermissions({
+    permissions: currentProfile.metadata?.permissions,
+    rolePermissions: currentRole.permissions,
+    roleMetadata: currentRole.metadata,
+    accountMetadata: currentProfile.metadata,
+  });
+
+  return {
+    currentProfile,
+    currentRole,
+    effectivePermissions,
+  };
+}
+
 export async function handleResendInvite(request: Request, dependencies: ResendInviteDependencies = defaultDependencies) {
   const authUser = await dependencies.getAuthUser();
 
@@ -124,7 +149,7 @@ export async function handleResendInvite(request: Request, dependencies: ResendI
     );
   }
 
-  const currentProfile = workspace.profiles.find((profile) => profile.id === workspace.currentProfileId && !profile.deletedAt) ?? null;
+  const currentProfile = loadActorContext(workspace, workspace.currentOrganizationId);
 
   if (!currentProfile) {
     return NextResponse.json(
@@ -139,15 +164,7 @@ export async function handleResendInvite(request: Request, dependencies: ResendI
     );
   }
 
-  const currentRole = workspace.roles.find((role) => role.id === currentProfile.roleId) ?? getRolePresetBySlug("administrator");
-  const effectivePermissions = resolveAccountPermissions({
-    permissions: currentProfile.metadata?.permissions,
-    rolePermissions: currentRole.permissions,
-    roleMetadata: currentRole.metadata,
-    accountMetadata: currentProfile.metadata,
-  });
-
-  if (!effectivePermissions.includes("accounts.manage")) {
+  if (!currentProfile.effectivePermissions.includes("accounts.manage")) {
     return NextResponse.json(
       {
         ok: false,
@@ -194,7 +211,7 @@ export async function handleResendInvite(request: Request, dependencies: ResendI
 
   const selected = buildOrganizationAccount(workspace, memberId);
 
-  if (!selected || selected.membership.organizationId !== workspace.currentOrganizationId) {
+  if (!selected) {
     return NextResponse.json(
       {
         ok: false,
@@ -204,6 +221,20 @@ export async function handleResendInvite(request: Request, dependencies: ResendI
         },
       },
       { status: 404 },
+    );
+  }
+
+  const actorContext = loadActorContext(workspace, selected.membership.organizationId);
+  if (!actorContext) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "forbidden",
+          message: "No pudimos resolver tu cuenta activa.",
+        },
+      },
+      { status: 403 },
     );
   }
 

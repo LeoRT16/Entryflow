@@ -158,6 +158,10 @@ function buildDependencies(workspace: WorkspaceBootstrap) {
           return undefined;
         }
         Object.assign(next, patch);
+        const nextStatus = patch.attributes?.status;
+        if (nextStatus === "active" || nextStatus === "inactive") {
+          next.status = nextStatus;
+        }
         return { ...next };
       },
     },
@@ -211,6 +215,76 @@ test("owner can edit own benign profile fields through the trusted account route
   assert.equal(payload.account.userEmail, "owner+updated@example.com");
   assert.equal(payload.profile.attributes.area, "Dirección");
   assert.equal(dependencies.state.users.find((user) => user.id === "user-owner")?.displayName, "Owner Updated");
+});
+
+test("fresh organization member mutations resolve the target organization instead of a stale current org", async () => {
+  const workspace = buildWorkspace({
+    currentOrganizationId: "org-a",
+    currentProfileId: "profile-owner",
+    profiles: [
+      buildMembership({ id: "profile-owner", userId: "user-owner", organizationId: "org-a", roleId: "role-owner", displayName: "Owner A", status: "active" }),
+      buildMembership({ id: "profile-owner-b", userId: "user-owner", organizationId: "org-b", roleId: "role-owner", displayName: "Owner B", status: "active" }),
+      buildMembership({ id: "profile-member-b", userId: "user-member-b", organizationId: "org-b", roleId: "role-reception", displayName: "Member B", status: "active" }),
+    ],
+    users: [
+      buildUser(),
+      buildUser({ id: "user-member-b", authUserId: "auth-member-b", email: "member-b@example.com", displayName: "Member B" }),
+    ],
+  });
+  const dependencies = buildDependencies(workspace);
+
+  const response = await handleAccountMutation(
+    jsonRequest("PATCH", {
+      userDisplayName: "Member B Updated",
+      displayName: "Member B Visible",
+      area: "Recepción B",
+      status: "inactive",
+      roleSlug: "administrator",
+      permissions: ["accounts.manage"],
+    }),
+    { params: Promise.resolve({ profileId: "profile-member-b" }) },
+    dependencies as never,
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.account.id, "profile-member-b");
+  assert.equal(payload.account.organizationId, "org-b");
+  assert.equal(payload.account.displayName, "Member B Visible");
+  assert.equal(payload.profile.status, "inactive");
+  assert.equal(dependencies.state.profiles.find((profile) => profile.id === "profile-member-b")?.status, "inactive");
+  assert.equal(dependencies.state.profiles.find((profile) => profile.id === "profile-owner")?.displayName, "Owner A");
+});
+
+test("same member identity is rejected when the actor has no membership in that organization", async () => {
+  const workspace = buildWorkspace({
+    currentOrganizationId: "org-a",
+    currentProfileId: "profile-owner",
+    profiles: [
+      buildMembership({ id: "profile-owner", userId: "user-owner", organizationId: "org-a", roleId: "role-owner", displayName: "Owner A", status: "active" }),
+      buildMembership({ id: "profile-member-b", userId: "user-member-b", organizationId: "org-b", roleId: "role-reception", displayName: "Member B", status: "active" }),
+    ],
+    users: [
+      buildUser(),
+      buildUser({ id: "user-member-b", authUserId: "auth-member-b", email: "member-b@example.com", displayName: "Member B" }),
+    ],
+  });
+  const dependencies = buildDependencies(workspace);
+
+  const response = await handleAccountMutation(
+    jsonRequest("PATCH", {
+      displayName: "Member B Visible",
+      status: "inactive",
+    }),
+    { params: Promise.resolve({ profileId: "profile-member-b" }) },
+    dependencies as never,
+  );
+
+  assert.equal(response.status, 403);
+  const payload = await response.json();
+  assert.equal(payload.ok, false);
+  assert.match(payload.error.message, /No pudimos resolver tu cuenta activa\./i);
 });
 
 test("critical self-disable remains blocked on the server route", async () => {
