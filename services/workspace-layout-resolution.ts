@@ -112,7 +112,8 @@ export function resolveCurrentVenueSectors({
   const orderMap = new Map(orderedSectorIds.map((sectorId, index) => [sectorId, index]));
   const resolvedSectors = orderedSectorIds
     .map((sectorId) => sectorsById.get(sectorId))
-    .filter((sector): sector is Sector => Boolean(sector));
+    .filter((sector): sector is Sector => Boolean(sector))
+    .filter((sector) => !currentVenueId || sector.venueId === currentVenueId);
   const remainingSectors = currentVenueId
     ? sectors.filter((sector) => sector.venueId === currentVenueId && !orderMap.has(sector.id))
     : sectors.filter((sector) => !orderMap.has(sector.id));
@@ -167,7 +168,8 @@ export function resolveCurrentVenueResources({
   const orderMap = new Map(orderedResourceIds.map((resourceId, index) => [resourceId, index]));
   const resolvedResources = orderedResourceIds
     .map((resourceId) => resourcesById.get(resourceId))
-    .filter((resource): resource is Resource => Boolean(resource));
+    .filter((resource): resource is Resource => Boolean(resource))
+    .filter((resource) => !currentVenueId || resource.venueId === currentVenueId);
   const remainingResources = currentVenueId
     ? resources.filter((resource) => resource.venueId === currentVenueId && !orderMap.has(resource.id))
     : resources.filter((resource) => !orderMap.has(resource.id));

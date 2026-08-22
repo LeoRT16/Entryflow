@@ -10,9 +10,13 @@ import {
   getTimelineEventsForOrganization,
   getVenuesForOrganization,
 } from "../features/domain/selectors";
+import {
+  resolveCurrentVenueResources,
+  resolveCurrentVenueSectors,
+} from "../services/workspace-layout-resolution";
 import { resolveOrganizationSwitchState } from "../services/workspace-service";
 import { resolveReservationWizardResourceOptions } from "../features/reservations/domain/reservation-wizard";
-import type { Event, Venue } from "../features/domain/types";
+import type { Event, EventLayout, EventLayoutResource, EventLayoutSector, Resource, Sector, Venue, VenueLayoutResource, VenueLayoutSector } from "../features/domain/types";
 import type { CheckIn } from "../features/check-in/types";
 import type { Guest } from "../features/check-in/types";
 import type { ReservationRecord } from "../features/reservations/types";
@@ -151,4 +155,426 @@ test("reservation wizard keeps Org A resources out of Org B when the primary sec
   );
 
   assert.deepEqual(resourceOptions.map((resource) => resource.id), ["resource-b1", "resource-b2"]);
+});
+
+test("ordered layout resources are still scoped to the current venue when event layouts reference foreign ids", () => {
+  const currentVenueId = "venue-b";
+  const resources: Resource[] = [
+    {
+      id: "resource-a1",
+      venueId: "venue-a",
+      sectorId: "sector-a",
+      type: "table",
+      name: "Mesa A1",
+      capacity: 4,
+      status: "Available",
+      order: 1,
+      metadata: {},
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "resource-b1",
+      venueId: "venue-b",
+      sectorId: "sector-b",
+      type: "table",
+      name: "Mesa B1",
+      capacity: 4,
+      status: "Available",
+      order: 1,
+      metadata: {},
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const sectors: Sector[] = [
+    {
+      id: "sector-a",
+      venueId: "venue-a",
+      name: "Sector A",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "sector-b",
+      venueId: "venue-b",
+      name: "Sector B",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const venueLayoutResources: VenueLayoutResource[] = [
+    {
+      id: "venue-layout-resource-a1",
+      venueLayoutId: "venue-layout-a",
+      sourceResourceId: "resource-a1",
+      type: "table",
+      name: "Mesa A1",
+      capacity: 4,
+      status: "active",
+      order: 1,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const eventLayoutResources: EventLayoutResource[] = [
+    {
+      id: "event-layout-resource-a1",
+      eventLayoutId: "event-layout-b",
+      sourceVenueLayoutResourceId: "venue-layout-resource-a1",
+      type: "table",
+      name: "Mesa A1",
+      capacity: 4,
+      status: "active",
+      order: 1,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const venueLayoutSectors: VenueLayoutSector[] = [
+    {
+      id: "venue-layout-sector-a",
+      venueLayoutId: "venue-layout-a",
+      sourceSectorId: "sector-a",
+      name: "Sector A",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const eventLayoutSectors: EventLayoutSector[] = [
+    {
+      id: "event-layout-sector-a",
+      eventLayoutId: "event-layout-b",
+      sourceVenueLayoutSectorId: "venue-layout-sector-a",
+      name: "Sector A",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const currentEventLayout: EventLayout = {
+    id: "event-layout-b",
+    eventId: "event-b",
+    venueId: "venue-b",
+    name: "Layout B",
+    status: "active",
+    createdAt: "2026-08-21T10:00:00.000Z",
+    updatedAt: "2026-08-21T10:00:00.000Z",
+  };
+
+  const currentVenueResources = resolveCurrentVenueResources({
+    currentVenueId,
+    currentEventLayout,
+    venueLayout: null,
+    resources,
+    venueLayoutResources,
+    eventLayoutResources,
+  });
+  const currentVenueSectors = resolveCurrentVenueSectors({
+    currentVenueId,
+    currentEventLayout,
+    venueLayout: null,
+    sectors,
+    venueLayoutSectors,
+    eventLayoutSectors,
+  });
+
+  assert.deepEqual(currentVenueResources.map((resource) => resource.id), ["resource-b1"]);
+  assert.deepEqual(currentVenueSectors.map((sector) => sector.id), ["sector-b"]);
+  assert.ok(currentVenueResources.every((resource) => resource.venueId === currentVenueId));
+  assert.ok(currentVenueSectors.every((sector) => sector.venueId === currentVenueId));
+});
+
+test("ordered layout resources preserve valid current-venue ordering", () => {
+  const currentVenueId = "venue-b";
+  const resources: Resource[] = [
+    {
+      id: "resource-b1",
+      venueId: "venue-b",
+      sectorId: "sector-b",
+      type: "table",
+      name: "Mesa B1",
+      capacity: 4,
+      status: "Available",
+      order: 2,
+      metadata: {},
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "resource-b2",
+      venueId: "venue-b",
+      sectorId: "sector-b",
+      type: "table",
+      name: "Mesa B2",
+      capacity: 4,
+      status: "Available",
+      order: 3,
+      metadata: {},
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "resource-b3",
+      venueId: "venue-b",
+      sectorId: "sector-b",
+      type: "table",
+      name: "Mesa B3",
+      capacity: 4,
+      status: "Available",
+      order: 1,
+      metadata: {},
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const eventLayoutResources: EventLayoutResource[] = [
+    {
+      id: "event-layout-resource-b3",
+      eventLayoutId: "event-layout-b",
+      sourceVenueLayoutResourceId: "venue-layout-resource-b3",
+      type: "table",
+      name: "Mesa B3",
+      capacity: 4,
+      status: "active",
+      order: 1,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "event-layout-resource-b1",
+      eventLayoutId: "event-layout-b",
+      sourceVenueLayoutResourceId: "venue-layout-resource-b1",
+      type: "table",
+      name: "Mesa B1",
+      capacity: 4,
+      status: "active",
+      order: 2,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const venueLayoutResources: VenueLayoutResource[] = [
+    {
+      id: "venue-layout-resource-b1",
+      venueLayoutId: "venue-layout-b",
+      sourceResourceId: "resource-b1",
+      type: "table",
+      name: "Mesa B1",
+      capacity: 4,
+      status: "active",
+      order: 1,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "venue-layout-resource-b3",
+      venueLayoutId: "venue-layout-b",
+      sourceResourceId: "resource-b3",
+      type: "table",
+      name: "Mesa B3",
+      capacity: 4,
+      status: "active",
+      order: 2,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const eventLayout = {
+    id: "event-layout-b",
+    eventId: "event-b",
+    venueId: currentVenueId,
+    name: "Layout B",
+    status: "active",
+    createdAt: "2026-08-21T10:00:00.000Z",
+    updatedAt: "2026-08-21T10:00:00.000Z",
+  } as EventLayout;
+
+  const currentVenueResources = resolveCurrentVenueResources({
+    currentVenueId,
+    currentEventLayout: eventLayout,
+    venueLayout: null,
+    resources,
+    venueLayoutResources,
+    eventLayoutResources,
+  });
+
+  assert.deepEqual(currentVenueResources.map((resource) => resource.id), ["resource-b3", "resource-b1", "resource-b2"]);
+  assert.ok(currentVenueResources.every((resource) => resource.venueId === currentVenueId));
+});
+
+test("foreign refs are rejected when current venue switches in either direction", () => {
+  const resources: Resource[] = [
+    {
+      id: "resource-a",
+      venueId: "venue-a",
+      sectorId: "sector-a",
+      type: "table",
+      name: "Mesa A",
+      capacity: 4,
+      status: "Available",
+      order: 1,
+      metadata: {},
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "resource-b",
+      venueId: "venue-b",
+      sectorId: "sector-b",
+      type: "table",
+      name: "Mesa B",
+      capacity: 4,
+      status: "Available",
+      order: 1,
+      metadata: {},
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const sectors: Sector[] = [
+    {
+      id: "sector-a",
+      venueId: "venue-a",
+      name: "Sector A",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "sector-b",
+      venueId: "venue-b",
+      name: "Sector B",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const venueLayoutResources: VenueLayoutResource[] = [
+    {
+      id: "venue-layout-resource-a",
+      venueLayoutId: "venue-layout-a",
+      sourceResourceId: "resource-a",
+      type: "table",
+      name: "Mesa A",
+      capacity: 4,
+      status: "active",
+      order: 1,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "venue-layout-resource-b",
+      venueLayoutId: "venue-layout-b",
+      sourceResourceId: "resource-b",
+      type: "table",
+      name: "Mesa B",
+      capacity: 4,
+      status: "active",
+      order: 1,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const venueLayoutSectors: VenueLayoutSector[] = [
+    {
+      id: "venue-layout-sector-a",
+      venueLayoutId: "venue-layout-a",
+      sourceSectorId: "sector-a",
+      name: "Sector A",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "venue-layout-sector-b",
+      venueLayoutId: "venue-layout-b",
+      sourceSectorId: "sector-b",
+      name: "Sector B",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const eventLayoutResources: EventLayoutResource[] = [
+    {
+      id: "event-layout-resource-a",
+      eventLayoutId: "event-layout-a",
+      sourceVenueLayoutResourceId: "venue-layout-resource-b",
+      type: "table",
+      name: "Mesa B",
+      capacity: 4,
+      status: "active",
+      order: 1,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "event-layout-resource-b",
+      eventLayoutId: "event-layout-b",
+      sourceVenueLayoutResourceId: "venue-layout-resource-a",
+      type: "table",
+      name: "Mesa A",
+      capacity: 4,
+      status: "active",
+      order: 1,
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+  const eventLayoutSectors: EventLayoutSector[] = [
+    {
+      id: "event-layout-sector-a",
+      eventLayoutId: "event-layout-a",
+      sourceVenueLayoutSectorId: "venue-layout-sector-b",
+      name: "Sector B",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+    {
+      id: "event-layout-sector-b",
+      eventLayoutId: "event-layout-b",
+      sourceVenueLayoutSectorId: "venue-layout-sector-a",
+      name: "Sector A",
+      order: 1,
+      status: "active",
+      createdAt: "2026-08-21T10:00:00.000Z",
+      updatedAt: "2026-08-21T10:00:00.000Z",
+    },
+  ];
+
+  const currentVenueBResources = resolveCurrentVenueResources({
+    currentVenueId: "venue-b",
+    currentEventLayout: { id: "event-layout-a", eventId: "event-a", venueId: "venue-a", name: "Layout A", status: "active", createdAt: "2026-08-21T10:00:00.000Z", updatedAt: "2026-08-21T10:00:00.000Z" } as EventLayout,
+    venueLayout: null,
+    resources,
+    venueLayoutResources,
+    eventLayoutResources,
+  });
+  const currentVenueASectors = resolveCurrentVenueSectors({
+    currentVenueId: "venue-a",
+    currentEventLayout: { id: "event-layout-b", eventId: "event-b", venueId: "venue-b", name: "Layout B", status: "active", createdAt: "2026-08-21T10:00:00.000Z", updatedAt: "2026-08-21T10:00:00.000Z" } as EventLayout,
+    venueLayout: null,
+    sectors,
+    venueLayoutSectors,
+    eventLayoutSectors,
+  });
+
+  assert.deepEqual(currentVenueBResources.map((resource) => resource.id), ["resource-b"]);
+  assert.deepEqual(currentVenueASectors.map((sector) => sector.id), ["sector-a"]);
+  assert.ok(currentVenueBResources.every((resource) => resource.venueId === "venue-b"));
+  assert.ok(currentVenueASectors.every((sector) => sector.venueId === "venue-a"));
 });
