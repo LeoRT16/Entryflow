@@ -11,6 +11,7 @@ import {
   getVenuesForOrganization,
 } from "../features/domain/selectors";
 import { resolveOrganizationSwitchState } from "../services/workspace-service";
+import { resolveReservationWizardResourceOptions } from "../features/reservations/domain/reservation-wizard";
 import type { Event, Venue } from "../features/domain/types";
 import type { CheckIn } from "../features/check-in/types";
 import type { Guest } from "../features/check-in/types";
@@ -136,4 +137,18 @@ test("organization-scoped selectors exclude data from other organizations", () =
   assert.deepEqual(getTablesForOrganization("org-b", orgAEvents, tables).map((table) => table.id), ["table-b"]);
   assert.deepEqual(getCheckInsForOrganization("org-b", orgAEvents, checkIns).map((checkIn) => checkIn.id), ["checkin-b"]);
   assert.deepEqual(getTimelineEventsForOrganization("org-b", orgAEvents, timelineEvents).map((entry) => entry.id), ["timeline-b"]);
+});
+
+test("reservation wizard keeps Org A resources out of Org B when the primary sector changes", () => {
+  const resourceOptions = resolveReservationWizardResourceOptions(
+    [
+      { id: "resource-a1", sectorId: "org-a-patio-a", eventLayoutResourceId: undefined },
+      { id: "resource-a2", sectorId: "org-a-patio-b", eventLayoutResourceId: undefined },
+      { id: "resource-b1", sectorId: "org-b-patio-a", eventLayoutResourceId: undefined },
+      { id: "resource-b2", sectorId: "org-b-patio-a", eventLayoutResourceId: undefined },
+    ],
+    "org-b-patio-a",
+  );
+
+  assert.deepEqual(resourceOptions.map((resource) => resource.id), ["resource-b1", "resource-b2"]);
 });

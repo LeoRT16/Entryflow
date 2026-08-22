@@ -127,6 +127,29 @@ export function preferEventLayoutMappedResources<T extends { eventLayoutResource
   return mappedResources.length ? mappedResources : resourceOptions;
 }
 
+export function resolveReservationWizardResourceOptions<T extends { eventLayoutResourceId?: string | null; sectorId?: string | null }>(
+  resourceOptions: T[],
+  preferredSectorId?: string | null,
+) {
+  const mappedResources = resourceOptions.filter((resource) => Boolean(resource.eventLayoutResourceId));
+
+  if (mappedResources.length) {
+    return mappedResources;
+  }
+
+  const normalizedPreferredSectorId = preferredSectorId?.trim() ?? "";
+
+  if (!normalizedPreferredSectorId) {
+    return resourceOptions;
+  }
+
+  const preferredSectorResources = resourceOptions.filter(
+    (resource) => resource.sectorId === normalizedPreferredSectorId || !resource.sectorId,
+  );
+
+  return preferredSectorResources.length ? preferredSectorResources : resourceOptions;
+}
+
 export function resolveReservationCapacityViolation({
   resourceCapacity,
   guestCount,

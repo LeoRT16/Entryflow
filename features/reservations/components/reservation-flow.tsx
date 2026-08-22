@@ -23,7 +23,7 @@ import {
   createReservationSubmissionGate,
   resolveInitialReservationResourceId,
   resolveReservationCapacityViolation,
-  preferEventLayoutMappedResources,
+  resolveReservationWizardResourceOptions,
   runReservationSubmission,
 } from "@/features/reservations/domain/reservation-wizard";
 import { clampGuestCount } from "@/features/reservations/utils/reservation-utils";
@@ -390,7 +390,7 @@ function ReservationFlowWorkspace({
       currentVenueId: currentVenue?.id ?? currentEvent.venueId,
       eventLayouts,
     });
-    const mappedResources = preferEventLayoutMappedResources(
+    const mappedResources = resolveReservationWizardResourceOptions(
       venueResources.map((resource) => {
         const summary = tableSummaries.find((item) => item.id === resource.id) ?? null;
         const currentEventLayoutResource = resolveCurrentEventLayoutResource({
@@ -648,7 +648,7 @@ function ReservationFlowWorkspace({
         };
       });
 
-      return preferEventLayoutMappedResources(options);
+      return resolveReservationWizardResourceOptions(options, venueSectors[0]?.id ?? null);
     },
     [currentEvent.id, currentEvent.venueId, currentVenue, currentVenueResources, currentVenueSectors, eventLayoutResources, eventLayouts, resources, sectors, tableSummaries, venueLayoutResources, venues],
   );

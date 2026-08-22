@@ -7,6 +7,7 @@ import {
   createReservationWizardDefaults,
   createReservationSubmissionGate,
   preferEventLayoutMappedResources,
+  resolveReservationWizardResourceOptions,
   resolveInitialReservationResourceId,
   resolveReservationCapacityViolation,
   runReservationSubmission,
@@ -86,6 +87,24 @@ test("reservation wizard prefers event-layout-mapped resources when any are avai
   assert.deepEqual(fallback, [
     { id: "resource-a", eventLayoutResourceId: undefined },
     { id: "resource-b", eventLayoutResourceId: null },
+  ]);
+});
+
+test("reservation wizard falls back to the primary sector when no event-layout mapping exists", () => {
+  const resources = resolveReservationWizardResourceOptions(
+    [
+      { id: "mesa-1", sectorId: "patio-a", eventLayoutResourceId: undefined },
+      { id: "mesa-2", sectorId: "patio-a", eventLayoutResourceId: undefined },
+      { id: "mesa-3", sectorId: "patio-b", eventLayoutResourceId: undefined },
+      { id: "mesa-4", sectorId: null, eventLayoutResourceId: undefined },
+    ],
+    "patio-a",
+  );
+
+  assert.deepEqual(resources, [
+    { id: "mesa-1", sectorId: "patio-a", eventLayoutResourceId: undefined },
+    { id: "mesa-2", sectorId: "patio-a", eventLayoutResourceId: undefined },
+    { id: "mesa-4", sectorId: null, eventLayoutResourceId: undefined },
   ]);
 });
 

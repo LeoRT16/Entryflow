@@ -45,8 +45,8 @@ test("reservation flow wires edit, delete, and cancel callbacks into the operati
   assert.match(source, /reservationGuests=\{reservationGuests\}/);
   assert.match(source, /canIssueWhatsAppInvitations=\{can\("access\.issue"\)\}/);
   assert.match(source, /setGuestsState=\{store\.setGuestsState\}/);
-  assert.match(source, /const options = venueResources\.map\(/);
-  assert.match(source, /return preferEventLayoutMappedResources\(options\);/);
+  assert.match(source, /resolveReservationWizardResourceOptions/);
+  assert.match(source, /venueSectors\[0\]\?\.id \?\? null/);
   assert.doesNotMatch(source, /reservationGuestPresets/);
 });
 
