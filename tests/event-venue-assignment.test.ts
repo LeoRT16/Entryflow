@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildEventFromDraft, buildEventDraft, getEventBlueprint } from "../features/events/domain";
+import { resolveManagedVenueById } from "../features/events/domain/event-venue-boundary";
 import { buildEventVenueChangeConfirmation, shouldWarnBeforeChangingEventVenue } from "../features/events/domain/event-venue-assignment";
 import { isTableInCurrentEventContext } from "../features/business-rules/domain/ownership-guards";
 
@@ -72,12 +73,47 @@ test("buildEventFromDraft persists the selected venueId", () => {
   assert.equal(event.venue, "La Rota Carlota");
 });
 
+test("buildEventFromDraft preserves a free-text location when no managed venue is selected", () => {
+  const blueprint = getEventBlueprint("custom");
+  const event = buildEventFromDraft({
+    organizationId: "org-1",
+    blueprint,
+    draft: {
+      name: "Evento E2E",
+      description: "Evento para validar venue libre",
+      date: "8 de agosto de 2026",
+      startTime: "21:00",
+      endTime: "03:00",
+      timezone: "America/La_Paz",
+      venueId: "",
+      venue: "Bolivar 175",
+      capacity: "200",
+      operationalModel: "mixed",
+      enabledModules: ["overview"],
+      admissionMethods: ["manual", "list", "code"],
+      resourceTypes: [],
+    },
+    id: "event-1",
+  });
+
+  assert.equal(event.venueId, undefined);
+  assert.equal(event.venue, "Bolivar 175");
+});
+
 test("buildEventDraft starts without a venue so an empty-venue org cannot inherit another org's venue label", () => {
   const blueprint = getEventBlueprint("custom");
   const draft = buildEventDraft(blueprint);
 
   assert.equal(draft.venueId, "");
   assert.equal(draft.venue, "");
+});
+
+test("managed venue selection resolves only by canonical venueId", () => {
+  const venues = [{ id: "venue-a" }, { id: "venue-b" }];
+
+  assert.equal(resolveManagedVenueById({ venueId: "venue-b", venues })?.id, "venue-b");
+  assert.equal(resolveManagedVenueById({ venueId: "", venues }), null);
+  assert.equal(resolveManagedVenueById({ venueId: "venue-c", venues }), null);
 });
 
 test("event editor modal keeps the venue selector bound to venueId and persists venueId on save", () => {
@@ -87,8 +123,10 @@ test("event editor modal keeps the venue selector bound to venueId and persists 
   assert.match(source, /venueId:\s*nextVenueId,/);
   assert.match(source, /confirm\(\{/);
   assert.doesNotMatch(source, /window\.confirm\(/);
-  assert.match(source, /const venueOptions = useMemo\(\(\) => venues, \[venues\]\);/);
-  assert.doesNotMatch(source, /venues\.filter\(\(venue\) => venue\.organizationId === event\.organizationId\)/);
+  assert.match(source, /resolveManagedVenueById\(\{/);
+  assert.match(source, /Sin venue seleccionado/);
+  assert.doesNotMatch(source, /venue\.name === event\.venue/);
+  assert.doesNotMatch(source, /defaultVenue/);
 });
 
 test("venue change confirmation copy stays on the shared confirmation pattern", () => {
@@ -146,8 +184,10 @@ test("workspace service updates an event without reselecting it as current", () 
 test("event creation wizard selects and persists organization venues through venueId", () => {
   const source = readFileSync(new URL("../features/events/components/event-creation-wizard.tsx", import.meta.url), "utf8");
 
-  assert.match(source, /const venueOptions = useMemo\(\(\) => venues, \[venues\]\);/);
+  assert.match(source, /resolveManagedVenueById\(\{/);
   assert.match(source, /value=\{draft\.venueId\}/);
   assert.match(source, /venueId: selectedVenue\?\.id \?\? ""/);
-  assert.doesNotMatch(source, /venues\.filter\(\(venue\) => venue\.organizationId === organizationId\)/);
+  assert.match(source, /<option value="">Sin venue seleccionado<\/option>/);
+  assert.match(source, /label="Lugar \/ ubicación"/);
+  assert.doesNotMatch(source, /defaultVenue/);
 });

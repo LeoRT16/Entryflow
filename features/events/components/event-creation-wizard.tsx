@@ -16,6 +16,7 @@ import {
   getEventTypeLabel,
   getOperationalModelLabel,
 } from "@/features/events/domain";
+import { resolveManagedVenueById } from "@/features/events/domain/event-venue-boundary";
 import type { EventBlueprint, EventDraft } from "@/features/events/domain";
 import { getDefaultTimezone } from "@/lib/timezone";
 
@@ -42,7 +43,6 @@ export default function EventCreationWizard({
   const [draft, setDraft] = useState<EventDraft>(() => buildEventDraft(getEventBlueprint("custom")));
   const preferredTimezone = getDefaultTimezone(organizationTimezone);
   const venueOptions = useMemo(() => venues, [venues]);
-  const defaultVenue = useMemo(() => venueOptions.find((venue) => venue.status === "active") ?? venueOptions[0] ?? null, [venueOptions]);
 
   useEffect(() => {
     if (!open) {
@@ -99,8 +99,8 @@ export default function EventCreationWizard({
         ...nextDraft,
         name: "Evento personalizado",
         capacity: "",
-        venueId: defaultVenue?.id ?? "",
-        venue: defaultVenue?.name ?? nextDraft.venue,
+        venueId: "",
+        venue: "",
         enabledModules: ["overview"],
         admissionMethods: ["manual", "list", "code"],
         resourceTypes: [],
@@ -114,13 +114,6 @@ export default function EventCreationWizard({
       ...nextDraft,
       timezone: preferredTimezone,
     });
-    if (defaultVenue) {
-      setDraft((current) => ({
-        ...current,
-        venueId: defaultVenue.id,
-        venue: defaultVenue.name,
-      }));
-    }
     setStep(2);
   };
 
@@ -287,11 +280,14 @@ export default function EventCreationWizard({
                   />
                   {venueOptions.length ? (
                     <label className="block">
-                      <span className="mb-2 block text-sm font-medium text-slate-300">Lugar / ubicación</span>
+                      <span className="mb-2 block text-sm font-medium text-slate-300">Venue canónico</span>
                       <select
                         value={draft.venueId}
                         onChange={(event) => {
-                          const selectedVenue = venueOptions.find((venue) => venue.id === event.target.value);
+                          const selectedVenue = resolveManagedVenueById({
+                            venueId: event.target.value,
+                            venues: venueOptions,
+                          });
                           updateDraft((current) => ({
                             ...current,
                             venueId: selectedVenue?.id ?? "",
@@ -300,6 +296,7 @@ export default function EventCreationWizard({
                         }}
                         className="h-12 w-full rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/60 focus:bg-white/[0.06]"
                       >
+                        <option value="">Sin venue seleccionado</option>
                         {venueOptions.map((venue) => (
                           <option key={venue.id} value={venue.id}>
                             {venue.name}
@@ -307,13 +304,12 @@ export default function EventCreationWizard({
                         ))}
                       </select>
                     </label>
-                  ) : (
-                    <Field
-                      label="Lugar / ubicación"
-                      value={draft.venue}
-                      onChange={(value) => updateDraft((current) => ({ ...current, venue: value }))}
-                    />
-                  )}
+                  ) : null}
+                  <Field
+                    label="Lugar / ubicación"
+                    value={draft.venue}
+                    onChange={(value) => updateDraft((current) => ({ ...current, venue: value }))}
+                  />
                   <Field
                     label="Fecha"
                     value={draft.date}

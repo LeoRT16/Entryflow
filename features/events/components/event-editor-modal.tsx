@@ -28,6 +28,7 @@ import type { CheckIn } from "@/features/check-in/types";
 import type { Guest } from "@/features/check-in/types";
 import type { ReservationRecord } from "@/features/reservations/types";
 import type { TableRecord } from "@/features/tables/types";
+import { resolveManagedVenueById } from "@/features/events/domain/event-venue-boundary";
 
 type EventEditorModalProps = {
   open: boolean;
@@ -139,12 +140,7 @@ export default function EventEditorModal({
   const artworkInputRef = useRef<HTMLInputElement | null>(null);
 
   const venueOptions = useMemo(() => venues, [venues]);
-  const defaultVenue = useMemo(() => venueOptions.find((venue) => venue.status === "active") ?? venueOptions[0] ?? null, [venueOptions]);
-  const matchedVenue = useMemo(
-    () => venueOptions.find((venue) => venue.id === event.venueId) ?? venueOptions.find((venue) => venue.name === event.venue),
-    [event.venue, event.venueId, venueOptions],
-  );
-  const initialVenueId = event.venueId ?? matchedVenue?.id ?? defaultVenue?.id ?? "";
+  const initialVenueId = event.venueId ?? "";
   const initialVenueIdRef = useRef(initialVenueId);
   const canEditEvent = !isTerminalEventStatus(event.status);
   const [eventName, setEventName] = useState(event.name);
@@ -184,6 +180,10 @@ export default function EventEditorModal({
   }
 
   const persistEvent = onPatchEvent ?? onSave;
+  const selectedVenue = resolveManagedVenueById({
+    venueId: eventVenueId,
+    venues: venueOptions,
+  });
   const buildNextMetadata = (nextArtwork: EventInvitationArtwork | null = eventArtwork, nextOverlayLayout: InvitationOverlayLayout | null = eventOverlayLayout) =>
     mergeEventInvitationOverlayLayoutMetadata(
       mergeEventInvitationArtworkMetadata(event.metadata, nextArtwork),
@@ -228,13 +228,12 @@ export default function EventEditorModal({
   };
 
   const submit = async () => {
-    const selectedVenue = venueOptions.find((venue) => venue.id === eventVenueId) ?? defaultVenue;
-    const nextVenueId = selectedVenue?.id || eventVenueId || undefined;
+    const nextVenueId = selectedVenue?.id || undefined;
     const nextEvent: Event = {
       ...event,
       name: eventName.trim() || event.name,
       venueId: nextVenueId,
-      venue: selectedVenue?.name || eventVenue.trim() || event.venue,
+      venue: eventVenue.trim() || selectedVenue?.name || event.venue,
       description: eventDescription.trim() || undefined,
       capacity: Number.parseInt(eventCapacity, 10) || event.capacity,
       startAt: eventStartAt,
@@ -437,13 +436,14 @@ export default function EventEditorModal({
             <Field label="Capacidad" value={eventCapacity} onChange={setEventCapacity} placeholder="800" type="number" disabled={!canEditEvent} />
             {venueOptions.length ? (
               <label className="block">
-                <span className="text-sm font-medium text-slate-200">Espacio del evento</span>
+                <span className="text-sm font-medium text-slate-200">Venue canónico</span>
                 <select
                   value={eventVenueId}
                   disabled={!canEditEvent}
                   onChange={(changeEvent) => setEventVenueId(changeEvent.target.value)}
                   className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
                 >
+                  <option value="">{event.venue?.trim() ? `Sin venue seleccionado · ${event.venue}` : "Sin venue seleccionado"}</option>
                   {venueOptions.map((venue) => (
                     <option key={venue.id} value={venue.id}>
                       {venue.name}
@@ -451,15 +451,14 @@ export default function EventEditorModal({
                   ))}
                 </select>
               </label>
-            ) : (
-              <Field
-                label="Espacio del evento"
-                value={eventVenue}
-                onChange={setEventVenue}
-                placeholder="Sala, club o espacio"
-                disabled={!canEditEvent}
-              />
-            )}
+            ) : null}
+            <Field
+              label="Espacio del evento"
+              value={eventVenue}
+              onChange={setEventVenue}
+              placeholder="Sala, club o espacio"
+              disabled={!canEditEvent}
+            />
           </div>
 
           <div className="mt-4">
@@ -557,7 +556,7 @@ export default function EventEditorModal({
               <InvitationOverlayEditor
                 eventName={event.name}
                 eventStartAt={eventStartAt}
-                eventVenue={matchedVenue?.name ?? defaultVenue?.name ?? (eventVenue.trim() || event.venue)}
+                eventVenue={selectedVenue?.name ?? (eventVenue.trim() || event.venue)}
                 eventTimezone={event.timezone}
                 artworkUrl={eventArtwork?.url}
                 layout={eventOverlayLayout ?? getDefaultInvitationOverlayLayout()}
@@ -592,7 +591,7 @@ export default function EventEditorModal({
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Contexto</p>
               <p className="mt-2 text-sm text-slate-300">
-                {matchedVenue?.name ?? defaultVenue?.name ?? event.venue} · {event.capacity} personas
+                {selectedVenue?.name ?? event.venue} · {event.capacity} personas
               </p>
               <p className="mt-1 text-xs text-slate-500">La edición del evento ya no vive en Ajustes.</p>
             </div>

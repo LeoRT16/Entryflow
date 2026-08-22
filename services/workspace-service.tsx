@@ -41,6 +41,7 @@ import {
   assertTableInCurrentEventContext,
   findTableInCurrentEventContext,
 } from "@/features/business-rules/domain/ownership-guards";
+import { resolveCanonicalCurrentVenue } from "@/features/events/domain/event-venue-boundary";
 import {
   buildEventSelectionCandidate,
   isTerminalEventStatus,
@@ -1368,6 +1369,11 @@ export function WorkspaceServiceProvider({
     () => getEventSelection(events, currentOrganization.id, currentEventId),
     [currentEventId, currentOrganization.id, events],
   );
+  const currentVenue = useMemo(
+    () => resolveCanonicalCurrentVenue({ currentEventVenueId: currentEvent.venueId, venues }),
+    [currentEvent.venueId, venues],
+  );
+  const currentVenueId = currentVenue?.id ?? "";
   const accountSelection = useMemo(
     () =>
       getAccountSelection({
@@ -1428,46 +1434,53 @@ export function WorkspaceServiceProvider({
     },
     [],
   );
-  const currentVenue = useMemo(
-    () =>
-      venues.find((venue) => venue.id === currentEvent.venueId && venue.status === "active") ??
-      venues.find((venue) => venue.id === currentEvent.venueId) ??
-      venues.find((venue) => venue.status === "active") ??
-      venues[0] ??
-      null,
-    [currentEvent.venueId, venues],
-  );
   const currentEventLayout = useMemo(
-    () => resolveCurrentEventLayout({ currentEventId: currentEvent.id, currentVenueId: currentVenue?.id ?? currentEvent.venueId, eventLayouts }),
-    [currentEvent.id, currentEvent.venueId, currentVenue?.id, eventLayouts],
+    () => resolveCurrentEventLayout({ currentEventId: currentEvent.id, currentVenueId: currentVenueId || undefined, eventLayouts }),
+    [currentEvent.id, currentVenueId, eventLayouts],
   );
   const currentVenueLayout = useMemo(
-    () => resolveCurrentVenueLayout({ currentVenueId: currentVenue?.id ?? currentEvent.venueId, currentEventLayout, venueLayouts }),
-    [currentEvent.venueId, currentEventLayout, currentVenue?.id, venueLayouts],
+    () => {
+      if (!currentVenueId) {
+        return null;
+      }
+
+      return resolveCurrentVenueLayout({ currentVenueId, currentEventLayout, venueLayouts });
+    },
+    [currentEventLayout, currentVenueId, venueLayouts],
   );
   const currentVenueSectors = useMemo(
-    () =>
-      resolveCurrentVenueSectors({
-        currentVenueId: currentVenue?.id ?? currentEvent.venueId,
+    () => {
+      if (!currentVenueId) {
+        return [];
+      }
+
+      return resolveCurrentVenueSectors({
+        currentVenueId,
         currentEventLayout,
         venueLayout: currentVenueLayout,
         sectors,
         venueLayoutSectors,
         eventLayoutSectors,
-      }),
-    [currentEvent.venueId, currentEventLayout, currentVenue?.id, eventLayoutSectors, sectors, currentVenueLayout, venueLayoutSectors],
+      });
+    },
+    [currentEventLayout, currentVenueId, currentVenueLayout, eventLayoutSectors, sectors, venueLayoutSectors],
   );
   const currentVenueResources = useMemo(
-    () =>
-      resolveCurrentVenueResources({
-        currentVenueId: currentVenue?.id ?? currentEvent.venueId,
+    () => {
+      if (!currentVenueId) {
+        return [];
+      }
+
+      return resolveCurrentVenueResources({
+        currentVenueId,
         currentEventLayout,
         venueLayout: currentVenueLayout,
         resources,
         venueLayoutResources,
         eventLayoutResources,
-      }),
-    [currentEvent.venueId, currentEventLayout, currentVenue?.id, eventLayoutResources, currentVenueLayout, resources, venueLayoutResources],
+      });
+    },
+    [currentEventLayout, currentVenueId, currentVenueLayout, eventLayoutResources, resources, venueLayoutResources],
   );
   const currentEventLayoutResourcesBySourceResourceId = useMemo(() => {
     const venueLayoutResourcesById = new Map(venueLayoutResources.map((layoutResource) => [layoutResource.id, layoutResource]));

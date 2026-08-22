@@ -50,6 +50,17 @@ test("reservation flow wires edit, delete, and cancel callbacks into the operati
   assert.doesNotMatch(source, /reservationGuestPresets/);
 });
 
+test("reservation wizard fail closed when the venue cannot be proven", () => {
+  const source = readFileSync(new URL("../features/reservations/components/reservation-flow.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /const venue = currentVenue \?\? null;/);
+  assert.match(source, /const venueSectors = currentVenueSectors;/);
+  assert.match(source, /const venueResources = currentVenueResources;/);
+  assert.match(source, /const currentVenueId = venue\?\.id \?\? "";/);
+  assert.doesNotMatch(source, /resources\.filter\(\(resource\) => !venue \|\| resource\.venueId === venue\.id\)/);
+  assert.doesNotMatch(source, /sectors\.filter\(\(sector\) => !venue \|\| sector\.venueId === venue\.id\)/);
+});
+
 test("reservation persistence resolves the selected resource through the current event table context", () => {
   const source = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
   const createReservationBlock = extractBlock(source, "const createReservation = useCallback(", "  const updateGuestWhatsApp = useCallback(");

@@ -63,9 +63,6 @@ type ReservationFlowWorkspaceProps = Pick<
   CheckInStore,
   | "currentOrganization"
   | "currentEvent"
-  | "venues"
-  | "sectors"
-  | "resources"
   | "currentVenue"
   | "currentVenueSectors"
   | "currentVenueResources"
@@ -128,9 +125,6 @@ export default function ReservationFlow() {
       key={store.currentEvent.id}
       currentOrganization={store.currentOrganization}
       currentEvent={store.currentEvent}
-      venues={store.venues}
-      sectors={store.sectors}
-      resources={store.resources}
       currentVenue={store.currentVenue}
       currentVenueSectors={store.currentVenueSectors}
       currentVenueResources={store.currentVenueResources}
@@ -161,9 +155,6 @@ export default function ReservationFlow() {
 function ReservationFlowWorkspace({
   currentOrganization,
   currentEvent,
-  venues,
-  sectors,
-  resources,
   currentVenue,
   currentVenueSectors,
   currentVenueResources,
@@ -378,16 +369,13 @@ function ReservationFlowWorkspace({
   );
 
   const selectedResourceContext = useMemo(() => {
-    const venue = currentVenue ?? venues.find((item) => item.id === currentEvent.venueId) ?? null;
-    const venueSectors = currentVenueSectors.length
-      ? currentVenueSectors
-      : sectors.filter((sector) => !venue || sector.venueId === venue.id);
-    const venueResources = currentVenueResources.length
-      ? currentVenueResources
-      : resources.filter((resource) => !venue || resource.venueId === venue.id);
+    const venue = currentVenue ?? null;
+    const venueSectors = currentVenueSectors;
+    const venueResources = currentVenueResources;
+    const currentVenueId = venue?.id ?? "";
     const currentEventLayout = resolveCurrentEventLayout({
       currentEventId: currentEvent.id,
-      currentVenueId: currentVenue?.id ?? currentEvent.venueId,
+      currentVenueId,
       eventLayouts,
     });
     const mappedResources = resolveReservationWizardResourceOptions(
@@ -424,7 +412,7 @@ function ReservationFlowWorkspace({
       resource,
       summary,
     };
-  }, [currentEvent.id, currentEvent.venueId, currentVenue, currentVenueResources, currentVenueSectors, eventLayoutResources, eventLayouts, resources, sectors, selectedResourceId, tableSummaries, venueLayoutResources, venues]);
+  }, [currentEvent.id, currentVenue, currentVenueResources, currentVenueSectors, eventLayoutResources, eventLayouts, selectedResourceId, tableSummaries, venueLayoutResources]);
 
   const selectedResource = selectedResourceContext.resource;
   const selectedResourceSummary = selectedResourceContext.summary;
@@ -609,16 +597,13 @@ function ReservationFlowWorkspace({
 
   const resourceOptions = useMemo<TableOption[]>(
     () => {
-      const venue = currentVenue ?? venues.find((item) => item.id === currentEvent.venueId) ?? null;
-      const venueSectors = currentVenueSectors.length
-        ? currentVenueSectors
-        : sectors.filter((sector) => !venue || sector.venueId === venue.id);
-      const venueResources = currentVenueResources.length
-        ? currentVenueResources
-        : resources.filter((resource) => !venue || resource.venueId === venue.id);
+      const venue = currentVenue ?? null;
+      const venueSectors = currentVenueSectors;
+      const venueResources = currentVenueResources;
+      const currentVenueId = venue?.id ?? "";
       const currentEventLayout = resolveCurrentEventLayout({
         currentEventId: currentEvent.id,
-        currentVenueId: currentVenue?.id ?? currentEvent.venueId,
+        currentVenueId,
         eventLayouts,
       });
 
@@ -650,7 +635,7 @@ function ReservationFlowWorkspace({
 
       return resolveReservationWizardResourceOptions(options, venueSectors[0]?.id ?? null);
     },
-    [currentEvent.id, currentEvent.venueId, currentVenue, currentVenueResources, currentVenueSectors, eventLayoutResources, eventLayouts, resources, sectors, tableSummaries, venueLayoutResources, venues],
+    [currentEvent.id, currentVenue, currentVenueResources, currentVenueSectors, eventLayoutResources, eventLayouts, tableSummaries, venueLayoutResources],
   );
 
   const registeredGuests = useMemo(() => countDraftRegisteredGuests(guestDrafts), [guestDrafts]);
