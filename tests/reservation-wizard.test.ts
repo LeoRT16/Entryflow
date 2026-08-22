@@ -6,6 +6,7 @@ import {
   countDraftRegisteredGuests,
   createReservationWizardDefaults,
   createReservationSubmissionGate,
+  preferEventLayoutMappedResources,
   resolveInitialReservationResourceId,
   resolveReservationCapacityViolation,
   runReservationSubmission,
@@ -63,6 +64,29 @@ test("a new reservation does not silently select the first venue resource", () =
     }),
     "resource-b",
   );
+});
+
+test("reservation wizard prefers event-layout-mapped resources when any are available", () => {
+  const mappedOnly = preferEventLayoutMappedResources([
+    { id: "resource-a", eventLayoutResourceId: "layout-resource-a" },
+    { id: "resource-b", eventLayoutResourceId: undefined },
+    { id: "resource-c", eventLayoutResourceId: "layout-resource-c" },
+  ]);
+
+  assert.deepEqual(mappedOnly, [
+    { id: "resource-a", eventLayoutResourceId: "layout-resource-a" },
+    { id: "resource-c", eventLayoutResourceId: "layout-resource-c" },
+  ]);
+
+  const fallback = preferEventLayoutMappedResources([
+    { id: "resource-a", eventLayoutResourceId: undefined },
+    { id: "resource-b", eventLayoutResourceId: null },
+  ]);
+
+  assert.deepEqual(fallback, [
+    { id: "resource-a", eventLayoutResourceId: undefined },
+    { id: "resource-b", eventLayoutResourceId: null },
+  ]);
 });
 
 test("create defaults always start blank for the selected resource", () => {

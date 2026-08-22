@@ -23,6 +23,7 @@ import {
   createReservationSubmissionGate,
   resolveInitialReservationResourceId,
   resolveReservationCapacityViolation,
+  preferEventLayoutMappedResources,
   runReservationSubmission,
 } from "@/features/reservations/domain/reservation-wizard";
 import { clampGuestCount } from "@/features/reservations/utils/reservation-utils";
@@ -384,41 +385,43 @@ function ReservationFlowWorkspace({
     const venueResources = currentVenueResources.length
       ? currentVenueResources
       : resources.filter((resource) => !venue || resource.venueId === venue.id);
-
-    const resource = selectedResourceId ? venueResources.find((item) => item.id === selectedResourceId) ?? null : null;
     const currentEventLayout = resolveCurrentEventLayout({
       currentEventId: currentEvent.id,
       currentVenueId: currentVenue?.id ?? currentEvent.venueId,
       eventLayouts,
     });
-    const currentEventLayoutResource = resource
-      ? resolveCurrentEventLayoutResource({
+    const mappedResources = preferEventLayoutMappedResources(
+      venueResources.map((resource) => {
+        const summary = tableSummaries.find((item) => item.id === resource.id) ?? null;
+        const currentEventLayoutResource = resolveCurrentEventLayoutResource({
           currentEventLayout,
           resourceId: resource.id,
           venueLayoutResources,
           eventLayoutResources,
-        })
-      : null;
+        });
+
+        return {
+          id: resource.id,
+          name: resource.name,
+          capacity: resource.capacity,
+          location: venueSectors.find((sector) => sector.id === resource.sectorId)?.name ?? venue?.name ?? "Sin sector",
+          status: (summary?.status ?? resource.status) as TableOption["status"],
+          venueId: resource.venueId,
+          sectorId: resource.sectorId,
+          tone: summary?.statusTone ?? (resource.status === "Closed" || resource.status === "Over Capacity" ? "danger" : resource.status === "Reserved" ? "info" : resource.status === "Full" ? "warning" : "success"),
+          assignedGuests: summary?.metrics.assignedGuests,
+          activeReservations: summary?.metrics.activeReservations,
+          overCapacity: summary?.metrics.overCapacity,
+          eventLayoutResourceId: currentEventLayoutResource?.id,
+          eventLayoutId: currentEventLayoutResource?.eventLayoutId,
+        };
+      }),
+    );
+    const resource = selectedResourceId ? mappedResources.find((item) => item.id === selectedResourceId) ?? null : mappedResources[0] ?? null;
     const summary = resource ? tableSummaries.find((item) => item.id === resource.id) ?? null : null;
 
     return {
-      resource: resource
-        ? {
-            id: resource.id,
-            name: resource.name,
-            capacity: resource.capacity,
-            location: venueSectors.find((sector) => sector.id === resource.sectorId)?.name ?? venue?.name ?? "Sin sector",
-            status: (summary?.status ?? resource.status) as TableOption["status"],
-            venueId: resource.venueId,
-            sectorId: resource.sectorId,
-            tone: summary?.statusTone ?? (resource.status === "Closed" || resource.status === "Over Capacity" ? "danger" : resource.status === "Reserved" ? "info" : resource.status === "Full" ? "warning" : "success"),
-            assignedGuests: summary?.metrics.assignedGuests,
-            activeReservations: summary?.metrics.activeReservations,
-            overCapacity: summary?.metrics.overCapacity,
-            eventLayoutResourceId: currentEventLayoutResource?.id,
-            eventLayoutId: currentEventLayoutResource?.eventLayoutId,
-          }
-        : null,
+      resource,
       summary,
     };
   }, [currentEvent.id, currentEvent.venueId, currentVenue, currentVenueResources, currentVenueSectors, eventLayoutResources, eventLayouts, resources, sectors, selectedResourceId, tableSummaries, venueLayoutResources, venues]);
@@ -619,7 +622,7 @@ function ReservationFlowWorkspace({
         eventLayouts,
       });
 
-      return venueResources.map((resource) => {
+      const options = venueResources.map((resource) => {
         const summary = tableSummaries.find((item) => item.id === resource.id);
         const eventLayoutResource = resolveCurrentEventLayoutResource({
           currentEventLayout,
@@ -644,6 +647,8 @@ function ReservationFlowWorkspace({
           overCapacity: summary?.metrics.overCapacity,
         };
       });
+
+      return preferEventLayoutMappedResources(options);
     },
     [currentEvent.id, currentEvent.venueId, currentVenue, currentVenueResources, currentVenueSectors, eventLayoutResources, eventLayouts, resources, sectors, tableSummaries, venueLayoutResources, venues],
   );

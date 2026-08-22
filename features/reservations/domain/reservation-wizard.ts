@@ -121,6 +121,12 @@ export function resolveInitialReservationResourceId({
   return currentVenueResources.some((resource) => resource.id === explicitId) ? explicitId : "";
 }
 
+export function preferEventLayoutMappedResources<T extends { eventLayoutResourceId?: string | null }>(resourceOptions: T[]) {
+  const mappedResources = resourceOptions.filter((resource) => Boolean(resource.eventLayoutResourceId));
+
+  return mappedResources.length ? mappedResources : resourceOptions;
+}
+
 export function resolveReservationCapacityViolation({
   resourceCapacity,
   guestCount,
