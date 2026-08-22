@@ -22,6 +22,25 @@ test("reservation resource migration adds a nullable resource foreign key and sc
   assert.doesNotMatch(sql, /table_id\s*=\s*resource_id/);
 });
 
+test("fresh-org reservation fallback migration keeps tenant and resource guards while allowing venue-less events", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20260822163050_reservation_resource_relationship_venue_fallback.sql", import.meta.url), "utf8");
+
+  assert.match(sql, /create or replace function public\.resource_belongs_to_event\(/);
+  assert.match(sql, /reservation_resource_id is null/);
+  assert.match(sql, /e\.organization_id = any\(public\.current_organization_ids\(\)\)/);
+  assert.match(sql, /e\.id = any\(public\.current_event_ids\(\)\)/);
+  assert.match(sql, /r\.id = any\(public\.current_resource_ids\(\)\)/);
+  assert.match(sql, /e\.venue_id is null\s+or r\.venue_id = e\.venue_id/);
+  assert.doesNotMatch(sql, /r\.venue_id = e\.venue_id\s+and\s+e\.venue_id is null/);
+});
+
+test("fresh-org reservation fallback migration keeps venue-bound events strict", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20260822163050_reservation_resource_relationship_venue_fallback.sql", import.meta.url), "utf8");
+
+  assert.match(sql, /and\s+\(\s*e\.venue_id is null[\s\S]*?or\s+r\.venue_id = e\.venue_id\s*\)/);
+  assert.doesNotMatch(sql, /e\.venue_id is null[\s\S]*?or[\s\S]*?r\.venue_id = e\.venue_id[\s\S]*?or\s+r\.venue_id = e\.venue_id/);
+});
+
 test("reservation mapper only emits columns supported by the current reservations contract", () => {
   const row = mapReservationToRow({
     id: "reservation-1",
