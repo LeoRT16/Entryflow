@@ -238,6 +238,35 @@ test("timeline quick read prioritizes action, target, actor and role", () => {
   assert.equal(quickRead.timestamp, "19:04");
 });
 
+test("timeline quick read resolves guest identity from metadata when guestName is missing", () => {
+  const quickRead = buildTimelineQuickReadSummary({
+    id: "timeline-cancelled",
+    eventId: "event-1",
+    timestamp: "19:17",
+    kind: "checkin.invalid",
+    icon: "alert",
+    tone: "danger",
+    title: "Acceso cancelado",
+    description: "La reserva fue cancelada.",
+    guestId: "guest-1",
+    reservationId: "reservation-1",
+    reservationName: "Mesa 1 · Reserva cancelada",
+    reservationCode: "RES-CANCEL-1",
+    target: "Andrea Pérez",
+    actor: "Recepción",
+    actorRole: "Puerta",
+    context: "Evento E2E",
+    metadata: {
+      guestName: "Andrea Pérez",
+      guestCarnet: "9988776",
+    },
+  });
+
+  assert.equal(quickRead.guestLine, "Andrea Pérez\nCarnet · 9988776");
+  assert.equal(quickRead.operatorLine, "Recepción\nPuerta");
+  assert.equal(quickRead.reservationLine, "Mesa 1 · Reserva cancelada\nRES-CANCEL-1");
+});
+
 test("historical incomplete timeline entries degrade without leaking reservation labels into guest", () => {
   const quickRead = buildTimelineQuickReadSummary({
     id: "timeline-2",

@@ -25,6 +25,56 @@ export function getEntryTone(status: EntryStatus | ReservationSummary["status"] 
   return "info" as const;
 }
 
+export function resolveGuestCheckInEligibility(
+  guest: Pick<Guest, "admissionStatus" | "qrStatus" | "reservationStatus">,
+  reservation?: Pick<ReservationRecord, "status"> | null,
+) {
+  const reservationStatus = normalizeReservationStatus(reservation?.status ?? guest.reservationStatus);
+
+  if (reservationStatus === "Cancelled" || reservationStatus === "No Show") {
+    return {
+      canEnter: false,
+      tone: "danger" as const,
+      label: "No puede entrar",
+      detail: reservationStatus === "Cancelled" ? "La reserva fue cancelada." : "La reserva figura como no show.",
+    };
+  }
+
+  if (guest.admissionStatus === "Ingresó") {
+    return {
+      canEnter: false,
+      tone: "warning" as const,
+      label: "Ya ingresó",
+      detail: "Este acceso ya fue consumido.",
+    };
+  }
+
+  if (guest.admissionStatus === "Anulada" || guest.admissionStatus === "Bloqueada" || guest.qrStatus === "Anulado" || guest.qrStatus === "Bloqueado") {
+    return {
+      canEnter: false,
+      tone: "danger" as const,
+      label: "No puede entrar",
+      detail: "El acceso está bloqueado o anulado.",
+    };
+  }
+
+  if (guest.qrStatus === "Usado") {
+    return {
+      canEnter: false,
+      tone: "warning" as const,
+      label: "Ya fue usado",
+      detail: "El código ya fue consumido en un ingreso previo.",
+    };
+  }
+
+  return {
+    canEnter: true,
+    tone: "success" as const,
+    label: "Puede entrar",
+    detail: "La validación coincide con un acceso habilitado.",
+  };
+}
+
 export function searchGuests(guests: Guest[], query: string) {
   const normalizedQuery = normalizeCheckInText(query);
 

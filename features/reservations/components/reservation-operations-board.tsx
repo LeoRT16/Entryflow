@@ -1,30 +1,56 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
+import InvitationCard from "@/features/access/components/invitation-card";
+import type { Event as PlatformEvent } from "@/features/domain/types";
+import type { Guest as CheckInGuest } from "@/features/check-in/types";
 import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
+import { sendReservationWhatsAppInvitation } from "@/features/access/domain/whatsapp-reservation-invitation-delivery";
+import {
+  buildReservationWhatsAppInvitationPlan,
+  getWhatsAppDeliveryAcceptedMessage,
+  getWhatsAppDeliveryAttemptNumber,
+  getWhatsAppDeliveryTimestampLabel,
+} from "@/features/access/domain/whatsapp-reservation-invitations";
+import { getLegacyWhatsAppDeliveryStatus } from "@/features/access/domain/whatsapp-delivery-tracking";
 import {
   formatReservationStatus,
   getReservationStatusTone,
   isTerminalReservationStatus,
 } from "@/features/reservations/domain/reservation-domain";
+import {
+  canHardDeleteGuest,
+  canHardDeleteReservation,
+} from "@/features/reservations/domain/reservation-deletion";
 import type {
   ReservationGuestAction,
   ReservationGuestInput,
   ReservationSummary,
 } from "@/features/reservations/types";
+export { canHardDeleteGuest, canHardDeleteReservation };
+import type {
+  ReservationWhatsAppInvitationCandidate,
+  ReservationWhatsAppInvitationPlan,
+} from "@/features/access/domain/whatsapp-reservation-invitations";
 
 type ReservationOperationsBoardProps = {
+  currentEvent: Pick<PlatformEvent, "name" | "startAt" | "timezone" | "venue">;
+  currentVenueName?: string | null;
+  reservationGuests: CheckInGuest[];
   reservations: ReservationSummary[];
   activeReservationId: string;
   isTerminalEvent?: boolean;
   canEditGuest: boolean;
   canEditReservation: boolean;
   canDeleteReservation: boolean;
+  canIssueWhatsAppInvitations: boolean;
+  setGuestsState: Dispatch<SetStateAction<CheckInGuest[]>>;
   onSelectReservation: (reservationId: string) => void;
   onEditReservation: (reservationId: string) => void;
   onDeleteReservation: (reservationId: string) => Promise<void>;
+  onCancelReservation: (reservationId: string) => void;
   onMarkConfirmed: (reservationId: string) => void;
   onAddGuest: (reservationId: string, guest: ReservationGuestInput) => void;
   onGuestAction: (params: {
@@ -44,6 +70,42 @@ type GuestOverflowActionItem = {
   tone?: GuestOverflowActionTone;
   onSelect: () => void;
 };
+
+type ReservationWhatsAppBatchResult = {
+  guestId: string;
+  guestName: string;
+  status: "accepted" | "failed";
+  providerAccepted: boolean;
+  trackingPersisted: boolean;
+  warning?: string;
+  detail: string;
+  isRetry: boolean;
+};
+
+type ReservationWhatsAppBatchSummary = {
+  results: ReservationWhatsAppBatchResult[];
+  skippedCount: number;
+  acceptedCount: number;
+  failedCount: number;
+  warningCount: number;
+};
+
+export function summarizeReservationWhatsAppBatchResults(
+  results: ReservationWhatsAppBatchResult[],
+  skippedCount: number,
+): ReservationWhatsAppBatchSummary {
+  const acceptedCount = results.filter((item) => item.providerAccepted).length;
+  const failedCount = results.filter((item) => !item.providerAccepted).length;
+  const warningCount = results.filter((item) => item.providerAccepted && !item.trackingPersisted).length;
+
+  return {
+    results,
+    skippedCount,
+    acceptedCount,
+    failedCount,
+    warningCount,
+  };
+}
 
 export function getReservationGuestActionVisibility(
   reservationStatus: ReservationSummary["status"],
@@ -73,11 +135,15 @@ function guestOverflowToneClasses(tone: GuestOverflowActionTone) {
 }
 
 export default function ReservationOperationsBoard({
+  currentEvent,
+  currentVenueName,
+  reservationGuests,
   reservations,
   activeReservationId,
   onSelectReservation,
   onEditReservation,
   onDeleteReservation,
+  onCancelReservation,
   onMarkConfirmed,
   onAddGuest,
   onGuestAction,
@@ -86,6 +152,8 @@ export default function ReservationOperationsBoard({
   canEditGuest,
   canEditReservation,
   canDeleteReservation,
+  canIssueWhatsAppInvitations,
+  setGuestsState,
   isTerminalEvent = false,
 }: ReservationOperationsBoardProps) {
   const { showToast, confirm } = useFeedback();
@@ -94,6 +162,12 @@ export default function ReservationOperationsBoard({
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
   const [guestWhatsapp, setGuestWhatsapp] = useState("");
+  const [isSendingReservationInvitations, setIsSendingReservationInvitations] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
+  const [lastBatchResult, setLastBatchResult] = useState<ReservationWhatsAppBatchSummary | null>(null);
+  const [bulkExportCandidate, setBulkExportCandidate] = useState<ReservationWhatsAppInvitationCandidate | null>(null);
+  const bulkExportInvitationRef = useRef<HTMLDivElement | null>(null);
+  const bulkExportReadyResolverRef = useRef<(() => void) | null>(null);
 
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -114,9 +188,65 @@ export default function ReservationOperationsBoard({
     visibleReservations.find((reservation) => reservation.id === activeReservationId) ??
     visibleReservations[0] ??
     null;
+  const canHardDeleteActiveReservation = activeReservation ? canHardDeleteReservation(activeReservation) : false;
+  const whatsappPlan = useMemo(
+    () =>
+      activeReservation
+        ? buildReservationWhatsAppInvitationPlan({
+            reservation: activeReservation,
+            guests: reservationGuests,
+            currentEvent,
+            currentVenueName,
+          })
+        : null,
+    [activeReservation, currentEvent, currentVenueName, reservationGuests],
+  );
+  const whatsappCandidateCount = whatsappPlan?.eligibleCount ?? 0;
+  const whatsappRetryableCount = whatsappPlan?.retryableCount ?? 0;
+  const whatsappAlreadySentCount = whatsappPlan?.alreadySentCount ?? 0;
+  const whatsappMissingCount = (whatsappPlan?.missingWhatsAppCount ?? 0) + (whatsappPlan?.missingCodeCount ?? 0);
+  const hasReservationGuests = (activeReservation?.guests.length ?? 0) > 0;
+  const whatsappInvitationStatusMessage = whatsappPlan
+    ? whatsappCandidateCount > 0
+      ? whatsappRetryableCount > 0
+      ? `${whatsappCandidateCount} invitaciones listas · ${whatsappRetryableCount} fallidas para reintentar`
+        : `${whatsappCandidateCount} invitaciones listas`
+      : whatsappAlreadySentCount > 0
+        ? `${whatsappAlreadySentCount} aceptadas por WhatsApp${whatsappMissingCount ? ` · ${whatsappMissingCount} sin datos válidos` : ""}`
+        : `${whatsappMissingCount} sin datos válidos`
+    : null;
   const isTerminalReservation = activeReservation
     ? isTerminalEvent || isTerminalReservationStatus(activeReservation.status)
     : false;
+
+  useLayoutEffect(() => {
+    if (!bulkExportCandidate) {
+      return;
+    }
+
+    const node = bulkExportInvitationRef.current;
+
+    if (!node) {
+      return;
+    }
+
+    const exportGuestId = node.dataset.exportGuestId?.trim() ?? "";
+    const exportAccessCode = node.dataset.exportAccessCode?.trim() ?? "";
+
+    if (exportGuestId !== bulkExportCandidate.guest.id || exportAccessCode !== bulkExportCandidate.accessCode) {
+      return;
+    }
+
+    bulkExportReadyResolverRef.current?.();
+    bulkExportReadyResolverRef.current = null;
+  }, [bulkExportCandidate]);
+
+  const waitForBulkExportCandidate = useCallback((candidate: ReservationWhatsAppInvitationCandidate) => {
+    return new Promise<void>((resolve) => {
+      bulkExportReadyResolverRef.current = resolve;
+      setBulkExportCandidate(candidate);
+    });
+  }, []);
 
   const resetGuestForm = () => {
     setGuestName("");
@@ -153,6 +283,197 @@ export default function ReservationOperationsBoard({
     setIsAddGuestFormOpen(false);
     resetGuestForm();
   };
+
+  const sendOneReservationInvitation = useCallback(
+    async (guest: ReservationWhatsAppInvitationPlan["eligibleGuests"][number]) => {
+      await waitForBulkExportCandidate(guest);
+
+      if (!bulkExportInvitationRef.current) {
+        throw new Error("No se pudo preparar la invitación para WhatsApp.");
+      }
+
+      const delivery = await sendReservationWhatsAppInvitation(guest, currentEvent.name, {
+        invitationNode: bulkExportInvitationRef.current,
+      });
+
+      const acceptedResult = {
+        status: delivery.status,
+        providerAccepted: delivery.providerAccepted,
+        trackingPersisted: delivery.trackingPersisted,
+        warning: delivery.warning?.message ?? (delivery.trackingPersisted ? undefined : delivery.detail),
+        detail: delivery.detail,
+      } as const;
+
+      const acceptedAt = new Date().toISOString();
+      const attemptNumber = getWhatsAppDeliveryAttemptNumber(guest.guest);
+      const deliveryStatus = getLegacyWhatsAppDeliveryStatus("accepted", attemptNumber);
+      const nextGuest = {
+        ...guest.guest,
+        deliveryStatus,
+        noInvitationSent: false,
+        recentChange: true,
+        deliveryHistory: [
+          ...guest.guest.deliveryHistory,
+          {
+            time: getWhatsAppDeliveryTimestampLabel(acceptedAt),
+            title: deliveryStatus,
+            detail: getWhatsAppDeliveryAcceptedMessage(Boolean(delivery.trackingPersisted)),
+          },
+        ],
+        whatsappDelivery: {
+          messageId: delivery.messageId,
+          attemptNumber,
+          currentStatus: "accepted",
+          updatedAt: acceptedAt,
+          acceptedAt,
+        },
+      } as CheckInGuest;
+
+      try {
+        setGuestsState((current) => current.map((item) => (item.id === nextGuest.id ? nextGuest : item)));
+      } catch (error) {
+        console.error("WhatsApp guest state update failed after accepted send", {
+          guestId: guest.guest.id,
+          messageId: delivery.messageId,
+          error: error instanceof Error ? error.message : "unknown",
+        });
+      }
+
+      return acceptedResult;
+    },
+    [currentEvent.name, setGuestsState, waitForBulkExportCandidate],
+  );
+
+  const runBulkSendReservations = useCallback(
+    async (includeAlreadySentGuests = false) => {
+      if (!activeReservation) {
+        return;
+      }
+
+      const plan = includeAlreadySentGuests
+        ? buildReservationWhatsAppInvitationPlan({
+            reservation: activeReservation,
+            guests: reservationGuests,
+            currentEvent,
+            currentVenueName,
+            includeAlreadySentGuests: true,
+          })
+        : whatsappPlan;
+
+      if (!plan) {
+        return;
+      }
+
+      const { eligibleGuests, skippedGuests, eligibleCount } = plan;
+
+      setIsSendingReservationInvitations(true);
+      setBulkProgress({ current: 0, total: eligibleCount });
+      const batchResults: ReservationWhatsAppBatchResult[] = [];
+
+      try {
+        for (const [index, candidate] of eligibleGuests.entries()) {
+          setBulkProgress({ current: index + 1, total: eligibleGuests.length });
+
+          try {
+            const result = await sendOneReservationInvitation(candidate);
+            batchResults.push({
+              guestId: candidate.guest.id,
+              guestName: candidate.guest.guestName,
+              status: "accepted",
+              providerAccepted: true,
+              trackingPersisted: result.trackingPersisted,
+              warning: result.warning,
+              detail: result.detail,
+              isRetry: candidate.isRetry,
+            });
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : "No se pudo completar el envío.";
+            batchResults.push({
+              guestId: candidate.guest.id,
+              guestName: candidate.guest.guestName,
+              status: "failed",
+              providerAccepted: false,
+              trackingPersisted: false,
+              detail,
+              isRetry: candidate.isRetry,
+            });
+          }
+        }
+
+        const batchSummary = summarizeReservationWhatsAppBatchResults(batchResults, skippedGuests.length);
+        setLastBatchResult(batchSummary);
+
+        showToast({
+          title: batchSummary.failedCount ? "Aceptación parcial completada" : "Aceptadas por WhatsApp",
+          description: batchSummary.failedCount
+            ? `${batchSummary.acceptedCount} aceptadas por WhatsApp · ${batchSummary.failedCount} fallidas · ${skippedGuests.length} omitidas. Podés repetir el botón para reintentar las fallidas.`
+            : `${batchSummary.acceptedCount} aceptadas por WhatsApp · ${batchSummary.failedCount} fallidas · ${skippedGuests.length} omitidas${batchSummary.warningCount ? ` · ${batchSummary.warningCount} con advertencia de seguimiento` : ""}.`,
+          tone: batchSummary.failedCount ? "warning" : "success",
+        });
+      } finally {
+        setBulkProgress(null);
+        setIsSendingReservationInvitations(false);
+      }
+    },
+    [activeReservation, currentEvent, currentVenueName, reservationGuests, sendOneReservationInvitation, showToast, whatsappPlan],
+  );
+
+  const handleBulkSendReservations = useCallback(() => {
+    if (!activeReservation || isTerminalReservation || !canIssueWhatsAppInvitations || !hasReservationGuests) {
+      return;
+    }
+
+    if (whatsappCandidateCount > 0) {
+      const confirmMessage =
+        whatsappRetryableCount > 0
+          ? `Se enviarán ${whatsappCandidateCount} invitaciones y se reintentarán ${whatsappRetryableCount} fallidas. Se omitirán ${whatsappAlreadySentCount} ya aceptadas por WhatsApp y ${whatsappMissingCount} sin datos válidos.`
+          : `Se enviarán ${whatsappCandidateCount} invitaciones listas. Se omitirán ${whatsappAlreadySentCount} ya aceptadas por WhatsApp y ${whatsappMissingCount} sin datos válidos.`;
+
+      confirm({
+        title: "Enviar invitaciones",
+        description: confirmMessage,
+        confirmLabel: `Enviar ${whatsappCandidateCount} invitaciones`,
+        cancelLabel: "Cancelar",
+        tone: "success",
+        onConfirm: () => {
+          void runBulkSendReservations(false);
+        },
+      });
+      return;
+    }
+
+    if (whatsappAlreadySentCount > 0) {
+      confirm({
+        title: "Invitaciones ya aceptadas por WhatsApp",
+        description: `${whatsappAlreadySentCount} de ${activeReservation.guests.length} invitados ya tienen una aceptación registrada por WhatsApp.`,
+        confirmLabel: "Reenviar invitaciones",
+        cancelLabel: "Cancelar",
+        tone: "warning",
+        onConfirm: () => {
+          void runBulkSendReservations(true);
+        },
+      });
+      return;
+    }
+
+    showToast({
+      title: "No hay invitados listos para envío",
+      description: `${whatsappMissingCount} invitados no tienen WhatsApp o código válidos.`,
+      tone: "warning",
+    });
+  }, [
+    activeReservation,
+    canIssueWhatsAppInvitations,
+    confirm,
+    hasReservationGuests,
+    isTerminalReservation,
+    runBulkSendReservations,
+    showToast,
+    whatsappAlreadySentCount,
+    whatsappCandidateCount,
+    whatsappMissingCount,
+    whatsappRetryableCount,
+  ]);
 
   if (!reservations.length) {
     return (
@@ -280,69 +601,109 @@ export default function ReservationOperationsBoard({
       </div>
 
       <section className="surface-panel min-w-0 space-y-5 p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1">
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <p className="kicker">Detalle de reserva</p>
-            <h2 className="mt-2 break-words text-2xl font-semibold tracking-tight text-white">
+
+            <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
+              <StatusBadge variant={getReservationStatusTone(activeReservation.status)}>
+                {formatReservationStatus(activeReservation.status)}
+              </StatusBadge>
+              {canConfirmReservation ? (
+                <button
+                  type="button"
+                  onClick={() => onMarkConfirmed(activeReservation.id)}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
+                >
+                  Marcar confirmado
+                </button>
+              ) : isTerminalReservation ? (
+                <span className="inline-flex h-11 items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-400">
+                  Reserva terminal
+                </span>
+              ) : null}
+              {canMutateReservation ? (
+                <>
+                  {canIssueWhatsAppInvitations && hasReservationGuests ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleBulkSendReservations()}
+                      disabled={isSendingReservationInvitations}
+                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-300/40 bg-emerald-400/15 px-4 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {isSendingReservationInvitations && bulkProgress
+                        ? `Enviando ${bulkProgress.current}/${bulkProgress.total}`
+                        : "Enviar invitaciones"}
+                    </button>
+                  ) : null}
+                  {canEditReservation ? (
+                    <button
+                      type="button"
+                      onClick={() => onEditReservation(activeReservation.id)}
+                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                    >
+                      Editar reserva
+                    </button>
+                  ) : null}
+                  {canDeleteReservation ? (
+                    canHardDeleteActiveReservation ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          confirm({
+                            title: "Eliminar reserva",
+                            description: `Vas a eliminar ${activeReservation.name}. Se liberará ${activeReservation.tableName} y los invitados asociados dejarán de mostrarse.`,
+                            confirmLabel: "Eliminar reserva",
+                            cancelLabel: "Cancelar",
+                            tone: "danger",
+                            onConfirm: () => {
+                              void onDeleteReservation(activeReservation.id);
+                            },
+                          })
+                        }
+                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 text-sm font-medium text-rose-50 transition hover:bg-rose-400/15"
+                      >
+                        Eliminar reserva
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          confirm({
+                            title: "Cancelar reserva",
+                            description: `Esta reserva ya tiene invitados o actividad registrada. La cancelaremos para conservar el historial operativo.`,
+                            confirmLabel: "Cancelar reserva",
+                            cancelLabel: "Cancelar",
+                            tone: "warning",
+                            onConfirm: () => {
+                              onCancelReservation(activeReservation.id);
+                            },
+                          })
+                        }
+                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15"
+                      >
+                        Cancelar reserva
+                      </button>
+                    )
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="min-w-0">
+            <h2 className="text-2xl font-semibold tracking-tight text-white">
               {activeReservation.tableName} · {activeReservation.eventName}
             </h2>
             <p className="mt-2 break-words text-sm text-slate-400">
               {activeReservation.code} · {activeReservation.name}
             </p>
           </div>
-
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-            <StatusBadge variant={getReservationStatusTone(activeReservation.status)}>
-              {formatReservationStatus(activeReservation.status)}
-            </StatusBadge>
-            {canConfirmReservation ? (
-              <button
-                type="button"
-                onClick={() => onMarkConfirmed(activeReservation.id)}
-                className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
-              >
-                Marcar confirmado
-              </button>
-            ) : isTerminalReservation ? (
-              <span className="inline-flex h-11 items-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-400">
-                Reserva terminal
-              </span>
-            ) : null}
-            {canMutateReservation ? (
-              <>
-                {canEditReservation ? (
-                  <button
-                    type="button"
-                    onClick={() => onEditReservation(activeReservation.id)}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-                  >
-                    Editar reserva
-                  </button>
-                ) : null}
-                {canDeleteReservation ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      confirm({
-                        title: "Eliminar reserva",
-                        description: `Vas a eliminar ${activeReservation.name}. Se liberará ${activeReservation.tableName} y los invitados asociados dejarán de mostrarse.`,
-                        confirmLabel: "Eliminar reserva",
-                        cancelLabel: "Cancelar",
-                        tone: "danger",
-                        onConfirm: () => {
-                          void onDeleteReservation(activeReservation.id);
-                        },
-                      })
-                    }
-                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 text-sm font-medium text-rose-50 transition hover:bg-rose-400/15"
-                  >
-                    Eliminar reserva
-                  </button>
-                ) : null}
-              </>
-            ) : null}
-          </div>
         </div>
+
+        {whatsappInvitationStatusMessage ? (
+          <p className="break-words text-xs text-slate-400">{whatsappInvitationStatusMessage}</p>
+        ) : null}
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <ReservationInfoRow label="Fecha" value={activeReservation.date} />
@@ -364,6 +725,7 @@ export default function ReservationOperationsBoard({
               <p className="kicker">Invitados ({activeReservation.guests.length})</p>
               <p className="mt-2 break-words text-sm text-slate-400">
                 Estado individual y acciones
+                {canIssueWhatsAppInvitations && whatsappCandidateCount > 0 ? ` · ${whatsappCandidateCount} invitaciones listas` : ""}
               </p>
             </div>
 
@@ -456,6 +818,48 @@ export default function ReservationOperationsBoard({
           ) : null}
         </section>
 
+        {lastBatchResult ? (
+          <section className="surface-elevated min-w-0 p-4">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="kicker">Último envío</p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">
+                  {lastBatchResult.acceptedCount} aceptadas por WhatsApp ·{" "}
+                  {lastBatchResult.failedCount} fallidas ·{" "}
+                  {lastBatchResult.skippedCount} omitidas
+                </p>
+                {lastBatchResult.warningCount ? (
+                  <p className="mt-2 text-xs text-amber-200">
+                    {lastBatchResult.warningCount} envío{lastBatchResult.warningCount === 1 ? "" : "s"} aceptado{lastBatchResult.warningCount === 1 ? "" : "s"} con advertencia de seguimiento.
+                  </p>
+                ) : null}
+              </div>
+              <StatusBadge variant={lastBatchResult.failedCount ? "warning" : "success"}>
+                {lastBatchResult.acceptedCount + lastBatchResult.failedCount}
+              </StatusBadge>
+            </div>
+
+            {lastBatchResult.failedCount ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Fallidas</p>
+                <div className="flex flex-wrap gap-2">
+                  {lastBatchResult.results
+                    .filter((item) => item.status === "failed")
+                    .map((item) => (
+                      <span
+                        key={item.guestId}
+                        className="rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-1 text-xs text-rose-50"
+                        title={item.detail}
+                      >
+                        {item.guestName}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         <details className="surface-elevated min-w-0 p-4">
           <summary className="flex min-w-0 cursor-pointer list-none items-center justify-between gap-3">
             <div className="min-w-0">
@@ -480,7 +884,20 @@ export default function ReservationOperationsBoard({
             {activeReservation.notes || "Sin observaciones operativas."}
           </p>
         </section>
+
       </section>
+
+      <div className="pointer-events-none fixed left-[-200vw] top-0 w-[1080px] overflow-hidden" aria-hidden="true">
+        <div
+          ref={bulkExportInvitationRef}
+          className="w-[1080px]"
+          data-export-guest-id={bulkExportCandidate?.guest.id ?? ""}
+          data-export-access-code={bulkExportCandidate?.accessCode ?? ""}
+        >
+          {bulkExportCandidate ? <InvitationCard invitation={bulkExportCandidate.invitation} mode="download" /> : null}
+        </div>
+      </div>
+
     </section>
   );
 }
@@ -509,6 +926,7 @@ function ReservationGuestRow({
   onRemove: () => void;
 }) {
   const actionVisibility = getReservationGuestActionVisibility(reservationStatus, guest, eventTerminal);
+  const canHardDelete = canHardDeleteGuest(guest);
   const overflowActions: GuestOverflowActionItem[] = [
     canEditGuest
       ? {
@@ -541,7 +959,7 @@ function ReservationGuestRow({
           onSelect: onCancel,
         }
       : null,
-    actionVisibility.showRemove
+    actionVisibility.showRemove && canHardDelete
       ? {
           id: "remove",
           label: "Eliminar",

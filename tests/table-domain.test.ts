@@ -97,6 +97,23 @@ test("historical active reservations do not occupy the current event table", () 
   assert.equal(primaryReservation, null);
 });
 
+test("cancelled reservations do not count as active table occupancy", () => {
+  const table = buildTable();
+  const cancelledReservation = buildReservation({
+    id: "reservation-cancelled",
+    status: "Cancelled",
+    updatedAt: "2026-08-14T13:00:00.000Z",
+  });
+
+  const summary = buildTableSummary(table, [cancelledReservation], [], [], "event-current");
+  const primaryReservation = getPrimaryActiveTableReservation(table, [cancelledReservation], "event-current");
+
+  assert.deepEqual(summary.reservationIds, ["reservation-cancelled"]);
+  assert.equal(summary.metrics.activeReservations, 0);
+  assert.equal(summary.status, "Available");
+  assert.equal(primaryReservation, null);
+});
+
 test("duplicate active reservations remain visible only for the current event and the newest one wins deterministically", () => {
   const table = buildTable();
   const olderReservation = buildReservation({

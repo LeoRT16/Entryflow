@@ -437,6 +437,14 @@ export async function sendWhatsAppCloudMessage(
       ? ((responseBody as { messages?: Array<{ id?: unknown }> }).messages?.[0]?.id as string | undefined) ?? null
       : null;
 
+  if (!messageId) {
+    throw new WhatsAppCloudError("WhatsApp Cloud API no devolvió un message id.", {
+      status: 502,
+      code: "whatsapp_cloud_missing_message_id",
+      safeMessage: "WhatsApp Cloud API no devolvió un message id.",
+    });
+  }
+
   return {
     messageId,
   };

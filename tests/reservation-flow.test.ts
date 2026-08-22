@@ -35,12 +35,16 @@ test("reservation flow metrics reuse the canonical occupancy snapshot", () => {
   assert.equal(totals.capacityRemaining, 34);
 });
 
-test("reservation flow wires edit and delete callbacks into the operations board", () => {
+test("reservation flow wires edit, delete, and cancel callbacks into the operations board", () => {
   const source = readFileSync(new URL("../features/reservations/components/reservation-flow.tsx", import.meta.url), "utf8");
 
   assert.match(source, /deleteReservation=\{store\.deleteReservation\}/);
   assert.match(source, /onEditReservation=\{handleEditReservation\}/);
   assert.match(source, /onDeleteReservation=\{handleDeleteReservation\}/);
+  assert.match(source, /onCancelReservation=\{handleCancelReservation\}/);
+  assert.match(source, /reservationGuests=\{reservationGuests\}/);
+  assert.match(source, /canIssueWhatsAppInvitations=\{can\("access\.issue"\)\}/);
+  assert.match(source, /setGuestsState=\{store\.setGuestsState\}/);
   assert.doesNotMatch(source, /reservationGuestPresets/);
 });
 

@@ -66,7 +66,7 @@ test("accepted WhatsApp sends expose an explicit tracking failure response witho
   assert.equal(response.ok, true);
   assert.equal(response.providerAccepted, true);
   assert.equal(response.trackingPersisted, false);
-  assert.equal(response.status, "accepted_but_tracking_failed");
+  assert.equal(response.status, "accepted");
   assert.equal(response.warning?.message, "WhatsApp aceptó el mensaje, pero EntryFlow no pudo registrar su seguimiento. No lo reenvíes todavía.");
   assert.equal("failed" in response, false);
 });

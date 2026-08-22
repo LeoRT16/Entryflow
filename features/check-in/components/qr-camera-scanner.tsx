@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import StatusBadge from "@/components/status-badge";
+import { createQrDetectionGate } from "@/features/check-in/domain/qr-detection-gate";
 
 type BarcodeDetectorLike = {
   detect(source: HTMLVideoElement): Promise<Array<{ rawValue: string }>>;
@@ -65,6 +66,7 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
   const detectorRef = useRef<BarcodeDetectorLike | null>(null);
   const frameRef = useRef<number | null>(null);
   const runningRef = useRef(false);
+  const detectionGateRef = useRef(createQrDetectionGate());
   const scannerSessionRef = useRef(0);
   const initialMessage = "Activá la cámara para leer un QR o código de acceso.";
   const stoppedMessage = "Cámara detenida. Tocá Reiniciar o Activar cámara para volver a escanear.";
@@ -130,6 +132,7 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
 
     setStatus("starting");
     setMessage(`Encendiendo cámara para ${eventName}.`);
+    detectionGateRef.current.reset();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -171,7 +174,7 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
           const result = await detectorRef.current.detect(videoRef.current);
           const rawValue = result[0]?.rawValue?.trim();
 
-          if (rawValue) {
+          if (rawValue && detectionGateRef.current.shouldAccept(rawValue)) {
             setMessage(`Código detectado: ${rawValue}`);
             onDetected(rawValue);
             stopScanner({ nextMessage: `Código detectado: ${rawValue}` });

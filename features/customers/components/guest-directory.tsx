@@ -12,10 +12,11 @@ import {
 
 import InvitationCard from "@/features/access/components/invitation-card";
 import type { InvitationDesign } from "@/features/access/domain/access-domain";
-import { renderInvitationImageBlob } from "@/features/access/domain/invitation-image-export";
 import { INVITATION_RENDER_SIZE, getInvitationDownloadFilename } from "@/features/access/domain/invitation-rendering";
+import { renderInvitationImageBlob, waitForInvitationImageNodeReady } from "@/features/access/domain/invitation-image-export";
 import { canSendWhatsAppInvitation, normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
 import { prepareWhatsAppInvitationMediaBlob } from "@/features/access/domain/whatsapp-invitation-media";
+import { buildGuestInvitationDesign } from "@/features/access/domain/whatsapp-reservation-invitations";
 import {
   getWhatsAppDeliveryStatusLabel,
   getWhatsAppDeliveryStatusTone,
@@ -33,10 +34,6 @@ import { matchesText, normalizeText } from "@/features/customers/utils";
 import { statusTone } from "@/features/customers/domain/customer-directory";
 import type { GuestRecord } from "@/features/customers/types";
 import GuestEditModal from "@/features/customers/components/guest-edit-modal";
-import { getEventInvitationArtwork } from "@/features/events/domain/invitation-artwork";
-import { formatInvitationEventDateLabel, getEventInvitationOverlayLayout } from "@/features/events/domain/invitation-overlay";
-import { resolveEventVenueDisplayName } from "@/features/events/domain/event-venue-boundary";
-import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 20;
@@ -334,14 +331,7 @@ function GuestDrawer({
   const exportInvitationRef = useRef<HTMLDivElement | null>(null);
 
   const visibleInvitationCode = guest.accessCode ?? guest.invitationCode;
-  const invitationQrToken = guest.qrToken ?? visibleInvitationCode;
   const isWhatsAppReady = Boolean(normalizeWhatsAppPhoneNumber(guest.whatsapp));
-  const invitationDateLabel = useMemo(
-    () => formatInvitationEventDateLabel(currentEvent.startAt, currentEvent.timezone),
-    [currentEvent.startAt, currentEvent.timezone],
-  );
-  const invitationArtwork = useMemo(() => getEventInvitationArtwork(currentEvent), [currentEvent]);
-  const invitationOverlayLayout = useMemo(() => getEventInvitationOverlayLayout(currentEvent), [currentEvent]);
   const reservationHolderName = useMemo(
     () =>
       reservations.find((reservation) => reservation.code === guest.reservationCode || reservation.id === guest.reservationCode)?.holderName ??
@@ -350,50 +340,24 @@ function GuestDrawer({
   );
 
   const invitation = useMemo<InvitationDesign>(
-    () => ({
-      id: guest.id,
-      eventName: currentEvent.name,
-      guestName: guest.guestName,
-      reservationName: guest.reservationName,
-      reservationHolderName,
-      reservationCode: guest.reservationCode,
-      tableName: guest.tableName,
-      zoneName: guest.seat,
-      venueName: resolveEventVenueDisplayName({
+    () =>
+      buildGuestInvitationDesign({
+        guest: {
+          id: guest.id,
+          guestName: guest.guestName,
+          reservationName: guest.reservationName,
+          reservationCode: guest.reservationCode,
+          seat: guest.seat,
+          tableName: guest.tableName,
+          accessCode: guest.accessCode,
+          invitationCode: guest.invitationCode,
+          qrToken: guest.qrToken,
+        },
+        currentEvent,
         currentVenueName: currentVenue?.name,
-        eventVenue: currentEvent.venue,
+        reservationHolderName,
       }),
-      date: invitationDateLabel,
-      time: formatTimelineDisplayTime(currentEvent.startAt),
-      uniqueCode: visibleInvitationCode,
-      qrValue: invitationQrToken,
-      artUrl: invitationArtwork?.url,
-      artPath: invitationArtwork?.path,
-      artLabel: invitationArtwork?.label,
-      overlayLayout: invitationOverlayLayout ?? undefined,
-      theme: "Pieza lista para compartir y validar operativamente.",
-      variant: "general",
-    }),
-    [
-      currentEvent.name,
-      currentVenue?.name,
-      currentEvent.venue,
-      currentEvent.startAt,
-      guest.id,
-      guest.guestName,
-      guest.reservationCode,
-      guest.reservationName,
-      guest.seat,
-      guest.tableName,
-      invitationArtwork?.label,
-      invitationArtwork?.path,
-      invitationArtwork?.url,
-      invitationDateLabel,
-      invitationOverlayLayout,
-      invitationQrToken,
-      reservationHolderName,
-      visibleInvitationCode,
-    ],
+    [currentEvent, currentVenue?.name, guest.accessCode, guest.guestName, guest.id, guest.invitationCode, guest.qrToken, guest.reservationCode, guest.reservationName, guest.seat, guest.tableName, reservationHolderName],
   );
 
   const handleDownloadInvitation = useCallback(async () => {
@@ -404,6 +368,7 @@ function GuestDrawer({
     setIsExportingInvitation(true);
 
     try {
+      await waitForInvitationImageNodeReady(exportInvitationRef.current);
       const { blob, filename } = await renderInvitationImageBlob(exportInvitationRef.current, {
         filename: getInvitationDownloadFilename(visibleInvitationCode),
       });
@@ -453,6 +418,7 @@ function GuestDrawer({
         throw new Error("No se pudo preparar la invitación para WhatsApp.");
       }
 
+      await waitForInvitationImageNodeReady(exportInvitationRef.current);
       const invitationImage = await renderInvitationImageBlob(exportInvitationRef.current, {
         filename: getInvitationDownloadFilename(visibleInvitationCode),
       });
@@ -766,6 +732,7 @@ function GuestDrawer({
           <InvitationCard invitation={invitation} mode="download" />
         </div>
       </div>
+
     </div>
   );
 }

@@ -395,10 +395,13 @@ export function buildCheckInAttemptTimelineEvent(guest: Guest | undefined, attem
 export function buildTimelineQuickReadSummary(event: TimelineEvent) {
   const guestCarnet = readMetadataString(event.metadata?.guestCarnet);
   const method = readMetadataString(event.metadata?.method);
-  const guestLine = event.guestName
+  const fallbackGuestName =
+    readMetadataString(event.metadata?.guestName) || (event.guestId && event.kind.startsWith("checkin") ? readMetadataString(event.target) : "");
+  const guestName = event.guestName ?? fallbackGuestName;
+  const guestLine = guestName
     ? guestCarnet
-      ? `${event.guestName}\nCarnet · ${guestCarnet}`
-      : event.guestName
+      ? `${guestName}\nCarnet · ${guestCarnet}`
+      : guestName
     : "";
   const reservationSource = event.tableName ?? event.reservationName ?? readMetadataString(event.metadata?.reservationName);
   const reservationCode = event.reservationCode ?? readMetadataString(event.metadata?.reservationCode);

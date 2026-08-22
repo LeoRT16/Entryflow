@@ -260,6 +260,39 @@ test("WhatsApp Cloud send succeeds with a provider message id and never exposes 
   assert.equal(JSON.parse(calls[0]?.[1]?.body as string).text.preview_url, false);
 });
 
+test("WhatsApp Cloud send fails when Meta omits the message id", async () => {
+  const fetchImpl = async () =>
+    new Response(JSON.stringify({ messages: [{}] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  await assert.rejects(
+    () =>
+      sendWhatsAppCloudMessage(
+        {
+          recipient: "77374577",
+          guestName: "Guest",
+          eventName: "Event",
+          accessCode: "RES-001",
+        },
+        fetchImpl,
+        buildProcessEnv({
+          WHATSAPP_ACCESS_TOKEN: "super-secret",
+          WHATSAPP_PHONE_NUMBER_ID: "987654321",
+          WHATSAPP_API_VERSION: "v23.0",
+        }),
+      ),
+    (error: unknown) => {
+      assert.ok(error instanceof WhatsAppCloudError);
+      assert.equal((error as WhatsAppCloudError).status, 502);
+      assert.equal((error as WhatsAppCloudError).code, "whatsapp_cloud_missing_message_id");
+      assert.equal((error as WhatsAppCloudError).safeMessage, "WhatsApp Cloud API no devolvió un message id.");
+      return true;
+    },
+  );
+});
+
 test("WhatsApp Cloud send rejects invalid numbers before calling Meta", async () => {
   let fetchCalled = false;
 

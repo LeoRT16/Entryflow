@@ -1,7 +1,7 @@
 import type { GuestRecord } from "@/features/customers/types";
 import { getLegacyWhatsAppDeliveryStatus } from "@/features/access/domain/whatsapp-delivery-tracking";
 
-export type WhatsAppSendAcceptanceStatus = "accepted" | "accepted_but_tracking_failed";
+export type WhatsAppSendAcceptanceStatus = "accepted";
 
 export type WhatsAppSendAcceptanceResponse = {
   ok: true;
@@ -66,24 +66,19 @@ export function buildWhatsAppSendAcceptedGuestUpdate(params: {
 }
 
 export function buildWhatsAppSendAcceptanceResponse(trackingPersisted: boolean): WhatsAppSendAcceptanceResponse {
-  if (trackingPersisted) {
-    return {
-      ok: true,
-      providerAccepted: true,
-      trackingPersisted: true,
-      status: "accepted",
-    };
-  }
-
   return {
     ok: true,
     providerAccepted: true,
-    trackingPersisted: false,
-    status: "accepted_but_tracking_failed",
-    warning: {
-      code: "accepted_but_tracking_failed",
-      message: "WhatsApp aceptó el mensaje, pero EntryFlow no pudo registrar su seguimiento. No lo reenvíes todavía.",
-    },
+    trackingPersisted,
+    status: "accepted",
+    ...(trackingPersisted
+      ? {}
+      : {
+          warning: {
+            code: "accepted_but_tracking_failed" as const,
+            message: "WhatsApp aceptó el mensaje, pero EntryFlow no pudo registrar su seguimiento. No lo reenvíes todavía.",
+          },
+        }),
   };
 }
 

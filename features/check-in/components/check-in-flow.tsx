@@ -10,6 +10,7 @@ import {
   formatGuestCarnetLabel,
   getCheckInActionLabel,
   getEntryTone,
+  resolveGuestCheckInEligibility,
   resolveCheckInGuestByQuery,
   shouldAutoSubmitDetectedCheckIn,
 } from "@/features/check-in/domain/check-in-domain";
@@ -63,42 +64,6 @@ function QuickReadField({
   );
 }
 
-function getEligibilityMessage(guest: Guest) {
-  if (guest.admissionStatus === "Ingresó") {
-    return {
-      canEnter: false,
-      tone: "warning" as const,
-      label: "Ya ingresó",
-      detail: "Este acceso ya fue consumido.",
-    };
-  }
-
-  if (guest.admissionStatus === "Anulada" || guest.admissionStatus === "Bloqueada" || guest.qrStatus === "Anulado" || guest.qrStatus === "Bloqueado") {
-    return {
-      canEnter: false,
-      tone: "danger" as const,
-      label: "No puede entrar",
-      detail: "El acceso está bloqueado o anulado.",
-    };
-  }
-
-  if (guest.qrStatus === "Usado") {
-    return {
-      canEnter: false,
-      tone: "warning" as const,
-      label: "Ya fue usado",
-      detail: "El código ya fue consumido en un ingreso previo.",
-    };
-  }
-
-  return {
-    canEnter: true,
-    tone: "success" as const,
-    label: "Puede entrar",
-    detail: "La validación coincide con un acceso habilitado.",
-  };
-}
-
 export default function CheckInFlow() {
   const { currentEvent } = useCheckInStore();
 
@@ -146,13 +111,17 @@ function CheckInWorkspace() {
       }),
     [currentEvent, eventGuests, eventReservations, query],
   );
-
   const selectedGuest = eventGuests.find((guest) => guest.id === selectedGuestId) ?? resolvedGuest ?? (searchResults.length === 1 ? searchResults[0] : null);
   const selectedGuestQuickRead = selectedGuest ? buildGuestQuickReadSummary(selectedGuest) : null;
   const attemptGuest = attemptState.kind === "idle" ? null : attemptState.guest ?? null;
   const attemptGuestQuickRead = attemptGuest ? buildGuestQuickReadSummary(attemptGuest) : null;
+  const selectedGuestReservation = selectedGuest
+    ? eventReservations.find((reservation) => reservation.id === selectedGuest.reservationId) ?? null
+    : null;
 
-  const eligibility = selectedGuest ? getEligibilityMessage(selectedGuest) : null;
+  const eligibility = selectedGuest
+    ? resolveGuestCheckInEligibility(selectedGuest, selectedGuestReservation)
+    : null;
   const canRegister = Boolean(selectedGuest && !isTerminalEvent);
   const primaryActionLabel = getCheckInActionLabel({
     canEnter: Boolean(eligibility?.canEnter),
@@ -169,7 +138,6 @@ function CheckInWorkspace() {
   const handleDetected = (value: string) => {
     setQuery(value);
     setValidationMethod("QR");
-    setAttemptState({ kind: "idle" });
 
     const match = resolveCheckInGuestByQuery({
       query: value,
@@ -179,7 +147,16 @@ function CheckInWorkspace() {
     });
     setSelectedGuestId(match?.id ?? null);
 
-    if (match && shouldAutoSubmitDetectedCheckIn({ canEnter: getEligibilityMessage(match).canEnter, isTerminalEvent })) {
+    if (
+      match &&
+      shouldAutoSubmitDetectedCheckIn({
+        canEnter: resolveGuestCheckInEligibility(
+          match,
+          eventReservations.find((reservation) => reservation.id === match.reservationId) ?? null,
+        ).canEnter,
+        isTerminalEvent,
+      })
+    ) {
       void submitCheckIn(match, value, "QR");
     }
   };

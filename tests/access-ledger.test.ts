@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildAccessGrantFromGuest, getAccessGrantIdentity, getQrToken, getVisibleInvitationCode, resolveAccessGrantByQuery } from "../features/access/domain/access-ledger";
+import { createTicketFromGuest, evaluateAdmission } from "../features/access/domain/access-domain";
 import type { Guest } from "../features/check-in/types";
 import type { Event } from "../features/domain/types";
 import type { ReservationRecord } from "../features/reservations/types";
@@ -183,4 +184,40 @@ test("reassigned reservations invalidate the previous qr token and issue a new o
   assert.equal(newTokenResolution.status, "found");
   assert.equal(newTokenResolution.guest?.reservationId, "reservation-2");
   assert.equal(newTokenResolution.grant?.qrToken, reassignedGrant.qrToken);
+});
+
+test("cancelled reservations produce cancelled access grants and rejected admissions", () => {
+  const guest = buildGuest({
+    admissionStatus: "Pendiente",
+    reservationStatus: "Cancelled",
+    qrStatus: "Válido",
+  });
+  const reservation = buildReservation({
+    status: "Cancelled",
+  });
+  const grant = buildAccessGrantFromGuest(guest, reservation);
+  const ticket = createTicketFromGuest({
+    id: grant.id,
+    reservationId: grant.reservationId,
+    guestId: grant.guestId,
+    eventId: grant.eventId,
+    code: grant.code,
+    qrToken: grant.qrToken,
+    accessType: "invitation",
+    createdAt: "2026-08-12T17:00:00.000Z",
+    status: "Cancelled",
+  });
+
+  const result = evaluateAdmission({
+    ticket,
+    query: grant.qrToken,
+    method: "qr",
+    operator: "Escáner",
+    timestamp: "2026-08-12T22:00:00.000Z",
+  });
+
+  assert.equal(grant.status, "cancelled");
+  assert.equal(result.result, "Cancelled");
+  assert.equal(result.shouldPersist, true);
+  assert.equal(result.note, "La invitación fue anulada.");
 });

@@ -211,16 +211,6 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                 />
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {event.actor ? <StatusBadge variant="info">{event.actor}</StatusBadge> : null}
-                {event.actorRole ? <StatusBadge variant="info">{event.actorRole}</StatusBadge> : null}
-                {event.target ? <StatusBadge variant={event.tone}>{event.target}</StatusBadge> : null}
-                {event.context ? <StatusBadge variant="success">{event.context}</StatusBadge> : null}
-                {event.reservationCode ? <StatusBadge variant="info">{event.reservationCode}</StatusBadge> : null}
-                {event.reservationName ? <StatusBadge variant={event.tone}>{event.reservationName}</StatusBadge> : null}
-                {event.guestName ? <StatusBadge variant="warning">{event.guestName}</StatusBadge> : null}
-                {event.tableName ? <StatusBadge variant="success">{event.tableName}</StatusBadge> : null}
-              </div>
             </article>
           </ContextualCard>
         );
@@ -273,16 +263,6 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {event.actor ? <StatusBadge variant="info">{event.actor}</StatusBadge> : null}
-                {event.actorRole ? <StatusBadge variant="info">{event.actorRole}</StatusBadge> : null}
-                {event.target ? <StatusBadge variant={event.tone}>{event.target}</StatusBadge> : null}
-                {event.context ? <StatusBadge variant="success">{event.context}</StatusBadge> : null}
-                {event.reservationCode ? <StatusBadge variant="info">{event.reservationCode}</StatusBadge> : null}
-                {event.reservationName ? <StatusBadge variant={event.tone}>{event.reservationName}</StatusBadge> : null}
-                {event.guestName ? <StatusBadge variant="warning">{event.guestName}</StatusBadge> : null}
-                {event.tableName ? <StatusBadge variant="success">{event.tableName}</StatusBadge> : null}
-              </div>
             </div>
           </article>
         </ContextualCard>

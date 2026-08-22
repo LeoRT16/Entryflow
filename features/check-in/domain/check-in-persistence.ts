@@ -65,6 +65,7 @@ export function buildRejectedCheckInTimelineEntry(params: {
     metadata: {
       ...(timelineEntry.metadata ?? {}),
       guestCarnet: guest?.carnet ?? undefined,
+      guestName: guest?.guestName ?? undefined,
       reservationCode: guest?.reservationCode,
       reservationName: guest?.reservationName,
       tableId: guest?.tableId,

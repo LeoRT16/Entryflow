@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { QrCameraControls } from "../features/check-in/components/qr-camera-scanner";
+import { createQrDetectionGate } from "../features/check-in/domain/qr-detection-gate";
 
 type ReactTreeNode = {
   type: unknown;
@@ -95,4 +97,24 @@ test("scanner controls keep activate separate from restart when idle", () => {
   assert.ok(restartButton, "The restart button should always render");
   assert.equal((activateButton as ReactTreeNode).props.onClick, handlers.activate);
   assert.equal((restartButton as ReactTreeNode).props.onClick, handlers.restart);
+});
+
+test("scanner locks a detected QR until a fresh scan session explicitly resets it", () => {
+  const gate = createQrDetectionGate();
+
+  assert.equal(gate.shouldAccept(" qr-123 "), true);
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    assert.equal(gate.shouldAccept("qr-123"), false);
+  }
+
+  assert.equal(gate.shouldAccept("qr-456"), false);
+  gate.reset();
+  assert.equal(gate.shouldAccept("qr-123"), true);
+
+  const source = readFileSync(new URL("../features/check-in/components/qr-camera-scanner.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /const detectionGateRef = useRef\(createQrDetectionGate\(\)\);/);
+  assert.match(source, /detectionGateRef\.current\.reset\(\);/);
+  assert.match(source, /if \(rawValue && detectionGateRef\.current\.shouldAccept\(rawValue\)\)/);
 });

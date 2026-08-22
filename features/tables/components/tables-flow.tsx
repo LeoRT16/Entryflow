@@ -276,7 +276,7 @@ function TablesFlowWorkspace() {
     ? guests.filter((guest) => guest.reservationId === selectedReservation.id).sort((a, b) => a.id.localeCompare(b.id))
     : [];
   const selectedReservationConflictCount = selectedReservationResource
-    ? resourceSummaryMap.get(selectedReservationResource.id)?.reservationIds.length ?? 0
+    ? resourceSummaryMap.get(selectedReservationResource.id)?.metrics.activeReservations ?? 0
     : 0;
 
   const startCreateSector = () => {

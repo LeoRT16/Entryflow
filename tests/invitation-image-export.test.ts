@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { renderInvitationImageBlob } from "../features/access/domain/invitation-image-export";
+import {
+  renderInvitationImageBlob,
+  waitForInvitationImageNodeReady,
+} from "../features/access/domain/invitation-image-export";
 
 test("renderInvitationImageBlob waits for fonts and returns a reusable blob descriptor", async () => {
   const calls: string[] = [];
@@ -67,4 +70,36 @@ test("renderInvitationImageBlob throws when no blob is produced", async () => {
       return true;
     },
   );
+});
+
+test("waitForInvitationImageNodeReady waits for images and paint frames before export", async () => {
+  const calls: string[] = [];
+  const image = {
+    complete: true,
+    naturalWidth: 1080,
+    naturalHeight: 1920,
+    decode: async () => {
+      calls.push("decode");
+    },
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  } as unknown as HTMLImageElement;
+  const node = {
+    isConnected: true,
+    querySelectorAll: () => [image],
+    getBoundingClientRect: () => ({ width: 1080, height: 1920 }),
+  } as unknown as HTMLElement;
+
+  let rafCalls = 0;
+
+  await waitForInvitationImageNodeReady(node, {
+    requestAnimationFrameImpl: ((callback: FrameRequestCallback) => {
+      rafCalls += 1;
+      callback(0);
+      return 0;
+    }) as typeof requestAnimationFrame,
+  });
+
+  assert.deepEqual(calls, []);
+  assert.equal(rafCalls, 2);
 });

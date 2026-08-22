@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import type { GuestRecord } from "@/features/customers/types";
+import { normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
@@ -32,6 +34,27 @@ type WhatsAppSendRequestBody = {
 
 function getRequestString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+export function resolveWhatsAppSendDetails(
+  body: WhatsAppSendRequestBody,
+  guest: Pick<GuestRecord, "whatsapp" | "guestName" | "eventName" | "accessCode" | "invitationCode"> | null,
+) {
+  if (guest) {
+    return {
+      recipient: normalizeWhatsAppPhoneNumber(guest.whatsapp) ?? "",
+      guestName: getRequestString(guest.guestName),
+      eventName: getRequestString(guest.eventName),
+      accessCode: getRequestString(guest.accessCode) || getRequestString(guest.invitationCode),
+    };
+  }
+
+  return {
+    recipient: getRequestString(body.recipient),
+    guestName: getRequestString(body.guestName),
+    eventName: getRequestString(body.eventName),
+    accessCode: getRequestString(body.accessCode) || getRequestString(body.invitationCode),
+  };
 }
 
 type WhatsAppDeliveryAttemptsTable = {
@@ -70,7 +93,7 @@ export async function POST(request: Request) {
   const mediaId = getRequestString(body.mediaId);
   const guestId = getRequestString(body.guestId);
 
-  if (!recipient || !guestName || !eventName || !accessCode) {
+  if (!guestId && (!recipient || !guestName || !eventName || !accessCode)) {
     return NextResponse.json(
       {
         ok: false,
@@ -148,10 +171,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const guest =
-    (guestId ? workspace.guests.find((item) => item.id === guestId) : null) ??
-    workspace.guests.find((item) => item.accessCode === accessCode || item.invitationCode === accessCode) ??
-    null;
+  const guest = guestId
+    ? workspace.guests.find((item) => item.id === guestId) ?? null
+    : workspace.guests.find((item) => item.accessCode === accessCode || item.invitationCode === accessCode) ?? null;
 
   if (!guest) {
     return NextResponse.json(
@@ -166,14 +188,33 @@ export async function POST(request: Request) {
     );
   }
 
+  const resolved = resolveWhatsAppSendDetails(body, guest);
+  const resolvedRecipient = resolved.recipient;
+  const resolvedGuestName = resolved.guestName;
+  const resolvedEventName = resolved.eventName;
+  const resolvedAccessCode = resolved.accessCode;
+
+  if (!resolvedRecipient || !resolvedGuestName || !resolvedEventName || !resolvedAccessCode) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "missing_fields",
+          message: "Faltan datos para preparar el envío por WhatsApp.",
+        },
+      },
+      { status: 400 },
+    );
+  }
+
   try {
     const templateConfig = mediaId ? getWhatsAppImageTemplateConfig() : getRequiredWhatsAppTemplateConfig();
 
     const result = await sendWhatsAppCloudMessage({
-      recipient,
-      guestName,
-      eventName,
-      accessCode,
+      recipient: resolvedRecipient,
+      guestName: resolvedGuestName,
+      eventName: resolvedEventName,
+      accessCode: resolvedAccessCode,
       ...(mediaId ? { mediaId } : {}),
     });
 
@@ -259,7 +300,10 @@ export async function POST(request: Request) {
       });
     });
 
-    return NextResponse.json(buildWhatsAppSendAcceptanceResponse(trackingPersisted));
+    return NextResponse.json({
+      ...buildWhatsAppSendAcceptanceResponse(trackingPersisted),
+      messageId,
+    });
   } catch (error) {
     if (error instanceof WhatsAppCloudError) {
       return NextResponse.json(

@@ -356,6 +356,10 @@ type WorkspaceServiceValue = {
 
 const WorkspaceServiceContext = createContext<WorkspaceServiceValue | null>(null);
 
+export function getWorkspaceReloadStatus(currentStatus: WorkspaceServiceStatus) {
+  return currentStatus === "ready" ? "ready" : "loading";
+}
+
 function getOrganizationSelection(organizations: Organization[], currentOrganizationId: string) {
   return organizations.find((organization) => organization.id === currentOrganizationId)
     ?? organizations.find((organization) => organization.status === "active")
@@ -1194,7 +1198,10 @@ export function WorkspaceServiceProvider({
 
   const reloadWorkspace = useCallback(async () => {
     try {
-      setStatus("loading");
+      if (getWorkspaceReloadStatus(status) === "loading") {
+        setStatus("loading");
+      }
+
       const snapshot = await loadWorkspaceFromRepositories(repositories, initialCurrentUserId);
       const accessibleProfiles = initialCurrentUserId
         ? snapshot.profiles.filter((profile) => profile.userId === initialCurrentUserId && !profile.deletedAt)
@@ -1243,7 +1250,7 @@ export function WorkspaceServiceProvider({
       setCurrentOrganizationIdState(nextCurrentOrganizationId);
       setCurrentEventIdState(nextCurrentEventId);
       setCurrentProfileIdState(nextCurrentProfileId);
-      setStatus(
+      const nextStatus =
         snapshot.users.length ||
           snapshot.roles.length ||
           snapshot.profiles.length ||
@@ -1265,14 +1272,17 @@ export function WorkspaceServiceProvider({
           snapshot.attempts.length ||
           snapshot.timelineEvents.length
           ? "ready"
-          : "empty",
-      );
+          : "empty";
+
+      setStatus(nextStatus);
       setError(null);
     } catch (exception) {
       setError(exception as Error);
-      setStatus("error");
+      if (status !== "ready") {
+        setStatus("error");
+      }
     }
-  }, [currentEventId, currentOrganizationId, currentProfileId, initialCurrentUserId, repositories]);
+  }, [currentEventId, currentOrganizationId, currentProfileId, initialCurrentUserId, repositories, status]);
 
   useEffect(() => {
     reloadWorkspaceRef.current = reloadWorkspace;
@@ -3642,7 +3652,11 @@ export function WorkspaceServiceProvider({
         if (result.result !== "Valid") {
           setAttempts((current) => [attempt, ...current].slice(0, 12));
           const nextTimelineEntry: TimelineEvent = withAuditContext(
-            { ...createAdmissionTimelineEntry(result, ticket), eventId: currentEvent.id } as TimelineEvent,
+            buildRejectedCheckInTimelineEntry({
+              guest,
+              result,
+              ticket,
+            }),
             {
               actor: currentAccount.displayName,
               actorRole: currentAccount.roleName,

@@ -85,6 +85,7 @@ type ReservationFlowWorkspaceProps = Pick<
   | "addReservationGuest"
   | "updateReservationGuest"
   | "updateGuestProfile"
+  | "setGuestsState"
   | "setReservationStatus"
   | "registerCheckIn"
 >;
@@ -149,6 +150,7 @@ export default function ReservationFlow() {
       addReservationGuest={store.addReservationGuest}
       updateReservationGuest={store.updateReservationGuest}
       updateGuestProfile={store.updateGuestProfile}
+      setGuestsState={store.setGuestsState}
       setReservationStatus={store.setReservationStatus}
       registerCheckIn={store.registerCheckIn}
     />
@@ -181,6 +183,7 @@ function ReservationFlowWorkspace({
   addReservationGuest,
   updateReservationGuest,
   updateGuestProfile,
+  setGuestsState,
   setReservationStatus,
   registerCheckIn,
 }: ReservationFlowWorkspaceProps) {
@@ -410,7 +413,7 @@ function ReservationFlowWorkspace({
             sectorId: resource.sectorId,
             tone: summary?.statusTone ?? (resource.status === "Closed" || resource.status === "Over Capacity" ? "danger" : resource.status === "Reserved" ? "info" : resource.status === "Full" ? "warning" : "success"),
             assignedGuests: summary?.metrics.assignedGuests,
-            activeReservations: summary?.reservationIds.length,
+            activeReservations: summary?.metrics.activeReservations,
             overCapacity: summary?.metrics.overCapacity,
             eventLayoutResourceId: currentEventLayoutResource?.id,
             eventLayoutId: currentEventLayoutResource?.eventLayoutId,
@@ -637,7 +640,7 @@ function ReservationFlowWorkspace({
           eventLayoutResourceId: eventLayoutResource?.id,
           tone: summary?.statusTone ?? (resource.status === "Closed" || resource.status === "Over Capacity" ? "danger" : resource.status === "Reserved" ? "info" : resource.status === "Full" ? "warning" : "success"),
           assignedGuests: summary?.metrics.assignedGuests,
-          activeReservations: summary?.reservationIds.length,
+          activeReservations: summary?.metrics.activeReservations,
           overCapacity: summary?.metrics.overCapacity,
         };
       });
@@ -1015,6 +1018,13 @@ function ReservationFlowWorkspace({
     [deleteReservation, prioritizedReservations, setActiveReservationId, showToast],
   );
 
+  const handleCancelReservation = useCallback(
+    (reservationId: string) => {
+      setReservationStatus(reservationId, "Cancelled");
+    },
+    [setReservationStatus],
+  );
+
   return (
     <div className="space-y-6">
       <Topbar
@@ -1069,12 +1079,18 @@ function ReservationFlowWorkspace({
 
       <section className="min-w-0">
         <ReservationOperationsBoard
+          currentEvent={currentEvent}
+          currentVenueName={currentVenue?.name}
+          reservationGuests={reservationGuests}
           reservations={prioritizedReservations}
           activeReservationId={activeReservation?.id ?? ""}
           isTerminalEvent={isTerminalEvent}
+          canIssueWhatsAppInvitations={can("access.issue")}
+          setGuestsState={setGuestsState}
           onSelectReservation={setActiveReservationId}
           onEditReservation={handleEditReservation}
           onDeleteReservation={handleDeleteReservation}
+          onCancelReservation={handleCancelReservation}
           onMarkConfirmed={(reservationId) => {
             setReservationStatus(reservationId, "Confirmed");
           }}

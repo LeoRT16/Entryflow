@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import test from "node:test";
 
 import {
@@ -14,6 +15,10 @@ function buildProcessEnv(values: Record<string, string>) {
     NODE_ENV: "test",
     ...values,
   } as unknown as NodeJS.ProcessEnv;
+}
+
+function sha256(buffer: Uint8Array) {
+  return crypto.createHash("sha256").update(Buffer.from(buffer.buffer, buffer.byteOffset, buffer.byteLength)).digest("hex");
 }
 
 test("WhatsApp image template config reads server env when configured", () => {
@@ -107,6 +112,29 @@ test("WhatsApp media upload creates multipart form-data and extracts the media i
   assert.ok(file instanceof File);
   assert.equal((file as File).name, "invitation.png");
   assert.equal((file as File).type, "image/png");
+});
+
+test("WhatsApp media upload preserves the file bytes through multipart round-trip", async () => {
+  const sourceBytes = new Uint8Array([1, 2, 3, 4, 5, 250, 251, 252]);
+  const sourceBlob = new Blob([sourceBytes], { type: "image/png" });
+  const sourceHash = sha256(sourceBytes);
+
+  const formData = new FormData();
+  formData.append("messaging_product", "whatsapp");
+  formData.append("file", new File([sourceBlob], "invitation.png", { type: sourceBlob.type }));
+
+  const request = new Request("http://localhost/api/whatsapp/media", {
+    method: "POST",
+    body: formData,
+  });
+  const receivedFormData = await request.formData();
+  const receivedFile = receivedFormData.get("file");
+
+  assert.ok(receivedFile instanceof File);
+  assert.equal(receivedFile.type, "image/png");
+  assert.equal(receivedFile.name, "invitation.png");
+  assert.equal(receivedFile.size, sourceBlob.size);
+  assert.equal(sha256(new Uint8Array(await receivedFile.arrayBuffer())), sourceHash);
 });
 
 test("WhatsApp media upload sanitizes provider errors", async () => {
