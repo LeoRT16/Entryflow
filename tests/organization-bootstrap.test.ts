@@ -228,6 +228,8 @@ function buildDependencies(workspace: WorkspaceBootstrap, options?: { authUser?:
         organizations: {
           getById: async (id: string) =>
             state.organizations.find((organization: { id?: string; deletedAt?: string | null }) => organization.id === id && !organization.deletedAt) ?? null,
+          getBySlug: async (slug: string) =>
+            state.organizations.find((organization: { slug?: string }) => organization.slug === slug) ?? null,
           create: async (organization: Partial<Organization>) => {
             const nextOrganization = {
               id: String(organization.id ?? `org-${state.organizations.length + 1}`),
@@ -407,4 +409,48 @@ test("trusted organization bootstrap rolls back the organization if owner member
   assert.equal(state.organizations.length, 2);
   assert.equal(state.organizations[1]?.deletedAt, "2026-08-20T10:00:01.000Z");
   assert.equal(state.profiles.length, 1);
+});
+
+test("trusted organization bootstrap resolves slug collisions for new organizations", async () => {
+  const workspace = buildWorkspace({
+    organizations: [
+      ...buildWorkspace().organizations,
+      {
+        id: "org-duplicate",
+        name: "Nueva organización",
+        slug: "nueva-organizacion",
+        status: "active",
+        timezone: "America/La_Paz",
+        branding: {},
+        settings: { timezone: "America/La_Paz" },
+        metadata: null,
+        createdAt: "2026-08-20T10:00:00.000Z",
+        updatedAt: "2026-08-20T10:00:00.000Z",
+        deletedAt: null,
+      },
+    ] as never,
+  });
+  const { dependencies, state } = buildDependencies(workspace);
+
+  const response = await handleOrganizationBootstrap(
+    buildRequest({
+      id: "11111111-1111-1111-1111-111111111111",
+      name: "Nueva organización",
+      timezone: "America/La_Paz",
+    }),
+    dependencies,
+  );
+
+  assert.equal(response.status, 200);
+  const payload = (await response.json()) as {
+    ok: boolean;
+    created: boolean;
+    organization: Organization & { deletedAt?: string | null };
+  };
+
+  assert.equal(payload.ok, true);
+  assert.equal(payload.created, true);
+  assert.equal(payload.organization.slug, "nueva-organizacion-11111111");
+  assert.equal(state.organizations.at(-1)?.slug, "nueva-organizacion-11111111");
+  assert.equal(state.organizations[2]?.slug, "nueva-organizacion-11111111");
 });

@@ -61,6 +61,22 @@ function normalizeOrganizationInput(body: OrganizationRequestBody) {
   } satisfies Organization;
 }
 
+async function resolveCreateOrganizationSlug(
+  repositories: ReturnType<typeof createSupabaseWorkspaceRepositories>,
+  organization: Organization,
+) {
+  const existingOrganization = await repositories.organizations.getBySlug(organization.slug);
+
+  if (!existingOrganization || existingOrganization.id === organization.id) {
+    return organization;
+  }
+
+  return {
+    ...organization,
+    slug: `${organization.slug}-${organization.id.slice(0, 8)}`,
+  };
+}
+
 export async function handleOrganizationBootstrap(request: Request, dependencies = createOrgRouteDependencies()) {
   const authUser = await dependencies.getAuthUser();
 
@@ -244,11 +260,12 @@ export async function handleOrganizationBootstrap(request: Request, dependencies
       );
     }
 
-    const createdOrganization = await repositories.organizations.create({
+    const organizationToCreate = await resolveCreateOrganizationSlug(repositories, {
       ...nextOrganization,
       id: nextOrganization.id,
       status: "active",
     });
+    const createdOrganization = await repositories.organizations.create(organizationToCreate);
 
     try {
       const createdProfile = await repositories.profiles.create({

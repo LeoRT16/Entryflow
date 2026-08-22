@@ -154,6 +154,7 @@ type SupabaseWorkspaceRepositories = {
     getByOrganizationAndUser(organizationId: string, userId: string): Promise<OrganizationMembership | undefined>;
   };
   organizations: SupabaseCrudRepository<Organization> & {
+    getBySlug(slug: string): Promise<Organization | undefined>;
     setActive(organizationId: string): Promise<void>;
   };
   venues: SupabaseCrudRepository<Venue> & {
@@ -762,6 +763,19 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     profiles,
     organizations: {
       ...organizations,
+      async getBySlug(slug: string) {
+        if (!client) {
+          return undefined;
+        }
+
+        const { data, error } = await client.from("organizations").select("*").eq("slug", slug).maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        return data ? mapOrganizationRowToDomain(data as OrganizationRow) : undefined;
+      },
       async setActive(organizationId: string) {
         if (!client) {
           return;
