@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import Topbar from "@/components/topbar";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import AccreditationInvitationBoard from "@/features/accreditation/invitations/components/accreditation-invitation-board";
 import { buildAccreditationInvitationOperationalReadModel } from "@/features/accreditation/invitations/domain/accreditation-invitation-operational";
+import { getOperationalModelLabel, getEventTypeLabel } from "@/features/events/domain/event-blueprints";
+import { isAccreditationPhase2EventType } from "@/features/accreditation/events";
 import { createSupabaseAccreditationAccessRepositories } from "@/repositories/supabase-accreditation-access-repositories";
 import { createSupabaseAccreditationInvitationDeliveryRepositories } from "@/repositories/supabase-accreditation-invitation-repositories";
 import { createSupabaseAccreditationRepositories } from "@/repositories/supabase-accreditation-repositories";
@@ -129,6 +132,10 @@ export default async function AccreditationPage() {
     profiles: workspace.profiles,
   });
 
+  const phase2Events = workspace.events.filter(
+    (event) => event.organizationId === workspace.currentOrganizationId && isAccreditationPhase2EventType(event.eventType),
+  );
+
   return (
     <main className="mx-auto w-full max-w-[1280px] space-y-5 px-4 py-6 sm:px-6 lg:px-0">
       <Topbar
@@ -144,6 +151,44 @@ export default async function AccreditationPage() {
       ) : null}
 
       <AccreditationInvitationBoard model={model} />
+
+      <section className="space-y-4 rounded-[1.8rem] border border-white/10 bg-[#0d1117] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">Fase 2</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Eventos de perfil y participantes</h2>
+          </div>
+          <p className="text-sm text-slate-400">Conferencia, Seminario y Taller</p>
+        </div>
+
+        {phase2Events.length ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {phase2Events.map((event) => (
+              <Link
+                key={event.id}
+                href={`/accreditation/events/${event.id}`}
+                className="group rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4 transition hover:border-cyan-400/25 hover:bg-white/[0.05]"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-lg font-semibold tracking-tight text-white">{event.name}</h3>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-300">
+                    {getEventTypeLabel(event.eventType)}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-slate-400">{getOperationalModelLabel(event.operationalModel)}</p>
+                <p className="mt-3 text-sm text-slate-500">{event.venue} · {event.startAt}</p>
+                <p className="mt-4 text-sm font-medium text-cyan-200 transition group-hover:text-cyan-100">
+                  Abrir perfil y participantes
+                </p>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.03] p-6 text-sm text-slate-400">
+            No hay eventos de Conferencia, Seminario o Taller disponibles en esta organización.
+          </div>
+        )}
+      </section>
     </main>
   );
 }
