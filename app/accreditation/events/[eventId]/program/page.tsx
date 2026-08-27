@@ -3,14 +3,10 @@ import { redirect } from "next/navigation";
 
 import Topbar from "@/components/topbar";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
-import AccreditationEventProfileCard from "@/features/accreditation/participants/components/accreditation-event-profile-card";
-import AccreditationParticipantBoard from "@/features/accreditation/participants/components/accreditation-participant-board";
-import { buildAccreditationParticipantOperationalReadModel } from "@/features/accreditation/participants";
+import AccreditationProgramBoard from "@/features/accreditation/program/components/accreditation-program-board";
+import { buildAccreditationProgramReadModel } from "@/features/accreditation/program";
 import { isAccreditationPhase2EventType } from "@/features/accreditation/events";
-import { createSupabaseAccreditationAccessRepositories } from "@/repositories/supabase-accreditation-access-repositories";
-import { createSupabaseAccreditationCheckInRepositories } from "@/repositories/supabase-accreditation-checkin-repositories";
-import { createSupabaseAccreditationInvitationDeliveryRepositories } from "@/repositories/supabase-accreditation-invitation-repositories";
-import { createSupabaseAccreditationRepositories } from "@/repositories/supabase-accreditation-repositories";
+import { createSupabaseAccreditationProgramRepositories } from "@/repositories/supabase-accreditation-program-repositories";
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
@@ -23,7 +19,7 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   const { eventId } = await params;
 
   return {
-    title: `Acreditación · Evento ${eventId}`,
+    title: `Acreditación · Programa ${eventId}`,
   };
 }
 
@@ -45,12 +41,12 @@ function WorkspaceNotice({
   );
 }
 
-export default async function AccreditationEventPage({ params }: PageParams) {
+export default async function AccreditationProgramPage({ params }: PageParams) {
   const { eventId } = await params;
   const authUser = await getSupabaseAuthUser();
 
   if (!authUser) {
-    redirect(`/login?next=/accreditation/events/${eventId}`);
+    redirect(`/login?next=/accreditation/events/${eventId}/program`);
   }
 
   const workspace = await loadWorkspaceBootstrap({ id: authUser.id, email: authUser.email });
@@ -58,7 +54,7 @@ export default async function AccreditationEventPage({ params }: PageParams) {
   if (workspace.authState.status !== "ready") {
     return (
       <WorkspaceNotice
-        title="No pudimos abrir el evento"
+        title="No pudimos abrir el programa"
         description={getWorkspaceAuthStateMessage(workspace.authState)}
       />
     );
@@ -83,7 +79,7 @@ export default async function AccreditationEventPage({ params }: PageParams) {
     accountMetadata: currentProfile.metadata,
   });
 
-  const canManageParticipants = permissions.includes("event.edit") || permissions.includes("settings.manage");
+  const canManageProgram = permissions.includes("event.edit") || permissions.includes("settings.manage");
   const event = workspace.events.find((item) => item.id === eventId && item.organizationId === workspace.currentOrganizationId) ?? null;
 
   if (!event) {
@@ -99,47 +95,28 @@ export default async function AccreditationEventPage({ params }: PageParams) {
     return (
       <WorkspaceNotice
         title="Este evento no pertenece a la Fase 2"
-        description="La vista de perfil y participantes solo está disponible para eventos de tipo Conferencia, Seminario o Taller."
+        description="El programa y las sesiones solo están disponibles para eventos de tipo Conferencia, Seminario o Taller."
       />
     );
   }
 
   const client = getSupabaseServerClient() as never;
-  const enrollmentRepositories = createSupabaseAccreditationRepositories(client);
-  const accessRepositories = createSupabaseAccreditationAccessRepositories(client);
-  const checkInRepositories = createSupabaseAccreditationCheckInRepositories(client);
-  const deliveryRepositories = createSupabaseAccreditationInvitationDeliveryRepositories(client);
-
-  const scope = {
+  const repositories = createSupabaseAccreditationProgramRepositories(client);
+  const sessions = await repositories.list({
     organizationId: event.organizationId,
     eventId: event.id,
-  };
+  });
 
-  const [enrollments, categories, accessGrants, deliveryAttempts, checkIns] = await Promise.all([
-    enrollmentRepositories.enrollments.list(scope),
-    enrollmentRepositories.categories.list(scope),
-    accessRepositories.list(scope),
-    deliveryRepositories.listByEvent(scope),
-    checkInRepositories.listByEvent(scope),
-  ]);
-
-  const model = buildAccreditationParticipantOperationalReadModel({
+  const model = buildAccreditationProgramReadModel({
     event,
-    canEdit: canManageParticipants,
-    canCancel: canManageParticipants,
-    enrollments,
-    categories,
-    accessGrants,
-    deliveryAttempts,
-    checkIns,
-    profiles: workspace.profiles,
+    sessions,
   });
 
   if (!model) {
     return (
       <WorkspaceNotice
-        title="Este evento no puede abrirse como Fase 2"
-        description="No pudimos construir el perfil operacional de participantes para este evento."
+        title="No pudimos abrir el programa"
+        description="No pudimos construir la vista operacional del programa para este evento."
       />
     );
   }
@@ -148,29 +125,52 @@ export default async function AccreditationEventPage({ params }: PageParams) {
     <main className="mx-auto w-full max-w-[1280px] space-y-5 px-4 py-6 sm:px-6 lg:px-0">
       <Topbar
         eyebrow="Acreditación"
-        title="Perfil y participantes"
-        description="Operación individual para Conferencia, Seminario y Taller sin usar Guest ni Reservation."
-        primaryAction={{
-          label: "Ver programa",
-          href: `/accreditation/events/${event.id}/program`,
-        }}
+        title="Programa y sesiones"
+        description="Agenda operativa para Conferencia, Seminario y Taller sin usar acceso, check-in ni RSVP."
         secondaryAction={{
+          label: "Volver al perfil",
+          href: `/accreditation/events/${event.id}`,
+        }}
+        primaryAction={{
           label: "Volver a acreditación",
           href: "/accreditation",
         }}
       />
+
       <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
         <span>{event.eventType}</span>
         <span>·</span>
         <span>{event.operationalModel}</span>
+        <span>·</span>
+        <span>{event.timezone}</span>
       </div>
 
-      <AccreditationEventProfileCard profile={model.eventProfile} />
-      <AccreditationParticipantBoard
+      <section className="rounded-[1.8rem] border border-white/10 bg-[#0d1117] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">Perfil</p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">{model.eventProfile.eventName}</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">{model.eventProfile.scheduleLabel}</p>
+            <p className="mt-2 text-sm text-slate-500">{model.eventProfile.venueLabel}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:w-[28rem]">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Sesiones</p>
+              <p className="mt-2 text-lg font-semibold text-white">{model.summary.total}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Programadas</p>
+              <p className="mt-2 text-lg font-semibold text-white">{model.summary.upcoming}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <AccreditationProgramBoard
         eventId={event.id}
-        categories={categories}
+        eventTimezone={event.timezone}
         model={model}
-        canManageParticipants={canManageParticipants}
+        canManageProgram={canManageProgram}
       />
     </main>
   );
