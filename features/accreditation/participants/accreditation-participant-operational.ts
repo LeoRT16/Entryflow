@@ -6,6 +6,7 @@ import type { AccreditationWhatsAppDeliveryAttempt } from "@/features/accreditat
 import { getAccreditationInvitationDeliveryLabel, getAccreditationInvitationDeliveryTone } from "@/features/accreditation/invitations";
 import type { Event } from "@/features/domain/types";
 import { buildAccreditationEventProfile, isAccreditationPhase2EventType, type AccreditationEventProfile } from "../events/accreditation-event-profile";
+import { buildAccreditationParticipantDisplayModel, type AccreditationParticipantDisplayModel } from "./accreditation-participant-display";
 import {
   mergeAccreditationParticipantMetadata,
   resolveAccreditationParticipantProfile,
@@ -28,6 +29,7 @@ export type AccreditationParticipantOperationalRow = {
   status: AccreditationEnrollment["status"];
   statusLabel: string;
   profile: AccreditationParticipantProfile;
+  presentation: AccreditationParticipantDisplayModel;
   credentialState: "missing" | "active" | "revoked";
   credentialStateLabel: string;
   invitationState: AccreditationParticipantInvitationState;
@@ -180,12 +182,19 @@ export function buildAccreditationParticipantOperationalReadModel(
       const latestAttempt = [...attempts].sort(compareAttemptsDesc)[0];
       const latestCheckIn = checkInByEnrollmentId.get(enrollment.id);
       const profile = resolveAccreditationParticipantProfile(enrollment.metadata);
+      const presentation = buildAccreditationParticipantDisplayModel({
+        participantId: enrollment.id,
+        participantName: enrollment.name,
+        metadata: enrollment.metadata,
+        categoryName: category?.name,
+        eventName: input.event.name,
+      });
       const credentialState = resolveCredentialState(accessGrant);
       const checkInState = buildCheckInState(latestCheckIn);
 
       return {
         enrollmentId: enrollment.id,
-        displayName: profile.badgeName || enrollment.name,
+        displayName: presentation.displayName,
         participantName: enrollment.name,
         email: enrollment.email ?? undefined,
         phone: enrollment.phone ?? undefined,
@@ -194,6 +203,7 @@ export function buildAccreditationParticipantOperationalReadModel(
         status: enrollment.status,
         statusLabel: enrollment.status === "active" ? "Activo" : "Cancelado",
         profile,
+        presentation,
         ...credentialState,
         invitationState: latestAttempt?.deliveryStatus ?? "never_sent",
         invitationStateLabel: latestAttempt

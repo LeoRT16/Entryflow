@@ -235,10 +235,20 @@ test("participant operational read model resolves profile, invitation, credentia
   const cancelledRow = model?.rows.find((row) => row.enrollmentId === "enrollment-2");
 
   assert.equal(activeRow?.profile.company, "OpenAI Bolivia");
+  assert.equal(activeRow?.presentation.displayName, "Ana");
+  assert.equal(activeRow?.presentation.participantSubtitleLine, "Ana Pérez");
+  assert.equal(activeRow?.presentation.companyJobTitleLine, "OpenAI Bolivia · Speaker");
+  assert.equal(activeRow?.presentation.company, "OpenAI Bolivia");
+  assert.equal(activeRow?.presentation.jobTitle, "Speaker");
+  assert.equal(activeRow?.presentation.participantRole, "Ponente");
   assert.equal(activeRow?.credentialState, "active");
   assert.equal(activeRow?.invitationState, "delivered");
   assert.equal(activeRow?.checkInState, "checked_in");
   assert.equal(cancelledRow?.status, "cancelled");
+  assert.equal(cancelledRow?.presentation.displayName, "Bruno Gómez");
+  assert.equal(cancelledRow?.presentation.participantSubtitleLine, undefined);
+  assert.equal(cancelledRow?.presentation.companyJobTitleLine, undefined);
+  assert.equal(cancelledRow?.presentation.participantRole, "Asistente");
   assert.equal(cancelledRow?.credentialState, "revoked");
   assert.equal(cancelledRow?.invitationState, "failed");
   assert.equal(cancelledRow?.checkInState, "not_checked_in");

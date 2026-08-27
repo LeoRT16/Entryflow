@@ -151,7 +151,7 @@ export default function AccreditationParticipantRow({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="min-w-0 text-lg font-semibold tracking-tight text-white">{row.displayName}</h3>
+            <h3 className="min-w-0 text-lg font-semibold tracking-tight text-white">{row.presentation.displayName}</h3>
             <StatusBadge variant={row.status === "active" ? "success" : "warning"}>{row.statusLabel}</StatusBadge>
             <StatusBadge variant={row.credentialState === "revoked" ? "danger" : row.credentialState === "active" ? "success" : "warning"}>
               {row.credentialStateLabel}
@@ -160,19 +160,29 @@ export default function AccreditationParticipantRow({
             <StatusBadge variant={row.checkInState === "checked_in" ? "success" : "info"}>{row.checkInStateLabel}</StatusBadge>
           </div>
 
+          <div className="mt-2 text-sm text-slate-400">
+            <p className="font-medium text-slate-200">{row.participantName}</p>
+            {row.presentation.participantSubtitleLine ? <p className="mt-1">{row.presentation.participantSubtitleLine}</p> : null}
+            {row.presentation.companyJobTitleLine ? <p className="mt-1">{row.presentation.companyJobTitleLine}</p> : null}
+          </div>
+
           <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Meta label="Participante" value={row.participantName} />
+            <Meta label="Badge" value={row.presentation.displayName} />
             <Meta label="Teléfono" value={row.phone || "Sin teléfono"} />
             <Meta label="Categoría" value={row.categoryName || "Sin categoría"} />
             <Meta label="Credencial" value={row.accessCodePresent ? "Emitida" : "Sin emitir"} />
           </div>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Meta label="Empresa" value={row.profile.company || "Sin empresa"} />
-            <Meta label="Cargo" value={row.profile.jobTitle || "Sin cargo"} />
-            <Meta label="Badge" value={row.profile.badgeName || "Sin badge"} />
-            <Meta label="Rol" value={row.profile.participantRole || "Sin rol"} />
+            <Meta label="Empresa" value={row.presentation.company || "Sin empresa"} />
+            <Meta label="Cargo" value={row.presentation.jobTitle || "Sin cargo"} />
+            <Meta label="Rol" value={row.presentation.participantRole || "Sin rol"} />
+            <Meta label="Evento" value={row.presentation.eventName || "Sin evento"} />
           </div>
+
+          {row.presentation.participantRoleLine ? (
+            <p className="mt-3 text-sm text-slate-400">Clasificación: {row.presentation.participantRoleLine}</p>
+          ) : null}
 
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span>Invitación: {row.invitationStateLabel}</span>

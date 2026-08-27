@@ -62,21 +62,30 @@ function buildRequest(body: unknown, method = "POST") {
   });
 }
 
-type ParticipantMutationCall = {
-  organizationId: string;
-  eventId: string;
-  metadata: {
-    company?: string;
-    badgeName?: string;
-    [key: string]: unknown;
-  };
+type ParticipantMetadata = {
+  company?: string;
+  jobTitle?: string;
+  badgeName?: string;
+  participantRole?: string;
+  [key: string]: unknown;
 };
 
-type ParticipantCreateInput = ParticipantMutationCall & {
+type ParticipantCreateInput = {
+  organizationId: string;
+  eventId: string;
   name: string;
   email: string | null;
   phone: string | null;
   categoryId: string | null;
+  metadata: ParticipantMetadata;
+};
+
+type ParticipantUpdateInput = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  categoryId: string | null;
+  metadata: ParticipantMetadata | undefined;
 };
 
 type ParticipantMutationResponse = {
@@ -86,7 +95,7 @@ type ParticipantMutationResponse = {
 };
 
 test("participant create succeeds and preserves typed metadata", async () => {
-  const createCalls: ParticipantMutationCall[] = [];
+  const createCalls: ParticipantCreateInput[] = [];
   const response = await createParticipant(
     buildRequest({
       name: "Ana Pérez",
@@ -141,6 +150,8 @@ test("participant create succeeds and preserves typed metadata", async () => {
   assert.equal(createCalls[0]?.eventId, "event-1");
   assert.equal(createCalls[0]?.metadata.company, "OpenAI Bolivia");
   assert.equal(createCalls[0]?.metadata.badgeName, "Ana");
+  assert.equal(createCalls[0]?.metadata.jobTitle, "Speaker");
+  assert.equal(createCalls[0]?.metadata.participantRole, "Ponente");
 });
 
 test("participant create rejects unauthorized and unrelated events", async () => {
@@ -179,16 +190,19 @@ test("participant create rejects unauthorized and unrelated events", async () =>
 });
 
 test("participant update preserves unrelated metadata and cancel keeps history", async () => {
-  let updatePayload: { metadata?: ParticipantMutationCall["metadata"] } | null = null;
+  let updatePayload: ParticipantUpdateInput | null = null;
   let cancelled = false;
 
   const workspace = buildWorkspace();
 
   const response = await PATCH(
     buildRequest({
-      name: "Ana Pérez Actualizada",
-      badgeName: "Ana VIP",
+      name: "Ana Pérez",
+      categoryId: "category-1",
       company: "OpenAI Bolivia",
+      jobTitle: "Speaker",
+      badgeName: "Ana VIP",
+      participantRole: "Ponente",
     }, "PATCH"),
     { params: Promise.resolve({ eventId: "event-1", enrollmentId: "enrollment-1" }) },
     {
@@ -215,17 +229,23 @@ test("participant update preserves unrelated metadata and cancel keeps history",
               };
             },
             async update(_id: string, patch: Record<string, unknown>) {
-              updatePayload = patch;
+              updatePayload = patch as ParticipantUpdateInput;
               return {
                 id: "enrollment-1",
                 organizationId: "org-1",
                 eventId: "event-1",
-                name: "Ana Pérez Actualizada",
+                name: "Ana Pérez",
                 email: "ana@example.com",
                 phone: "+59170000001",
                 categoryId: "category-1",
                 status: "active",
-                metadata: { custom: "keep", company: "OpenAI Bolivia", badgeName: "Ana VIP" },
+                metadata: {
+                  custom: "keep",
+                  company: "OpenAI Bolivia",
+                  jobTitle: "Speaker",
+                  badgeName: "Ana VIP",
+                  participantRole: "Ponente",
+                },
                 createdAt: "2026-08-27T10:00:00.000Z",
                 updatedAt: "2026-08-27T10:20:00.000Z",
                 deletedAt: null,
@@ -254,13 +274,100 @@ test("participant update preserves unrelated metadata and cancel keeps history",
   );
 
   const payload = (await response.json()) as ParticipantMutationResponse;
+  const currentUpdatePayload = updatePayload as ParticipantUpdateInput | null;
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
-  const updatedMetadata = (updatePayload as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
-  assert.equal((updatedMetadata as Record<string, unknown>).custom, "keep");
-  assert.equal((updatedMetadata as Record<string, unknown>).badgeName, "Ana VIP");
+  assert.equal(currentUpdatePayload?.name, "Ana Pérez");
+  assert.equal(currentUpdatePayload?.categoryId, "category-1");
+  assert.equal(currentUpdatePayload?.metadata?.custom, "keep");
+  assert.equal(currentUpdatePayload?.metadata?.company, "OpenAI Bolivia");
+  assert.equal(currentUpdatePayload?.metadata?.jobTitle, "Speaker");
+  assert.equal(currentUpdatePayload?.metadata?.badgeName, "Ana VIP");
+  assert.equal(currentUpdatePayload?.metadata?.participantRole, "Ponente");
   assert.equal(cancelled, false);
+
+  const clearedResponse = await PATCH(
+    buildRequest({
+      name: "Ana Pérez",
+      categoryId: "category-1",
+      company: "  OpenAI Bolivia  ",
+      jobTitle: "",
+      badgeName: " ",
+      participantRole: "Facilitator",
+    }, "PATCH"),
+    { params: Promise.resolve({ eventId: "event-1", enrollmentId: "enrollment-1" }) },
+    {
+      getAuthUser: async () => ({ id: "user-1", email: "admin@example.com" } as never),
+      loadWorkspace: async () => workspace as never,
+      getClient: () => ({}) as never,
+      createEnrollmentRepositories: () =>
+        ({
+          enrollments: {
+            async getById() {
+              return {
+                id: "enrollment-1",
+                organizationId: "org-1",
+                eventId: "event-1",
+                name: "Ana Pérez",
+                email: "ana@example.com",
+                phone: "+59170000001",
+                categoryId: "category-1",
+                status: "active",
+                metadata: { custom: "keep", company: "Old", badgeName: "Old badge" },
+                createdAt: "2026-08-27T10:00:00.000Z",
+                updatedAt: "2026-08-27T10:00:00.000Z",
+                deletedAt: null,
+              };
+            },
+            async update(_id: string, patch: Record<string, unknown>) {
+              updatePayload = patch as ParticipantUpdateInput;
+              return {
+                id: "enrollment-1",
+                organizationId: "org-1",
+                eventId: "event-1",
+                name: "Ana Pérez",
+                email: "ana@example.com",
+                phone: "+59170000001",
+                categoryId: "category-1",
+                status: "active",
+                metadata: { custom: "keep", company: "OpenAI Bolivia", participantRole: "Facilitator" },
+                createdAt: "2026-08-27T10:00:00.000Z",
+                updatedAt: "2026-08-27T10:20:00.000Z",
+                deletedAt: null,
+              };
+            },
+            async cancel() {
+              cancelled = true;
+              return {
+                id: "enrollment-1",
+                organizationId: "org-1",
+                eventId: "event-1",
+                name: "Ana Pérez",
+                email: "ana@example.com",
+                phone: "+59170000001",
+                categoryId: "category-1",
+                status: "cancelled",
+                metadata: { custom: "keep" },
+                createdAt: "2026-08-27T10:00:00.000Z",
+                updatedAt: "2026-08-27T10:20:00.000Z",
+                deletedAt: null,
+              };
+            },
+          },
+        }) as never,
+    },
+  );
+
+  const clearedPayload = (await clearedResponse.json()) as ParticipantMutationResponse;
+  const clearedUpdatePayload = updatePayload as ParticipantUpdateInput | null;
+
+  assert.equal(clearedResponse.status, 200);
+  assert.equal(clearedPayload.ok, true);
+  assert.equal(clearedUpdatePayload?.metadata?.company, "OpenAI Bolivia");
+  assert.equal(clearedUpdatePayload?.metadata?.jobTitle, undefined);
+  assert.equal(clearedUpdatePayload?.metadata?.badgeName, undefined);
+  assert.equal(clearedUpdatePayload?.metadata?.participantRole, "Facilitator");
 
   const cancelResponse = await DELETE(
     new Request("http://localhost", { method: "DELETE" }),

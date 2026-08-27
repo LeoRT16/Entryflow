@@ -70,8 +70,18 @@ export default function AccreditationParticipantFormFields({
       </label>
       <Input label="Empresa" name="company" defaultValue={defaults?.company} placeholder="Empresa u organización" />
       <Input label="Cargo" name="jobTitle" defaultValue={defaults?.jobTitle} placeholder="Rol o cargo" />
-      <Input label="Badge" name="badgeName" defaultValue={defaults?.badgeName} placeholder="Nombre para credencial" />
-      <Input label="Rol participante" name="participantRole" defaultValue={defaults?.participantRole} placeholder="Asistente, speaker, staff..." />
+      <Input
+        label="Nombre para acreditación / badge"
+        name="badgeName"
+        defaultValue={defaults?.badgeName}
+        placeholder="Nombre visible en acreditación"
+      />
+      <Input
+        label="Rol del participante"
+        name="participantRole"
+        defaultValue={defaults?.participantRole}
+        placeholder="Asistente, speaker, staff..."
+      />
     </div>
   );
 }
