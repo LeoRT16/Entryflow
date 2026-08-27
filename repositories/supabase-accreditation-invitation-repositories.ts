@@ -33,6 +33,7 @@ function createNoopRepositories(): AccreditationInvitationDeliveryRepository {
     create: unavailable,
     getByMessageId: unavailable,
     listByEnrollment: unavailable,
+    listByEvent: unavailable,
   };
 }
 
@@ -109,6 +110,19 @@ export function createSupabaseAccreditationInvitationDeliveryRepositories(
             .from<AccreditationWhatsAppDeliveryAttemptRow[]>("accreditation_whatsapp_delivery_attempts")
             .select("*")
             .eq("enrollment_id", enrollmentId)
+            .order("attempt_number", { ascending: false }),
+          scope,
+        ),
+      );
+
+      return rows.map((row) => mapAccreditationWhatsAppDeliveryAttemptRowToDomain(row as AccreditationWhatsAppDeliveryAttemptRow));
+    },
+    async listByEvent(scope) {
+      const rows = await unwrapMany(
+        buildQueryScope(
+          safeClient
+            .from<AccreditationWhatsAppDeliveryAttemptRow[]>("accreditation_whatsapp_delivery_attempts")
+            .select("*")
             .order("attempt_number", { ascending: false }),
           scope,
         ),

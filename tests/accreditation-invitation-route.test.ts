@@ -172,6 +172,9 @@ test("accreditation invitation send preserves access data and stores a new deliv
           listByEnrollment: async () => {
             throw new Error("should not read attempts before insert");
           },
+          listByEvent: async () => {
+            throw new Error("should not read attempts before insert");
+          },
         } as never),
       sendWhatsApp: async (
         params: { recipient: string; guestName: string; eventName: string; accessCode: string; mediaId?: string },
@@ -273,6 +276,7 @@ test("accreditation invitation send fails closed when the enrollment phone is in
           },
           getByMessageId: async () => undefined,
           listByEnrollment: async () => [],
+          listByEvent: async () => [],
         } as never),
       sendWhatsApp: async () => {
         throw new Error("should not send when phone is invalid");

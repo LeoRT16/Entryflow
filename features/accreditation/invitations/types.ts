@@ -114,6 +114,7 @@ export type AccreditationInvitationDeliveryRepository = {
   create(attempt: AccreditationWhatsAppDeliveryAttempt): Promise<AccreditationWhatsAppDeliveryAttempt>;
   getByMessageId(scope: { organizationId: string; eventId: string }, messageId: string): Promise<AccreditationWhatsAppDeliveryAttempt | undefined>;
   listByEnrollment(scope: { organizationId: string; eventId: string }, enrollmentId: string): Promise<AccreditationWhatsAppDeliveryAttempt[]>;
+  listByEvent(scope: { organizationId: string; eventId: string }): Promise<AccreditationWhatsAppDeliveryAttempt[]>;
 };
 
 export type AccreditationInvitationScope = {

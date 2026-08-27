@@ -167,6 +167,39 @@ test("accreditation invitation delivery repository round-trips attempts through 
         },
       ],
     },
+    {
+      data: [
+        {
+          id: "attempt-1",
+          organization_id: "org-1",
+          event_id: "event-1",
+          enrollment_id: "enrollment-1",
+          access_grant_id: "grant-1",
+          operator_profile_id: "profile-1",
+          recipient: "59170000097",
+          access_code: "ACC-7K4D-9M2Q",
+          qr_token: "acc1_1234567890abcdef1234567890abcdef",
+          message_id: "wamid.mock-1",
+          attempt_number: 1,
+          delivery_status: "accepted",
+          status_history: [],
+          accepted_at: "2026-08-26T12:00:00.000Z",
+          sent_at: null,
+          delivered_at: null,
+          read_at: null,
+          failed_at: null,
+          failure_code: null,
+          failure_message: null,
+          failure_details: null,
+          template_name: "accreditation_invitation",
+          template_language: "es_MX",
+          media_id: null,
+          created_at: "2026-08-26T12:00:00.000Z",
+          updated_at: "2026-08-26T12:00:00.000Z",
+          deleted_at: null,
+        },
+      ],
+    },
   ]);
 
   const repositories = createSupabaseAccreditationInvitationDeliveryRepositories(client as never);
@@ -199,10 +232,12 @@ test("accreditation invitation delivery repository round-trips attempts through 
 
   const byMessageId = await repositories.getByMessageId({ organizationId: "org-1", eventId: "event-1" }, "wamid.mock-1");
   const list = await repositories.listByEnrollment({ organizationId: "org-1", eventId: "event-1" }, "enrollment-1");
+  const byEvent = await repositories.listByEvent({ organizationId: "org-1", eventId: "event-1" });
 
   assert.equal(created.accessCode, "ACC-7K4D-9M2Q");
   assert.equal(byMessageId?.qrToken, "acc1_1234567890abcdef1234567890abcdef");
   assert.equal(list.length, 1);
+  assert.equal(byEvent.length, 1);
   assert.ok(client.calls.some((call) => call.table === "accreditation_whatsapp_delivery_attempts"));
   assert.equal(client.calls.some((call) => call.table === "whatsapp_delivery_attempts"), false);
 });
