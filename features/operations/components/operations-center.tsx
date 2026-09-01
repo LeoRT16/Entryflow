@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import StatusBadge from "@/components/status-badge";
 import Topbar from "@/components/topbar";
 import type { WorkspacePriorityItem } from "@/domain/workspace-priority";
+import { isAccreditationPhase2EventType } from "@/features/accreditation/events";
 import { useCheckInStore } from "@/services/workspace-service";
 
 type OperationsIncident = {
@@ -137,7 +138,24 @@ function IncidentGroup({
   );
 }
 
-function StableState() {
+function StableState({ accreditation, eventId }: { accreditation: boolean; eventId: string }) {
+  if (accreditation) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+        <p className="text-sm font-semibold text-white">Operación de acreditación estable</p>
+        <p className="mt-2 text-sm leading-6 text-slate-400">No hay incidencias de sectores, checkpoints o movimientos que requieran atención.</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link href={`/accreditation/events/${eventId}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-medium text-white">
+            Ver participantes
+          </Link>
+          <Link href={`/accreditation/events/${eventId}/access`} className="inline-flex h-10 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 text-sm font-medium text-cyan-50">
+            Abrir acceso operativo
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
       <p className="text-sm font-semibold text-white">Operación estable</p>
@@ -147,7 +165,8 @@ function StableState() {
 }
 
 export default function OperationsCenter() {
-  const { workspacePriority } = useCheckInStore();
+  const { workspacePriority, currentEvent } = useCheckInStore();
+  const accreditation = isAccreditationPhase2EventType(currentEvent.eventType);
 
   const incidents = useMemo(() => {
     const seen = new Map<string, OperationsIncident>();
@@ -209,7 +228,7 @@ export default function OperationsCenter() {
               ) : null}
             </>
           ) : (
-            <StableState />
+            <StableState accreditation={accreditation} eventId={currentEvent.id} />
           )}
         </div>
       </section>

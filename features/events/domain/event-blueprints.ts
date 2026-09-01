@@ -9,6 +9,17 @@ import type {
 } from "@/features/domain/types";
 import { getDefaultTimezone } from "@/lib/timezone";
 
+function getCurrentDateForTimezone(timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 export type EventBlueprint = {
   eventType: EventType;
   label: string;
@@ -67,12 +78,12 @@ const moduleLabels: Record<EventModule, string> = {
   activity: "Actividad",
   analytics: "Analíticas",
   notifications: "Notificaciones",
-  ticketing: "Ticketing",
+  ticketing: "Venta de tickets",
   payments: "Pagos",
   badges: "Credenciales",
   agenda: "Agenda",
   staff: "Staff",
-  gates: "Puertas",
+  gates: "Puntos de acceso",
   "capacity-control": "Control de capacidad",
   communications: "Comunicaciones",
 };
@@ -120,10 +131,10 @@ const eventBlueprints: EventBlueprint[] = [
     description: "Operación ágil de acceso, control de ingreso y visión en vivo.",
     operationalModel: "general-admission",
     allowedOperationalModels: ["general-admission", "mixed"],
-    requiredModules: ["overview", "access", "attendees", "admission", "operations", "activity"],
+    requiredModules: ["overview", "access", "attendees", "admission", "operations", "activity", "gates"],
     optionalModules: ["analytics", "notifications"],
-    futureModules: ["ticketing", "gates", "capacity-control", "payments"],
-    enabledModules: ["overview", "access", "attendees", "admission", "operations", "activity", "analytics", "notifications"],
+    futureModules: ["ticketing", "capacity-control", "payments"],
+    enabledModules: ["overview", "access", "attendees", "admission", "operations", "activity", "analytics", "notifications", "gates"],
     admissionMethods: ["qr", "code", "manual", "ticket", "credential"],
     resourceTypes: ["zone", "area"],
     capacityRequired: true,
@@ -136,10 +147,10 @@ const eventBlueprints: EventBlueprint[] = [
     description: "Alta rotación de acceso con recursos abiertos y operación distribuida.",
     operationalModel: "general-admission",
     allowedOperationalModels: ["general-admission", "mixed"],
-    requiredModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity"],
+    requiredModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "gates"],
     optionalModules: ["analytics", "notifications"],
-    futureModules: ["ticketing", "gates", "capacity-control"],
-    enabledModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "analytics", "notifications"],
+    futureModules: ["ticketing", "capacity-control"],
+    enabledModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "analytics", "notifications", "gates"],
     admissionMethods: ["qr", "manual", "ticket", "list", "invitation"],
     resourceTypes: ["zone", "area"],
     capacityRequired: true,
@@ -152,10 +163,10 @@ const eventBlueprints: EventBlueprint[] = [
     description: "Control de asistentes, recursos reservados y operación formal.",
     operationalModel: "reserved",
     allowedOperationalModels: ["reserved", "mixed", "accreditation"],
-    requiredModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity"],
+    requiredModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "gates"],
     optionalModules: ["analytics", "notifications"],
     futureModules: ["badges", "agenda", "communications"],
-    enabledModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "analytics", "notifications"],
+    enabledModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "analytics", "notifications", "gates"],
     admissionMethods: ["qr", "code", "manual", "list", "credential"],
     resourceTypes: ["room", "table", "booth"],
     capacityRequired: true,
@@ -168,10 +179,10 @@ const eventBlueprints: EventBlueprint[] = [
     description: "Flujo centrado en asistentes, acreditación y recursos de sala.",
     operationalModel: "reserved",
     allowedOperationalModels: ["reserved", "accreditation", "general-admission"],
-    requiredModules: ["overview", "access", "attendees", "admission", "resources", "activity"],
+    requiredModules: ["overview", "access", "attendees", "admission", "resources", "activity", "gates"],
     optionalModules: ["analytics", "notifications"],
     futureModules: ["agenda", "badges", "communications"],
-    enabledModules: ["overview", "access", "attendees", "admission", "resources", "activity", "analytics", "notifications"],
+    enabledModules: ["overview", "access", "attendees", "admission", "resources", "activity", "analytics", "notifications", "gates"],
     admissionMethods: ["qr", "code", "manual", "list", "credential"],
     resourceTypes: ["room", "zone"],
     capacityRequired: true,
@@ -184,10 +195,10 @@ const eventBlueprints: EventBlueprint[] = [
     description: "Formato informativo con control de asistentes y espacios limitados.",
     operationalModel: "reserved",
     allowedOperationalModels: ["reserved", "accreditation", "general-admission"],
-    requiredModules: ["overview", "access", "attendees", "admission", "resources", "activity"],
+    requiredModules: ["overview", "access", "attendees", "admission", "resources", "activity", "gates"],
     optionalModules: ["analytics", "notifications"],
     futureModules: ["agenda", "badges", "communications"],
-    enabledModules: ["overview", "access", "attendees", "admission", "resources", "activity", "analytics", "notifications"],
+    enabledModules: ["overview", "access", "attendees", "admission", "resources", "activity", "analytics", "notifications", "gates"],
     admissionMethods: ["qr", "code", "manual", "list", "credential"],
     resourceTypes: ["room", "zone"],
     capacityRequired: true,
@@ -200,10 +211,10 @@ const eventBlueprints: EventBlueprint[] = [
     description: "Interacción cercana con salas, asistentes y control simple de acceso.",
     operationalModel: "reserved",
     allowedOperationalModels: ["reserved", "general-admission", "mixed"],
-    requiredModules: ["overview", "access", "attendees", "admission", "resources", "activity"],
+    requiredModules: ["overview", "access", "attendees", "admission", "resources", "activity", "gates"],
     optionalModules: ["analytics", "notifications"],
     futureModules: ["agenda", "badges", "communications"],
-    enabledModules: ["overview", "access", "attendees", "admission", "resources", "activity", "analytics", "notifications"],
+    enabledModules: ["overview", "access", "attendees", "admission", "resources", "activity", "analytics", "notifications", "gates"],
     admissionMethods: ["qr", "code", "manual", "list", "credential"],
     resourceTypes: ["room", "zone"],
     capacityRequired: true,
@@ -216,31 +227,15 @@ const eventBlueprints: EventBlueprint[] = [
     description: "Escenario con asientos, sectores y control de ocupación.",
     operationalModel: "reserved",
     allowedOperationalModels: ["reserved", "general-admission"],
-    requiredModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity"],
+    requiredModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "gates"],
     optionalModules: ["analytics", "notifications"],
     futureModules: ["ticketing", "payments"],
-    enabledModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "analytics", "notifications"],
+    enabledModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "analytics", "notifications", "gates"],
     admissionMethods: ["qr", "code", "manual", "ticket", "invitation"],
     resourceTypes: ["seat", "zone", "box"],
     capacityRequired: true,
     icon: "theatre",
     tone: "rose",
-  },
-  {
-    eventType: "sports",
-    label: "Deportivo",
-    description: "Control de acceso distribuido con recursos por sector y capacidad crítica.",
-    operationalModel: "general-admission",
-    allowedOperationalModels: ["general-admission", "mixed", "reserved"],
-    requiredModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity"],
-    optionalModules: ["analytics", "notifications"],
-    futureModules: ["ticketing", "gates", "capacity-control"],
-    enabledModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "analytics", "notifications"],
-    admissionMethods: ["qr", "code", "manual", "ticket", "credential"],
-    resourceTypes: ["seat", "zone", "box"],
-    capacityRequired: true,
-    icon: "trophy",
-    tone: "amber",
   },
   {
     eventType: "private",
@@ -362,7 +357,7 @@ export function getEventNavigation(event: Pick<Event, "eventType" | "enabledModu
     enabled: false,
     required: false,
     future: true,
-    description: "Próximamente.",
+    description: module === "ticketing" ? "Venta y emisión de tickets próximamente; la validación de tickets ya está disponible." : "Próximamente.",
   }));
 
   return [
@@ -377,14 +372,14 @@ export function getEventNavigation(event: Pick<Event, "eventType" | "enabledModu
   ];
 }
 
-export function buildEventDraft(blueprint: EventBlueprint): EventDraft {
+export function buildEventDraft(blueprint: EventBlueprint, timezone = getDefaultTimezone()): EventDraft {
   return {
     name: blueprint.label === "Personalizado" ? "Nuevo evento" : blueprint.label,
     description: blueprint.description,
-    date: "8 de agosto de 2026",
+    date: getCurrentDateForTimezone(timezone),
     startTime: "21:00",
     endTime: "03:00",
-    timezone: getDefaultTimezone(),
+    timezone,
     venueId: "",
     venue: "",
     capacity: blueprint.capacityRequired ? "200" : "0",

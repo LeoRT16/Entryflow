@@ -20,6 +20,28 @@ import { resolveManagedVenueById } from "@/features/events/domain/event-venue-bo
 import type { EventBlueprint, EventDraft } from "@/features/events/domain";
 import { getDefaultTimezone } from "@/lib/timezone";
 
+const admissionMethodLabels: Record<EventDraft["admissionMethods"][number], string> = {
+  qr: "Código QR",
+  code: "Código",
+  manual: "Manual",
+  ticket: "Ticket validado",
+  credential: "Credencial",
+  list: "Lista",
+  invitation: "Invitación",
+};
+
+const resourceTypeLabels: Record<EventDraft["resourceTypes"][number], string> = {
+  table: "Mesa",
+  lounge: "Lounge",
+  seat: "Asiento",
+  zone: "Zona",
+  box: "Palco",
+  room: "Sala",
+  booth: "Stand",
+  gate: "Punto de acceso",
+  area: "Área",
+};
+
 type EventCreationWizardProps = {
   open: boolean;
   onClose: () => void;
@@ -200,7 +222,7 @@ export default function EventCreationWizard({
               Crear evento desde una plantilla
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-              La plataforma sigue funcionando igual, pero ahora podemos crear eventos con configuraciones diferentes para validar la nueva arquitectura conceptual.
+              Configurá el formato, la operación y las capacidades de tu próximo evento.
             </p>
           </div>
 
@@ -417,7 +439,7 @@ export default function EventCreationWizard({
                               : "border-white/10 bg-white/[0.03] text-slate-300"
                           } ${disabled ? "cursor-default opacity-90" : "hover:border-white/20 hover:bg-white/[0.06]"}`}
                         >
-                          {resourceType}
+                          {resourceTypeLabels[resourceType]}
                         </button>
                       );
                     })}
@@ -432,7 +454,7 @@ export default function EventCreationWizard({
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Paso 4</p>
                   <h3 className="mt-2 text-xl font-semibold text-white">Módulos</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Los módulos esenciales quedan bloqueados. Los futuros se muestran como próximos y no se pueden seleccionar.
+                    Las capacidades esenciales quedan activas. Las extensiones futuras se muestran por separado.
                   </p>
                 </div>
 
@@ -465,7 +487,7 @@ export default function EventCreationWizard({
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Próximamente</p>
-                          <p className="mt-2 text-sm text-slate-400">Estos módulos quedan fuera del alcance de la plantilla actual.</p>
+                          <p className="mt-2 text-sm text-slate-400">La venta y emisión de tickets todavía no forma parte de EntryFlow; los tickets externos sí pueden validarse.</p>
                         </div>
                         <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-slate-400">
                           {blueprint.futureModules.length} módulos
@@ -514,7 +536,7 @@ export default function EventCreationWizard({
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-medium uppercase tracking-[0.24em] text-white">{method}</span>
+                          <span className="text-sm font-medium uppercase tracking-[0.24em] text-white">{admissionMethodLabels[method]}</span>
                           {selected ? <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300">Activo</span> : null}
                         </div>
                       </button>
@@ -528,7 +550,7 @@ export default function EventCreationWizard({
               <section className="mt-6 space-y-5">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Paso 6</p>
-                  <h3 className="mt-2 text-xl font-semibold text-white">Review</h3>
+                  <h3 className="mt-2 text-xl font-semibold text-white">Revisión</h3>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
@@ -542,12 +564,12 @@ export default function EventCreationWizard({
                       <SummaryRow label="Capacidad" value={draft.capacity || "0"} />
                       <SummaryRow label="Modelo operativo" value={getOperationalModelLabel(draft.operationalModel)} />
                       <SummaryRow label="Módulos incluidos" value={`${draft.enabledModules.length}`} />
-                      <SummaryRow label="Admisión" value={draft.admissionMethods.join(" · ")} />
+                      <SummaryRow label="Admisión" value={draft.admissionMethods.map((method) => admissionMethodLabels[method]).join(" · ")} />
                     </dl>
                   </div>
 
                   <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Preview de navegación</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Capacidades habilitadas</p>
 
                     <div className="mt-4 space-y-3">
                       {navigationPreview.map((group) => (
@@ -572,7 +594,6 @@ export default function EventCreationWizard({
                                   </div>
                                   <div className="flex flex-col items-end gap-1 text-[10px] uppercase tracking-[0.24em] text-slate-500">
                                     <span>{item.required ? "Esencial" : item.future ? "Próximamente" : "Opcional"}</span>
-                                    <span>{item.route ?? "Sin ruta legacy"}</span>
                                   </div>
                                 </div>
                               </div>
@@ -660,7 +681,7 @@ export default function EventCreationWizard({
                 <div className="mt-4 flex flex-wrap gap-2">
                   {draft.admissionMethods.map((method) => (
                     <span key={method} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-medium uppercase tracking-[0.22em] text-slate-300">
-                      {method}
+                      {admissionMethodLabels[method]}
                     </span>
                   ))}
                 </div>
@@ -672,7 +693,7 @@ export default function EventCreationWizard({
                   {draft.resourceTypes.length ? (
                     draft.resourceTypes.map((resourceType) => (
                       <span key={resourceType} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-medium uppercase tracking-[0.22em] text-slate-300">
-                        {resourceType}
+                        {resourceTypeLabels[resourceType]}
                       </span>
                     ))
                   ) : (
@@ -682,9 +703,9 @@ export default function EventCreationWizard({
               </div>
 
               <div className="rounded-[1.5rem] border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-50">
-                <p className="font-medium">La Rota Carlota permanece intacta.</p>
+                <p className="font-medium">Configuración lista para operar.</p>
                 <p className="mt-2 leading-6 text-cyan-50/75">
-                  Este asistente solo agrega eventos a la biblioteca. No altera Reservas, Invitados, Ingreso, Espacios, Actividad u Operaciones.
+                  Al crear el evento, sus capacidades quedarán disponibles según el formato elegido.
                 </p>
               </div>
             </div>
@@ -696,7 +717,7 @@ export default function EventCreationWizard({
 }
 
 function WizardStepper({ step }: { step: number }) {
-  const labels = ["Tipo", "General", "Modelo", "Módulos", "Admisión", "Review"];
+  const labels = ["Tipo", "General", "Modelo", "Módulos", "Admisión", "Revisión"];
 
   return (
     <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">

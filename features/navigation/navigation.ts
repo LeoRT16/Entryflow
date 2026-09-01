@@ -8,6 +8,7 @@ export type NavigationItem = {
   icon: string;
   permission: AccountPermissionKey;
   module?: EventModule;
+  eventTypes?: PlatformEvent["eventType"][];
   description: string;
 };
 
@@ -22,9 +23,11 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     links: [
       { href: "/", label: "Resumen", icon: "dashboard", permission: "dashboard.view", description: "Centro de control principal." },
       { href: "/operations", label: "Operaciones", icon: "operations", permission: "operations.view", module: "operations", description: "Centro de control del evento." },
-      { href: "/reservations", label: "Reservas", icon: "reservations", permission: "reservation.view", module: "access", description: "Flujo de reservas y detalle operativo." },
-      { href: "/customers", label: "Invitados", icon: "customers", permission: "guest.view", module: "attendees", description: "Directorio de invitados y atención." },
-      { href: "/check-in", label: "Ingreso", icon: "checkin", permission: "checkin.view", module: "admission", description: "Validación y registro de ingresos." },
+      { href: "/reservations", label: "Reservas", icon: "reservations", permission: "reservation.view", module: "access", description: "Flujo de reservas y detalle operativo.", eventTypes: ["nightlife", "private", "custom"] },
+      { href: "/customers", label: "Invitados", icon: "customers", permission: "guest.view", module: "attendees", description: "Directorio de invitados y atención.", eventTypes: ["nightlife", "private", "custom"] },
+      { href: "/check-in", label: "Ingreso", icon: "checkin", permission: "checkin.view", module: "admission", description: "Validación y registro de ingresos.", eventTypes: ["nightlife", "private", "custom"] },
+      { href: "/accreditation/events/:eventId", label: "Acreditación", icon: "access", permission: "guest.view", module: "attendees", eventTypes: ["concert", "corporate", "conference", "seminar", "workshop", "theatre", "festival"], description: "Participantes, credenciales y perfiles operativos." },
+      { href: "/accreditation/events/:eventId/access", label: "Acceso operativo", icon: "admission", permission: "checkin.view", module: "admission", eventTypes: ["concert", "corporate", "conference", "seminar", "workshop", "theatre", "festival"], description: "Sectores, checkpoints, evaluación y movimientos." },
       { href: "/tables", label: "Espacios", icon: "tables", permission: "resource.view", module: "resources", description: "Estado y ocupación de espacios físicos." },
       { href: "/timeline", label: "Actividad", icon: "timeline", permission: "timeline.view", module: "activity", description: "Actividad reciente sincronizada." },
       { href: "/statistics", label: "Estadísticas", icon: "analytics", permission: "statistics.view", description: "Vista analítica del espacio de trabajo." },
@@ -44,7 +47,9 @@ function normalizePathname(pathname: string) {
   return pathname.split(/[?#]/)[0] || "/";
 }
 
-function isItemVisible(item: NavigationItem, can: (permission: AccountPermissionKey) => boolean, currentEvent?: Pick<PlatformEvent, "enabledModules"> | null) {
+type NavigationEventContext = Pick<PlatformEvent, "enabledModules"> & Partial<Pick<PlatformEvent, "id" | "eventType">>;
+
+function isItemVisible(item: NavigationItem, can: (permission: AccountPermissionKey) => boolean, currentEvent?: NavigationEventContext | null) {
   if (!can(item.permission)) {
     return false;
   }
@@ -57,13 +62,27 @@ function isItemVisible(item: NavigationItem, can: (permission: AccountPermission
     return false;
   }
 
+  if (item.eventTypes && currentEvent.eventType && !item.eventTypes.includes(currentEvent.eventType)) {
+    return false;
+  }
+
+  if (item.href.includes(":eventId") && !currentEvent.id) {
+    return false;
+  }
+
   return isModuleEnabled(currentEvent, item.module);
 }
 
-export function getNavigationGroups(can: (permission: AccountPermissionKey) => boolean, currentEvent?: Pick<PlatformEvent, "enabledModules"> | null) {
+function resolveNavigationHref(item: NavigationItem, currentEvent?: NavigationEventContext | null) {
+  return item.href.replace(":eventId", currentEvent?.id ?? "");
+}
+
+export function getNavigationGroups(can: (permission: AccountPermissionKey) => boolean, currentEvent?: NavigationEventContext | null) {
   return NAVIGATION_GROUPS.map((group) => ({
     ...group,
-    links: group.links.filter((item) => isItemVisible(item, can, currentEvent)),
+    links: group.links
+      .filter((item) => isItemVisible(item, can, currentEvent))
+      .map((item) => ({ ...item, href: resolveNavigationHref(item, currentEvent) })),
   })).filter((group) => group.links.length > 0);
 }
 
@@ -73,6 +92,10 @@ export function getNavigationItems() {
 
 export function getNavigationRouteMatch(pathname: string) {
   const currentPath = normalizePathname(pathname);
+
+  if (currentPath.startsWith("/accreditation/events/")) {
+    return NAVIGATION_GROUPS[0]?.links.find((item) => item.label === "Acreditación") ?? null;
+  }
 
   return getNavigationItems().find((item) => currentPath === item.href || currentPath.startsWith(`${item.href}/`)) ?? null;
 }
@@ -95,7 +118,7 @@ export function getFirstAccessibleNavigationHref(
 export function canAccessNavigationItem(
   item: NavigationItem,
   can: (permission: AccountPermissionKey) => boolean,
-  currentEvent?: Pick<PlatformEvent, "enabledModules"> | null,
+  currentEvent?: NavigationEventContext | null,
 ) {
   return isItemVisible(item, can, currentEvent);
 }
@@ -107,4 +130,3 @@ export function getNavigationPermissionForPath(pathname: string) {
 export function getNavigationModuleForPath(pathname: string) {
   return getNavigationRouteMatch(pathname)?.module ?? null;
 }
-

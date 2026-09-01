@@ -69,6 +69,22 @@ test("door sidebar stays limited to the three operational links by default", () 
   assert.equal(groups[0]?.links.some((item) => item.label === "Espacios"), false);
 });
 
+test("accreditation event navigation replaces legacy reservation surfaces", () => {
+  const concert: Pick<PlatformEvent, "id" | "eventType" | "enabledModules"> = {
+    id: "concert-1",
+    eventType: "concert",
+    enabledModules: ["overview", "access", "attendees", "admission", "operations", "activity", "analytics", "notifications", "gates"],
+  };
+  const permissions = getRolePresetBySlug("administrator").permissions;
+  const links = getNavigationGroups(buildCan(permissions), concert)[0]?.links ?? [];
+
+  assert.equal(links.some((item) => item.label === "Reservas"), false);
+  assert.equal(links.some((item) => item.label === "Invitados"), false);
+  assert.equal(links.some((item) => item.label === "Ingreso"), false);
+  assert.equal(links.find((item) => item.label === "Acreditación")?.href, "/accreditation/events/concert-1");
+  assert.equal(links.find((item) => item.label === "Acceso operativo")?.href, "/accreditation/events/concert-1/access");
+});
+
 test("door navigation expands only when explicit overrides are present", () => {
   const basePermissions = getRolePresetBySlug("door").permissions;
   const withVenue = resolveAccountPermissions({
