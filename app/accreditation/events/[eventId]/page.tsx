@@ -6,12 +6,14 @@ import Topbar from "@/components/topbar";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import AccreditationEventProfileCard from "@/features/accreditation/participants/components/accreditation-event-profile-card";
 import AccreditationParticipantBoard from "@/features/accreditation/participants/components/accreditation-participant-board";
+import AccreditationTheatreSeatingPanel from "@/features/accreditation/theatre/components/accreditation-theatre-seating-panel";
 import { buildAccreditationParticipantOperationalReadModel } from "@/features/accreditation/participants";
 import { isAccreditationPhase2EventType } from "@/features/accreditation/events";
 import { createSupabaseAccreditationAccessRepositories } from "@/repositories/supabase-accreditation-access-repositories";
 import { createSupabaseAccreditationCheckInRepositories } from "@/repositories/supabase-accreditation-checkin-repositories";
 import { createSupabaseAccreditationInvitationDeliveryRepositories } from "@/repositories/supabase-accreditation-invitation-repositories";
 import { createSupabaseAccreditationRepositories } from "@/repositories/supabase-accreditation-repositories";
+import { createSupabaseAccreditationTheatreRepository } from "@/repositories/supabase-accreditation-theatre-repository";
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
@@ -110,18 +112,21 @@ export default async function AccreditationEventPage({ params }: PageParams) {
   const accessRepositories = createSupabaseAccreditationAccessRepositories(client);
   const checkInRepositories = createSupabaseAccreditationCheckInRepositories(client);
   const deliveryRepositories = createSupabaseAccreditationInvitationDeliveryRepositories(client);
+  const theatreRepository = createSupabaseAccreditationTheatreRepository(client);
 
   const scope = {
     organizationId: event.organizationId,
     eventId: event.id,
   };
 
-  const [enrollments, categories, accessGrants, deliveryAttempts, checkIns] = await Promise.all([
+  const [enrollments, categories, accessGrants, deliveryAttempts, checkIns, theatreSeats, theatreAssignments] = await Promise.all([
     enrollmentRepositories.enrollments.list(scope),
     enrollmentRepositories.categories.list(scope),
     accessRepositories.list(scope),
     deliveryRepositories.listByEvent(scope),
     checkInRepositories.listByEvent(scope),
+    event.eventType === "theatre" ? theatreRepository.listSeats(scope) : Promise.resolve([]),
+    event.eventType === "theatre" ? theatreRepository.listAssignments(scope) : Promise.resolve([]),
   ]);
 
   const model = buildAccreditationParticipantOperationalReadModel({
@@ -168,6 +173,15 @@ export default async function AccreditationEventPage({ params }: PageParams) {
           Abrir sectores y entitlements
         </Link>
       </div>
+      {event.eventType === "theatre" ? (
+        <AccreditationTheatreSeatingPanel
+          eventId={event.id}
+          seats={theatreSeats}
+          assignments={theatreAssignments}
+          participants={enrollments.map((enrollment) => ({ id: enrollment.id, name: enrollment.name }))}
+          canManage={canManageParticipants}
+        />
+      ) : null}
       <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
         <span>{event.eventType}</span>
         <span>·</span>
