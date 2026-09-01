@@ -1,5 +1,6 @@
 import type { AccreditationAccessGrantRow } from "@/features/accreditation/access";
 import type { AccreditationEnrollmentRow } from "@/features/accreditation/types";
+import type { Json } from "@/lib/supabase/types";
 import type {
   AccreditationAccessEntitlementRepository,
   AccreditationAccessEntitlementRow,
@@ -11,6 +12,8 @@ import type {
   AccreditationSectorAccessScope,
   AccreditationSectorMovementRepository,
   AccreditationSectorMovementRow,
+  AccreditationAccessCheckpointRepository,
+  AccreditationAccessCheckpointRow,
 } from "@/features/accreditation/sector-access";
 import {
   AccreditationSectorAccessValidationError,
@@ -33,6 +36,7 @@ import {
   mapAccreditationSectorAccessAttemptRowToDomain,
   mapAccreditationSectorAccessAttemptToRow,
   mapAccreditationSectorMovementRowToDomain,
+  mapAccreditationAccessCheckpointRowToDomain,
 } from "@/lib/supabase/accreditation-sector-access-mappers";
 import { mapAccreditationAccessGrantRowToDomain } from "@/lib/supabase/accreditation-access-mappers";
 import { mapAccreditationEnrollmentRowToDomain } from "@/lib/supabase/accreditation-mappers";
@@ -67,6 +71,13 @@ function createNoopRepositories(): AccreditationSectorAccessRepositories {
   };
 
   return {
+    checkpoints: {
+      create: unavailable,
+      update: unavailable,
+      deactivate: unavailable,
+      getById: unavailable,
+      listByEvent: unavailable,
+    },
     sectors: {
       create: unavailable,
       update: unavailable,
@@ -289,6 +300,60 @@ export function createSupabaseAccreditationSectorAccessRepositories(
     },
   };
 
+  const checkpoints: AccreditationAccessCheckpointRepository = {
+    async create(input) {
+      const sector = await getSectorById(client, input.sectorId);
+      if (!sector || sector.organizationId !== input.organizationId || sector.eventId !== input.eventId) {
+        throw new AccreditationSectorAccessValidationError("wrong_scope", "El checkpoint debe apuntar a un sector del mismo evento.");
+      }
+      const now = nowIso();
+      const row = {
+        id: crypto.randomUUID(),
+        organization_id: input.organizationId,
+        event_id: input.eventId,
+        sector_id: input.sectorId,
+        name: input.name.trim(),
+        code: input.code?.trim() || null,
+        status: input.status ?? "active",
+        metadata: (input.metadata as Json | null | undefined) ?? null,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+      } satisfies AccreditationAccessCheckpointRow;
+      const { data, error } = await client.from<AccreditationAccessCheckpointRow>("accreditation_access_checkpoints").insert(row).select("*").single();
+      if (error) throw error;
+      return mapAccreditationAccessCheckpointRowToDomain(data as AccreditationAccessCheckpointRow);
+    },
+    async update(id, patch) {
+      const current = await checkpoints.getById(id);
+      if (!current) throw new Error("Accreditation checkpoint not found.");
+      const { data, error } = await client.from<AccreditationAccessCheckpointRow>("accreditation_access_checkpoints").update({
+        id: current.id,
+        organization_id: current.organizationId,
+        event_id: current.eventId,
+        sector_id: current.sectorId,
+        name: patch.name?.trim() || current.name,
+        code: patch.code?.trim() || null,
+        status: patch.status ?? current.status,
+        metadata: patch.metadata ?? null,
+        created_at: current.createdAt,
+        updated_at: nowIso(),
+        deleted_at: current.deletedAt ?? null,
+      }).eq("id", id).select("*").single();
+      if (error) throw error;
+      return mapAccreditationAccessCheckpointRowToDomain(data as AccreditationAccessCheckpointRow);
+    },
+    async deactivate(id) { return checkpoints.update(id, { status: "inactive" }); },
+    async getById(id) {
+      const row = await unwrapSingle(client.from<AccreditationAccessCheckpointRow>("accreditation_access_checkpoints").select("*").eq("id", id).eq("deleted_at", null));
+      return row ? mapAccreditationAccessCheckpointRowToDomain(row) : undefined;
+    },
+    async listByEvent(scope) {
+      const rows = await unwrapMany(buildQueryScope(client.from<AccreditationAccessCheckpointRow[]>("accreditation_access_checkpoints").select("*").order("name", { ascending: true }), scope));
+      return rows.map((row) => mapAccreditationAccessCheckpointRowToDomain(row));
+    },
+  };
+
   const entitlements: AccreditationAccessEntitlementRepository = {
     async assign(input) {
       const existing = await resolveActiveByGrantAndSector(client, { organizationId: input.organizationId, eventId: input.eventId }, input.accessGrantId, input.sectorId);
@@ -451,24 +516,38 @@ export function createSupabaseAccreditationSectorAccessRepositories(
 
   const movements: AccreditationSectorMovementRepository = {
     async record(input) {
+      const rpcName = input.checkpointId ? "accreditation_sector_record_movement_at_checkpoint" : "accreditation_sector_record_movement";
+      const rpcArgs = input.checkpointId
+        ? {
+            movement_organization_id: input.organizationId,
+            movement_event_id: input.eventId,
+            movement_checkpoint_id: input.checkpointId,
+            movement_access_grant_id: input.accessGrantId ?? null,
+            movement_enrollment_id: input.enrollmentId ?? null,
+            movement_operator_profile_id: input.operatorProfileId,
+            movement_type: input.movement,
+            movement_source: input.source,
+            movement_credential_reference: input.credentialReference,
+          }
+        : {
+            movement_organization_id: input.organizationId,
+            movement_event_id: input.eventId,
+            movement_access_grant_id: input.accessGrantId ?? null,
+            movement_enrollment_id: input.enrollmentId ?? null,
+            movement_sector_id: input.sectorId ?? null,
+            movement_operator_profile_id: input.operatorProfileId,
+            movement_type: input.movement,
+            movement_source: input.source,
+            movement_credential_reference: input.credentialReference,
+            movement_sector_reference: input.sectorReference,
+          };
       const { data, error } = await client.rpc<{
         status: "recorded" | "already_inside" | "already_outside" | "denied";
         inside: boolean;
         movement_id: string | null;
         attempt_id: string | null;
         denial_reason: string | null;
-      }[]>("accreditation_sector_record_movement", {
-        movement_organization_id: input.organizationId,
-        movement_event_id: input.eventId,
-        movement_access_grant_id: input.accessGrantId ?? null,
-        movement_enrollment_id: input.enrollmentId ?? null,
-        movement_sector_id: input.sectorId ?? null,
-        movement_operator_profile_id: input.operatorProfileId,
-        movement_type: input.movement,
-        movement_source: input.source,
-        movement_credential_reference: input.credentialReference,
-        movement_sector_reference: input.sectorReference,
-      });
+      }[]>(rpcName, rpcArgs);
 
       if (error) {
         throw error;
@@ -506,5 +585,5 @@ export function createSupabaseAccreditationSectorAccessRepositories(
     },
   };
 
-  return { sectors, entitlements, attempts, movements };
+      return { checkpoints, sectors, entitlements, attempts, movements };
 }

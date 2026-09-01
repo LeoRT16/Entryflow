@@ -12,6 +12,7 @@ import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services
 type AttemptBody = {
   credential?: string;
   sectorId?: string;
+  checkpointId?: string;
   source?: string;
 };
 
@@ -94,10 +95,11 @@ export async function POST(request: Request, context: { params: Promise<{ eventI
   }
 
   const credential = getText(body.credential);
-  const sectorReference = getText(body.sectorId);
+  const checkpointReference = getText(body.checkpointId);
+  const requestedSectorReference = getText(body.sectorId);
   const source = getText(body.source) || "manual_code";
 
-  if (!credential || !sectorReference) {
+  if (!credential || (!requestedSectorReference && !checkpointReference)) {
     return NextResponse.json({ ok: false, error: { code: "missing_fields", message: "Faltan la credencial y el sector." } }, { status: 400 });
   }
 
@@ -114,14 +116,18 @@ export async function POST(request: Request, context: { params: Promise<{ eventI
   const accreditationRepositories = createSupabaseAccreditationRepositories(client);
   const sectorRepositories = createSupabaseAccreditationSectorAccessRepositories(client);
   const targetScope = { organizationId: scope.event.organizationId, eventId: scope.event.id };
-  const sector = await sectorRepositories.sectors.getById(sectorReference);
+  const checkpoint = checkpointReference ? await sectorRepositories.checkpoints.getById(checkpointReference) : undefined;
+  const sectorReference = checkpointReference ? checkpoint?.code || checkpoint?.name || checkpointReference : requestedSectorReference;
+  const sector = checkpointReference ? checkpoint ? await sectorRepositories.sectors.getById(checkpoint.sectorId) : undefined : await sectorRepositories.sectors.getById(sectorReference);
   const resolvedSector = sector && sector.organizationId === targetScope.organizationId && sector.eventId === targetScope.eventId ? sector : undefined;
   const grant = normalizedSource === "qr"
     ? await accessRepositories.resolveByQrToken(targetScope, credential)
     : await accessRepositories.resolveByAccessCode(targetScope, credential);
   const enrollment = grant ? await accreditationRepositories.enrollments.getById(grant.enrollmentId) : undefined;
   const entitlements = grant ? await sectorRepositories.entitlements.listByGrant(targetScope, grant.id) : [];
-  const decision = evaluateAccreditationSectorAccess({
+  const decision = checkpointReference && (!checkpoint || checkpoint.status !== "active")
+    ? { allowed: false as const, reason: "checkpoint_inactive" as const }
+    : evaluateAccreditationSectorAccess({
     scope: targetScope,
     grant,
     enrollment,
@@ -134,6 +140,7 @@ export async function POST(request: Request, context: { params: Promise<{ eventI
     accessGrantId: grant?.id ?? null,
     enrollmentId: enrollment?.id ?? null,
     sectorId: resolvedSector?.id ?? null,
+    checkpointId: checkpoint?.id ?? null,
     operatorProfileId: scope.operatorProfileId,
     source: normalizedSource,
     credentialReference: credential,

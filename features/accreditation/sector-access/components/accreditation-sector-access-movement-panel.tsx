@@ -6,16 +6,18 @@ import { useState, type FormEvent } from "react";
 import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
 import { deriveAccreditationSectorPresence } from "@/features/accreditation/sector-access";
-import type { AccreditationAccessSector, AccreditationSectorMovement, AccreditationSectorAccessAttemptSource } from "@/features/accreditation/sector-access";
+import type { AccreditationAccessCheckpoint, AccreditationAccessSector, AccreditationSectorMovement, AccreditationSectorAccessAttemptSource } from "@/features/accreditation/sector-access";
 
 export default function AccreditationSectorAccessMovementPanel({
   eventId,
   sectors,
+  checkpoints,
   movements,
   canOperate,
 }: {
   eventId: string;
   sectors: AccreditationAccessSector[];
+  checkpoints: AccreditationAccessCheckpoint[];
   movements: AccreditationSectorMovement[];
   canOperate: boolean;
 }) {
@@ -30,17 +32,17 @@ export default function AccreditationSectorAccessMovementPanel({
     if (!canOperate || busy) return;
     const form = new FormData(event.currentTarget);
     const credential = String(form.get("credential") || "").trim();
-    const sectorId = String(form.get("sectorId") || "").trim();
+    const checkpointId = String(form.get("checkpointId") || "").trim();
     const movement = String(form.get("movement") || "entry");
     const source = String(form.get("source") || "manual_code") as AccreditationSectorAccessAttemptSource;
-    if (!credential || !sectorId) {
+    if (!credential || !checkpointId) {
       showToast({ title: "Faltan datos", description: "Ingresá una credencial y elegí un sector.", tone: "warning" });
       return;
     }
     setBusy(true);
     try {
       const response = await fetch(`/api/accreditation/events/${eventId}/sector-access/movements`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credential, sectorId, movement, source }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ credential, checkpointId, movement, source }),
       });
       const payload = (await response.json().catch(() => null)) as { ok?: boolean; result?: { status?: string; inside?: boolean }; error?: { message?: string } } | null;
       if (!response.ok) throw new Error(payload?.error?.message || "No se pudo registrar el movimiento.");
@@ -61,7 +63,7 @@ export default function AccreditationSectorAccessMovementPanel({
       </div>
       {canOperate ? <form onSubmit={submit} className="mt-5 grid gap-3 lg:grid-cols-[1.2fr_1fr_0.8fr_0.8fr_auto]">
         <input name="credential" placeholder="Código o QR exacto" className="surface-interactive w-full px-3 py-2" />
-        <select name="sectorId" defaultValue="" className="surface-interactive w-full px-3 py-2"><option value="" disabled>Elegí un sector</option>{sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.name} · {sector.code}</option>)}</select>
+        <select name="checkpointId" defaultValue="" className="surface-interactive w-full px-3 py-2"><option value="" disabled>Elegí un checkpoint</option>{checkpoints.map((checkpoint) => <option key={checkpoint.id} value={checkpoint.id}>{checkpoint.name} · {sectors.find((sector) => sector.id === checkpoint.sectorId)?.name ?? checkpoint.sectorId}</option>)}</select>
         <select name="movement" defaultValue="entry" className="surface-interactive w-full px-3 py-2"><option value="entry">Entrada</option><option value="exit">Salida</option></select>
         <select name="source" defaultValue="manual_code" className="surface-interactive w-full px-3 py-2"><option value="qr">QR</option><option value="manual_code">Código</option><option value="manual_operator">Operador</option></select>
         <button type="submit" disabled={busy} className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 text-sm font-medium text-emerald-50 transition hover:bg-emerald-400/15 disabled:opacity-60">{busy ? "Registrando..." : "Registrar"}</button>

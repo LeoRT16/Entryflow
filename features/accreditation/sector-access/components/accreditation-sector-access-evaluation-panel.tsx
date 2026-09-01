@@ -9,6 +9,7 @@ import type {
   AccreditationAccessSector,
   AccreditationSectorAccessAttempt,
   AccreditationSectorAccessAttemptSource,
+  AccreditationAccessCheckpoint,
 } from "@/features/accreditation/sector-access";
 
 function requestJson(input: RequestInfo | URL, init: RequestInit) {
@@ -34,11 +35,13 @@ function reasonLabel(reason?: string) {
 export default function AccreditationSectorAccessEvaluationPanel({
   eventId,
   sectors,
+  checkpoints,
   attempts,
   canEvaluate,
 }: {
   eventId: string;
   sectors: AccreditationAccessSector[];
+  checkpoints: AccreditationAccessCheckpoint[];
   attempts: AccreditationSectorAccessAttempt[];
   canEvaluate: boolean;
 }) {
@@ -55,10 +58,10 @@ export default function AccreditationSectorAccessEvaluationPanel({
 
     const form = new FormData(event.currentTarget);
     const credential = String(form.get("credential") || "").trim();
-    const sectorId = String(form.get("sectorId") || "").trim();
+    const checkpointId = String(form.get("checkpointId") || "").trim();
     const source = String(form.get("source") || "manual_code");
 
-    if (!credential || !sectorId) {
+    if (!credential || !checkpointId) {
       showToast({ title: "Faltan datos", description: "Ingresá una credencial y elegí un sector.", tone: "warning" });
       return;
     }
@@ -69,7 +72,7 @@ export default function AccreditationSectorAccessEvaluationPanel({
       const payload = await requestJson(`/api/accreditation/events/${eventId}/sector-access/attempts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ credential, sectorId, source }),
+        body: JSON.stringify({ credential, checkpointId, source }),
       });
       const decision = (payload as { decision?: { allowed?: boolean; reason?: string } } | null)?.decision;
 
@@ -107,9 +110,9 @@ export default function AccreditationSectorAccessEvaluationPanel({
       {canEvaluate ? (
         <form onSubmit={handleSubmit} className="mt-5 grid gap-3 lg:grid-cols-[1.2fr_1fr_0.8fr_auto]">
           <input name="credential" placeholder="Código o QR exacto" className="surface-interactive w-full px-3 py-2" />
-          <select name="sectorId" defaultValue="" className="surface-interactive w-full px-3 py-2">
-            <option value="" disabled>Elegí un sector</option>
-            {sectors.map((sector) => <option key={sector.id} value={sector.id}>{sector.name} · {sector.code}</option>)}
+          <select name="checkpointId" defaultValue="" className="surface-interactive w-full px-3 py-2">
+            <option value="" disabled>Elegí un checkpoint</option>
+            {checkpoints.map((checkpoint) => <option key={checkpoint.id} value={checkpoint.id}>{checkpoint.name} · {sectors.find((sector) => sector.id === checkpoint.sectorId)?.name ?? checkpoint.sectorId}</option>)}
           </select>
           <select name="source" defaultValue="manual_code" className="surface-interactive w-full px-3 py-2">
             <option value="qr">QR</option>

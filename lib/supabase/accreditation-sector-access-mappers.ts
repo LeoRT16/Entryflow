@@ -8,6 +8,8 @@ import type {
   AccreditationSectorAccessAttemptRow,
   AccreditationSectorMovement,
   AccreditationSectorMovementRow,
+  AccreditationAccessCheckpoint,
+  AccreditationAccessCheckpointRow,
 } from "@/features/accreditation/sector-access";
 
 function toMetadata(value: Json | null | undefined) {
@@ -95,6 +97,7 @@ export function mapAccreditationSectorAccessAttemptRowToDomain(
     accessGrantId: row.access_grant_id,
     enrollmentId: row.enrollment_id,
     sectorId: row.sector_id,
+    checkpointId: row.checkpoint_id,
     operatorProfileId: row.operator_profile_id,
     source: row.source,
     credentialReference: row.credential_reference,
@@ -117,6 +120,7 @@ export function mapAccreditationSectorAccessAttemptToRow(
     access_grant_id: attempt.accessGrantId ?? null,
     enrollment_id: attempt.enrollmentId ?? null,
     sector_id: attempt.sectorId ?? null,
+    checkpoint_id: attempt.checkpointId ?? null,
     operator_profile_id: attempt.operatorProfileId,
     source: attempt.source,
     credential_reference: attempt.credentialReference,
@@ -136,6 +140,7 @@ export function mapAccreditationSectorMovementRowToDomain(row: AccreditationSect
     accessGrantId: row.access_grant_id,
     enrollmentId: row.enrollment_id,
     sectorId: row.sector_id,
+    checkpointId: row.checkpoint_id,
     operatorProfileId: row.operator_profile_id,
     movement: row.movement,
     source: row.source,
@@ -145,5 +150,21 @@ export function mapAccreditationSectorMovementRowToDomain(row: AccreditationSect
     movedAt: row.moved_at,
     metadata: toMetadata(row.metadata),
     createdAt: row.created_at,
+  };
+}
+
+export function mapAccreditationAccessCheckpointRowToDomain(row: AccreditationAccessCheckpointRow): AccreditationAccessCheckpoint {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    eventId: row.event_id,
+    sectorId: row.sector_id,
+    name: row.name,
+    code: row.code ?? undefined,
+    status: row.status,
+    metadata: toMetadata(row.metadata),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
   };
 }

@@ -9,7 +9,7 @@ import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
 
-type MovementBody = { credential?: string; sectorId?: string; movement?: string; source?: string };
+type MovementBody = { credential?: string; sectorId?: string; checkpointId?: string; movement?: string; source?: string };
 type ScopeResult =
   | { ok: false; status: number; error: { code: string; message: string } }
   | { ok: true; event: { id: string; organizationId: string }; operatorProfileId: string };
@@ -49,10 +49,11 @@ export async function POST(request: Request, context: { params: Promise<{ eventI
   let body: MovementBody = {};
   try { body = (await request.json()) as MovementBody; } catch { body = {}; }
   const credential = text(body.credential);
-  const sectorReference = text(body.sectorId);
+  const requestedSectorReference = text(body.sectorId);
+  const checkpointReference = text(body.checkpointId);
   const movement = text(body.movement);
   const source = text(body.source) || "manual_code";
-  if (!credential || !sectorReference || !["entry", "exit"].includes(movement)) {
+  if (!credential || (!requestedSectorReference && !checkpointReference) || !["entry", "exit"].includes(movement)) {
     return NextResponse.json({ ok: false, error: { code: "missing_fields", message: "Faltan la credencial, el sector o el movimiento." } }, { status: 400 });
   }
   let normalizedSource;
@@ -64,12 +65,15 @@ export async function POST(request: Request, context: { params: Promise<{ eventI
   const accessRepositories = createSupabaseAccreditationAccessRepositories(client);
   const accreditationRepositories = createSupabaseAccreditationRepositories(client);
   const sectorRepositories = createSupabaseAccreditationSectorAccessRepositories(client);
-  const sector = await sectorRepositories.sectors.getById(sectorReference);
+  const checkpoint = checkpointReference ? await sectorRepositories.checkpoints.getById(checkpointReference) : undefined;
+  const sectorReference = checkpointReference ? checkpoint?.code || checkpoint?.name || checkpointReference : requestedSectorReference;
+  const sector = checkpointReference ? checkpoint ? await sectorRepositories.sectors.getById(checkpoint.sectorId) : undefined : await sectorRepositories.sectors.getById(sectorReference);
   const resolvedSector = sector && sector.organizationId === targetScope.organizationId && sector.eventId === targetScope.eventId ? sector : undefined;
   const grant = normalizedSource === "qr" ? await accessRepositories.resolveByQrToken(targetScope, credential) : await accessRepositories.resolveByAccessCode(targetScope, credential);
   const enrollment = grant ? await accreditationRepositories.enrollments.getById(grant.enrollmentId) : undefined;
   const result = await sectorRepositories.movements.record({
     ...targetScope,
+    checkpointId: checkpoint?.id,
     accessGrantId: grant?.id,
     enrollmentId: enrollment?.id,
     sectorId: resolvedSector?.id,

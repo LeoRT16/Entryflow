@@ -6,6 +6,7 @@ import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accou
 import AccreditationSectorAccessBoard from "@/features/accreditation/sector-access/components/accreditation-sector-access-board";
 import AccreditationSectorAccessEvaluationPanel from "@/features/accreditation/sector-access/components/accreditation-sector-access-evaluation-panel";
 import AccreditationSectorAccessMovementPanel from "@/features/accreditation/sector-access/components/accreditation-sector-access-movement-panel";
+import AccreditationAccessCheckpointsPanel from "@/features/accreditation/sector-access/components/accreditation-access-checkpoints-panel";
 import { createSupabaseAccreditationAccessRepositories } from "@/repositories/supabase-accreditation-access-repositories";
 import { createSupabaseAccreditationRepositories } from "@/repositories/supabase-accreditation-repositories";
 import { createSupabaseAccreditationSectorAccessRepositories } from "@/repositories/supabase-accreditation-sector-access-repositories";
@@ -106,11 +107,12 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
     eventId: currentEvent.id,
   };
 
-  const [enrollments, accessGrants, sectors, entitlements, attempts, movements] = await Promise.all([
+  const [enrollments, accessGrants, sectors, entitlements, checkpoints, attempts, movements] = await Promise.all([
     enrollmentRepositories.enrollments.list(scope),
     accessRepositories.list(scope),
     sectorAccessRepositories.sectors.listByEvent(scope),
     sectorAccessRepositories.entitlements.listByEvent(scope),
+    sectorAccessRepositories.checkpoints.listByEvent(scope),
     canViewSectorAccessHistory ? sectorAccessRepositories.attempts.listByEvent(scope) : Promise.resolve([]),
     canViewSectorAccessHistory ? sectorAccessRepositories.movements.listByEvent(scope) : Promise.resolve([]),
   ]);
@@ -142,6 +144,7 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
       <AccreditationSectorAccessEvaluationPanel
         eventId={currentEvent.id}
         sectors={sectors}
+        checkpoints={checkpoints}
         attempts={attempts}
         canEvaluate={canEvaluateSectorAccess}
       />
@@ -149,6 +152,7 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
       <AccreditationSectorAccessMovementPanel
         eventId={currentEvent.id}
         sectors={sectors}
+        checkpoints={checkpoints}
         movements={movements}
         canOperate={canEvaluateSectorAccess}
       />
@@ -162,6 +166,13 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
         enrollments={enrollments}
         accessGrants={accessGrants}
         entitlements={entitlements}
+      />
+
+      <AccreditationAccessCheckpointsPanel
+        eventId={currentEvent.id}
+        checkpoints={checkpoints}
+        sectors={sectors}
+        canManage={canManageSectors}
       />
     </main>
   );
