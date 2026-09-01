@@ -6,6 +6,8 @@ import type {
   AccreditationAccessSectorRow,
   AccreditationSectorAccessAttempt,
   AccreditationSectorAccessAttemptRow,
+  AccreditationSectorMovement,
+  AccreditationSectorMovementRow,
 } from "@/features/accreditation/sector-access";
 
 function toMetadata(value: Json | null | undefined) {
@@ -123,5 +125,25 @@ export function mapAccreditationSectorAccessAttemptToRow(
     denial_reason: attempt.denialReason ?? null,
     evaluated_at: attempt.evaluatedAt,
     metadata: toJson(attempt.metadata),
+  };
+}
+
+export function mapAccreditationSectorMovementRowToDomain(row: AccreditationSectorMovementRow): AccreditationSectorMovement {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    eventId: row.event_id,
+    accessGrantId: row.access_grant_id,
+    enrollmentId: row.enrollment_id,
+    sectorId: row.sector_id,
+    operatorProfileId: row.operator_profile_id,
+    movement: row.movement,
+    source: row.source,
+    evaluationAttemptId: row.evaluation_attempt_id,
+    credentialReference: row.credential_reference,
+    sectorReference: row.sector_reference,
+    movedAt: row.moved_at,
+    metadata: toMetadata(row.metadata),
+    createdAt: row.created_at,
   };
 }

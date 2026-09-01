@@ -5,6 +5,7 @@ import Topbar from "@/components/topbar";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import AccreditationSectorAccessBoard from "@/features/accreditation/sector-access/components/accreditation-sector-access-board";
 import AccreditationSectorAccessEvaluationPanel from "@/features/accreditation/sector-access/components/accreditation-sector-access-evaluation-panel";
+import AccreditationSectorAccessMovementPanel from "@/features/accreditation/sector-access/components/accreditation-sector-access-movement-panel";
 import { createSupabaseAccreditationAccessRepositories } from "@/repositories/supabase-accreditation-access-repositories";
 import { createSupabaseAccreditationRepositories } from "@/repositories/supabase-accreditation-repositories";
 import { createSupabaseAccreditationSectorAccessRepositories } from "@/repositories/supabase-accreditation-sector-access-repositories";
@@ -105,12 +106,13 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
     eventId: currentEvent.id,
   };
 
-  const [enrollments, accessGrants, sectors, entitlements, attempts] = await Promise.all([
+  const [enrollments, accessGrants, sectors, entitlements, attempts, movements] = await Promise.all([
     enrollmentRepositories.enrollments.list(scope),
     accessRepositories.list(scope),
     sectorAccessRepositories.sectors.listByEvent(scope),
     sectorAccessRepositories.entitlements.listByEvent(scope),
     canViewSectorAccessHistory ? sectorAccessRepositories.attempts.listByEvent(scope) : Promise.resolve([]),
+    canViewSectorAccessHistory ? sectorAccessRepositories.movements.listByEvent(scope) : Promise.resolve([]),
   ]);
 
   return (
@@ -142,6 +144,13 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
         sectors={sectors}
         attempts={attempts}
         canEvaluate={canEvaluateSectorAccess}
+      />
+
+      <AccreditationSectorAccessMovementPanel
+        eventId={currentEvent.id}
+        sectors={sectors}
+        movements={movements}
+        canOperate={canEvaluateSectorAccess}
       />
 
       <AccreditationSectorAccessBoard

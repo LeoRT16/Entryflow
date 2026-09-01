@@ -11,6 +11,10 @@ import type {
   AccreditationSectorAccessAttempt,
   AccreditationSectorAccessAttemptInput,
   AccreditationSectorAccessAttemptSource,
+  AccreditationSectorMovement,
+  AccreditationSectorMovementInput,
+  AccreditationSectorMovementResult,
+  AccreditationSectorPresence,
   AccreditationSectorAccessValidationErrorCode,
 } from "./types";
 
@@ -282,6 +286,64 @@ export function buildAccreditationSectorAccessAttempt(
     evaluatedAt: timestamp,
     createdAt: timestamp,
   };
+}
+
+function movementKey(movement: Pick<AccreditationSectorMovement, "organizationId" | "eventId" | "accessGrantId" | "sectorId">) {
+  return [movement.organizationId, movement.eventId, movement.accessGrantId, movement.sectorId].join(":");
+}
+
+export function deriveAccreditationSectorPresence(movements: AccreditationSectorMovement[]): AccreditationSectorPresence[] {
+  const latest = new Map<string, AccreditationSectorMovement>();
+
+  for (const movement of movements) {
+    const key = movementKey(movement);
+    const current = latest.get(key);
+
+    if (!current || movement.movedAt >= current.movedAt) {
+      latest.set(key, movement);
+    }
+  }
+
+  return [...latest.values()].map((movement) => ({
+    organizationId: movement.organizationId,
+    eventId: movement.eventId,
+    accessGrantId: movement.accessGrantId,
+    sectorId: movement.sectorId,
+    inside: movement.movement === "entry",
+    latestMovement: movement,
+  }));
+}
+
+export function getAccreditationSectorPresence(
+  movements: AccreditationSectorMovement[],
+  scope: { organizationId: string; eventId: string },
+  accessGrantId: string,
+  sectorId: string,
+) {
+  return deriveAccreditationSectorPresence(movements).find(
+    (presence) =>
+      presence.organizationId === scope.organizationId &&
+      presence.eventId === scope.eventId &&
+      presence.accessGrantId === accessGrantId &&
+      presence.sectorId === sectorId,
+  );
+}
+
+export function evaluateAccreditationSectorMovementTransition(
+  movement: AccreditationSectorMovementInput,
+  presence?: AccreditationSectorPresence,
+): AccreditationSectorMovementResult {
+  const inside = presence?.inside === true;
+
+  if (movement.movement === "entry" && inside) {
+    return { status: "already_inside", inside: true };
+  }
+
+  if (movement.movement === "exit" && !inside) {
+    return { status: "already_outside", inside: false };
+  }
+
+  return { status: "recorded", inside: movement.movement === "entry" };
 }
 
 export function assertAccreditationAccessSectorScope(params: {

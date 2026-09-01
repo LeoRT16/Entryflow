@@ -9,6 +9,8 @@ import type {
   AccreditationSectorAccessAttemptRow,
   AccreditationSectorAccessRepositories,
   AccreditationSectorAccessScope,
+  AccreditationSectorMovementRepository,
+  AccreditationSectorMovementRow,
 } from "@/features/accreditation/sector-access";
 import {
   AccreditationSectorAccessValidationError,
@@ -30,6 +32,7 @@ import {
   mapAccreditationAccessSectorToRow,
   mapAccreditationSectorAccessAttemptRowToDomain,
   mapAccreditationSectorAccessAttemptToRow,
+  mapAccreditationSectorMovementRowToDomain,
 } from "@/lib/supabase/accreditation-sector-access-mappers";
 import { mapAccreditationAccessGrantRowToDomain } from "@/lib/supabase/accreditation-access-mappers";
 import { mapAccreditationEnrollmentRowToDomain } from "@/lib/supabase/accreditation-mappers";
@@ -50,9 +53,13 @@ type SupabaseQuery<T = unknown> = PromiseLike<SupabaseQueryResult<T>> & {
   single(): Promise<SupabaseQueryResult<T>>;
 };
 
+type SupabaseRpcClient = {
+  rpc<T = unknown>(functionName: string, args: Record<string, unknown>): PromiseLike<SupabaseQueryResult<T>>;
+};
+
 export type AccreditationSectorAccessSupabaseClient = {
   from<T = unknown>(table: string): SupabaseQuery<T>;
-};
+} & SupabaseRpcClient;
 
 function createNoopRepositories(): AccreditationSectorAccessRepositories {
   const unavailable = async () => {
@@ -77,6 +84,10 @@ function createNoopRepositories(): AccreditationSectorAccessRepositories {
     },
     attempts: {
       append: unavailable,
+      listByEvent: unavailable,
+    },
+    movements: {
+      record: unavailable,
       listByEvent: unavailable,
     },
   };
@@ -438,5 +449,62 @@ export function createSupabaseAccreditationSectorAccessRepositories(
     },
   };
 
-  return { sectors, entitlements, attempts };
+  const movements: AccreditationSectorMovementRepository = {
+    async record(input) {
+      const { data, error } = await client.rpc<{
+        status: "recorded" | "already_inside" | "already_outside" | "denied";
+        inside: boolean;
+        movement_id: string | null;
+        attempt_id: string | null;
+        denial_reason: string | null;
+      }[]>("accreditation_sector_record_movement", {
+        movement_organization_id: input.organizationId,
+        movement_event_id: input.eventId,
+        movement_access_grant_id: input.accessGrantId ?? null,
+        movement_enrollment_id: input.enrollmentId ?? null,
+        movement_sector_id: input.sectorId ?? null,
+        movement_operator_profile_id: input.operatorProfileId,
+        movement_type: input.movement,
+        movement_source: input.source,
+        movement_credential_reference: input.credentialReference,
+        movement_sector_reference: input.sectorReference,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const result = Array.isArray(data) ? data[0] : data;
+      if (!result) {
+        throw new Error("Supabase returned no accreditation sector movement result.");
+      }
+
+      const movement = result.movement_id
+        ? await unwrapSingle(client.from<AccreditationSectorMovementRow>("accreditation_sector_movements").select("*").eq("id", result.movement_id))
+        : undefined;
+
+      return {
+        status: result.status,
+        inside: result.inside,
+        movement: movement ? mapAccreditationSectorMovementRowToDomain(movement) : undefined,
+        decision: result.status === "denied"
+          ? { allowed: false, reason: result.denial_reason as never }
+          : result.attempt_id
+            ? { allowed: true }
+            : undefined,
+      };
+    },
+    async listByEvent(scope) {
+      const rows = await unwrapMany(
+        buildQueryScope(
+          client.from<AccreditationSectorMovementRow[]>("accreditation_sector_movements").select("*").order("moved_at", { ascending: false }),
+          scope,
+        ),
+      );
+
+      return rows.map((row) => mapAccreditationSectorMovementRowToDomain(row));
+    },
+  };
+
+  return { sectors, entitlements, attempts, movements };
 }

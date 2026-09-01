@@ -6,6 +6,7 @@ export type AccreditationAccessSectorStatus = "active" | "inactive";
 export type AccreditationAccessEntitlementStatus = "active" | "revoked";
 export type AccreditationSectorAccessAttemptSource = "qr" | "manual_code" | "manual_operator";
 export type AccreditationSectorAccessAttemptDecision = "allow" | "deny";
+export type AccreditationSectorMovementType = "entry" | "exit";
 
 export type AccreditationSectorAccessScope = {
   organizationId: string;
@@ -187,6 +188,72 @@ export type AccreditationSectorAccessAttemptRow = {
   created_at: string;
 };
 
+export type AccreditationSectorMovement = {
+  id: string;
+  organizationId: string;
+  eventId: string;
+  accessGrantId: string;
+  enrollmentId: string;
+  sectorId: string;
+  operatorProfileId: string;
+  movement: AccreditationSectorMovementType;
+  source: AccreditationSectorAccessAttemptSource;
+  evaluationAttemptId?: string | null;
+  credentialReference: string;
+  sectorReference: string;
+  movedAt: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type AccreditationSectorMovementRow = {
+  id: string;
+  organization_id: string;
+  event_id: string;
+  access_grant_id: string;
+  enrollment_id: string;
+  sector_id: string;
+  operator_profile_id: string;
+  movement: AccreditationSectorMovementType;
+  source: AccreditationSectorAccessAttemptSource;
+  evaluation_attempt_id: string | null;
+  credential_reference: string;
+  sector_reference: string;
+  moved_at: string;
+  metadata: Json | null;
+  created_at: string;
+};
+
+export type AccreditationSectorPresence = {
+  organizationId: string;
+  eventId: string;
+  accessGrantId: string;
+  sectorId: string;
+  inside: boolean;
+  latestMovement?: AccreditationSectorMovement;
+};
+
+export type AccreditationSectorMovementInput = {
+  organizationId: string;
+  eventId: string;
+  accessGrantId?: string | null;
+  enrollmentId?: string | null;
+  sectorId?: string | null;
+  operatorProfileId: string;
+  movement: AccreditationSectorMovementType;
+  source: AccreditationSectorAccessAttemptSource;
+  evaluationAttemptId?: string | null;
+  credentialReference: string;
+  sectorReference: string;
+};
+
+export type AccreditationSectorMovementResult = {
+  status: "recorded" | "already_inside" | "already_outside" | "denied";
+  inside: boolean;
+  movement?: AccreditationSectorMovement;
+  decision?: AccreditationSectorAccessDecision;
+};
+
 export type AccreditationAccessSectorRepository = {
   create(input: AccreditationAccessSectorInput): Promise<AccreditationAccessSector>;
   update(id: string, patch: AccreditationAccessSectorUpdateInput): Promise<AccreditationAccessSector>;
@@ -212,11 +279,17 @@ export type AccreditationSectorAccessRepositories = {
   sectors: AccreditationAccessSectorRepository;
   entitlements: AccreditationAccessEntitlementRepository;
   attempts: AccreditationSectorAccessAttemptRepository;
+  movements: AccreditationSectorMovementRepository;
 };
 
 export type AccreditationSectorAccessAttemptRepository = {
   append(input: AccreditationSectorAccessAttemptInput): Promise<AccreditationSectorAccessAttempt>;
   listByEvent(scope: AccreditationSectorAccessScope): Promise<AccreditationSectorAccessAttempt[]>;
+};
+
+export type AccreditationSectorMovementRepository = {
+  record(input: AccreditationSectorMovementInput): Promise<AccreditationSectorMovementResult>;
+  listByEvent(scope: AccreditationSectorAccessScope): Promise<AccreditationSectorMovement[]>;
 };
 
 export type AccreditationSectorAccessDecisionInput = {
