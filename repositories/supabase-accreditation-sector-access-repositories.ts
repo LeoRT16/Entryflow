@@ -5,6 +5,8 @@ import type {
   AccreditationAccessEntitlementRow,
   AccreditationAccessSectorRepository,
   AccreditationAccessSectorRow,
+  AccreditationSectorAccessAttemptRepository,
+  AccreditationSectorAccessAttemptRow,
   AccreditationSectorAccessRepositories,
   AccreditationSectorAccessScope,
 } from "@/features/accreditation/sector-access";
@@ -12,6 +14,7 @@ import {
   AccreditationSectorAccessValidationError,
   buildAccreditationAccessEntitlement,
   buildAccreditationAccessSector,
+  buildAccreditationSectorAccessAttempt,
   deactivateAccreditationAccessSector,
   normalizeAccreditationAccessEntitlementStatus,
   normalizeAccreditationAccessSectorCode,
@@ -25,6 +28,8 @@ import {
   mapAccreditationAccessEntitlementToRow,
   mapAccreditationAccessSectorRowToDomain,
   mapAccreditationAccessSectorToRow,
+  mapAccreditationSectorAccessAttemptRowToDomain,
+  mapAccreditationSectorAccessAttemptToRow,
 } from "@/lib/supabase/accreditation-sector-access-mappers";
 import { mapAccreditationAccessGrantRowToDomain } from "@/lib/supabase/accreditation-access-mappers";
 import { mapAccreditationEnrollmentRowToDomain } from "@/lib/supabase/accreditation-mappers";
@@ -69,6 +74,10 @@ function createNoopRepositories(): AccreditationSectorAccessRepositories {
       listByGrant: unavailable,
       listByEvent: unavailable,
       resolveActiveByGrantAndSector: unavailable,
+    },
+    attempts: {
+      append: unavailable,
+      listByEvent: unavailable,
     },
   };
 }
@@ -396,5 +405,38 @@ export function createSupabaseAccreditationSectorAccessRepositories(
     },
   };
 
-  return { sectors, entitlements };
+  const attempts: AccreditationSectorAccessAttemptRepository = {
+    async append(input) {
+      const attempt = buildAccreditationSectorAccessAttempt(
+        input,
+        input.decision === "allow" ? { allowed: true } : { allowed: false, reason: input.denialReason },
+      );
+      const { data, error } = await client
+        .from<AccreditationSectorAccessAttemptRow>("accreditation_sector_access_attempts")
+        .insert(mapAccreditationSectorAccessAttemptToRow(attempt))
+        .select("*")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapAccreditationSectorAccessAttemptRowToDomain(data as AccreditationSectorAccessAttemptRow);
+    },
+    async listByEvent(scope) {
+      const rows = await unwrapMany(
+        buildQueryScope(
+          client
+            .from<AccreditationSectorAccessAttemptRow[]>("accreditation_sector_access_attempts")
+            .select("*")
+            .order("evaluated_at", { ascending: false }),
+          scope,
+        ),
+      );
+
+      return rows.map((row) => mapAccreditationSectorAccessAttemptRowToDomain(row as AccreditationSectorAccessAttemptRow));
+    },
+  };
+
+  return { sectors, entitlements, attempts };
 }

@@ -4,6 +4,8 @@ import type {
   AccreditationAccessEntitlementRow,
   AccreditationAccessSector,
   AccreditationAccessSectorRow,
+  AccreditationSectorAccessAttempt,
+  AccreditationSectorAccessAttemptRow,
 } from "@/features/accreditation/sector-access";
 
 function toMetadata(value: Json | null | undefined) {
@@ -78,5 +80,48 @@ export function mapAccreditationAccessEntitlementToRow(
     issued_at: entitlement.issuedAt,
     revoked_at: entitlement.revokedAt ?? null,
     metadata: toJson(entitlement.metadata),
+  };
+}
+
+export function mapAccreditationSectorAccessAttemptRowToDomain(
+  row: AccreditationSectorAccessAttemptRow,
+): AccreditationSectorAccessAttempt {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    eventId: row.event_id,
+    accessGrantId: row.access_grant_id,
+    enrollmentId: row.enrollment_id,
+    sectorId: row.sector_id,
+    operatorProfileId: row.operator_profile_id,
+    source: row.source,
+    credentialReference: row.credential_reference,
+    sectorReference: row.sector_reference,
+    decision: row.decision,
+    denialReason: row.denial_reason ?? undefined,
+    evaluatedAt: row.evaluated_at,
+    metadata: toMetadata(row.metadata),
+    createdAt: row.created_at,
+  };
+}
+
+export function mapAccreditationSectorAccessAttemptToRow(
+  attempt: AccreditationSectorAccessAttempt,
+): Omit<AccreditationSectorAccessAttemptRow, "created_at"> {
+  return {
+    id: attempt.id,
+    organization_id: attempt.organizationId,
+    event_id: attempt.eventId,
+    access_grant_id: attempt.accessGrantId ?? null,
+    enrollment_id: attempt.enrollmentId ?? null,
+    sector_id: attempt.sectorId ?? null,
+    operator_profile_id: attempt.operatorProfileId,
+    source: attempt.source,
+    credential_reference: attempt.credentialReference,
+    sector_reference: attempt.sectorReference,
+    decision: attempt.decision,
+    denial_reason: attempt.denialReason ?? null,
+    evaluated_at: attempt.evaluatedAt,
+    metadata: toJson(attempt.metadata),
   };
 }

@@ -11,6 +11,7 @@ import type {
 import {
   assertAccreditationAccessSectorScope,
   buildAccreditationAccessEntitlement,
+  buildAccreditationSectorAccessAttempt,
   buildAccreditationAccessSector,
   deactivateAccreditationAccessSector,
   evaluateAccreditationSectorAccess,
@@ -45,6 +46,13 @@ export function evaluateAccreditationAccessSectorDecision(
   input: AccreditationSectorAccessDecisionInput,
 ): AccreditationSectorAccessDecision {
   return evaluateAccreditationSectorAccess(input);
+}
+
+export function buildAccreditationSectorAccessAttemptRecord(
+  input: import("./types").AccreditationSectorAccessAttemptInput,
+  decision: AccreditationSectorAccessDecision,
+) {
+  return buildAccreditationSectorAccessAttempt(input, decision);
 }
 
 export function assertAccreditationAccessSectorBelongsToScope(params: {

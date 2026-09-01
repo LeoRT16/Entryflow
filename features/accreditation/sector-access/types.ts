@@ -4,6 +4,8 @@ import type { Json } from "@/lib/supabase/types";
 
 export type AccreditationAccessSectorStatus = "active" | "inactive";
 export type AccreditationAccessEntitlementStatus = "active" | "revoked";
+export type AccreditationSectorAccessAttemptSource = "qr" | "manual_code" | "manual_operator";
+export type AccreditationSectorAccessAttemptDecision = "allow" | "deny";
 
 export type AccreditationSectorAccessScope = {
   organizationId: string;
@@ -110,6 +112,8 @@ export type AccreditationAccessEntitlementRow = {
 };
 
 export type AccreditationSectorAccessValidationErrorCode =
+  | "invalid_source"
+  | "invalid_decision"
   | "invalid_status"
   | "invalid_name"
   | "invalid_code"
@@ -140,6 +144,49 @@ export type AccreditationSectorAccessDecision = {
   reason?: AccreditationSectorAccessDecisionReason;
 };
 
+export type AccreditationSectorAccessAttempt = {
+  id: string;
+  organizationId: string;
+  eventId: string;
+  accessGrantId?: string | null;
+  enrollmentId?: string | null;
+  sectorId?: string | null;
+  operatorProfileId: string;
+  source: AccreditationSectorAccessAttemptSource;
+  credentialReference: string;
+  sectorReference: string;
+  decision: AccreditationSectorAccessAttemptDecision;
+  denialReason?: AccreditationSectorAccessDecisionReason;
+  evaluatedAt: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type AccreditationSectorAccessAttemptInput = Omit<
+  AccreditationSectorAccessAttempt,
+  "id" | "evaluatedAt" | "createdAt"
+> & {
+  evaluatedAt?: string;
+};
+
+export type AccreditationSectorAccessAttemptRow = {
+  id: string;
+  organization_id: string;
+  event_id: string;
+  access_grant_id: string | null;
+  enrollment_id: string | null;
+  sector_id: string | null;
+  operator_profile_id: string;
+  source: AccreditationSectorAccessAttemptSource;
+  credential_reference: string;
+  sector_reference: string;
+  decision: AccreditationSectorAccessAttemptDecision;
+  denial_reason: AccreditationSectorAccessDecisionReason | null;
+  evaluated_at: string;
+  metadata: Json | null;
+  created_at: string;
+};
+
 export type AccreditationAccessSectorRepository = {
   create(input: AccreditationAccessSectorInput): Promise<AccreditationAccessSector>;
   update(id: string, patch: AccreditationAccessSectorUpdateInput): Promise<AccreditationAccessSector>;
@@ -164,6 +211,12 @@ export type AccreditationAccessEntitlementRepository = {
 export type AccreditationSectorAccessRepositories = {
   sectors: AccreditationAccessSectorRepository;
   entitlements: AccreditationAccessEntitlementRepository;
+  attempts: AccreditationSectorAccessAttemptRepository;
+};
+
+export type AccreditationSectorAccessAttemptRepository = {
+  append(input: AccreditationSectorAccessAttemptInput): Promise<AccreditationSectorAccessAttempt>;
+  listByEvent(scope: AccreditationSectorAccessScope): Promise<AccreditationSectorAccessAttempt[]>;
 };
 
 export type AccreditationSectorAccessDecisionInput = {

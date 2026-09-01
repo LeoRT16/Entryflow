@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Topbar from "@/components/topbar";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import AccreditationSectorAccessBoard from "@/features/accreditation/sector-access/components/accreditation-sector-access-board";
+import AccreditationSectorAccessEvaluationPanel from "@/features/accreditation/sector-access/components/accreditation-sector-access-evaluation-panel";
 import { createSupabaseAccreditationAccessRepositories } from "@/repositories/supabase-accreditation-access-repositories";
 import { createSupabaseAccreditationRepositories } from "@/repositories/supabase-accreditation-repositories";
 import { createSupabaseAccreditationSectorAccessRepositories } from "@/repositories/supabase-accreditation-sector-access-repositories";
@@ -81,6 +82,8 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
 
   const canManageSectors = permissions.includes("event.edit") || permissions.includes("settings.manage");
   const canAssignEntitlements = permissions.includes("access.issue");
+  const canEvaluateSectorAccess = permissions.includes("checkin.perform");
+  const canViewSectorAccessHistory = canEvaluateSectorAccess || permissions.includes("checkin.view");
   const currentEvent = workspace.events.find((item) => item.id === eventId && item.organizationId === workspace.currentOrganizationId) ?? null;
 
   if (!currentEvent) {
@@ -102,11 +105,12 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
     eventId: currentEvent.id,
   };
 
-  const [enrollments, accessGrants, sectors, entitlements] = await Promise.all([
+  const [enrollments, accessGrants, sectors, entitlements, attempts] = await Promise.all([
     enrollmentRepositories.enrollments.list(scope),
     accessRepositories.list(scope),
     sectorAccessRepositories.sectors.listByEvent(scope),
     sectorAccessRepositories.entitlements.listByEvent(scope),
+    canViewSectorAccessHistory ? sectorAccessRepositories.attempts.listByEvent(scope) : Promise.resolve([]),
   ]);
 
   return (
@@ -132,6 +136,13 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
         <span>·</span>
         <span>{currentEvent.timezone}</span>
       </section>
+
+      <AccreditationSectorAccessEvaluationPanel
+        eventId={currentEvent.id}
+        sectors={sectors}
+        attempts={attempts}
+        canEvaluate={canEvaluateSectorAccess}
+      />
 
       <AccreditationSectorAccessBoard
         eventId={currentEvent.id}

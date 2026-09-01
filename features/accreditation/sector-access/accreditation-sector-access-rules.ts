@@ -8,6 +8,9 @@ import type {
   AccreditationAccessSectorStatus,
   AccreditationSectorAccessDecision,
   AccreditationSectorAccessDecisionInput,
+  AccreditationSectorAccessAttempt,
+  AccreditationSectorAccessAttemptInput,
+  AccreditationSectorAccessAttemptSource,
   AccreditationSectorAccessValidationErrorCode,
 } from "./types";
 
@@ -46,6 +49,14 @@ export function normalizeAccreditationAccessEntitlementStatus(
   }
 
   throw new AccreditationSectorAccessValidationError("invalid_status", `Invalid accreditation access entitlement status: ${status ?? "undefined"}`);
+}
+
+export function normalizeAccreditationSectorAccessAttemptSource(source?: string | null): AccreditationSectorAccessAttemptSource {
+  if (source === "qr" || source === "manual_code" || source === "manual_operator") {
+    return source;
+  }
+
+  throw new AccreditationSectorAccessValidationError("invalid_source", `Invalid accreditation sector access source: ${source ?? "undefined"}`);
 }
 
 export function normalizeAccreditationAccessSectorName(value: string) {
@@ -244,6 +255,33 @@ export function evaluateAccreditationSectorAccess(input: AccreditationSectorAcce
   }
 
   return { allowed: false, reason: "no_sector_entitlement" };
+}
+
+export function buildAccreditationSectorAccessAttempt(
+  input: AccreditationSectorAccessAttemptInput,
+  decision: AccreditationSectorAccessDecision,
+  clock: () => string = nowIso,
+): AccreditationSectorAccessAttempt {
+  const timestamp = input.evaluatedAt ?? clock();
+  const normalizedSource = normalizeAccreditationSectorAccessAttemptSource(input.source);
+
+  if (decision.allowed && decision.reason) {
+    throw new AccreditationSectorAccessValidationError("invalid_decision", "Allowed sector access attempts cannot include a denial reason.");
+  }
+
+  if (!decision.allowed && !decision.reason) {
+    throw new AccreditationSectorAccessValidationError("invalid_decision", "Denied sector access attempts require a denial reason.");
+  }
+
+  return {
+    ...input,
+    id: createUuid(),
+    source: normalizedSource,
+    decision: decision.allowed ? "allow" : "deny",
+    denialReason: decision.reason,
+    evaluatedAt: timestamp,
+    createdAt: timestamp,
+  };
 }
 
 export function assertAccreditationAccessSectorScope(params: {
