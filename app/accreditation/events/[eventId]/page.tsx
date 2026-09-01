@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import Topbar from "@/components/topbar";
@@ -159,6 +160,14 @@ export default async function AccreditationEventPage({ params }: PageParams) {
           href: "/accreditation",
         }}
       />
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          href={`/accreditation/events/${event.id}/access`}
+          className="surface-interactive inline-flex h-11 items-center justify-center px-4 text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+        >
+          Abrir sectores y entitlements
+        </Link>
+      </div>
       <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
         <span>{event.eventType}</span>
         <span>·</span>
