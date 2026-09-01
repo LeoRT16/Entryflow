@@ -271,12 +271,33 @@ const eventBlueprints: EventBlueprint[] = [
   },
 ];
 
+const historicalEventBlueprints: EventBlueprint[] = [
+  {
+    eventType: "sports",
+    label: "Deportivo",
+    description: "Evento deportivo histórico.",
+    operationalModel: "general-admission",
+    allowedOperationalModels: ["general-admission", "mixed", "reserved"],
+    requiredModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity"],
+    optionalModules: ["analytics", "notifications"],
+    futureModules: ["ticketing", "capacity-control"],
+    enabledModules: ["overview", "access", "attendees", "admission", "resources", "operations", "activity", "analytics", "notifications"],
+    admissionMethods: ["qr", "code", "manual", "ticket", "credential"],
+    resourceTypes: ["seat", "zone", "box"],
+    capacityRequired: true,
+    icon: "trophy",
+    tone: "amber",
+  },
+];
+
 export function getEventBlueprints() {
   return eventBlueprints;
 }
 
 export function getEventBlueprint(eventType: EventType) {
-  return eventBlueprints.find((blueprint) => blueprint.eventType === eventType) ?? eventBlueprints.at(-1)!;
+  return eventBlueprints.find((blueprint) => blueprint.eventType === eventType)
+    ?? historicalEventBlueprints.find((blueprint) => blueprint.eventType === eventType)
+    ?? eventBlueprints.at(-1)!;
 }
 
 export function getEventTypeLabel(eventType: EventType) {

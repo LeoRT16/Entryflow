@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildEventDraft, getEventBlueprints, getEventModuleLabel } from "../features/events/domain/event-blueprints";
+import { buildEventDraft, getEventBlueprint, getEventBlueprints, getEventModuleLabel } from "../features/events/domain/event-blueprints";
 
 test("event blueprints expose only supported beta event types", () => {
   const types = getEventBlueprints().map((blueprint) => blueprint.eventType);
 
   assert.equal(types.includes("sports"), false);
   assert.deepEqual(types, ["nightlife", "concert", "festival", "corporate", "conference", "seminar", "workshop", "theatre", "private", "custom"]);
+  assert.equal(getEventBlueprint("sports").label, "Deportivo");
 });
 
 test("accreditation blueprints include live access checkpoints", () => {
