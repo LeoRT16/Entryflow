@@ -6,10 +6,35 @@ import {
   isAccreditationPhase2EventType,
 } from "@/features/accreditation/events";
 
-test("conference, seminar, and workshop are recognized as Phase 2 event types", () => {
+test("concert, conference, seminar, and workshop are recognized as accreditation event types", () => {
+  assert.equal(isAccreditationPhase2EventType("concert"), true);
   assert.equal(isAccreditationPhase2EventType("conference"), true);
   assert.equal(isAccreditationPhase2EventType("seminar"), true);
   assert.equal(isAccreditationPhase2EventType("workshop"), true);
+});
+
+test("concert event profiles use the canonical concert label", () => {
+  const profile = buildAccreditationEventProfile(
+    {
+      id: "event-concert",
+      name: "Concierto Horizonte",
+      eventType: "concert",
+      operationalModel: "general-admission",
+      startAt: "2026-09-05T15:00:00.000Z",
+      endAt: "2026-09-05T23:00:00.000Z",
+      timezone: "America/La_Paz",
+      venue: "Estadio principal",
+    },
+    {
+      participantCount: 250,
+      activeParticipantCount: 245,
+      cancelledParticipantCount: 5,
+    },
+  );
+
+  assert.ok(profile);
+  assert.equal(profile?.eventTypeLabel, "Concierto");
+  assert.equal(profile?.participantCount, 250);
 });
 
 test("unrelated event types are rejected by the Phase 2 event profile", () => {

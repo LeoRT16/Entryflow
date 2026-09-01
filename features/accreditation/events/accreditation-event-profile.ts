@@ -1,9 +1,9 @@
 import type { Event } from "@/features/domain/types";
 import { getEventTypeLabel, getOperationalModelLabel } from "@/features/events/domain/event-blueprints";
 
-export const ACCREDITATION_PHASE_2_EVENT_TYPES = new Set(["conference", "seminar", "workshop"] as const);
+export const ACCREDITATION_PHASE_2_EVENT_TYPES = new Set(["concert", "conference", "seminar", "workshop"] as const);
 
-export type AccreditationPhase2EventType = "conference" | "seminar" | "workshop";
+export type AccreditationPhase2EventType = "concert" | "conference" | "seminar" | "workshop";
 
 export type AccreditationEventProfile = {
   eventId: string;
