@@ -6,11 +6,36 @@ import {
   isAccreditationPhase2EventType,
 } from "@/features/accreditation/events";
 
-test("concert, conference, seminar, and workshop are recognized as accreditation event types", () => {
+test("concert, corporate, conference, seminar, and workshop are recognized as accreditation event types", () => {
   assert.equal(isAccreditationPhase2EventType("concert"), true);
+  assert.equal(isAccreditationPhase2EventType("corporate"), true);
   assert.equal(isAccreditationPhase2EventType("conference"), true);
   assert.equal(isAccreditationPhase2EventType("seminar"), true);
   assert.equal(isAccreditationPhase2EventType("workshop"), true);
+});
+
+test("corporate event profiles use the canonical corporate label", () => {
+  const profile = buildAccreditationEventProfile(
+    {
+      id: "event-corporate",
+      name: "Encuentro Corporativo",
+      eventType: "corporate",
+      operationalModel: "reserved",
+      startAt: "2026-09-10T15:00:00.000Z",
+      endAt: "2026-09-10T22:00:00.000Z",
+      timezone: "America/La_Paz",
+      venue: "Centro de convenciones",
+    },
+    {
+      participantCount: 120,
+      activeParticipantCount: 118,
+      cancelledParticipantCount: 2,
+    },
+  );
+
+  assert.ok(profile);
+  assert.equal(profile?.eventTypeLabel, "Corporativo");
+  assert.equal(profile?.operationalModelLabel, "Reservado");
 });
 
 test("concert event profiles use the canonical concert label", () => {

@@ -182,7 +182,7 @@ export default function AccreditationParticipantBoard({
           <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">Sin participantes</p>
           <h3 className="mt-3 text-2xl font-semibold tracking-tight text-white">Todavía no hay inscripciones para este evento.</h3>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            Cuando agregues participantes de Concierto, Conferencia, Seminario o Taller, aparecerán aquí con su perfil, credencial, invitación e ingreso.
+            Cuando agregues participantes de Concierto, Corporativo, Conferencia, Seminario o Taller, aparecerán aquí con su perfil, credencial, invitación e ingreso.
           </p>
         </div>
       )}

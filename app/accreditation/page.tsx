@@ -158,7 +158,7 @@ export default async function AccreditationPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">Fase 2</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Eventos de perfil y participantes</h2>
           </div>
-          <p className="text-sm text-slate-400">Concierto, Conferencia, Seminario y Taller</p>
+          <p className="text-sm text-slate-400">Concierto, Corporativo, Conferencia, Seminario y Taller</p>
         </div>
 
         {phase2Events.length ? (
@@ -185,7 +185,7 @@ export default async function AccreditationPage() {
           </div>
         ) : (
           <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-white/[0.03] p-6 text-sm text-slate-400">
-            No hay eventos de Concierto, Conferencia, Seminario o Taller disponibles en esta organización.
+            No hay eventos de Concierto, Corporativo, Conferencia, Seminario o Taller disponibles en esta organización.
           </div>
         )}
       </section>

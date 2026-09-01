@@ -95,7 +95,7 @@ export default async function AccreditationProgramPage({ params }: PageParams) {
     return (
       <WorkspaceNotice
         title="Este evento no pertenece a la Fase 2"
-        description="El programa y las sesiones solo están disponibles para eventos de tipo Concierto, Conferencia, Seminario o Taller."
+        description="El programa y las sesiones solo están disponibles para eventos de tipo Concierto, Corporativo, Conferencia, Seminario o Taller."
       />
     );
   }
@@ -126,7 +126,7 @@ export default async function AccreditationProgramPage({ params }: PageParams) {
       <Topbar
         eyebrow="Acreditación"
         title="Programa y sesiones"
-        description="Agenda operativa para Concierto, Conferencia, Seminario y Taller sin usar acceso, check-in ni RSVP."
+        description="Agenda operativa para Concierto, Corporativo, Conferencia, Seminario y Taller sin usar acceso, check-in ni RSVP."
         secondaryAction={{
           label: "Volver al perfil",
           href: `/accreditation/events/${event.id}`,
