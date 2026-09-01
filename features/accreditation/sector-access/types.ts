@@ -196,6 +196,7 @@ export type AccreditationSectorAccessAttempt = {
   enrollmentId?: string | null;
   sectorId?: string | null;
   checkpointId?: string | null;
+  eventDayId?: string | null;
   operatorProfileId: string;
   source: AccreditationSectorAccessAttemptSource;
   credentialReference: string;
@@ -222,6 +223,7 @@ export type AccreditationSectorAccessAttemptRow = {
   enrollment_id: string | null;
   sector_id: string | null;
   checkpoint_id?: string | null;
+  event_day_id?: string | null;
   operator_profile_id: string;
   source: AccreditationSectorAccessAttemptSource;
   credential_reference: string;
@@ -241,6 +243,7 @@ export type AccreditationSectorMovement = {
   enrollmentId: string;
   sectorId: string;
   checkpointId?: string | null;
+  eventDayId?: string | null;
   operatorProfileId: string;
   movement: AccreditationSectorMovementType;
   source: AccreditationSectorAccessAttemptSource;
@@ -260,6 +263,7 @@ export type AccreditationSectorMovementRow = {
   enrollment_id: string;
   sector_id: string;
   checkpoint_id?: string | null;
+  event_day_id?: string | null;
   operator_profile_id: string;
   movement: AccreditationSectorMovementType;
   source: AccreditationSectorAccessAttemptSource;
@@ -287,6 +291,7 @@ export type AccreditationSectorMovementInput = {
   enrollmentId?: string | null;
   sectorId?: string | null;
   checkpointId?: string | null;
+  eventDayId?: string | null;
   operatorProfileId: string;
   movement: AccreditationSectorMovementType;
   source: AccreditationSectorAccessAttemptSource;

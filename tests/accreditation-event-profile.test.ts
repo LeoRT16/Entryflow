@@ -6,10 +6,11 @@ import {
   isAccreditationPhase2EventType,
 } from "@/features/accreditation/events";
 
-test("concert, corporate, conference, seminar, workshop, and theatre are recognized as accreditation event types", () => {
+test("concert, corporate, conference, seminar, workshop, theatre, and festival are recognized as accreditation event types", () => {
   assert.equal(isAccreditationPhase2EventType("concert"), true);
   assert.equal(isAccreditationPhase2EventType("corporate"), true);
   assert.equal(isAccreditationPhase2EventType("theatre"), true);
+  assert.equal(isAccreditationPhase2EventType("festival"), true);
   assert.equal(isAccreditationPhase2EventType("conference"), true);
   assert.equal(isAccreditationPhase2EventType("seminar"), true);
   assert.equal(isAccreditationPhase2EventType("workshop"), true);

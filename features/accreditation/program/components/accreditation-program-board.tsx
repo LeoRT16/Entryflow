@@ -431,7 +431,7 @@ export default function AccreditationProgramBoard({
           <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">Sin programa</p>
           <h3 className="mt-3 text-2xl font-semibold tracking-tight text-white">Todavía no hay sesiones programadas para este evento.</h3>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            Cuando agregues sesiones de Concierto, Corporativo, Conferencia, Seminario o Taller, aparecerán aquí agrupadas por fecha y ordenadas cronológicamente.
+            Cuando agregues sesiones de Festival, Concierto, Corporativo, Conferencia, Seminario, Teatro o Taller, aparecerán aquí agrupadas por fecha y ordenadas cronológicamente.
           </p>
         </div>
       )}

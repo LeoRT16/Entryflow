@@ -7,6 +7,8 @@ import AccreditationSectorAccessBoard from "@/features/accreditation/sector-acce
 import AccreditationSectorAccessEvaluationPanel from "@/features/accreditation/sector-access/components/accreditation-sector-access-evaluation-panel";
 import AccreditationSectorAccessMovementPanel from "@/features/accreditation/sector-access/components/accreditation-sector-access-movement-panel";
 import AccreditationAccessCheckpointsPanel from "@/features/accreditation/sector-access/components/accreditation-access-checkpoints-panel";
+import type { AccreditationEventDay } from "@/features/accreditation/festival";
+import { createSupabaseAccreditationFestivalDayRepository } from "@/repositories/supabase-accreditation-festival-repository";
 import { createSupabaseAccreditationAccessRepositories } from "@/repositories/supabase-accreditation-access-repositories";
 import { createSupabaseAccreditationRepositories } from "@/repositories/supabase-accreditation-repositories";
 import { createSupabaseAccreditationSectorAccessRepositories } from "@/repositories/supabase-accreditation-sector-access-repositories";
@@ -101,13 +103,14 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
   const enrollmentRepositories = createSupabaseAccreditationRepositories(client);
   const accessRepositories = createSupabaseAccreditationAccessRepositories(client);
   const sectorAccessRepositories = createSupabaseAccreditationSectorAccessRepositories(client);
+  const festivalDayRepository = createSupabaseAccreditationFestivalDayRepository(client);
 
   const scope = {
     organizationId: currentEvent.organizationId,
     eventId: currentEvent.id,
   };
 
-  const [enrollments, accessGrants, sectors, entitlements, checkpoints, attempts, movements] = await Promise.all([
+  const [enrollments, accessGrants, sectors, entitlements, checkpoints, attempts, movements, eventDays] = await Promise.all([
     enrollmentRepositories.enrollments.list(scope),
     accessRepositories.list(scope),
     sectorAccessRepositories.sectors.listByEvent(scope),
@@ -115,6 +118,7 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
     sectorAccessRepositories.checkpoints.listByEvent(scope),
     canViewSectorAccessHistory ? sectorAccessRepositories.attempts.listByEvent(scope) : Promise.resolve([]),
     canViewSectorAccessHistory ? sectorAccessRepositories.movements.listByEvent(scope) : Promise.resolve([]),
+    currentEvent.eventType === "festival" ? festivalDayRepository.list(scope) : Promise.resolve([] as AccreditationEventDay[]),
   ]);
 
   return (
@@ -145,6 +149,7 @@ export default async function AccreditationSectorAccessPage({ params }: PagePara
         eventId={currentEvent.id}
         sectors={sectors}
         checkpoints={checkpoints}
+        eventDays={eventDays}
         attempts={attempts}
         canEvaluate={canEvaluateSectorAccess}
       />

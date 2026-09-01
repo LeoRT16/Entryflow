@@ -6,6 +6,7 @@ import Topbar from "@/components/topbar";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import AccreditationEventProfileCard from "@/features/accreditation/participants/components/accreditation-event-profile-card";
 import AccreditationParticipantBoard from "@/features/accreditation/participants/components/accreditation-participant-board";
+import AccreditationFestivalDayPanel from "@/features/accreditation/festival/components/accreditation-festival-day-panel";
 import AccreditationTheatreSeatingPanel from "@/features/accreditation/theatre/components/accreditation-theatre-seating-panel";
 import { buildAccreditationParticipantOperationalReadModel } from "@/features/accreditation/participants";
 import { isAccreditationPhase2EventType } from "@/features/accreditation/events";
@@ -13,6 +14,7 @@ import { createSupabaseAccreditationAccessRepositories } from "@/repositories/su
 import { createSupabaseAccreditationCheckInRepositories } from "@/repositories/supabase-accreditation-checkin-repositories";
 import { createSupabaseAccreditationInvitationDeliveryRepositories } from "@/repositories/supabase-accreditation-invitation-repositories";
 import { createSupabaseAccreditationRepositories } from "@/repositories/supabase-accreditation-repositories";
+import { createSupabaseAccreditationFestivalDayRepository } from "@/repositories/supabase-accreditation-festival-repository";
 import { createSupabaseAccreditationTheatreRepository } from "@/repositories/supabase-accreditation-theatre-repository";
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -102,7 +104,7 @@ export default async function AccreditationEventPage({ params }: PageParams) {
     return (
       <WorkspaceNotice
         title="Este evento no pertenece a la Fase 2"
-        description="La vista de perfil y participantes solo está disponible para eventos de tipo Concierto, Corporativo, Conferencia, Seminario o Taller."
+        description="La vista de perfil y participantes solo está disponible para eventos de tipo Festival, Concierto, Corporativo, Conferencia, Seminario, Teatro o Taller."
       />
     );
   }
@@ -113,13 +115,14 @@ export default async function AccreditationEventPage({ params }: PageParams) {
   const checkInRepositories = createSupabaseAccreditationCheckInRepositories(client);
   const deliveryRepositories = createSupabaseAccreditationInvitationDeliveryRepositories(client);
   const theatreRepository = createSupabaseAccreditationTheatreRepository(client);
+  const festivalDayRepository = createSupabaseAccreditationFestivalDayRepository(client);
 
   const scope = {
     organizationId: event.organizationId,
     eventId: event.id,
   };
 
-  const [enrollments, categories, accessGrants, deliveryAttempts, checkIns, theatreSeats, theatreAssignments] = await Promise.all([
+  const [enrollments, categories, accessGrants, deliveryAttempts, checkIns, theatreSeats, theatreAssignments, festivalDays] = await Promise.all([
     enrollmentRepositories.enrollments.list(scope),
     enrollmentRepositories.categories.list(scope),
     accessRepositories.list(scope),
@@ -127,6 +130,7 @@ export default async function AccreditationEventPage({ params }: PageParams) {
     checkInRepositories.listByEvent(scope),
     event.eventType === "theatre" ? theatreRepository.listSeats(scope) : Promise.resolve([]),
     event.eventType === "theatre" ? theatreRepository.listAssignments(scope) : Promise.resolve([]),
+    event.eventType === "festival" ? festivalDayRepository.list(scope) : Promise.resolve([]),
   ]);
 
   const model = buildAccreditationParticipantOperationalReadModel({
@@ -155,7 +159,7 @@ export default async function AccreditationEventPage({ params }: PageParams) {
       <Topbar
         eyebrow="Acreditación"
         title="Perfil y participantes"
-        description="Operación individual para Concierto, Corporativo, Conferencia, Seminario y Taller sin usar Guest ni Reservation."
+        description="Operación individual para Festival, Concierto, Corporativo, Conferencia, Seminario, Teatro y Taller sin usar Guest ni Reservation."
         primaryAction={{
           label: "Ver programa",
           href: `/accreditation/events/${event.id}/program`,
@@ -182,6 +186,7 @@ export default async function AccreditationEventPage({ params }: PageParams) {
           canManage={canManageParticipants}
         />
       ) : null}
+      {event.eventType === "festival" ? <AccreditationFestivalDayPanel eventId={event.id} days={festivalDays} canManage={canManageParticipants} /> : null}
       <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400">
         <span>{event.eventType}</span>
         <span>·</span>

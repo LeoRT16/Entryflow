@@ -95,7 +95,7 @@ async function validateSessionContext(
   }
 
   if (!isAccreditationPhase2EventType(event.event_type)) {
-    throw new Error("Accreditation program sessions are only available for conference, seminar, and workshop events.");
+    throw new Error("Accreditation program sessions are only available for Festival, Concert, Corporate, Conference, Seminar, Theatre, and Workshop events.");
   }
 }
 

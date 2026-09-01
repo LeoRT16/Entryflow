@@ -11,6 +11,7 @@ import type {
   AccreditationSectorAccessAttemptSource,
   AccreditationAccessCheckpoint,
 } from "@/features/accreditation/sector-access";
+import type { AccreditationEventDay } from "@/features/accreditation/festival";
 
 function requestJson(input: RequestInfo | URL, init: RequestInit) {
   return fetch(input, init).then(async (response) => {
@@ -36,12 +37,14 @@ export default function AccreditationSectorAccessEvaluationPanel({
   eventId,
   sectors,
   checkpoints,
+  eventDays,
   attempts,
   canEvaluate,
 }: {
   eventId: string;
   sectors: AccreditationAccessSector[];
   checkpoints: AccreditationAccessCheckpoint[];
+  eventDays?: AccreditationEventDay[];
   attempts: AccreditationSectorAccessAttempt[];
   canEvaluate: boolean;
 }) {
@@ -59,9 +62,10 @@ export default function AccreditationSectorAccessEvaluationPanel({
     const form = new FormData(event.currentTarget);
     const credential = String(form.get("credential") || "").trim();
     const checkpointId = String(form.get("checkpointId") || "").trim();
+    const eventDayId = String(form.get("eventDayId") || "").trim();
     const source = String(form.get("source") || "manual_code");
 
-    if (!credential || !checkpointId) {
+    if (!credential || !checkpointId || (eventDays?.length && !eventDayId)) {
       showToast({ title: "Faltan datos", description: "Ingresá una credencial y elegí un sector.", tone: "warning" });
       return;
     }
@@ -72,7 +76,7 @@ export default function AccreditationSectorAccessEvaluationPanel({
       const payload = await requestJson(`/api/accreditation/events/${eventId}/sector-access/attempts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ credential, checkpointId, source }),
+        body: JSON.stringify({ credential, checkpointId, eventDayId: eventDayId || undefined, source }),
       });
       const decision = (payload as { decision?: { allowed?: boolean; reason?: string } } | null)?.decision;
 
@@ -108,8 +112,9 @@ export default function AccreditationSectorAccessEvaluationPanel({
       </div>
 
       {canEvaluate ? (
-        <form onSubmit={handleSubmit} className="mt-5 grid gap-3 lg:grid-cols-[1.2fr_1fr_0.8fr_auto]">
+        <form onSubmit={handleSubmit} className="mt-5 grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_0.8fr_auto]">
           <input name="credential" placeholder="Código o QR exacto" className="surface-interactive w-full px-3 py-2" />
+          {eventDays?.length ? <select name="eventDayId" defaultValue="" className="surface-interactive w-full px-3 py-2"><option value="" disabled>Elegí el día</option>{eventDays.filter((day) => day.status === "active").map((day) => <option key={day.id} value={day.id}>Día {day.dayNumber} · {day.name}</option>)}</select> : null}
           <select name="checkpointId" defaultValue="" className="surface-interactive w-full px-3 py-2">
             <option value="" disabled>Elegí un checkpoint</option>
             {checkpoints.map((checkpoint) => <option key={checkpoint.id} value={checkpoint.id}>{checkpoint.name} · {sectors.find((sector) => sector.id === checkpoint.sectorId)?.name ?? checkpoint.sectorId}</option>)}

@@ -5,6 +5,7 @@ import { evaluateAccreditationSectorAccess, normalizeAccreditationSectorAccessAt
 import { createSupabaseAccreditationAccessRepositories } from "@/repositories/supabase-accreditation-access-repositories";
 import { createSupabaseAccreditationRepositories } from "@/repositories/supabase-accreditation-repositories";
 import { createSupabaseAccreditationSectorAccessRepositories } from "@/repositories/supabase-accreditation-sector-access-repositories";
+import { createSupabaseAccreditationFestivalDayRepository } from "@/repositories/supabase-accreditation-festival-repository";
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
@@ -13,12 +14,13 @@ type AttemptBody = {
   credential?: string;
   sectorId?: string;
   checkpointId?: string;
+  eventDayId?: string;
   source?: string;
 };
 
 type ScopeResult =
   | { ok: false; status: number; error: { code: string; message: string } }
-  | { ok: true; workspace: Awaited<ReturnType<typeof loadWorkspaceBootstrap>>; event: { id: string; organizationId: string }; operatorProfileId: string };
+  | { ok: true; workspace: Awaited<ReturnType<typeof loadWorkspaceBootstrap>>; event: { id: string; organizationId: string; eventType: string }; operatorProfileId: string };
 
 function getText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -96,6 +98,7 @@ export async function POST(request: Request, context: { params: Promise<{ eventI
 
   const credential = getText(body.credential);
   const checkpointReference = getText(body.checkpointId);
+  const eventDayReference = getText(body.eventDayId);
   const requestedSectorReference = getText(body.sectorId);
   const source = getText(body.source) || "manual_code";
 
@@ -116,6 +119,15 @@ export async function POST(request: Request, context: { params: Promise<{ eventI
   const accreditationRepositories = createSupabaseAccreditationRepositories(client);
   const sectorRepositories = createSupabaseAccreditationSectorAccessRepositories(client);
   const targetScope = { organizationId: scope.event.organizationId, eventId: scope.event.id };
+  const eventDay = eventDayReference
+    ? await createSupabaseAccreditationFestivalDayRepository(client).getById(targetScope, eventDayReference)
+    : undefined;
+  if (scope.event.eventType !== "festival" && eventDayReference) {
+    return NextResponse.json({ ok: false, error: { code: "invalid_event_day", message: "Los días operativos solo aplican a eventos Festival." } }, { status: 400 });
+  }
+  if (scope.event.eventType === "festival" && (!eventDayReference || !eventDay || eventDay.status !== "active")) {
+    return NextResponse.json({ ok: false, error: { code: "invalid_event_day", message: "Elegí un día activo del Festival." } }, { status: 400 });
+  }
   const checkpoint = checkpointReference ? await sectorRepositories.checkpoints.getById(checkpointReference) : undefined;
   const sectorReference = checkpointReference ? checkpoint?.code || checkpoint?.name || checkpointReference : requestedSectorReference;
   const sector = checkpointReference ? checkpoint ? await sectorRepositories.sectors.getById(checkpoint.sectorId) : undefined : await sectorRepositories.sectors.getById(sectorReference);
@@ -125,14 +137,21 @@ export async function POST(request: Request, context: { params: Promise<{ eventI
     : await accessRepositories.resolveByAccessCode(targetScope, credential);
   const enrollment = grant ? await accreditationRepositories.enrollments.getById(grant.enrollmentId) : undefined;
   const entitlements = grant ? await sectorRepositories.entitlements.listByGrant(targetScope, grant.id) : [];
+  const festivalRepository = createSupabaseAccreditationFestivalDayRepository(client);
+  const grantValidForDay = grant && eventDay ? await festivalRepository.isGrantValidForDay(targetScope, grant.id, eventDay.id) : true;
+  const dayEntitlements = eventDay
+    ? (await Promise.all(entitlements.map(async (entitlement) => (await festivalRepository.isEntitlementValidForDay(targetScope, entitlement.id, eventDay.id) ? entitlement : null)))).filter((entitlement): entitlement is NonNullable<typeof entitlement> => entitlement !== null)
+    : entitlements;
   const decision = checkpointReference && (!checkpoint || checkpoint.status !== "active")
     ? { allowed: false as const, reason: "checkpoint_inactive" as const }
+    : !grantValidForDay
+      ? { allowed: false as const, reason: "wrong_scope" as const }
     : evaluateAccreditationSectorAccess({
     scope: targetScope,
     grant,
     enrollment,
     sector: resolvedSector,
-    entitlements,
+    entitlements: dayEntitlements,
   });
   const attempt = await sectorRepositories.attempts.append({
     organizationId: targetScope.organizationId,
@@ -141,6 +160,7 @@ export async function POST(request: Request, context: { params: Promise<{ eventI
     enrollmentId: enrollment?.id ?? null,
     sectorId: resolvedSector?.id ?? null,
     checkpointId: checkpoint?.id ?? null,
+    eventDayId: eventDay?.id ?? null,
     operatorProfileId: scope.operatorProfileId,
     source: normalizedSource,
     credentialReference: credential,
