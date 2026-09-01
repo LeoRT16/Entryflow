@@ -34,3 +34,30 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Supabase migrations
+
+Vercel deploys the application only. Production database migrations are handled
+by `.github/workflows/supabase-migrations.yml` when migration files change on
+`main`, or through a deliberate `workflow_dispatch` run. The workflow performs
+static preflight, then waits for the protected GitHub `production` environment
+before it runs the authenticated migration list, dry-run, one real `db push`,
+and post-apply verification. It exits on failure and never runs automatic
+retries or `migration repair`.
+
+One-time GitHub setup:
+
+1. Create the `production` environment in repository Settings > Environments.
+2. Add required production reviewers to that environment. Approval happens when
+   the production job starts, before its authenticated preflight and apply steps.
+3. Add `SUPABASE_ACCESS_TOKEN` as a production environment secret.
+4. Add `SUPABASE_DB_PASSWORD` as a production environment secret.
+5. Add `SUPABASE_PROJECT_REF` as a production environment variable.
+6. Keep Actions permission to read repository contents; no write permission is
+   required.
+
+The access token and database password must never be committed or printed. A
+migration failure stops the workflow: inspect remote migration history and
+schema, do not edit an applied migration or blindly retry, and use a reviewed
+forward-fix migration when needed. Rollback is not assumed; destructive or
+nontransactional migrations require additional explicit review.

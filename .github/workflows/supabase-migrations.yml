@@ -1,0 +1,112 @@
+name: Supabase migrations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-migrations
+  cancel-in-progress: false
+
+jobs:
+  static-preflight:
+    name: Static migration preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Supabase CLI
+        run: npx --yes supabase@2.116.0 --version
+
+      - name: Validate migration directory and ordering
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d supabase/migrations
+          files="$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort)"
+          test -n "$files"
+          printf '%s\n' "$files"
+
+  production-migration:
+    name: Production migration
+    needs: static-preflight
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Supabase CLI
+        run: npx --yes supabase@2.116.0 --version
+
+      - name: Link the production project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$SUPABASE_DB_PASSWORD"
+          test -n "$SUPABASE_PROJECT_REF"
+          npx --yes supabase@2.116.0 link \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Verify migration state and show dry-run
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 migration list
+          npx --yes supabase@2.116.0 db push \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD" \
+            --dry-run
+
+      - name: Apply production migrations once
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 db push \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Verify migration history and remaining pending state
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 migration list
+          npx --yes supabase@2.116.0 db push \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --password "$SUPABASE_DB_PASSWORD" \
+            --dry-run
