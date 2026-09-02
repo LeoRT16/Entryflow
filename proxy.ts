@@ -1,13 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getFirstAccessibleNavigationHref, getNavigationModuleForPath, getNavigationPermissionForPath } from "@/features/navigation/navigation";
+import { getFirstAccessibleNavigationHref, getNavigationPermissionForPath } from "@/features/navigation/navigation";
 import { isPublicRoute } from "@/features/navigation/public-routes";
 import type { Database } from "@/lib/supabase/types";
 import { getSupabaseAnonKey, getSupabaseUrl, hasSupabaseConfig } from "@/lib/supabase/helpers";
 import { loadWorkspaceBootstrap } from "@/services/workspace-loader";
 import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
-import { isModuleEnabled } from "@/features/events/domain";
 
 function createSupabaseMiddlewareClient(request: NextRequest, response: NextResponse) {
   return createServerClient<Database>(getSupabaseUrl(), getSupabaseAnonKey(), {
@@ -70,9 +69,7 @@ export async function proxy(request: NextRequest) {
   const currentEvent = workspace?.events.find((event) => event.id === workspace.currentEventId) ?? null;
 
   const routePermission = getNavigationPermissionForPath(pathname);
-  const routeModule = getNavigationModuleForPath(pathname);
   const canAccessRoute = routePermission ? effectivePermissions.includes(routePermission) : true;
-  const moduleAvailable = routeModule ? (!currentEvent ? false : isModuleEnabled(currentEvent, routeModule)) : true;
 
   if (user && !routeIsPublic && workspace?.authState.status === "must-change-password") {
     const redirectUrl = request.nextUrl.clone();
@@ -96,7 +93,7 @@ export async function proxy(request: NextRequest) {
     return redirectResponse;
   }
 
-  if (user && !routeIsPublic && (!canAccessRoute || !moduleAvailable)) {
+  if (user && !routeIsPublic && !canAccessRoute) {
     const fallbackHref = getFirstAccessibleNavigationHref((permission) => effectivePermissions.includes(permission), currentEvent ?? undefined);
 
     if (fallbackHref && fallbackHref !== pathname) {
