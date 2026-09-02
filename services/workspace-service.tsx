@@ -68,6 +68,7 @@ import type {
   ReservationTimelineEntry,
   ReservationUpdateInput,
 } from "@/features/reservations/types";
+import type { ExtraWristbandPerson, ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
 import { buildTableSummaries } from "@/features/tables/domain/table-domain";
 import type { TableRecord, TableSummary } from "@/features/tables/types";
 import type { CheckIn, CheckInAttempt, CheckInMethod, Event as LegacyEvent, Guest } from "@/features/check-in/types";
@@ -256,6 +257,7 @@ type WorkspaceServiceValue = {
   activeEvent: LegacyEvent;
   guests: Guest[];
   reservations: ReservationRecord[];
+  extraWristbandSales: ExtraWristbandSale[];
   reservationSummaries: ReservationSummary[];
   tables: TableRecord[];
   tableSummaries: TableSummary[];
@@ -318,7 +320,7 @@ type WorkspaceServiceValue = {
   updateReservation: (input: ReservationUpdateInput) => Promise<ReservationRecord | undefined>;
   deleteReservation: (reservationId: string) => Promise<ReservationRecord | undefined>;
   createOrganization: (organization: Organization) => Promise<Organization>;
-  addReservationGuest: (reservationId: string, guest: ReservationGuestInput) => void;
+  addReservationGuest: (reservationId: string, guest: ReservationGuestInput) => Promise<void>;
   appendReservationGuests: (reservationId: string, guests: ReservationGuestInput[]) => Promise<ReservationRecord | undefined>;
   updateReservationGuest: (params: {
     reservationId: string;
@@ -339,6 +341,8 @@ type WorkspaceServiceValue = {
   closeTable: (tableId: string) => void;
   createEvent: (event: PlatformEvent) => Promise<PlatformEvent | undefined>;
   updateEvent: (event: PlatformEvent) => Promise<PlatformEvent | undefined>;
+  createExtraWristbandSale: (input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[] }) => Promise<void>;
+  cancelExtraWristbandSale: (input: { saleId: string; reason: string }) => Promise<void>;
   setEventStatus: (eventId: string, status: PlatformEvent["status"]) => void;
   setOrganizationsState: Dispatch<SetStateAction<Organization[]>>;
   setVenuesState: Dispatch<SetStateAction<Venue[]>>;
@@ -966,6 +970,7 @@ async function loadWorkspaceFromRepositories(repositories: SupabaseWorkspaceRepo
     tables,
     checkIns,
     timelineEvents,
+    extraWristbandSales,
   ] = await Promise.all([
     repositories.users.list(),
     repositories.roles.list(),
@@ -986,6 +991,7 @@ async function loadWorkspaceFromRepositories(repositories: SupabaseWorkspaceRepo
     repositories.tables.list(),
     repositories.checkIns.list(),
     repositories.timeline.list(),
+    repositories.extraWristbandSales.list(),
   ]);
 
   const activeProfiles = currentUserId
@@ -1045,6 +1051,7 @@ async function loadWorkspaceFromRepositories(repositories: SupabaseWorkspaceRepo
     timelineEvents: [
       ...timelineEvents,
     ].sort(compareTimelineEventsDescending),
+    extraWristbandSales,
     currentOrganizationId,
     currentEventId,
     currentProfileId,
@@ -1077,6 +1084,7 @@ export function WorkspaceServiceProvider({
   const [events, setEvents] = useState<PlatformEvent[]>(initialWorkspace?.events ?? []);
   const [guests, setGuests] = useState<Guest[]>(initialWorkspace?.guests ?? []);
   const [reservations, setReservations] = useState<ReservationRecord[]>(initialWorkspace?.reservations ?? []);
+  const [extraWristbandSales, setExtraWristbandSales] = useState<ExtraWristbandSale[]>(initialWorkspace?.extraWristbandSales ?? []);
   const [tables, setTables] = useState<TableRecord[]>(initialWorkspace?.tables ?? []);
   const [checkIns, setCheckIns] = useState<CheckIn[]>(initialWorkspace?.checkIns ?? []);
   const [attempts, setAttempts] = useState<CheckInAttempt[]>(initialWorkspace?.attempts ?? []);
@@ -1192,6 +1200,7 @@ export function WorkspaceServiceProvider({
       events: clone(events),
       guests: clone(guests),
       reservations: clone(reservations),
+      extraWristbandSales: clone(extraWristbandSales),
       tables: clone(tables),
       checkIns: clone(checkIns),
       attempts: clone(attempts),
@@ -1200,7 +1209,7 @@ export function WorkspaceServiceProvider({
       currentEventId,
       currentProfileId,
     }),
-    [attempts, checkIns, currentEventId, currentOrganizationId, currentProfileId, eventLayoutResources, eventLayoutSectors, eventLayouts, events, guests, organizations, persistedTimelineEvents, profiles, reservations, resources, roles, sectors, tables, users, venueLayoutResources, venueLayoutSectors, venueLayouts, venues],
+    [attempts, checkIns, currentEventId, currentOrganizationId, currentProfileId, eventLayoutResources, eventLayoutSectors, eventLayouts, events, extraWristbandSales, guests, organizations, persistedTimelineEvents, profiles, reservations, resources, roles, sectors, tables, users, venueLayoutResources, venueLayoutSectors, venueLayouts, venues],
   );
 
   const restoreSnapshot = useCallback((snapshot: ReturnType<typeof captureSnapshot>) => {
@@ -1220,6 +1229,7 @@ export function WorkspaceServiceProvider({
     setEvents(snapshot.events);
     setGuests(snapshot.guests);
     setReservations(snapshot.reservations);
+    setExtraWristbandSales(snapshot.extraWristbandSales);
     setTables(snapshot.tables);
     setCheckIns(snapshot.checkIns);
     setAttempts(snapshot.attempts);
@@ -1286,6 +1296,7 @@ export function WorkspaceServiceProvider({
       setEvents(snapshot.events);
       setGuests(snapshot.guests);
       setReservations(snapshot.reservations);
+      setExtraWristbandSales(snapshot.extraWristbandSales ?? []);
       setTables(snapshot.tables);
       setCheckIns(snapshot.checkIns);
       setAttempts(snapshot.attempts);
@@ -1310,6 +1321,7 @@ export function WorkspaceServiceProvider({
           snapshot.events.length ||
           snapshot.guests.length ||
           snapshot.reservations.length ||
+          (snapshot.extraWristbandSales?.length ?? 0) ||
           snapshot.tables.length ||
           snapshot.checkIns.length ||
           snapshot.attempts.length ||
@@ -2041,6 +2053,24 @@ export function WorkspaceServiceProvider({
     [captureSnapshot, currentOrganization.id, events, notify, persist, requirePermission, restoreSnapshot, venues],
   );
 
+  const createExtraWristbandSaleMutation = useCallback(
+    async (input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[] }) => {
+      requirePermission("reservation.edit");
+      await repositories.extraWristbandSales.create({ ...input, actor: currentAccount.displayName });
+      await reloadWorkspace();
+    },
+    [currentAccount.displayName, reloadWorkspace, repositories.extraWristbandSales, requirePermission],
+  );
+
+  const cancelExtraWristbandSaleMutation = useCallback(
+    async (input: { saleId: string; reason: string }) => {
+      requirePermission("reservation.cancel");
+      await repositories.extraWristbandSales.cancel({ ...input, actor: currentAccount.displayName });
+      await reloadWorkspace();
+    },
+    [currentAccount.displayName, reloadWorkspace, repositories.extraWristbandSales, requirePermission],
+  );
+
   const createOrganization = useCallback(
     async (organization: Organization) => {
       requirePermission("organization.manage");
@@ -2300,13 +2330,15 @@ export function WorkspaceServiceProvider({
           tableName: isPresale || isCourtesy ? undefined : tableName,
         }));
         const reservationGuestsWithAccess = reservationGuests.map(hydrateGuestAccessGrant);
+        const persistedReservationGuests: Guest[] = [];
         const grantTimestamp = nowIso();
 
         await repositories.reservations.upsert(reservation);
         for (const guest of reservationGuestsWithAccess) {
-          await repositories.guests.upsert(guest);
+          const persistedGuest = await repositories.guests.createWithAccessOrdinal(guest);
+          persistedReservationGuests.push(persistedGuest);
           const timelineEntry = withAuditContext(
-            buildAccessGrantTimelineEvent(guest, reservation, grantTimestamp),
+            buildAccessGrantTimelineEvent(persistedGuest, reservation, grantTimestamp),
             {
               actor: currentAccount.displayName,
               actorRole: currentAccount.roleName,
@@ -2319,7 +2351,7 @@ export function WorkspaceServiceProvider({
         }
 
         setReservations((current) => prependUniqueById(current, [reservation]));
-        setGuests((current) => prependUniqueById(current, reservationGuestsWithAccess));
+        setGuests((current) => prependUniqueById(current, persistedReservationGuests));
 
         notify({
           title: "Reserva creada",
@@ -2612,7 +2644,7 @@ export function WorkspaceServiceProvider({
         const nextGuests: Guest[] = input.guests.map((guestDraft, index) => {
           const currentGuest = existingGuests[index];
           const invitationSequence = `${index + 1} de ${nextGuestCount}`;
-          const invitationCode = currentGuest?.invitationCode ?? `${reservation.code}-${String(index + 1).padStart(2, "0")}`;
+          const invitationCode = currentGuest?.invitationCode ?? reservation.code;
 
           if (currentGuest) {
             return {
@@ -2715,16 +2747,16 @@ export function WorkspaceServiceProvider({
         };
 
         setReservations((current) => current.map((item) => (item.id === reservation.id ? nextReservation : item)));
-        setGuests((current) => [
-          ...current.filter((guest) => guest.reservationId !== reservation.id),
-          ...nextGuestsWithAccess,
-        ]);
-
         await repositories.reservations.upsert(nextReservation);
+        const existingGuestIds = new Set(existingGuests.map((guest) => guest.id));
+        const persistedNextGuests: Guest[] = [];
         for (const guest of nextGuestsWithAccess) {
-          await repositories.guests.upsert(guest);
+          const persistedGuest = existingGuestIds.has(guest.id)
+            ? await repositories.guests.upsert(guest)
+            : await repositories.guests.createWithAccessOrdinal(guest);
+          if (persistedGuest) persistedNextGuests.push(persistedGuest);
           const timelineEntry = withAuditContext(
-            buildAccessGrantTimelineEvent(guest, nextReservation, timestamp),
+            buildAccessGrantTimelineEvent(persistedGuest ?? guest, nextReservation, timestamp),
             {
               actor: currentAccount.displayName,
               actorRole: currentAccount.roleName,
@@ -2735,6 +2767,10 @@ export function WorkspaceServiceProvider({
           upsertPersistedTimelineEvent(timelineEntry);
           await repositories.timeline.upsert(timelineEntry);
         }
+        setGuests((current) => [
+          ...current.filter((guest) => guest.reservationId !== reservation.id),
+          ...persistedNextGuests,
+        ]);
         for (const guest of removedGuests) {
           await repositories.guests.delete(guest.id);
         }
@@ -2885,8 +2921,7 @@ export function WorkspaceServiceProvider({
         let nextReservation = { ...reservation };
         const totalGuestCount = reservationGuests.length + guestInputs.length;
 
-        for (const [index, guestInput] of guestInputs.entries()) {
-          const guestIndex = reservationGuests.length + index + 1;
+        for (const guestInput of guestInputs) {
           const guestId = createUuid();
           const nextGuest: Guest = {
             id: guestId,
@@ -2899,8 +2934,8 @@ export function WorkspaceServiceProvider({
             tableId: reservation.reservationType === "Cortesía" ? undefined : reservation.tableId,
             tableName: reservation.reservationType === "Cortesía" ? undefined : reservation.tableName,
             eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
-            invitationSequence: `${guestIndex} de ${totalGuestCount}`,
-            invitationCode: `${reservation.code}-${String(guestIndex).padStart(2, "0")}`,
+            invitationSequence: `Nuevo acceso · ${totalGuestCount} personas`,
+            invitationCode: reservation.code,
             carnet: guestInput.carnet,
             whatsapp: guestInput.whatsapp,
             deliveryStatus: "Enviada",
@@ -2940,15 +2975,14 @@ export function WorkspaceServiceProvider({
           };
         }
 
-        setGuests((current) => prependUniqueById(current, nextGuests));
-        setReservations((current) => current.map((item) => (item.id === reservationId ? nextReservation : item)));
-
         await repositories.reservations.upsert(nextReservation);
+        const persistedGuests: Guest[] = [];
         for (const guest of nextGuests) {
-          await repositories.guests.upsert(guest);
+          const persistedGuest = await repositories.guests.createWithAccessOrdinal(guest);
+          persistedGuests.push(persistedGuest);
           if (reservation.reservationType === "Cortesía") {
             const courtesyEvent = buildCourtesyAddedTimelineEvent(
-              guest,
+              persistedGuest,
               reservation,
               nowIso(),
               guest.operatorActivity[0]?.reason,
@@ -2957,7 +2991,7 @@ export function WorkspaceServiceProvider({
             await repositories.timeline.upsert(courtesyEvent);
           }
           const timelineEntry = withAuditContext(
-            buildAccessGrantTimelineEvent(guest, reservation, nowIso()),
+            buildAccessGrantTimelineEvent(persistedGuest, reservation, nowIso()),
             {
               actor: currentAccount.displayName,
               actorRole: currentAccount.roleName,
@@ -2970,6 +3004,9 @@ export function WorkspaceServiceProvider({
           upsertPersistedTimelineEvent(timelineEntry);
           await repositories.timeline.upsert(timelineEntry);
         }
+
+        setGuests((current) => prependUniqueById(current, persistedGuests));
+        setReservations((current) => current.map((item) => (item.id === reservationId ? nextReservation : item)));
 
         notify({
           title: reservation.reservationType === "Cortesía" ? "Cortesías agregadas" : "Manillas agregadas",
@@ -2994,7 +3031,7 @@ export function WorkspaceServiceProvider({
   );
 
   const addReservationGuest = useCallback(
-    (reservationId: string, guestInput: ReservationGuestInput) => {
+    async (reservationId: string, guestInput: ReservationGuestInput) => {
       requirePermission("reservation.edit");
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) return;
@@ -3036,8 +3073,6 @@ export function WorkspaceServiceProvider({
       }
 
       const snapshot = captureSnapshot();
-      const reservationGuests = guests.filter((guest) => guest.reservationId === reservationId);
-      const guestIndex = reservationGuests.length + 1;
       const guestId = createUuid();
       const nextGuest: Guest = {
         id: guestId,
@@ -3050,8 +3085,8 @@ export function WorkspaceServiceProvider({
         tableId: reservation.reservationType === "Cortesía" ? undefined : reservation.tableId,
         tableName: reservation.reservationType === "Cortesía" ? undefined : reservation.tableName,
         eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
-        invitationSequence: `${guestIndex} de ${guestIndex}`,
-        invitationCode: `${reservation.code}-${String(guestIndex).padStart(2, "0")}`,
+        invitationSequence: "Nuevo acceso",
+        invitationCode: reservation.code,
         carnet: guestInput.carnet,
         whatsapp: guestInput.whatsapp,
         deliveryStatus: "Enviada",
@@ -3063,8 +3098,9 @@ export function WorkspaceServiceProvider({
         manualAdmission: false,
       } as Guest;
       const nextGuestWithAccess = hydrateGuestAccessGrant(nextGuest);
+      const persistedGuest = await repositories.guests.createWithAccessOrdinal(nextGuestWithAccess);
 
-      setGuests((current) => [nextGuestWithAccess, ...current]);
+      setGuests((current) => [persistedGuest, ...current]);
       setReservations((current) =>
         current.map((item) =>
           item.id === reservationId
@@ -3095,10 +3131,9 @@ export function WorkspaceServiceProvider({
         ),
       );
 
-      void repositories.guests.upsert(nextGuestWithAccess).catch(() => restoreSnapshot(snapshot));
       if (reservation.reservationType === "Cortesía") {
         const courtesyEvent = buildCourtesyAddedTimelineEvent(
-          nextGuestWithAccess,
+          persistedGuest,
           reservation,
           nowIso(),
           guestInput.reason?.trim() || undefined,
@@ -3107,7 +3142,7 @@ export function WorkspaceServiceProvider({
         void repositories.timeline.upsert(courtesyEvent).catch(() => restoreSnapshot(snapshot));
       }
       const timelineEntry = withAuditContext(
-        buildAccessGrantTimelineEvent(nextGuestWithAccess, reservation, nowIso()),
+        buildAccessGrantTimelineEvent(persistedGuest, reservation, nowIso()),
         {
           actor: currentAccount.displayName,
           actorRole: currentAccount.roleName,
@@ -3773,16 +3808,23 @@ export function WorkspaceServiceProvider({
       }
 
       if (checkInSubmissionInFlightRef.current) {
+        notify({
+          title: "Ingreso en curso",
+          description: "Hay un ingreso en curso. Esperá a que termine para volver a intentarlo.",
+          tone: "warning",
+          icon: "alert",
+          href: "/check-in",
+        });
         return {
           result: "Bloqueado" as const,
           note: "Hay un ingreso en curso. Esperá a que termine para volver a intentarlo.",
         };
       }
 
-      const snapshot = captureSnapshot();
       checkInSubmissionInFlightRef.current = true;
 
       try {
+        const snapshot = captureSnapshot();
         const timestampIso = nowIso();
         const timestamp = timestampIso.slice(11, 16);
         const admissionMethod = method === "Manual" ? "manual" : "qr";
@@ -4108,6 +4150,7 @@ export function WorkspaceServiceProvider({
       activeEvent,
       guests,
       reservations,
+      extraWristbandSales,
       reservationSummaries,
       tables,
       tableSummaries,
@@ -4155,6 +4198,8 @@ export function WorkspaceServiceProvider({
       closeTable,
       createEvent,
       updateEvent,
+      createExtraWristbandSale: createExtraWristbandSaleMutation,
+      cancelExtraWristbandSale: cancelExtraWristbandSaleMutation,
       setEventStatus,
       setOrganizationsState: setOrganizations,
       setVenuesState: setVenues,
@@ -4183,11 +4228,13 @@ export function WorkspaceServiceProvider({
       closeTable,
       currentAccount,
       createEvent,
+      createExtraWristbandSaleMutation,
       createOrganization,
       createAccount,
       createReservation,
       updateReservation,
       deleteReservation,
+      cancelExtraWristbandSaleMutation,
       currentEvent,
       currentEventId,
       updateEvent,
@@ -4210,6 +4257,7 @@ export function WorkspaceServiceProvider({
       dashboard,
       error,
       events,
+      extraWristbandSales,
       effectivePermissions,
       findGuestByQuery,
       guests,

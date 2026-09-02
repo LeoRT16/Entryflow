@@ -13,6 +13,7 @@ export type EventCommercialConfig = {
     basePrice: number;
     includedAccesses: number;
     benefits: CommercialBenefit[];
+    extraWristbandPrice?: number;
   };
   presale: {
     enabled: boolean;
@@ -79,6 +80,9 @@ export function getEventCommercialConfig(event: Pick<Event, "metadata">): EventC
       basePrice: asNonNegativeNumber(reservation.basePrice),
       includedAccesses: Math.floor(asNonNegativeNumber(reservation.includedAccesses, 5)),
       benefits: normalizeCommercialBenefits(reservation.benefits),
+      ...(typeof reservation.extraWristbandPrice === "number" && Number.isFinite(reservation.extraWristbandPrice) && reservation.extraWristbandPrice >= 0
+        ? { extraWristbandPrice: reservation.extraWristbandPrice }
+        : {}),
     },
     presale: {
       enabled: presale.enabled === true,

@@ -95,6 +95,9 @@ export type Guest = {
   reservationName: string;
   reservationCode: string;
   reservationId: string;
+  extraWristbandSaleId?: string | null;
+  /** Monotonic ordinal used to allocate human access codes per reservation. */
+  accessOrdinal?: number | null;
   eventId: string;
   eventName: string;
   /** Identidad lógica interna del access grant asociado a este invitado. */

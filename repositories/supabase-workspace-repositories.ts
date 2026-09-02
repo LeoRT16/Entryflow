@@ -16,6 +16,7 @@ import type {
   VenueLayoutSector,
 } from "@/features/domain/types";
 import type { ReservationGuestAction, ReservationGuestInput, ReservationRecord, ReservationStatus } from "@/features/reservations/types";
+import { cancelExtraWristbandSale, createExtraWristbandSale, mapExtraWristbandSaleRowToDomain, type ExtraWristbandPerson, type ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
 import type { TableRecord } from "@/features/tables/types";
 import type { TimelineEvent } from "@/features/timeline/types";
 import type { Database } from "@/lib/supabase/types";
@@ -76,6 +77,7 @@ import type {
   ProfileRow,
   ResourceRow,
   ReservationRow,
+  ExtraWristbandSaleRow,
   RoleRow,
   SectorRow,
   TableRow,
@@ -177,7 +179,13 @@ type SupabaseWorkspaceRepositories = {
     setStatus(reservationId: string, status: ReservationStatus): Promise<void>;
     assignToTable(reservationId: string, tableId: string): Promise<void>;
   };
+  extraWristbandSales: {
+    list(): Promise<ExtraWristbandSale[]>;
+    create(input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[]; actor: string }): Promise<unknown>;
+    cancel(input: { saleId: string; reason: string; actor: string }): Promise<unknown>;
+  };
   guests: SupabaseCrudRepository<Guest> & {
+    createWithAccessOrdinal(guest: Guest): Promise<Guest>;
     moveToTable(guestId: string, tableId: string): Promise<void>;
     checkIn(query: string): Promise<CheckInAttempt | null>;
   };
@@ -722,12 +730,41 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     toRow: mapReservationToRow,
   });
 
+  const extraWristbandSales = {
+    async list() {
+      if (!client) return [];
+      const { data, error } = await client.from("reservation_extra_wristband_sales").select("*");
+      if (error) throw error;
+      return ((data ?? []) as ExtraWristbandSaleRow[]).map(mapExtraWristbandSaleRowToDomain);
+    },
+    async create(input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[]; actor: string }) {
+      if (!client) throw new Error("Supabase client is unavailable.");
+      return createExtraWristbandSale(client, input);
+    },
+    async cancel(input: { saleId: string; reason: string; actor: string }) {
+      if (!client) throw new Error("Supabase client is unavailable.");
+      return cancelExtraWristbandSale(client, input);
+    },
+  };
+
   const guests = buildCrudRepository<Guest, GuestRow>({
     client,
     table: "guests",
     fromRow: mapGuestRowToDomain,
     toRow: mapGuestToRow,
-  });
+  }) as SupabaseWorkspaceRepositories["guests"];
+
+  guests.createWithAccessOrdinal = async (guest) => {
+    if (!client) throw new Error("Supabase client is unavailable.");
+
+    const { data, error } = await client.rpc("create_guest_with_access_ordinal" as never, {
+      p_reservation_id: guest.reservationId,
+      p_guest: mapGuestToRow(guest),
+    } as never);
+
+    if (error) throw error;
+    return mapGuestRowToDomain(data as GuestRow);
+  };
 
   const tables = buildCrudRepository<TableRecord, TableRow>({
     client,
@@ -847,7 +884,7 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
           return;
         }
 
-        const row = await guests.create({
+        const row = await guests.createWithAccessOrdinal({
           id: createUuid(),
           guestName: guest.guestName,
           reservationName: currentReservation.name,
@@ -858,8 +895,8 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
           tableId: currentReservation.tableId,
           tableName: currentReservation.tableName,
           eventStatus: "Próximo",
-          invitationSequence: `${currentReservation.guestIds.length + 1} de ${currentReservation.guestIds.length + 1}`,
-          invitationCode: `${currentReservation.code}-${String(currentReservation.guestIds.length + 1).padStart(2, "0")}`,
+          invitationSequence: "1 de 1",
+          invitationCode: currentReservation.code,
           carnet: guest.carnet,
           whatsapp: guest.whatsapp,
           seat: undefined,
@@ -951,6 +988,7 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
         } as never);
       },
     },
+    extraWristbandSales,
     guests: {
       ...guests,
       async moveToTable(guestId: string, tableId: string) {

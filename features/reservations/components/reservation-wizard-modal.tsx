@@ -200,6 +200,7 @@ export default function ReservationWizardModal({
 }) {
   const isCreateMode = wizardMode === "create";
   const isPresale = reservationType === "Preventa";
+  const isMesa = reservationType === "Mesa";
   const isCourtesy = reservationType === "Cortesía";
   const isNonPhysical = isPresale || isCourtesy;
   const currentStep = wizardSteps.find((item) => item.step === step) ?? wizardSteps[0];
@@ -502,7 +503,7 @@ export default function ReservationWizardModal({
                       ) : (
                         <div className="mt-3 space-y-2 text-sm text-slate-300">
                           <p>Reserva: <span className="font-medium text-white">{commercialConfig.currency} {commercialConfig.reservation.basePrice}</span></p>
-                          <p>Accesos incluidos: <span className="font-medium text-white">{commercialConfig.reservation.includedAccesses}</span></p>
+                          <p>{isMesa ? "Manillas incluidas" : "Accesos incluidos"}: <span className="font-medium text-white">{commercialConfig.reservation.includedAccesses}</span></p>
                           <p>Beneficios: <span className="font-medium text-white">{commercialConfig.reservation.benefits.length ? commercialConfig.reservation.benefits.map((benefit) => `${benefit.quantity} × ${benefit.label}`).join(", ") : "Ninguno"}</span></p>
                         </div>
                       )}

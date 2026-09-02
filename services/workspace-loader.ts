@@ -4,6 +4,7 @@ import type { AccountRolePreset, AccountUser, OrganizationMembership } from "@/f
 import type { CheckInAttempt, Guest } from "@/features/check-in/types";
 import type { Event as PlatformEvent, Organization, Resource, Sector, Venue } from "@/features/domain/types";
 import type { ReservationRecord } from "@/features/reservations/types";
+import { mapExtraWristbandSaleRowToDomain, type ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
 import type { TableRecord } from "@/features/tables/types";
 import type { TimelineEvent } from "@/features/timeline/types";
 import { compareTimelineEventsDescending } from "@/features/timeline/domain/timeline-domain";
@@ -27,7 +28,7 @@ import {
   mapTimelineRowToDomain,
   mapVenueRowToDomain,
 } from "@/lib/supabase/mappers";
-import type { CheckInRow, EventRow, GuestRow, OrganizationRow, ProfileRow, ResourceRow, ReservationRow, RoleRow, SectorRow, TableRow, TimelineRow, UserRow, VenueRow, WhatsAppDeliveryAttemptRow } from "@/lib/supabase/types";
+import type { CheckInRow, EventRow, ExtraWristbandSaleRow, GuestRow, OrganizationRow, ProfileRow, ResourceRow, ReservationRow, RoleRow, SectorRow, TableRow, TimelineRow, UserRow, VenueRow, WhatsAppDeliveryAttemptRow } from "@/lib/supabase/types";
 import { createEmptyWorkspaceLayouts, loadWorkspaceLayouts, type WorkspaceLayoutCollections } from "@/services/workspace-layouts";
 import { buildEventSelectionCandidate, pickCurrentEventId as pickCurrentEventSelectionId } from "@/features/events/domain";
 
@@ -50,6 +51,7 @@ export type WorkspaceBootstrap = {
   events: PlatformEvent[];
   guests: Guest[];
   reservations: ReservationRecord[];
+  extraWristbandSales?: ExtraWristbandSale[];
   tables: TableRecord[];
   checkIns: ReturnType<typeof mapCheckInRowToDomain>[];
   attempts: CheckInAttempt[];
@@ -202,7 +204,8 @@ function createEmptyWorkspaceBootstrap(): WorkspaceBootstrap {
     ...layouts,
     events: [],
     guests: [],
-    reservations: [],
+  reservations: [],
+    extraWristbandSales: [],
     tables: [],
     checkIns: [],
     attempts: [],
@@ -418,6 +421,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     tableRows,
     checkInRows,
     timelineRows,
+    extraWristbandSaleRows,
   ] = await Promise.all([
     fetchSupabaseTable<UserRow>("users"),
     fetchSupabaseTable<RoleRow>("roles"),
@@ -432,6 +436,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     fetchSupabaseTable<TableRow>("tables"),
     fetchSupabaseTable<CheckInRow>("checkins"),
     fetchSupabaseTable<TimelineRow>("timeline_events"),
+    fetchSupabaseTable<ExtraWristbandSaleRow>("reservation_extra_wristband_sales", { optional: true }),
   ]);
   const whatsappDeliveryAttemptRows = await fetchSupabaseTable<WhatsAppDeliveryAttemptRow>("whatsapp_delivery_attempts", { optional: true });
 
@@ -553,6 +558,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
   );
   const checkInRowsForWorkspace = checkInRows.filter((checkIn) => allowedEventIds.has(checkIn.event_id) && checkIn.deleted_at === null);
   const timelineRowsForWorkspace = timelineRows.filter((timeline) => allowedEventIds.has(timeline.event_id));
+  const extraWristbandSaleRowsForWorkspace = extraWristbandSaleRows.filter((sale) => allowedEventIds.has(sale.event_id));
   const whatsappDeliveryAttemptRowsForWorkspace = whatsappDeliveryAttemptRows.filter(
     (attempt) =>
       attempt.deleted_at === null &&
@@ -610,6 +616,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     whatsappDelivery: whatsappDeliveryStateByGuestId.get(row.id),
   }));
   const reservations = reservationRowsForWorkspace.map((row) => mapReservationRowToDomain(row));
+  const extraWristbandSales = extraWristbandSaleRowsForWorkspace.map(mapExtraWristbandSaleRowToDomain);
   const tables = tableRowsForWorkspace.map((row) => mapTableRowToDomain(row));
   const checkIns = buildActiveCheckIns(checkInRowsForWorkspace);
   const timelineEvents = timelineRowsForWorkspace
@@ -642,6 +649,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     events,
     guests,
     reservations,
+    extraWristbandSales,
     tables,
     checkIns,
     attempts: buildAttemptsFromLogs(timelineEvents, currentEventId),

@@ -20,6 +20,8 @@ import {
   getReservationStatusTone,
   isTerminalReservationStatus,
 } from "@/features/reservations/domain/reservation-domain";
+import { calculateCommercialTotal, formatManillaLabel, getExtraWristbandCancellationErrorMessage, validateExtraWristbandSaleInput, type ExtraWristbandPerson, type ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
+import { getEventCommercialConfig } from "@/features/events/domain";
 import {
   canHardDeleteGuest,
   canHardDeleteReservation,
@@ -36,7 +38,7 @@ import type {
 } from "@/features/access/domain/whatsapp-reservation-invitations";
 
 type ReservationOperationsBoardProps = {
-  currentEvent: Pick<PlatformEvent, "name" | "startAt" | "timezone" | "venue">;
+  currentEvent: Pick<PlatformEvent, "id" | "name" | "startAt" | "timezone" | "venue" | "metadata">;
   currentVenueName?: string | null;
   reservationGuests: CheckInGuest[];
   reservations: ReservationSummary[];
@@ -52,14 +54,17 @@ type ReservationOperationsBoardProps = {
   onDeleteReservation: (reservationId: string) => Promise<void>;
   onCancelReservation: (reservationId: string) => void;
   onMarkConfirmed: (reservationId: string) => void;
-  onAddGuest: (reservationId: string, guest: ReservationGuestInput) => void;
+  onAddGuest: (reservationId: string, guest: ReservationGuestInput) => Promise<void>;
   onGuestAction: (params: {
     reservationId: string;
     guestId: string;
     action: ReservationGuestAction;
   }) => void;
-  onRegisterCheckIn: (reservationId: string, guestId: string) => void;
+  onRegisterCheckIn: (reservationId: string, guestId: string) => Promise<void>;
   onEditGuest: (guestId: string) => void;
+  extraWristbandSales: ExtraWristbandSale[];
+  createExtraWristbandSale: (input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[] }) => Promise<void>;
+  cancelExtraWristbandSale: (input: { saleId: string; reason: string }) => Promise<void>;
 };
 
 type GuestOverflowActionTone = "success" | "warning" | "danger" | "info";
@@ -155,6 +160,9 @@ export default function ReservationOperationsBoard({
   canIssueWhatsAppInvitations,
   setGuestsState,
   isTerminalEvent = false,
+  extraWristbandSales,
+  createExtraWristbandSale,
+  cancelExtraWristbandSale,
 }: ReservationOperationsBoardProps) {
   const { showToast, confirm } = useFeedback();
   const [query, setQuery] = useState("");
@@ -164,6 +172,14 @@ export default function ReservationOperationsBoard({
   const [guestDocument, setGuestDocument] = useState("");
   const [guestWhatsapp, setGuestWhatsapp] = useState("");
   const [guestReason, setGuestReason] = useState("");
+  const [isExtraWristbandModalOpen, setIsExtraWristbandModalOpen] = useState(false);
+  const [extraWristbandPeople, setExtraWristbandPeople] = useState<ExtraWristbandPerson[]>([{ name: "", carnet: "", whatsapp: "" }]);
+  const [extraWristbandError, setExtraWristbandError] = useState<string | null>(null);
+  const [isExtraWristbandSubmitting, setIsExtraWristbandSubmitting] = useState(false);
+  const [cancellationSale, setCancellationSale] = useState<ExtraWristbandSale | null>(null);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [cancellationError, setCancellationError] = useState<string | null>(null);
+  const [isCancellationSubmitting, setIsCancellationSubmitting] = useState(false);
   const [isSendingReservationInvitations, setIsSendingReservationInvitations] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
   const [lastBatchResult, setLastBatchResult] = useState<ReservationWhatsAppBatchSummary | null>(null);
@@ -196,6 +212,15 @@ export default function ReservationOperationsBoard({
     visibleReservations.find((reservation) => reservation.id === activeReservationId) ??
     visibleReservations[0] ??
     null;
+  const commercialConfig = useMemo(() => getEventCommercialConfig(currentEvent), [currentEvent]);
+  const activeExtraWristbandSales = useMemo(
+    () => extraWristbandSales.filter((sale) => sale.reservationId === activeReservation?.id),
+    [activeReservation?.id, extraWristbandSales],
+  );
+  const extraWristbandPrice = commercialConfig.reservation.extraWristbandPrice;
+  const activeExtraWristbandCount = activeExtraWristbandSales.filter((sale) => sale.status === "active").reduce((sum, sale) => sum + sale.quantity, 0);
+  const originalCommercialPrice = activeReservation?.commercialSnapshot?.reservationPrice ?? 0;
+  const commercialTotal = activeReservation ? calculateCommercialTotal(originalCommercialPrice, activeExtraWristbandSales) : 0;
   const canHardDeleteActiveReservation = activeReservation ? canHardDeleteReservation(activeReservation) : false;
   const whatsappPlan = useMemo(
     () =>
@@ -269,7 +294,7 @@ export default function ReservationOperationsBoard({
     resetGuestForm();
   };
 
-  const handleAddGuest = () => {
+  const handleAddGuest = async () => {
     if (!activeReservation || isTerminalReservation) {
       return;
     }
@@ -283,7 +308,7 @@ export default function ReservationOperationsBoard({
       return;
     }
 
-    onAddGuest(activeReservation.id, {
+    await onAddGuest(activeReservation.id, {
       guestName,
       carnet: guestDocument,
       whatsapp: guestWhatsapp,
@@ -484,6 +509,57 @@ export default function ReservationOperationsBoard({
     whatsappMissingCount,
     whatsappRetryableCount,
   ]);
+
+  const openExtraWristbandModal = () => {
+    setExtraWristbandPeople([{ name: "", carnet: "", whatsapp: "" }]);
+    setExtraWristbandError(null);
+    setIsExtraWristbandModalOpen(true);
+  };
+
+  const submitExtraWristbandSale = async () => {
+    if (!activeReservation || extraWristbandPrice === undefined) return;
+    const validationError = validateExtraWristbandSaleInput({
+      reservation: { ...activeReservation, eventId: currentEvent.id },
+      eventId: currentEvent.id,
+      price: extraWristbandPrice,
+      guests: extraWristbandPeople,
+    });
+    if (validationError) {
+      setExtraWristbandError(validationError);
+      return;
+    }
+
+    setIsExtraWristbandSubmitting(true);
+    setExtraWristbandError(null);
+    try {
+      await createExtraWristbandSale({ reservationId: activeReservation.id, eventId: currentEvent.id, people: extraWristbandPeople });
+      setIsExtraWristbandModalOpen(false);
+      showToast({ title: "Manillas extra agregadas", description: `${extraWristbandPeople.length} personas quedaron vinculadas a la reserva.`, tone: "success" });
+    } catch (error) {
+      setExtraWristbandError(error instanceof Error ? error.message : "No se pudieron agregar las manillas extra.");
+    } finally {
+      setIsExtraWristbandSubmitting(false);
+    }
+  };
+
+  const submitExtraWristbandCancellation = async () => {
+    if (!cancellationSale || !cancellationReason.trim()) {
+      setCancellationError("El motivo es obligatorio.");
+      return;
+    }
+    setIsCancellationSubmitting(true);
+    setCancellationError(null);
+    try {
+      await cancelExtraWristbandSale({ saleId: cancellationSale.id, reason: cancellationReason });
+      setCancellationSale(null);
+      setCancellationReason("");
+      showToast({ title: "Venta anulada", description: "Las personas asociadas quedaron sin acceso.", tone: "success" });
+    } catch (error) {
+      setCancellationError(getExtraWristbandCancellationErrorMessage(error));
+    } finally {
+      setIsCancellationSubmitting(false);
+    }
+  };
 
   if (!reservations.length) {
     return (
@@ -784,7 +860,7 @@ export default function ReservationOperationsBoard({
               />
               <ReservationInfoRow label="Moneda" value={activeReservation.commercialSnapshot.currency} />
               <ReservationInfoRow
-                label={activeReservation.commercialSnapshot.saleType === "presale" ? "Preventas compradas" : "Accesos incluidos"}
+                label={activeReservation.commercialSnapshot.saleType === "presale" ? "Preventas compradas" : activeReservation.reservationType === "Mesa" ? "Manillas incluidas" : "Accesos incluidos"}
                 value={`${getPresaleQuantity(activeReservation.commercialSnapshot)}`}
               />
               {activeReservation.commercialSnapshot.saleType === "presale" ? (
@@ -814,6 +890,49 @@ export default function ReservationOperationsBoard({
             <p className="mt-2 text-sm text-slate-400">Sin condiciones comerciales registradas.</p>
           )}
         </section> : null}
+
+        {activeReservation.reservationType === "Mesa" ? (
+          <section className="surface-elevated min-w-0 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="kicker">Operación comercial de Mesa</p>
+                <h3 className="mt-2 text-lg font-semibold text-white">Manillas extra</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  {extraWristbandPrice === undefined ? "Configura un precio en el evento para habilitar nuevas manillas." : `Precio vigente: ${formatCommercialCurrency(commercialConfig.currency)} ${formatCommercialAmount(extraWristbandPrice)} por manilla`}
+                </p>
+              </div>
+              {extraWristbandPrice !== undefined && !isTerminalReservation ? (
+                <button type="button" onClick={openExtraWristbandModal} className="inline-flex h-10 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15">
+                  Agregar manillas extra
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <ReservationInfoRow label="Manillas incluidas" value={`${activeReservation.commercialSnapshot?.includedAccesses ?? 0}`} />
+              <ReservationInfoRow label="Manillas extra activas" value={`${activeExtraWristbandCount}`} />
+              <ReservationInfoRow label="Personas totales vinculadas" value={`${activeReservation.metrics.guestCount}`} />
+              <ReservationInfoRow label="Total comercial" value={`${formatCommercialCurrency(activeReservation.commercialSnapshot?.currency ?? commercialConfig.currency)} ${formatCommercialAmount(commercialTotal)}`} />
+            </div>
+            {activeExtraWristbandSales.length ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Histórico de ventas</p>
+                {activeExtraWristbandSales.map((sale) => (
+                  <div key={sale.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-medium text-white">{formatManillaLabel(sale.quantity, true)} × {formatCommercialCurrency(sale.currency)} {formatCommercialAmount(sale.unitPrice)}</p>
+                      <p className="mt-1 text-xs text-slate-400">{formatCommercialCurrency(sale.currency)} {formatCommercialAmount(sale.totalPrice)} · {formatSaleDate(sale.createdAt)}{sale.createdBy ? ` · ${sale.createdBy}` : ""}</p>
+                      {sale.status === "cancelled" && sale.cancellationReason ? <p className="mt-1 break-words text-xs text-amber-200">Motivo: {sale.cancellationReason}</p> : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge variant={sale.status === "active" ? "success" : "danger"}>{sale.status === "active" ? "Activa" : "Anulada"}</StatusBadge>
+                      {sale.status === "active" && !isTerminalReservation ? <button type="button" onClick={() => { setCancellationSale(sale); setCancellationReason(""); setCancellationError(null); }} className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-50 transition hover:bg-rose-400/15">Anular venta</button> : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         <section className="surface-elevated min-w-0 p-4">
           <div className="flex min-w-0 items-center justify-between gap-3">
@@ -852,9 +971,7 @@ export default function ReservationOperationsBoard({
                   onCancel={() => {
                     onGuestAction({ reservationId: activeReservation.id, guestId: guest.id, action: "cancel" });
                   }}
-                  onCheckIn={() => {
-                    onRegisterCheckIn(activeReservation.id, guest.id);
-                  }}
+                  onCheckIn={() => onRegisterCheckIn(activeReservation.id, guest.id)}
                   onRevert={() => {
                     onGuestAction({ reservationId: activeReservation.id, guestId: guest.id, action: "revert" });
                   }}
@@ -990,6 +1107,35 @@ export default function ReservationOperationsBoard({
           </p>
         </section>
 
+        {isExtraWristbandModalOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-2xl rounded-[1.75rem] border border-white/10 bg-[#08111f] p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div><p className="kicker">Mesa · nueva operación</p><h2 className="mt-2 text-xl font-semibold text-white">Agregar manillas extra</h2><p className="mt-1 text-sm text-slate-400">{formatCommercialCurrency(commercialConfig.currency)} {formatCommercialAmount(extraWristbandPrice ?? 0)} por manilla</p></div>
+                <button type="button" onClick={() => setIsExtraWristbandModalOpen(false)} className="rounded-xl px-2 py-1 text-slate-400 hover:text-white" aria-label="Cerrar">×</button>
+              </div>
+              <div className="mt-5 space-y-3">
+                {extraWristbandPeople.map((person, index) => (
+                  <div key={index} className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto]">
+                    {(["name", "carnet", "whatsapp"] as const).map((field) => <input key={field} value={person[field]} onChange={(event) => setExtraWristbandPeople((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: event.target.value } : item))} placeholder={field === "name" ? "Nombre de la persona" : field === "carnet" ? "Carnet" : "WhatsApp"} className="h-11 min-w-0 w-full rounded-xl border border-white/15 bg-slate-900/70 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-400 focus:border-cyan-300/70" />)}
+                    <button type="button" onClick={() => setExtraWristbandPeople((current) => current.length === 1 ? current : current.filter((_, itemIndex) => itemIndex !== index))} disabled={extraWristbandPeople.length === 1} className="rounded-xl px-3 text-xs text-slate-400 hover:text-white disabled:opacity-30">Quitar</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={() => setExtraWristbandPeople((current) => [...current, { name: "", carnet: "", whatsapp: "" }])} className="mt-3 text-sm font-semibold text-cyan-200">+ Agregar persona</button>
+              <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4"><p className="text-sm font-semibold text-white">{formatManillaLabel(extraWristbandPeople.length, true)}</p><p className="mt-1 text-sm text-slate-400">{extraWristbandPeople.length} × {formatCommercialCurrency(commercialConfig.currency)} {formatCommercialAmount(extraWristbandPrice ?? 0)} · Total comercial: {formatCommercialCurrency(commercialConfig.currency)} {formatCommercialAmount((extraWristbandPrice ?? 0) * extraWristbandPeople.length)}</p></div>
+              {extraWristbandError ? <p className="mt-3 text-sm text-rose-200">{extraWristbandError}</p> : null}
+              <div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setIsExtraWristbandModalOpen(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-white">Cancelar</button><button type="button" onClick={() => void submitExtraWristbandSale()} disabled={isExtraWristbandSubmitting} className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-50 disabled:opacity-50">{isExtraWristbandSubmitting ? "Confirmando…" : "Confirmar manillas extra"}</button></div>
+            </div>
+          </div>
+        ) : null}
+
+        {cancellationSale ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-[1.75rem] border border-white/10 bg-[#08111f] p-5 shadow-2xl"><p className="kicker">Acción irreversible</p><h2 className="mt-2 text-xl font-semibold text-white">Anular venta de manillas extra</h2><p className="mt-3 text-sm leading-6 text-slate-300">Se anularán {cancellationSale.quantity} personas asociadas. Esta acción no representa una devolución de dinero.</p><p className="mt-2 text-sm text-slate-400">Importe histórico: {formatCommercialCurrency(cancellationSale.currency)} {formatCommercialAmount(cancellationSale.totalPrice)}</p><label className="mt-4 block"><span className="text-sm font-medium text-white">Motivo</span><textarea value={cancellationReason} onChange={(event) => setCancellationReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-xl border border-white/15 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 outline-none focus:border-rose-300/70" /></label>{cancellationError ? <p className="mt-3 text-sm text-rose-200">{cancellationError}</p> : null}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCancellationSale(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-white">Cancelar</button><button type="button" onClick={() => void submitExtraWristbandCancellation()} disabled={isCancellationSubmitting} className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2.5 text-sm font-semibold text-rose-50 disabled:opacity-50">{isCancellationSubmitting ? "Anulando…" : "Anular venta"}</button></div></div>
+          </div>
+        ) : null}
+
       </section>
 
       <div className="pointer-events-none fixed left-[-200vw] top-0 w-[1080px] overflow-hidden" aria-hidden="true">
@@ -1028,12 +1174,14 @@ function ReservationGuestRow({
   onEdit: () => void;
   onConfirm: () => void;
   onCancel: () => void;
-  onCheckIn: () => void;
+  onCheckIn: () => void | Promise<void>;
   onRevert: () => void;
   onRemove: () => void;
 }) {
+  const { showToast } = useFeedback();
   const actionVisibility = getReservationGuestActionVisibility(reservationStatus, guest, eventTerminal);
   const canHardDelete = canHardDeleteGuest(guest);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
   const overflowActions: GuestOverflowActionItem[] = [
     canEditGuest
       ? {
@@ -1115,6 +1263,7 @@ function ReservationGuestRow({
               {formatReservationStatus(guest.reservationStatus)}
             </StatusBadge>
             <StatusBadge variant="info">{guest.deliveryStatus}</StatusBadge>
+            {guest.extraWristbandSaleId ? <StatusBadge variant="info">Manilla extra</StatusBadge> : null}
           </div>
         </div>
 
@@ -1122,10 +1271,26 @@ function ReservationGuestRow({
           {actionVisibility.showCheckIn ? (
             <button
               type="button"
-              onClick={onCheckIn}
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/15"
+              onClick={() => {
+                if (isCheckingIn) {
+                  return;
+                }
+
+                setIsCheckingIn(true);
+                void Promise.resolve(onCheckIn())
+                  .catch((error: unknown) => {
+                    showToast({
+                      title: "No se pudo registrar el ingreso",
+                      description: error instanceof Error ? error.message : "Ocurrió un error al registrar el ingreso.",
+                      tone: "error",
+                    });
+                  })
+                  .finally(() => setIsCheckingIn(false));
+              }}
+              disabled={isCheckingIn}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Registrar ingreso
+              {isCheckingIn ? "Registrando ingreso..." : "Registrar ingreso"}
             </button>
           ) : null}
           <ReservationGuestOverflowMenu actions={overflowActions} />
@@ -1278,6 +1443,10 @@ function formatCommercialAmount(value: number) {
 
 function formatCommercialCurrency(currency: string) {
   return currency === "BOB" ? "Bs" : currency;
+}
+
+function formatSaleDate(value: string) {
+  return new Intl.DateTimeFormat("es-BO", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
 function getPresaleUnitPrice(snapshot: NonNullable<ReservationSummary["commercialSnapshot"]>) {

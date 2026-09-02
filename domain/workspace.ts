@@ -18,6 +18,7 @@ import type {
   ReservationStatus,
   ReservationSummary,
 } from "@/features/reservations/types";
+import type { ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
 import type { TableRecord, TableSummary } from "@/features/tables/types";
 import type { TimelineEvent } from "@/features/timeline/types";
 
@@ -28,6 +29,7 @@ export type WorkspaceCollections = {
   events: PlatformEvent[];
   guests: Guest[];
   reservations: ReservationRecord[];
+  extraWristbandSales: ExtraWristbandSale[];
   reservationSummaries: ReservationSummary[];
   tables: TableRecord[];
   tableSummaries: TableSummary[];
@@ -64,7 +66,7 @@ export type WorkspaceMutations = {
   createOrganization: (organization: Organization) => Organization;
   createEvent: (event: PlatformEvent) => void;
   setEventStatus: (eventId: string, status: PlatformEvent["status"]) => void;
-  addReservationGuest: (reservationId: string, guest: ReservationGuestInput) => void;
+  addReservationGuest: (reservationId: string, guest: ReservationGuestInput) => Promise<void>;
   updateReservationGuest: (params: {
     reservationId: string;
     guestId: string;

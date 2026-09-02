@@ -231,6 +231,7 @@ function getGuestReservationSummary(guest: Guest): ReservationGuestSummary {
     checkInMethod: guest.checkInMethod,
     gate: guest.gate,
     qrStatus: guest.qrStatus,
+    extraWristbandSaleId: guest.extraWristbandSaleId,
     manualAdmission: guest.manualAdmission,
     attention: guest.attention,
     canConfirm: guest.admissionStatus !== "Ingresó" && status !== "Confirmed",

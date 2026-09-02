@@ -32,6 +32,7 @@ export type ReservationRepository = CrudRepository<ReservationRecord, Reservatio
 };
 
 export type GuestRepository = CrudRepository<Guest> & {
+  createWithAccessOrdinal(guest: Guest): Promise<Guest>;
   moveToTable(guestId: string, tableId: string): void;
   checkIn(query: string): Promise<CheckInAttempt | null>;
 };
@@ -133,6 +134,21 @@ export function createMemoryWorkspaceRepositories(adapter: WorkspaceMemoryAdapte
     () => adapter.guests,
     adapter.setGuestsState,
   ) as GuestRepository;
+
+  guests.createWithAccessOrdinal = async (guest) => {
+    const reservation = adapter.reservations.find((item) => item.id === guest.reservationId);
+    if (!reservation) {
+      throw new Error("Reservation not found.");
+    }
+
+    const reservationGuests = adapter.guests.filter((item) => item.reservationId === guest.reservationId);
+    const accessOrdinal = Math.max(0, ...reservationGuests.map((item) => item.accessOrdinal ?? 0)) + 1;
+    return guests.create({
+      ...guest,
+      accessOrdinal,
+      invitationCode: `${reservation.code}-${String(accessOrdinal).padStart(2, "0")}`,
+    });
+  };
 
   const tables = buildCrudRepository<TableRecord>(
     () => adapter.tables,
@@ -257,6 +273,7 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       create: notImplemented,
       update: notImplemented,
       delete: notImplemented,
+      createWithAccessOrdinal: notImplemented,
       moveToTable: notImplemented,
       checkIn: notImplemented,
     },

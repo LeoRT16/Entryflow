@@ -170,6 +170,8 @@ export type GuestRow = SupabaseRowBase & {
   reservation_name: string;
   reservation_code: string;
   reservation_id: string;
+  extra_wristband_sale_id: string | null;
+  access_ordinal: number | null;
   event_name: string;
   table_id: string | null;
   table_name: string | null;
@@ -353,6 +355,22 @@ export type ProfileRow = SupabaseRowBase & {
   metadata: Json | null;
 };
 
+export type ExtraWristbandSaleRow = {
+  id: string;
+  reservation_id: string;
+  event_id: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  currency: string;
+  status: "active" | "cancelled";
+  created_by: string | null;
+  created_at: string;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancellation_reason: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -450,6 +468,11 @@ export type Database = {
         Row: TimelineRow;
         Insert: Omit<TimelineRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<TimelineRow, "created_at" | "updated_at" | "deleted_at">>;
         Update: Partial<TimelineRow>;
+      };
+      reservation_extra_wristband_sales: {
+        Row: ExtraWristbandSaleRow;
+        Insert: Omit<ExtraWristbandSaleRow, "created_at"> & Partial<Pick<ExtraWristbandSaleRow, "created_at">>;
+        Update: Partial<ExtraWristbandSaleRow>;
       };
       users: {
         Row: UserRow;

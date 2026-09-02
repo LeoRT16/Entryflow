@@ -143,6 +143,7 @@ export default function EventEditorModal({
   const initialVenueId = event.venueId ?? "";
   const initialVenueIdRef = useRef(initialVenueId);
   const canEditEvent = !isTerminalEventStatus(event.status);
+  const isBolicheEvent = event.eventType === "nightlife";
   const [eventName, setEventName] = useState(event.name);
   const [eventVenueId, setEventVenueId] = useState(initialVenueId);
   const [eventVenue, setEventVenue] = useState(event.venue);
@@ -506,7 +507,23 @@ export default function EventEditorModal({
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="Precio base de reserva" value={String(commercialConfig.reservation.basePrice)} onChange={(value) => updateCommercialConfig((current) => ({ ...current, reservation: { ...current.reservation, basePrice: Math.max(0, Number(value) || 0) } }))} type="number" disabled={!canEditEvent} />
-              <Field label="Accesos incluidos" value={String(commercialConfig.reservation.includedAccesses)} onChange={(value) => updateCommercialConfig((current) => ({ ...current, reservation: { ...current.reservation, includedAccesses: Math.max(0, Number(value) || 0) } }))} type="number" disabled={!canEditEvent} />
+              <Field label={isBolicheEvent ? "Manillas incluidas" : "Accesos incluidos"} value={String(commercialConfig.reservation.includedAccesses)} onChange={(value) => updateCommercialConfig((current) => ({ ...current, reservation: { ...current.reservation, includedAccesses: Math.max(0, Number(value) || 0) } }))} type="number" disabled={!canEditEvent} />
+              <div>
+                <Field
+                  label="Precio por manilla extra"
+                  value={commercialConfig.reservation.extraWristbandPrice === undefined ? "" : String(commercialConfig.reservation.extraWristbandPrice)}
+                  onChange={(value) => updateCommercialConfig((current) => ({
+                    ...current,
+                    reservation: {
+                      ...current.reservation,
+                      ...(value.trim() === "" ? { extraWristbandPrice: undefined } : { extraWristbandPrice: Math.max(0, Number(value) || 0) }),
+                    },
+                  }))}
+                  type="number"
+                  disabled={!canEditEvent}
+                />
+                <p className="mt-2 text-xs leading-5 text-slate-500">Precio vigente para nuevas manillas extra.</p>
+              </div>
             </div>
             <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/30 p-3">
               <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-white">Beneficios incluidos</p><button type="button" onClick={addBenefit} disabled={!canEditEvent} className="text-xs font-semibold text-cyan-200 disabled:opacity-50">Agregar beneficio</button></div>

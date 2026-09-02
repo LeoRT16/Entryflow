@@ -137,6 +137,7 @@ export type ReservationGuestSummary = {
   checkInMethod?: string;
   gate?: string;
   qrStatus?: string;
+  extraWristbandSaleId?: string | null;
   manualAdmission?: boolean;
   attention?: string;
   canConfirm: boolean;

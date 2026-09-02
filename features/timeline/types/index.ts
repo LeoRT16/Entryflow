@@ -9,6 +9,8 @@ export type TimelineKind =
   | "guest.confirmed"
   | "guest.cancelled"
   | "guest.removed"
+  | "reservation.extra_wristbands_added"
+  | "reservation.extra_wristbands_cancelled"
   | "guest.reverted"
   | "table.assigned"
   | "table.changed"

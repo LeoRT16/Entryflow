@@ -73,6 +73,7 @@ type ReservationFlowWorkspaceProps = Pick<
   | "events"
   | "guests"
   | "reservations"
+  | "extraWristbandSales"
   | "tableSummaries"
   | "workspaceIntelligence"
   | "reservationSummaries"
@@ -87,6 +88,8 @@ type ReservationFlowWorkspaceProps = Pick<
   | "setGuestsState"
   | "setReservationStatus"
   | "registerCheckIn"
+  | "createExtraWristbandSale"
+  | "cancelExtraWristbandSale"
 >;
 
 function reservationPriorityWeight(statusTone: ReservationSummary["statusTone"]) {
@@ -135,6 +138,7 @@ export default function ReservationFlow() {
       events={store.events}
       guests={store.guests}
       reservations={store.reservations}
+      extraWristbandSales={store.extraWristbandSales}
       tableSummaries={store.tableSummaries}
       workspaceIntelligence={store.workspaceIntelligence}
       reservationSummaries={store.reservationSummaries}
@@ -149,6 +153,8 @@ export default function ReservationFlow() {
       setGuestsState={store.setGuestsState}
       setReservationStatus={store.setReservationStatus}
       registerCheckIn={store.registerCheckIn}
+      createExtraWristbandSale={store.createExtraWristbandSale}
+      cancelExtraWristbandSale={store.cancelExtraWristbandSale}
     />
   );
 }
@@ -165,6 +171,7 @@ function ReservationFlowWorkspace({
   events,
   guests: reservationGuests,
   reservations,
+  extraWristbandSales,
   tableSummaries,
   workspaceIntelligence,
   reservationSummaries,
@@ -179,6 +186,8 @@ function ReservationFlowWorkspace({
   setGuestsState,
   setReservationStatus,
   registerCheckIn,
+  createExtraWristbandSale,
+  cancelExtraWristbandSale,
 }: ReservationFlowWorkspaceProps) {
   const { showToast } = useFeedback();
   const commercialConfig = useMemo(() => getEventCommercialConfig(currentEvent), [currentEvent]);
@@ -1203,21 +1212,21 @@ function ReservationFlowWorkspace({
           onMarkConfirmed={(reservationId) => {
             setReservationStatus(reservationId, "Confirmed");
           }}
-          onAddGuest={(reservationId, guest) => {
-            addReservationGuest(reservationId, guest);
+          onAddGuest={async (reservationId, guest) => {
+            await addReservationGuest(reservationId, guest);
           }}
           onGuestAction={(params) => {
             updateReservationGuest(params);
           }}
-          onRegisterCheckIn={(reservationId, guestId) => {
+          onRegisterCheckIn={async (reservationId, guestId) => {
             const reservation = reservationSummaries.find((item) => item.id === reservationId);
             const guest = reservation?.guests.find((item) => item.id === guestId);
 
             if (!reservation || !guest) {
-              return;
+              throw new Error("No se encontró el invitado en el estado actual de la reserva.");
             }
 
-            registerCheckIn({
+            await registerCheckIn({
               query: guest.invitationCode,
               method: "Manual",
               operator: "Recepción",
@@ -1229,6 +1238,9 @@ function ReservationFlowWorkspace({
           }}
           canEditReservation={can("reservation.edit")}
           canDeleteReservation={can("reservation.cancel")}
+          extraWristbandSales={extraWristbandSales}
+          createExtraWristbandSale={createExtraWristbandSale}
+          cancelExtraWristbandSale={cancelExtraWristbandSale}
         />
       </section>
 
