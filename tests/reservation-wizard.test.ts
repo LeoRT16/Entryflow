@@ -109,6 +109,75 @@ test("mesa still requires a resource and presale rejects incomplete people", () 
   assert.throws(() => createReservationBundle({ ...input, reservationType: "Preventa", selectedResource: undefined }), /complete access/);
 });
 
+test("courtesy creates an operational group with individual accesses and no commercial state", () => {
+  const guests = ["Ana", "Luis"].map((name, index) => ({
+    ...createGuestDraft(index),
+    name,
+    document: `CI-C-${index + 1}`,
+    whatsapp: `7100000${index + 1}`,
+  }));
+  const bundle = createReservationBundle({
+    eventId: "event-1",
+    eventName: "Evento de prueba",
+    date: "2026-09-02",
+    time: "21:00",
+    reservationType: "Cortesía",
+    reference: "Prensa",
+    holderName: "",
+    holderLastName: "",
+    documentValue: "",
+    whatsapp: "",
+    email: "",
+    preferences: "",
+    vip: false,
+    frequent: false,
+    notes: "",
+    guests,
+    amount: "999",
+    advance: "999",
+    paymentMethod: "Efectivo",
+    paymentStatus: "Pagado",
+    observations: "",
+  });
+
+  assert.equal(bundle.reservation.name, "Cortesía · Prensa");
+  assert.equal(bundle.reservation.reference, "Prensa");
+  assert.equal(bundle.reservation.status, "Confirmed");
+  assert.equal(bundle.reservation.paymentStatus, "Pendiente");
+  assert.equal(bundle.reservation.amount, "0");
+  assert.equal(bundle.reservation.advance, "0");
+  assert.equal(bundle.reservation.commercialSnapshot, undefined);
+  assert.equal(bundle.reservation.tableId, undefined);
+  assert.equal(bundle.guests.length, 2);
+  assert.equal(bundle.guests.every((guest) => guest.tableId === undefined && guest.tableName === undefined), true);
+  assert.equal(new Set(bundle.guests.map((guest) => guest.invitationCode)).size, 2);
+});
+
+test("courtesy requires at least one complete person", () => {
+  assert.throws(() => createReservationBundle({
+    eventId: "event-1",
+    eventName: "Evento de prueba",
+    date: "2026-09-02",
+    time: "21:00",
+    reservationType: "Cortesía",
+    holderName: "",
+    holderLastName: "",
+    documentValue: "",
+    whatsapp: "",
+    email: "",
+    preferences: "",
+    vip: false,
+    frequent: false,
+    notes: "",
+    guests: [createGuestDraft(0)],
+    amount: "0",
+    advance: "0",
+    paymentMethod: "Efectivo",
+    paymentStatus: "Pendiente",
+    observations: "",
+  }), /complete person/);
+});
+
 test("presale preloads the first access once and preserves an explicit replacement", () => {
   const holder = { holderName: "Leo", holderLastName: "Rojas", documentValue: "CI-1", whatsapp: "70000001" };
   const firstDraft = createGuestDraft(0);

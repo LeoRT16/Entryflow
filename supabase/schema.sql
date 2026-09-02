@@ -173,6 +173,7 @@ create table if not exists public.reservations (
   holder_whatsapp text not null default '',
   holder_email text not null default '',
   reservation_type text not null,
+  reference text,
   payment_status text not null,
   amount text not null default '0',
   advance text not null default '0',

@@ -221,6 +221,7 @@ export type ReservationRow = SupabaseRowBase & {
   holder_whatsapp: string;
   holder_email: string;
   reservation_type: ReservationType;
+  reference: string | null;
   payment_status: PaymentStatus;
   amount: string;
   advance: string;

@@ -1175,8 +1175,8 @@ export function buildWorkspaceIntelligence({
       activeOperators,
       recentActivity: eventTimeline.length,
     },
-    paidReservations: eventReservationSummaries.filter((reservation) => reservation.paymentStatus === "Pagado").length,
-    pendingPayments: eventReservationSummaries.filter((reservation) => reservation.paymentStatus === "Pendiente").length,
+    paidReservations: eventReservationSummaries.filter((reservation) => reservation.reservationType !== "Cortesía" && reservation.paymentStatus === "Pagado").length,
+    pendingPayments: eventReservationSummaries.filter((reservation) => reservation.reservationType !== "Cortesía" && reservation.paymentStatus === "Pendiente").length,
   };
 
   return {

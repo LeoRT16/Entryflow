@@ -193,6 +193,7 @@ function ReservationFlowWorkspace({
   const [time, setTime] = useState(wizardDefaults.time);
   const [guestCount, setGuestCount] = useState(wizardDefaults.guestCount);
   const [reservationType, setReservationType] = useState<ReservationType>(wizardDefaults.reservationType);
+  const [reference, setReference] = useState("");
   const [observations, setObservations] = useState(wizardDefaults.observations);
   const [holderName, setHolderName] = useState(wizardDefaults.holderName);
   const [holderLastName, setHolderLastName] = useState(wizardDefaults.holderLastName);
@@ -235,10 +236,14 @@ function ReservationFlowWorkspace({
   const [submissionActionLabel, setSubmissionActionLabel] = useState("Creando reserva…");
   const canEditGuest = can("guest.edit");
   const isPresale = reservationType === "Preventa";
+  const isCourtesy = reservationType === "Cortesía";
+  const isNonPhysical = isPresale || isCourtesy;
   const presaleMaximum = 100;
-  const currentPaymentAmount = isPresale
-    ? String(commercialConfig.presale.pricePerAccess * guestDrafts.length)
-    : amount;
+  const currentPaymentAmount = isCourtesy
+    ? "0"
+    : isPresale
+      ? String(commercialConfig.presale.pricePerAccess * guestDrafts.length)
+      : amount;
 
   const eventOptions = useMemo(
     () =>
@@ -289,7 +294,13 @@ function ReservationFlowWorkspace({
     (value) => {
       setReservationType((current) => {
         const next = typeof value === "function" ? value(current) : value;
-        if (next === "Preventa" && current !== "Preventa") {
+        if (next === "Cortesía") {
+          setGuestCount(0);
+          presalePreloadedHolderRef.current = null;
+          setGuestDrafts([]);
+          setSelectedResourceId("");
+          setReference("");
+        } else if (next === "Preventa" && current !== "Preventa") {
           setGuestCount(0);
           presalePreloadedHolderRef.current = null;
           setGuestDrafts([]);
@@ -302,7 +313,7 @@ function ReservationFlowWorkspace({
         return next;
       });
     },
-    [presalePreloadedHolderRef, setReservationType, wizardDefaults.guestCount, wizardDefaults.guestDrafts],
+    [presalePreloadedHolderRef, setReference, setReservationType, wizardDefaults.guestCount, wizardDefaults.guestDrafts],
   );
 
   const setHolderNameForWizard = useCallback<Dispatch<SetStateAction<string>>>(
@@ -547,6 +558,7 @@ function ReservationFlowWorkspace({
       setHolderLastName(editingReservation.holderName.split(" ").slice(1).join(" "));
       setDocumentValue(editingReservation.holderDocument);
       setWhatsapp(editingReservation.holderWhatsapp);
+      setReference(editingReservation.reference ?? "");
       setEmail(editingReservation.holderEmail);
       setPreferences("");
       setVip(false);
@@ -609,6 +621,7 @@ function ReservationFlowWorkspace({
     setTime(wizardDefaults.time);
     setGuestCount(wizardDefaults.guestCount);
     setReservationType(wizardDefaults.reservationType);
+    setReference("");
     setObservations(wizardDefaults.observations);
     setHolderName(wizardDefaults.holderName);
     setHolderLastName(wizardDefaults.holderLastName);
@@ -866,6 +879,14 @@ function ReservationFlowWorkspace({
   };
 
   const goNext = () => {
+    if (isCourtesy && step === 3) {
+      const hasCompleteGuests = guestDrafts.length > 0 && guestDrafts.every(isCompleteGuestDraft);
+      if (!hasCompleteGuests) {
+        setSubmissionError("Agrega al menos una persona completa con nombre, carnet y WhatsApp.");
+        return;
+      }
+    }
+
     if (isPresale && step === 2) {
       const holder = { holderName, holderLastName, documentValue, whatsapp };
       if (holder.holderName.trim() && holder.holderLastName.trim() && holder.documentValue.trim() && holder.whatsapp.trim()) {
@@ -890,7 +911,11 @@ function ReservationFlowWorkspace({
     }
 
     setSubmissionError(null);
-    setStep((currentStep) => (isPresale && currentStep === 3 ? 5 : Math.min(6, currentStep + 1)) as WizardStep);
+    setStep((currentStep) => {
+      if (isCourtesy && currentStep === 3) return 6;
+      if (isPresale && currentStep === 3) return 5;
+      return Math.min(6, currentStep + 1) as WizardStep;
+    });
   };
   const goPrevious = () =>
     setStep((currentStep) => (isPresale && currentStep === 5 ? 3 : Math.max(1, currentStep - 1)) as WizardStep);
@@ -921,20 +946,26 @@ function ReservationFlowWorkspace({
           ...input,
           eventId: currentEvent.id,
           eventName: currentEvent.name,
-          amount: isPresale ? amountForWizard : input.amount,
+          amount: isCourtesy ? "0" : isPresale ? amountForWizard : input.amount,
           commercialSnapshot: isPresale
             ? createPresaleCommercialSnapshot(commercialConfig, input.guests.length)
-            : createReservationCommercialSnapshot(commercialConfig),
+            : isCourtesy ? undefined : createReservationCommercialSnapshot(commercialConfig),
+          reference: isCourtesy ? reference : undefined,
         };
+
+        if (isCourtesy && (input.guests.length < 1 || input.guests.some((guest) => !isCompleteGuestDraft(guest)))) {
+          setSubmissionError("Cada cortesía requiere nombre, carnet y WhatsApp.");
+          return;
+        }
 
         if (isPresale && (!commercialConfig.presale.enabled || input.guests.length < 1 || input.guests.some((guest) => !isCompleteGuestDraft(guest)))) {
           setSubmissionError("Cada acceso de Preventa requiere nombre, carnet y WhatsApp.");
           return;
         }
 
-        const selectedResource = isPresale ? undefined : payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
+        const selectedResource = isNonPhysical ? undefined : payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
         const capacityViolation = resolveReservationCapacityViolation({
-          resourceCapacity: isPresale ? undefined : selectedResource?.capacity,
+          resourceCapacity: isNonPhysical ? undefined : selectedResource?.capacity,
           guestCount: payload.guests.length,
           resourceName: selectedResource?.name,
         });
@@ -973,7 +1004,7 @@ function ReservationFlowWorkspace({
         };
         const selectedResource = payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
         const capacityViolation = resolveReservationCapacityViolation({
-          resourceCapacity: selectedResource?.capacity,
+          resourceCapacity: selectedActiveReservation.reservationType === "Cortesía" ? undefined : selectedResource?.capacity,
           guestCount: payload.guests.length,
           resourceName: selectedResource?.name,
         });
@@ -1218,6 +1249,8 @@ function ReservationFlowWorkspace({
           updateGuestCount={updateGuestCount}
           reservationType={reservationType}
           setReservationType={setReservationTypeForWizard}
+          reference={reference}
+          setReference={setReference}
           observations={observations}
           setObservations={setObservations}
           holderName={holderName}
@@ -1243,7 +1276,7 @@ function ReservationFlowWorkspace({
           updateGuest={updateGuest}
           selectedResource={selectedResource}
           selectedResourceSummary={selectedResourceSummary}
-          selectedActiveReservation={wizardReservation}
+          selectedActiveReservation={isNonPhysical ? null : wizardReservation}
           selectedReservationConflictCount={selectedReservationConflictCount}
           wizardMode={wizardMode}
           selectedResourceId={selectedResourceId}

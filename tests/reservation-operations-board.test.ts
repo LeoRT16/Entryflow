@@ -114,6 +114,48 @@ test("reservation operations board exposes edit and delete actions for active re
   assert.doesNotMatch(source, /waitForInvitationFrame/);
 });
 
+test("courtesy actions use courtesy terminology without changing mesa terminology", () => {
+  const source = readFileSync(new URL("../features/reservations/components/reservation-operations-board.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /activeReservation\.reservationType === "Cortesía" \? "\+ Agregar cortesía" : "\+ Agregar invitado"/);
+  assert.match(source, /activeReservation\.reservationType === "Cortesía" \? "Agregar cortesía" : "Agregar invitado"/);
+  assert.match(source, /placeholder=\{activeReservation\.reservationType === "Cortesía" \? "Nombre de la persona" : "Nombre del invitado"\}/);
+});
+
+test("courtesy inline inputs keep entered values and placeholders legible", () => {
+  const source = readFileSync(new URL("../features/reservations/components/reservation-operations-board.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /text-slate-100 outline-none transition placeholder:text-slate-400 placeholder:opacity-100/);
+  assert.match(source, /focus:border-cyan-300\/70 focus:bg-slate-900 focus:ring-2 focus:ring-cyan-400\/20/);
+  assert.doesNotMatch(source, /disabled=.*input/);
+});
+
+test("courtesy inline form gives fields usable desktop widths without changing mesa layout", () => {
+  const source = readFileSync(new URL("../features/reservations/components/reservation-operations-board.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /activeReservation\.reservationType === "Cortesía"\s*\n\s*\? "grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-12"/);
+  assert.match(source, /activeReservation\.reservationType === "Cortesía" \? "xl:col-span-5" : ""/);
+  assert.match(source, /activeReservation\.reservationType === "Cortesía" \? "xl:col-span-5" : "xl:col-span-1"/);
+  assert.match(source, /min-w-0 w-full/);
+  assert.doesNotMatch(source, /min-w-\[(14|13|10|8)rem\]/);
+  assert.match(source, /xl:grid-cols-\[minmax\(0,1\.15fr\)_minmax\(0,0\.85fr\)_minmax\(0,0\.95fr\)_auto\]/);
+});
+
+test("courtesy copy distinguishes emitted access counts from people while preserving mesa and presale copy", () => {
+  const boardSource = readFileSync(new URL("../features/reservations/components/reservation-operations-board.tsx", import.meta.url), "utf8");
+  const wizardSource = readFileSync(new URL("../features/reservations/components/reservation-wizard-modal.tsx", import.meta.url), "utf8");
+
+  assert.match(boardSource, /reservation\.reservationType === "Cortesía" \? "Cortesías" : "Invitados"/);
+  assert.match(boardSource, /activeReservation\.reservationType === "Cortesía" \? "Personas" : "Invitados"/);
+  assert.match(wizardSource, /isCourtesy \? "Personas" : "Invitados"/);
+  assert.match(wizardSource, /isCourtesy \? `Persona \$\{index \+ 1\}` : index === 0 \? "Titular" : `Invitado \$\{index \+ 1\}`/);
+  assert.match(wizardSource, /step\.step === 3[\s\S]*title: "Personas"/);
+  assert.match(wizardSource, /step\.step === 2[\s\S]*title: "Referencia"/);
+  assert.match(wizardSource, /isPresale \|\| isCourtesy \? "Agregar persona" : "Agregar invitado"/);
+  assert.match(wizardSource, /isPresale \? "Accesos" : isCourtesy \? "Personas" : "Invitados"/);
+  assert.match(wizardSource, /isCourtesy \? "Personas" : "Invitados"/);
+});
+
 test("reservation batch accounting counts provider acceptance as accepted even when tracking persistence warns", () => {
   const summary = summarizeReservationWhatsAppBatchResults(
     [

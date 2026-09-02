@@ -427,6 +427,7 @@ export function buildTimelineQuickReadSummary(event: TimelineEvent) {
     guestLine,
     reservationLine,
     operatorLine,
+    reason: readMetadataString(event.metadata?.reason),
     description: event.description,
     timestamp: event.timestamp,
   };

@@ -209,6 +209,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                   value={quickRead.operatorLine || quickRead.actorLine || "Sin operador"}
                   compact
                 />
+                {quickRead.reason ? <TimelineField label="Motivo" value={quickRead.reason} compact /> : null}
               </div>
 
             </article>
@@ -262,6 +263,8 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                   <StatusBadge variant="info">{formatTimelineDisplayTime(quickRead.timestamp)}</StatusBadge>
                 </div>
               </div>
+
+              {quickRead.reason ? <TimelineField label="Motivo" value={quickRead.reason} /> : null}
 
             </div>
           </article>

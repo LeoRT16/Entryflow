@@ -2,7 +2,7 @@ import type { TableOption } from "@/features/tables/types";
 import type { ReservationCommercialSnapshot } from "@/features/events/domain/commercial-config";
 export type { TableOption } from "@/features/tables/types";
 
-export type ReservationType = "Mesa" | "Preventa" | "Cumpleaños" | "VIP" | "Corporativo";
+export type ReservationType = "Mesa" | "Preventa" | "Cortesía" | "Cumpleaños" | "VIP" | "Corporativo";
 export type PaymentMethod = "Efectivo" | "Transferencia" | "Tarjeta" | "Cortesía";
 export type PaymentStatus = "Pendiente" | "Parcial" | "Pagado";
 export type GuestInvitationState = "Pendiente" | "Lista" | "Enviada" | "Transferida";
@@ -21,6 +21,7 @@ export type ReservationGuestInput = {
   guestName: string;
   carnet: string;
   whatsapp: string;
+  reason?: string;
 };
 
 export type GuestDraft = {
@@ -51,6 +52,7 @@ export type ReservationTimelineEntry = {
   actorRole?: string;
   context?: string;
   target?: string;
+  reason?: string;
 };
 
 export type ReservationCreationInput = {
@@ -79,6 +81,7 @@ export type ReservationCreationInput = {
   paymentStatus: PaymentStatus;
   observations: string;
   commercialSnapshot?: ReservationCommercialSnapshot;
+  reference?: string;
 };
 
 export type ReservationUpdateInput = ReservationCreationInput & {
@@ -108,6 +111,7 @@ export type ReservationRecord = {
   holderWhatsapp: string;
   holderEmail: string;
   reservationType: ReservationType;
+  reference?: string;
   paymentStatus: PaymentStatus;
   amount: string;
   advance: string;
@@ -163,6 +167,7 @@ export type ReservationSummary = {
   time: string;
   tableName: string;
   reservationType: ReservationType;
+  reference?: string;
   status: ReservationStatus;
   statusTone: ReservationTone;
   metrics: ReservationMetrics;

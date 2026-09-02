@@ -746,6 +746,8 @@ type AuditTimelineContext = {
   actorRole?: string;
   context?: string;
   target?: string;
+  reason?: string;
+  reference?: string;
 };
 
 function withAuditContext<T extends { metadata?: Record<string, unknown> }>(entry: T, audit: AuditTimelineContext): T & AuditTimelineContext {
@@ -775,6 +777,45 @@ function buildReservationTimelineEntry(
     tone,
     ...audit,
   };
+}
+
+function buildCourtesyAddedTimelineEvent(
+  guest: Guest,
+  reservation: ReservationRecord,
+  timestamp: string,
+  reason?: string,
+): TimelineEvent {
+  return withAuditContext(
+    {
+      id: `courtesy-added-${guest.id}-${createUuid()}`,
+      eventId: guest.eventId,
+      createdAt: timestamp,
+      timestamp: timestamp.slice(11, 16),
+      kind: "guest.added",
+      icon: "guest",
+      tone: "info",
+      title: "Se agregó cortesía",
+      description: `${guest.guestName} se agregó a la cortesía.`,
+      reservationId: reservation.id,
+      reservationCode: reservation.code,
+      reservationName: reservation.name,
+      guestId: guest.id,
+      guestName: guest.guestName,
+      metadata: {
+        guestCarnet: guest.carnet,
+        guestName: guest.guestName,
+        reference: reservation.reference,
+        reason,
+      },
+    },
+    {
+      actor: guest.operatorActivity[0]?.operator,
+      context: reservation.reference ? `Cortesía · ${reservation.reference}` : "Cortesía",
+      target: guest.guestName,
+      reason,
+      reference: reservation.reference,
+    },
+  );
 }
 
 function buildAttemptTimelineEvent(attempt: CheckInAttempt, guest?: Guest): TimelineEvent {
@@ -2207,13 +2248,14 @@ export function WorkspaceServiceProvider({
         const bundle = createReservationBundle(input);
         const event = currentEvent;
         const isPresale = input.reservationType === "Preventa";
+        const isCourtesy = input.reservationType === "Cortesía";
         const selectedResource = input.selectedResource ?? input.selectedTable;
 
-        if (!isPresale && !selectedResource) {
+        if (!isPresale && !isCourtesy && !selectedResource) {
           throw new Error("A resource is required to create a reservation.");
         }
 
-        const selectedTable = !isPresale && selectedResource
+        const selectedTable = !isPresale && !isCourtesy && selectedResource
           ? findTableInCurrentEventContext(currentEventTables, selectedResource.id, currentEvent, currentVenue)
           : null;
         const persistedTableId = selectedTable ? resolvePersistedReservationTableId(tables, selectedTable.id) : undefined;
@@ -2225,32 +2267,37 @@ export function WorkspaceServiceProvider({
               eventLayoutResources,
             })
           : null;
-        const canonicalVenueId = isPresale
-          ? currentEvent.venueId ?? undefined
+        const canonicalVenueId = isPresale || isCourtesy
+          ? undefined
           : currentVenue?.id ?? currentEvent.venueId ?? selectedResource?.venueId ?? undefined;
         const tableId = persistedTableId;
-        const tableName = isPresale ? "" : bundle.reservation.tableName ?? selectedTable?.name ?? "";
+        const tableName = isPresale || isCourtesy ? "" : bundle.reservation.tableName ?? selectedTable?.name ?? "";
         const reservation: ReservationRecord = {
           ...bundle.reservation,
           eventId: event.id,
           eventName: event.name,
-          eventLayoutId: selectedEventLayoutResource?.eventLayoutId ?? (isPresale ? undefined : currentEventLayout?.id),
+          eventLayoutId: selectedEventLayoutResource?.eventLayoutId ?? (isPresale || isCourtesy ? undefined : currentEventLayout?.id),
           eventLayoutResourceId: selectedEventLayoutResource?.id ?? undefined,
-          tableId,
+          tableId: isPresale || isCourtesy ? undefined : tableId,
           tableName,
-          resourceId: isPresale ? undefined : selectedTable?.id,
-          resourceName: isPresale ? undefined : bundle.reservation.resourceName ?? selectedTable?.name,
-          sectorId: isPresale ? undefined : bundle.reservation.sectorId ?? selectedTable?.sectorId,
-          sectorName: isPresale ? undefined : bundle.reservation.sectorName ?? selectedTable?.location,
+          resourceId: isPresale || isCourtesy ? undefined : selectedTable?.id,
+          resourceName: isPresale || isCourtesy ? undefined : bundle.reservation.resourceName ?? selectedTable?.name,
+          sectorId: isPresale || isCourtesy ? undefined : bundle.reservation.sectorId ?? selectedTable?.sectorId,
+          sectorName: isPresale || isCourtesy ? undefined : bundle.reservation.sectorName ?? selectedTable?.location,
           venueId: canonicalVenueId,
-          tableCapacity: isPresale ? 0 : selectedTable?.capacity ?? 0,
+          tableCapacity: isPresale || isCourtesy ? 0 : selectedTable?.capacity ?? 0,
+          reference: isCourtesy ? input.reference?.trim() || undefined : undefined,
+          paymentStatus: isCourtesy ? "Pendiente" : bundle.reservation.paymentStatus,
+          amount: isCourtesy ? "0" : bundle.reservation.amount,
+          advance: isCourtesy ? "0" : bundle.reservation.advance,
+          commercialSnapshot: isCourtesy ? undefined : bundle.reservation.commercialSnapshot,
         };
         const reservationGuests = bundle.guests.map((guest) => ({
           ...guest,
           eventId: event.id,
           eventName: event.name,
-          tableId: isPresale ? undefined : tableId,
-          tableName: isPresale ? undefined : tableName,
+          tableId: isPresale || isCourtesy ? undefined : tableId,
+          tableName: isPresale || isCourtesy ? undefined : tableName,
         }));
         const reservationGuestsWithAccess = reservationGuests.map(hydrateGuestAccessGrant);
         const grantTimestamp = nowIso();
@@ -2825,6 +2872,10 @@ export function WorkspaceServiceProvider({
         return;
       }
 
+      if (reservation.reservationType === "Cortesía" && guestInputs.some((guest) => !guest.guestName.trim() || !guest.carnet.trim() || !guest.whatsapp.trim())) {
+        throw new Error("Cada cortesía requiere nombre, carnet y WhatsApp.");
+      }
+
       const snapshot = captureSnapshot();
 
       try {
@@ -2845,8 +2896,8 @@ export function WorkspaceServiceProvider({
             reservationId: reservation.id,
             eventId: reservation.eventId,
             eventName: reservation.eventName,
-            tableId: reservation.tableId,
-            tableName: reservation.tableName,
+            tableId: reservation.reservationType === "Cortesía" ? undefined : reservation.tableId,
+            tableName: reservation.reservationType === "Cortesía" ? undefined : reservation.tableName,
             eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
             invitationSequence: `${guestIndex} de ${totalGuestCount}`,
             invitationCode: `${reservation.code}-${String(guestIndex).padStart(2, "0")}`,
@@ -2856,7 +2907,7 @@ export function WorkspaceServiceProvider({
             admissionStatus: "Pendiente",
             reservationStatus: reservation.status,
             deliveryHistory: [{ time: nowIso().slice(11, 16), title: "Enviada", detail: "Invitación generada desde el panel operativo" }],
-            operatorActivity: [{ time: nowIso().slice(11, 16), action: "Invitado agregado", operator: "Recepción", reason: "Alta manual en Reservations" }],
+            operatorActivity: [{ time: nowIso().slice(11, 16), action: reservation.reservationType === "Cortesía" ? "Se agregó cortesía" : "Invitado agregado", operator: currentAccount.displayName, reason: guestInput.reason?.trim() || "Alta manual en Reservations" }],
             qrStatus: "Válido",
             manualAdmission: false,
           } as Guest;
@@ -2867,22 +2918,24 @@ export function WorkspaceServiceProvider({
           nextReservation = {
             ...nextReservation,
             guestIds: nextGuestIds,
-            timeline: [
-              ...nextReservation.timeline,
-              buildReservationTimelineEntry(
-                nextReservation.id,
-                nowIso(),
-                "Manillas agregadas",
-                `${guestInput.guestName} se sumó a la reserva existente.`,
-                "info",
-                {
-                  actor: currentAccount.displayName,
-                  actorRole: currentAccount.roleName,
-                  context: currentEvent.name,
-                  target: nextReservation.name,
-                },
-              ),
-            ],
+            timeline: reservation.reservationType === "Cortesía"
+              ? nextReservation.timeline
+              : [
+                  ...nextReservation.timeline,
+                  buildReservationTimelineEntry(
+                    nextReservation.id,
+                    nowIso(),
+                    "Manillas agregadas",
+                    `${guestInput.guestName} se sumó a la reserva existente.`,
+                    "info",
+                    {
+                      actor: currentAccount.displayName,
+                      actorRole: currentAccount.roleName,
+                      context: currentEvent.name,
+                      target: nextReservation.name,
+                    },
+                  ),
+                ],
             updatedAt: nowIso(),
           };
         }
@@ -2893,6 +2946,16 @@ export function WorkspaceServiceProvider({
         await repositories.reservations.upsert(nextReservation);
         for (const guest of nextGuests) {
           await repositories.guests.upsert(guest);
+          if (reservation.reservationType === "Cortesía") {
+            const courtesyEvent = buildCourtesyAddedTimelineEvent(
+              guest,
+              reservation,
+              nowIso(),
+              guest.operatorActivity[0]?.reason,
+            );
+            upsertPersistedTimelineEvent(courtesyEvent);
+            await repositories.timeline.upsert(courtesyEvent);
+          }
           const timelineEntry = withAuditContext(
             buildAccessGrantTimelineEvent(guest, reservation, nowIso()),
             {
@@ -2900,6 +2963,8 @@ export function WorkspaceServiceProvider({
               actorRole: currentAccount.roleName,
               context: currentEvent.name,
               target: nextReservation.name,
+              reason: guest.operatorActivity[0]?.reason,
+              reference: reservation.reference,
             },
           );
           upsertPersistedTimelineEvent(timelineEntry);
@@ -2907,8 +2972,8 @@ export function WorkspaceServiceProvider({
         }
 
         notify({
-          title: "Manillas agregadas",
-          description: `${guestInputs.length} invitados se sumaron a ${reservation.name}.`,
+          title: reservation.reservationType === "Cortesía" ? "Cortesías agregadas" : "Manillas agregadas",
+          description: `${guestInputs.length} ${reservation.reservationType === "Cortesía" ? "personas se agregaron a" : "invitados se sumaron a"} ${reservation.name}.`,
           tone: "info",
           icon: "guest",
           href: "/reservations",
@@ -2966,6 +3031,10 @@ export function WorkspaceServiceProvider({
         return;
       }
 
+      if (reservation.reservationType === "Cortesía" && (!guestInput.guestName.trim() || !guestInput.carnet.trim() || !guestInput.whatsapp.trim())) {
+        throw new Error("Cada cortesía requiere nombre, carnet y WhatsApp.");
+      }
+
       const snapshot = captureSnapshot();
       const reservationGuests = guests.filter((guest) => guest.reservationId === reservationId);
       const guestIndex = reservationGuests.length + 1;
@@ -2978,8 +3047,8 @@ export function WorkspaceServiceProvider({
         reservationId: reservation.id,
         eventId: reservation.eventId,
         eventName: reservation.eventName,
-        tableId: reservation.tableId,
-        tableName: reservation.tableName,
+        tableId: reservation.reservationType === "Cortesía" ? undefined : reservation.tableId,
+        tableName: reservation.reservationType === "Cortesía" ? undefined : reservation.tableName,
         eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
         invitationSequence: `${guestIndex} de ${guestIndex}`,
         invitationCode: `${reservation.code}-${String(guestIndex).padStart(2, "0")}`,
@@ -2989,7 +3058,7 @@ export function WorkspaceServiceProvider({
         admissionStatus: "Pendiente",
         reservationStatus: reservation.status,
         deliveryHistory: [{ time: nowIso().slice(11, 16), title: "Enviada", detail: "Invitación generada desde el panel operativo" }],
-        operatorActivity: [{ time: nowIso().slice(11, 16), action: "Invitado agregado", operator: "Recepción", reason: "Alta manual en Reservations" }],
+        operatorActivity: [{ time: nowIso().slice(11, 16), action: reservation.reservationType === "Cortesía" ? "Se agregó cortesía" : "Invitado agregado", operator: currentAccount.displayName, reason: guestInput.reason?.trim() || "Alta manual en Reservations" }],
         qrStatus: "Válido",
         manualAdmission: false,
       } as Guest;
@@ -3002,22 +3071,24 @@ export function WorkspaceServiceProvider({
             ? {
                 ...item,
                 guestIds: [...item.guestIds, guestId],
-                timeline: [
-                  ...item.timeline,
-                  buildReservationTimelineEntry(
-                    item.id,
-                    nowIso(),
-                    "Invitado agregado",
-                    `${guestInput.guestName} se sumó a la reserva.`,
-                    "info",
-                    {
-                      actor: currentAccount.displayName,
-                      actorRole: currentAccount.roleName,
-                      context: currentEvent.name,
-                      target: item.name,
-                    },
-                  ),
-                ],
+                timeline: reservation.reservationType === "Cortesía"
+                  ? item.timeline
+                  : [
+                      ...item.timeline,
+                      buildReservationTimelineEntry(
+                        item.id,
+                        nowIso(),
+                        "Invitado agregado",
+                        `${guestInput.guestName} se sumó a la reserva.`,
+                        "info",
+                        {
+                          actor: currentAccount.displayName,
+                          actorRole: currentAccount.roleName,
+                          context: currentEvent.name,
+                          target: item.name,
+                        },
+                      ),
+                    ],
                 updatedAt: nowIso().slice(11, 16),
               }
             : item,
@@ -3025,6 +3096,16 @@ export function WorkspaceServiceProvider({
       );
 
       void repositories.guests.upsert(nextGuestWithAccess).catch(() => restoreSnapshot(snapshot));
+      if (reservation.reservationType === "Cortesía") {
+        const courtesyEvent = buildCourtesyAddedTimelineEvent(
+          nextGuestWithAccess,
+          reservation,
+          nowIso(),
+          guestInput.reason?.trim() || undefined,
+        );
+        upsertPersistedTimelineEvent(courtesyEvent);
+        void repositories.timeline.upsert(courtesyEvent).catch(() => restoreSnapshot(snapshot));
+      }
       const timelineEntry = withAuditContext(
         buildAccessGrantTimelineEvent(nextGuestWithAccess, reservation, nowIso()),
         {
@@ -3032,6 +3113,8 @@ export function WorkspaceServiceProvider({
           actorRole: currentAccount.roleName,
           context: currentEvent.name,
           target: reservation.name,
+          reason: guestInput.reason?.trim() || undefined,
+          reference: reservation.reference,
         },
       );
       upsertPersistedTimelineEvent(timelineEntry);
@@ -3042,8 +3125,8 @@ export function WorkspaceServiceProvider({
       }).catch(() => restoreSnapshot(snapshot));
 
       notify({
-        title: "Invitado agregado",
-        description: `${guestInput.guestName} se sumó a ${reservation.name}.`,
+        title: reservation.reservationType === "Cortesía" ? "Cortesía agregada" : "Invitado agregado",
+        description: `${guestInput.guestName} ${reservation.reservationType === "Cortesía" ? "se agregó a" : "se sumó a"} ${reservation.name}.`,
         tone: "info",
         icon: "guest",
         href: "/reservations",
@@ -3136,6 +3219,12 @@ export function WorkspaceServiceProvider({
                   gate: guest.admissionStatus === "Ingresó" ? guest.gate : undefined,
                   tableId: guest.admissionStatus === "Ingresó" ? guest.tableId : undefined,
                   tableName: guest.admissionStatus === "Ingresó" ? guest.tableName : undefined,
+                  operatorActivity: [
+                    ...guest.operatorActivity,
+                    ...(reservation.reservationType === "Cortesía"
+                      ? [{ time: nowIso().slice(11, 16), action: "Cortesía anulada", operator: currentAccount.displayName, reason: "Anulación manual en Reservations" }]
+                      : []),
+                  ],
                 };
               }
               if (action === "revert") {
@@ -3199,6 +3288,9 @@ export function WorkspaceServiceProvider({
                       actorRole: currentAccount.roleName,
                       context: currentEvent.name,
                       target: item.name,
+                      ...(reservation.reservationType === "Cortesía" && action === "cancel"
+                        ? { reason: "Anulación manual en Reservations", reference: reservation.reference }
+                        : {}),
                     },
                   ),
                 ],
@@ -3279,7 +3371,9 @@ export function WorkspaceServiceProvider({
                 ...item,
                 status,
                 tableId: status === "Cancelled" || status === "No Show" ? undefined : item.tableId,
-                tableName: status === "Cancelled" || status === "No Show" ? "Sin mesa" : item.tableName,
+                tableName: status === "Cancelled" || status === "No Show"
+                  ? "Sin mesa"
+                  : item.tableName,
                 timeline: [
                   ...item.timeline,
                   buildReservationTimelineEntry(
@@ -3370,6 +3464,9 @@ export function WorkspaceServiceProvider({
                   ? guest.qrStatus
                   : "Bloqueado"
                 : guest.qrStatus,
+          operatorActivity: status === "Cancelled" && reservation.reservationType === "Cortesía"
+            ? [...guest.operatorActivity, { time: nowIso().slice(11, 16), action: "Cortesía anulada", operator: currentAccount.displayName, reason: "Anulación manual en Reservations" }]
+            : guest.operatorActivity,
           tableId: status === "Cancelled" || status === "No Show" ? (guest.admissionStatus === "Ingresó" ? guest.tableId : undefined) : guest.tableId,
           tableName: status === "Cancelled" || status === "No Show" ? (guest.admissionStatus === "Ingresó" ? guest.tableName : undefined) : guest.tableName,
         };

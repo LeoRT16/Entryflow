@@ -158,11 +158,12 @@ export default function ReservationOperationsBoard({
 }: ReservationOperationsBoardProps) {
   const { showToast, confirm } = useFeedback();
   const [query, setQuery] = useState("");
-  const [reservationFilter, setReservationFilter] = useState<"all" | "tables" | "presale">("all");
+  const [reservationFilter, setReservationFilter] = useState<"all" | "tables" | "presale" | "courtesy">("all");
   const [isAddGuestFormOpen, setIsAddGuestFormOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
   const [guestWhatsapp, setGuestWhatsapp] = useState("");
+  const [guestReason, setGuestReason] = useState("");
   const [isSendingReservationInvitations, setIsSendingReservationInvitations] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
   const [lastBatchResult, setLastBatchResult] = useState<ReservationWhatsAppBatchSummary | null>(null);
@@ -175,9 +176,11 @@ export default function ReservationOperationsBoard({
   const visibleReservations = useMemo(() => {
     const filteredReservations = reservationFilter === "presale"
       ? reservations.filter((reservation) => reservation.reservationType === "Preventa")
-      : reservationFilter === "tables"
-        ? reservations.filter((reservation) => reservation.reservationType !== "Preventa")
-        : reservations;
+      : reservationFilter === "courtesy"
+        ? reservations.filter((reservation) => reservation.reservationType === "Cortesía")
+        : reservationFilter === "tables"
+          ? reservations.filter((reservation) => reservation.reservationType !== "Preventa" && reservation.reservationType !== "Cortesía")
+          : reservations;
 
     if (!normalizedQuery) return filteredReservations;
 
@@ -257,6 +260,7 @@ export default function ReservationOperationsBoard({
     setGuestName("");
     setGuestDocument("");
     setGuestWhatsapp("");
+    setGuestReason("");
   };
 
   const handleSelectReservation = (reservationId: string) => {
@@ -270,10 +274,10 @@ export default function ReservationOperationsBoard({
       return;
     }
 
-    if (!guestName.trim()) {
+    if (!guestName.trim() || !guestDocument.trim() || !guestWhatsapp.trim()) {
       showToast({
-        title: "Ingresa un nombre",
-        description: "Necesitamos al menos el nombre del invitado para crear la invitación.",
+        title: "Completa los datos",
+        description: "Necesitamos nombre, carnet y WhatsApp para crear la invitación.",
         tone: "warning",
       });
       return;
@@ -283,6 +287,7 @@ export default function ReservationOperationsBoard({
       guestName,
       carnet: guestDocument,
       whatsapp: guestWhatsapp,
+      reason: guestReason.trim() || undefined,
     });
 
     setIsAddGuestFormOpen(false);
@@ -450,7 +455,7 @@ export default function ReservationOperationsBoard({
     if (whatsappAlreadySentCount > 0) {
       confirm({
         title: "Invitaciones ya aceptadas por WhatsApp",
-        description: `${whatsappAlreadySentCount} de ${activeReservation.guests.length} invitados ya tienen una aceptación registrada por WhatsApp.`,
+        description: `${whatsappAlreadySentCount} de ${activeReservation.guests.length} ${activeReservation.reservationType === "Cortesía" ? "personas" : "invitados"} ya tienen una aceptación registrada por WhatsApp.`,
         confirmLabel: "Reenviar invitaciones",
         cancelLabel: "Cancelar",
         tone: "warning",
@@ -462,8 +467,8 @@ export default function ReservationOperationsBoard({
     }
 
     showToast({
-      title: "No hay invitados listos para envío",
-      description: `${whatsappMissingCount} invitados no tienen WhatsApp o código válidos.`,
+      title: activeReservation.reservationType === "Cortesía" ? "No hay personas listas para envío" : "No hay invitados listos para envío",
+      description: `${whatsappMissingCount} ${activeReservation.reservationType === "Cortesía" ? "personas" : "invitados"} no tienen WhatsApp o código válidos.`,
       tone: "warning",
     });
   }, [
@@ -551,9 +556,9 @@ export default function ReservationOperationsBoard({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2" aria-label="Filtrar reservas">
-          {(["all", "tables", "presale"] as const).map((filter) => {
+          {(["all", "tables", "presale", "courtesy"] as const).map((filter) => {
             const selected = reservationFilter === filter;
-            const label = filter === "all" ? "Todas" : filter === "tables" ? "Mesas" : "Preventa";
+            const label = filter === "all" ? "Todas" : filter === "tables" ? "Mesas" : filter === "presale" ? "Preventa" : "Cortesías";
             return (
               <button
                 key={filter}
@@ -609,7 +614,11 @@ export default function ReservationOperationsBoard({
 
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
                   <span className="max-w-full break-words rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 normal-case tracking-normal">
-                    {reservation.reservationType === "Preventa" ? `${reservation.metrics.guestCount} preventas` : `Mesa ${reservation.tableName}`}
+                    {reservation.reservationType === "Preventa"
+                      ? `${reservation.metrics.guestCount} preventas`
+                      : reservation.reservationType === "Cortesía"
+                        ? `${reservation.metrics.guestCount} cortesías${reservation.reference ? ` · ${reservation.reference}` : ""}`
+                        : `Mesa ${reservation.tableName}`}
                   </span>
                   {reservation.reservationType === "Preventa" && reservation.commercialSnapshot ? (
                     <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
@@ -617,7 +626,7 @@ export default function ReservationOperationsBoard({
                     </span>
                   ) : null}
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
-                    Invitados {reservation.metrics.guestCount}
+                    {reservation.reservationType === "Cortesía" ? "Cortesías" : "Invitados"} {reservation.metrics.guestCount}
                   </span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
                     Ingresados {reservation.metrics.checkedInGuests}
@@ -727,6 +736,8 @@ export default function ReservationOperationsBoard({
             <h2 className="text-2xl font-semibold tracking-tight text-white">
               {activeReservation.reservationType === "Preventa"
                 ? activeReservation.name
+                : activeReservation.reservationType === "Cortesía"
+                  ? activeReservation.reference ? `Cortesía · ${activeReservation.reference}` : "Cortesía"
                 : `${activeReservation.tableName} · ${activeReservation.eventName}`}
             </h2>
             <p className="mt-2 break-words text-sm text-slate-400">
@@ -743,20 +754,27 @@ export default function ReservationOperationsBoard({
           <ReservationInfoRow label="Fecha" value={activeReservation.date} />
           <ReservationInfoRow label="Hora" value={activeReservation.time} />
           <ReservationInfoRow
-            label={activeReservation.reservationType === "Preventa" ? "Tipo" : "Mesa / espacio"}
-            value={activeReservation.reservationType === "Preventa" ? "Preventa" : activeReservation.tableName}
+            label={activeReservation.reservationType === "Preventa" || activeReservation.reservationType === "Cortesía" ? "Tipo" : "Mesa / espacio"}
+            value={activeReservation.reservationType === "Preventa" || activeReservation.reservationType === "Cortesía" ? activeReservation.reservationType : activeReservation.tableName}
           />
-          <ReservationInfoRow label="Pago" value={activeReservation.paymentStatus} />
+          {activeReservation.reservationType !== "Cortesía" ? <ReservationInfoRow label="Pago" value={activeReservation.paymentStatus} /> : null}
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ReservationInfoRow label="Invitados" value={`${activeReservation.metrics.guestCount}`} />
+          <ReservationInfoRow label={activeReservation.reservationType === "Cortesía" ? "Cortesías" : "Invitados"} value={`${activeReservation.metrics.guestCount}`} />
           <ReservationInfoRow label="Ingresados" value={`${activeReservation.metrics.checkedInGuests}`} />
           <ReservationInfoRow label="Pendientes" value={`${activeReservation.metrics.pendingGuests}`} />
-          <ReservationInfoRow label="Capacidad restante" value={`${activeReservation.metrics.capacityRemaining}`} />
+          {activeReservation.reservationType !== "Cortesía" ? <ReservationInfoRow label="Capacidad restante" value={`${activeReservation.metrics.capacityRemaining}`} /> : null}
         </div>
 
-        <section className="surface-elevated min-w-0 p-4">
+        {activeReservation.reservationType === "Cortesía" ? (
+          <section className="surface-elevated min-w-0 p-4">
+            <p className="kicker">Referencia</p>
+            <p className="mt-3 break-words text-sm text-slate-300">{activeReservation.reference || "Sin referencia"}</p>
+          </section>
+        ) : null}
+
+        {activeReservation.reservationType !== "Cortesía" ? <section className="surface-elevated min-w-0 p-4">
           <p className="kicker">Condiciones comerciales</p>
           {activeReservation.commercialSnapshot ? (
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -795,12 +813,12 @@ export default function ReservationOperationsBoard({
           ) : (
             <p className="mt-2 text-sm text-slate-400">Sin condiciones comerciales registradas.</p>
           )}
-        </section>
+        </section> : null}
 
         <section className="surface-elevated min-w-0 p-4">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="kicker">Invitados ({activeReservation.guests.length})</p>
+              <p className="kicker">{activeReservation.reservationType === "Cortesía" ? "Personas" : "Invitados"} ({activeReservation.guests.length})</p>
               <p className="mt-2 break-words text-sm text-slate-400">
                 Estado individual y acciones
                 {canIssueWhatsAppInvitations && whatsappCandidateCount > 0 ? ` · ${whatsappCandidateCount} invitaciones listas` : ""}
@@ -813,7 +831,7 @@ export default function ReservationOperationsBoard({
               disabled={isTerminalReservation}
               className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
             >
-                + Agregar invitado
+                {activeReservation.reservationType === "Cortesía" ? "+ Agregar cortesía" : "+ Agregar invitado"}
             </button> : null}
           </div>
 
@@ -826,7 +844,7 @@ export default function ReservationOperationsBoard({
                   guest={guest}
                   eventTerminal={isTerminalEvent}
                   canEditGuest={canEditGuest}
-                  allowRemove={activeReservation.reservationType !== "Preventa"}
+                  allowRemove={activeReservation.reservationType !== "Preventa" && activeReservation.reservationType !== "Cortesía"}
                   onEdit={() => onEditGuest(guest.id)}
                   onConfirm={() => {
                     onGuestAction({ reservationId: activeReservation.id, guestId: guest.id, action: "confirm" });
@@ -847,33 +865,41 @@ export default function ReservationOperationsBoard({
               ))
             ) : (
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-400">
-                Todavía no hay invitados cargados en esta reserva.
+                Todavía no hay {activeReservation.reservationType === "Cortesía" ? "personas" : "invitados"} cargados en esta reserva.
               </div>
             )}
           </div>
 
           {isAddGuestFormOpen ? (
             <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_auto]">
+              <div className={activeReservation.reservationType === "Cortesía"
+                ? "grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-12"
+                : "grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_auto]"}>
                 <input
                   value={guestName}
                   onChange={(event) => setGuestName(event.target.value)}
-                  placeholder="Nombre del invitado"
-                  className="h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06]"
+                  placeholder={activeReservation.reservationType === "Cortesía" ? "Nombre de la persona" : "Nombre del invitado"}
+                  className={`h-11 min-w-0 w-full rounded-2xl border border-white/20 bg-slate-900/70 px-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-400 placeholder:opacity-100 focus:border-cyan-300/70 focus:bg-slate-900 focus:ring-2 focus:ring-cyan-400/20 ${activeReservation.reservationType === "Cortesía" ? "xl:col-span-5" : ""}`}
                 />
                 <input
                   value={guestDocument}
                   onChange={(event) => setGuestDocument(event.target.value)}
                   placeholder="Carnet"
-                  className="h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06]"
+                  className={`h-11 min-w-0 w-full rounded-2xl border border-white/20 bg-slate-900/70 px-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-400 placeholder:opacity-100 focus:border-cyan-300/70 focus:bg-slate-900 focus:ring-2 focus:ring-cyan-400/20 ${activeReservation.reservationType === "Cortesía" ? "xl:col-span-3" : ""}`}
                 />
                 <input
                   value={guestWhatsapp}
                   onChange={(event) => setGuestWhatsapp(event.target.value)}
                   placeholder="WhatsApp"
-                  className="h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/50 focus:bg-white/[0.06]"
+                  className={`h-11 min-w-0 w-full rounded-2xl border border-white/20 bg-slate-900/70 px-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-400 placeholder:opacity-100 focus:border-cyan-300/70 focus:bg-slate-900 focus:ring-2 focus:ring-cyan-400/20 ${activeReservation.reservationType === "Cortesía" ? "xl:col-span-4" : ""}`}
                 />
-                <div className="flex min-w-0 flex-wrap gap-2 md:col-span-2 xl:col-span-1 xl:justify-end">
+                {activeReservation.reservationType === "Cortesía" ? <input
+                  value={guestReason}
+                  onChange={(event) => setGuestReason(event.target.value)}
+                  placeholder="Motivo (opcional)"
+                  className="h-11 min-w-0 w-full rounded-2xl border border-white/20 bg-slate-900/70 px-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-400 placeholder:opacity-100 focus:border-cyan-300/70 focus:bg-slate-900 focus:ring-2 focus:ring-cyan-400/20 xl:col-span-7"
+                /> : null}
+                <div className={`flex min-w-0 flex-wrap gap-2 md:col-span-2 xl:justify-end ${activeReservation.reservationType === "Cortesía" ? "xl:col-span-5" : "xl:col-span-1"}`}>
                   <button
                     type="button"
                     onClick={() => {
@@ -889,7 +915,7 @@ export default function ReservationOperationsBoard({
                     onClick={handleAddGuest}
                     className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
                   >
-                    Agregar invitado
+                    {activeReservation.reservationType === "Cortesía" ? "Agregar cortesía" : "Agregar invitado"}
                   </button>
                 </div>
               </div>

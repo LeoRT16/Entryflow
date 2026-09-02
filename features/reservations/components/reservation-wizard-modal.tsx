@@ -55,7 +55,7 @@ export const wizardSteps: Array<{ step: WizardStep; title: string; subtitle: str
   },
 ];
 
-const reservationTypes: ReservationType[] = ["Mesa", "Preventa", "Cumpleaños", "VIP", "Corporativo"];
+const reservationTypes: ReservationType[] = ["Mesa", "Preventa", "Cortesía", "Cumpleaños", "VIP", "Corporativo"];
 const paymentMethods: PaymentMethod[] = ["Efectivo", "Transferencia", "Tarjeta", "Cortesía"];
 const paymentStatuses: PaymentStatus[] = ["Pendiente", "Parcial", "Pagado"];
 
@@ -75,6 +75,8 @@ export default function ReservationWizardModal({
   updateGuestCount,
   reservationType,
   setReservationType,
+  reference,
+  setReference,
   observations,
   setObservations,
   holderName,
@@ -142,6 +144,8 @@ export default function ReservationWizardModal({
   updateGuestCount: (nextCount: number) => void;
   reservationType: ReservationType;
   setReservationType: Dispatch<SetStateAction<ReservationType>>;
+  reference: string;
+  setReference: Dispatch<SetStateAction<string>>;
   observations: string;
   setObservations: Dispatch<SetStateAction<string>>;
   holderName: string;
@@ -194,19 +198,21 @@ export default function ReservationWizardModal({
   eventOptions: string[];
   commercialConfig: EventCommercialConfig;
 }) {
-  const currentStep = wizardSteps.find((item) => item.step === step) ?? wizardSteps[0];
   const isCreateMode = wizardMode === "create";
   const isPresale = reservationType === "Preventa";
-  const visibleResource = isPresale ? null : selectedResource;
+  const isCourtesy = reservationType === "Cortesía";
+  const isNonPhysical = isPresale || isCourtesy;
+  const currentStep = wizardSteps.find((item) => item.step === step) ?? wizardSteps[0];
+  const currentStepCopy = getWizardStepCopy(currentStep, isCourtesy);
+  const visibleResource = isNonPhysical ? null : selectedResource;
   const modeLabel =
     wizardMode === "edit" ? "Editar reserva" : wizardMode === "append" ? "Agregar manillas" : "Crear reserva";
 
   const liveSummary = [
     { label: "Código", value: "RES-0108-DB" },
-    { label: "Invitados", value: `${guestCount}` },
-    { label: "Recurso", value: visibleResource?.name ?? "Sin recurso" },
-    { label: "Monto", value: formatCurrency(amount) },
-    { label: "Pago", value: paymentStatus },
+    { label: isCourtesy ? "Personas" : "Invitados", value: `${guestCount}` },
+    ...(!isNonPhysical ? [{ label: "Recurso", value: visibleResource?.name ?? "Sin recurso" }] : []),
+    ...(!isCourtesy ? [{ label: "Monto", value: formatCurrency(amount) }, { label: "Pago", value: paymentStatus }] : []),
   ];
 
   return (
@@ -232,10 +238,10 @@ export default function ReservationWizardModal({
                 <StatusBadge variant="info">{isCreateMode ? "Borrador" : wizardMode === "edit" ? "Edición" : "Manillas"}</StatusBadge>
               </div>
               <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-[2rem]">
-                {currentStep.title}
+                {currentStepCopy.title}
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                {currentStep.subtitle}
+                {currentStepCopy.subtitle}
               </p>
             </div>
 
@@ -255,7 +261,7 @@ export default function ReservationWizardModal({
             <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
               <main className="min-w-0 border-b border-white/10 px-5 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:border-white/10 lg:px-8 lg:py-6">
                 <div className="space-y-5">
-                  <WizardProgress step={step} completion={completion} isPresale={isPresale} />
+                  <WizardProgress step={step} completion={completion} isNonPhysical={isNonPhysical} isCourtesy={isCourtesy} />
 
                   <div
                     key={step}
@@ -274,6 +280,7 @@ export default function ReservationWizardModal({
                         guestCount={guestCount}
                         updateGuestCount={updateGuestCount}
                         reservationType={reservationType}
+                        isCourtesy={isCourtesy}
                         setReservationType={setReservationType}
                         presaleEnabled={commercialConfig.presale.enabled}
                         isPresale={isPresale}
@@ -282,7 +289,9 @@ export default function ReservationWizardModal({
                       />
                     ) : null}
 
-                    {step === 2 ? (
+                    {step === 2 && isCourtesy ? (
+                      <CourtesyReferenceStep reference={reference} setReference={setReference} />
+                    ) : step === 2 ? (
                       <HolderStep
                         wizardMode={wizardMode}
                         holderName={holderName}
@@ -310,6 +319,7 @@ export default function ReservationWizardModal({
                         wizardMode={wizardMode}
                         guests={guests}
                         isPresale={isPresale}
+                        isCourtesy={isCourtesy}
                         guestCount={guestCount}
                         registeredGuests={registeredGuests}
                         pendingGuests={pendingGuests}
@@ -319,7 +329,7 @@ export default function ReservationWizardModal({
                       />
                     ) : null}
 
-                    {step === 4 && !isPresale ? (
+                    {step === 4 && !isNonPhysical ? (
                       <TableStep
                         selectedResourceId={selectedResourceId}
                         setSelectedResourceId={setSelectedResourceId}
@@ -327,7 +337,7 @@ export default function ReservationWizardModal({
                       />
                     ) : null}
 
-                    {step === 5 ? (
+                    {step === 5 && !isCourtesy ? (
                       <PaymentStep
                         amount={amount}
                         isPresale={isPresale}
@@ -361,11 +371,13 @@ export default function ReservationWizardModal({
                         frequent={frequent}
                         notes={notes}
                         guests={guests}
+                        reference={reference}
                         selectedResource={visibleResource}
-                        selectedResourceSummary={isPresale ? null : selectedResourceSummary}
-                        selectedActiveReservation={isPresale ? null : selectedActiveReservation}
+                        selectedResourceSummary={isNonPhysical ? null : selectedResourceSummary}
+                        selectedActiveReservation={isNonPhysical ? null : selectedActiveReservation}
                         selectedReservationConflictCount={selectedReservationConflictCount}
                         isPresale={isPresale}
+                        isCourtesy={isCourtesy}
                         amount={amount}
                         advance={advance}
                         pendingNumber={pendingNumber}
@@ -421,14 +433,15 @@ export default function ReservationWizardModal({
                               frequent,
                               notes,
                               guests,
-                              selectedResource: isPresale ? undefined : selectedResource ?? undefined,
+                              selectedResource: isNonPhysical ? undefined : selectedResource ?? undefined,
+                              reference: isCourtesy ? reference : undefined,
                               amount,
                               advance,
                               paymentMethod,
                               paymentStatus,
                               observations,
                             };
-                            const isAppendFlow = wizardMode === "append" || (wizardMode === "create" && !isPresale && Boolean(selectedActiveReservation));
+                            const isAppendFlow = wizardMode === "append" || (wizardMode === "create" && !isNonPhysical && Boolean(selectedActiveReservation));
 
                             void (
                               wizardMode === "edit"
@@ -477,7 +490,7 @@ export default function ReservationWizardModal({
                     </div>
                   </div>
 
-                  {wizardMode === "create" ? (
+                  {wizardMode === "create" && !isCourtesy ? (
                     <div className="surface-panel p-4 sm:p-5">
                       <p className="kicker">Condiciones aplicadas</p>
                       {isPresale ? (
@@ -508,11 +521,11 @@ export default function ReservationWizardModal({
                         />
                       </div>
                       <div className="grid gap-3">
-                      {wizardSteps.filter((item) => !isPresale || item.step !== 4).map((item) => (
+                      {wizardSteps.filter((item) => (!isNonPhysical || item.step !== 4) && (!isCourtesy || item.step !== 5)).map((item) => (
                           <WizardStepChip
                             key={item.step}
                             step={item.step}
-                            title={item.title}
+                            title={getWizardStepCopy(item, isCourtesy).title}
                             active={step === item.step}
                             completed={step > item.step}
                             onClick={() => setStep(item.step)}
@@ -527,10 +540,10 @@ export default function ReservationWizardModal({
                       Estado
                     </p>
                     <div className="mt-4 grid gap-3">
-                      <LiveSummaryRow label="Estado de pago" value={paymentStatus} />
-                      <LiveSummaryRow label="Recurso" value={visibleResource?.name ?? "Sin recurso"} />
+                      {!isCourtesy ? <LiveSummaryRow label="Estado de pago" value={paymentStatus} /> : null}
+                      {!isCourtesy ? <LiveSummaryRow label="Recurso" value={visibleResource?.name ?? "Sin recurso"} /> : null}
                       <LiveSummaryRow
-                        label="Invitados"
+                        label={isCourtesy ? "Personas" : "Invitados"}
                         value={`${registeredGuests} / ${guestCount}`}
                       />
                     </div>
@@ -572,11 +585,13 @@ export default function ReservationWizardModal({
 function WizardProgress({
   step,
   completion,
-  isPresale,
+  isNonPhysical,
+  isCourtesy,
 }: {
   step: WizardStep;
   completion: number;
-  isPresale: boolean;
+  isNonPhysical: boolean;
+  isCourtesy: boolean;
 }) {
   return (
     <section className="surface-panel p-4 sm:p-5">
@@ -600,11 +615,11 @@ function WizardProgress({
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        {wizardSteps.filter((item) => !isPresale || item.step !== 4).map((item) => (
+        {wizardSteps.filter((item) => (!isNonPhysical || item.step !== 4) && (!isCourtesy || item.step !== 5)).map((item) => (
           <WizardStepChip
             key={item.step}
             step={item.step}
-            title={item.title}
+            title={getWizardStepCopy(item, isCourtesy).title}
             active={step === item.step}
             completed={step > item.step}
             onClick={() => {}}
@@ -613,6 +628,22 @@ function WizardProgress({
       </div>
     </section>
   );
+}
+
+function getWizardStepCopy(step: (typeof wizardSteps)[number], isCourtesy: boolean) {
+  if (!isCourtesy) {
+    return step;
+  }
+
+  if (step.step === 2) {
+    return { ...step, title: "Referencia", subtitle: "Identificación opcional de la emisión." };
+  }
+
+  if (step.step === 3) {
+    return { ...step, title: "Personas", subtitle: "Lista individual de personas con acceso." };
+  }
+
+  return step;
 }
 
 function WizardStepChip({
@@ -673,6 +704,7 @@ function GeneralStep({
   guestCount,
   updateGuestCount,
   reservationType,
+  isCourtesy,
   setReservationType,
   observations,
   setObservations,
@@ -690,6 +722,7 @@ function GeneralStep({
   guestCount: number;
   updateGuestCount: (nextCount: number) => void;
   reservationType: ReservationType;
+  isCourtesy: boolean;
   setReservationType: Dispatch<SetStateAction<ReservationType>>;
   observations: string;
   setObservations: Dispatch<SetStateAction<string>>;
@@ -735,7 +768,7 @@ function GeneralStep({
           <input value={time} onChange={(event) => setTime(event.target.value)} className={inputClassName} />
         </Field>
 
-        {!isPresale ? (
+        {!isPresale && !isCourtesy ? (
           <Field label="Cantidad de invitados">
             <input
               type="number"
@@ -908,9 +941,38 @@ function HolderStep({
   );
 }
 
+function CourtesyReferenceStep({
+  reference,
+  setReference,
+}: {
+  reference: string;
+  setReference: Dispatch<SetStateAction<string>>;
+}) {
+  return (
+    <section className="surface-panel p-4 sm:p-5">
+      <p className="kicker">Referencia de cortesía</p>
+      <h3 className="mt-2 text-xl font-semibold tracking-tight text-white">Agrupa esta emisión de accesos</h3>
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+        Es opcional y sirve para identificar el origen de la cortesía. Puedes dejarlo vacío.
+      </p>
+      <div className="mt-5 max-w-xl">
+        <Field label="Referencia (opcional)">
+          <input
+            value={reference}
+            onChange={(event) => setReference(event.target.value)}
+            className={inputClassName}
+            placeholder="Coca-Cola, Prensa, Producción"
+          />
+        </Field>
+      </div>
+    </section>
+  );
+}
+
 function GuestsStep({
   wizardMode,
   isPresale,
+  isCourtesy,
   guests,
   guestCount,
   registeredGuests,
@@ -921,6 +983,7 @@ function GuestsStep({
 }: {
   wizardMode: "create" | "edit" | "append";
   isPresale: boolean;
+  isCourtesy: boolean;
   guests: GuestDraft[];
   guestCount: number;
   registeredGuests: number;
@@ -934,25 +997,27 @@ function GuestsStep({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-            {isPresale ? "Accesos" : "Invitados"}
+            {isPresale ? "Accesos" : isCourtesy ? "Personas" : "Invitados"}
           </p>
           <p className="mt-2 text-sm text-slate-400">
             {isPresale
               ? "Cada persona debe tener nombre, carnet y WhatsApp para generar su acceso individual."
-              : "Lista interactiva simulada con edición individual y estado visual por invitado."}
+              : isCourtesy
+                ? "Lista individual de personas con acceso y estado operativo."
+                : "Lista interactiva simulada con edición individual y estado visual por invitado."}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <StatusBadge variant="info">
-            {registeredGuests} {isPresale ? "accesos completos" : `de ${guestCount} invitados registrados`}
+            {registeredGuests} {isPresale ? "accesos completos" : isCourtesy ? `de ${guestCount} personas registradas` : `de ${guestCount} invitados registrados`}
           </StatusBadge>
           <button
             type="button"
             onClick={addGuest}
             className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
           >
-            {isPresale ? "Agregar persona" : "Agregar invitado"}
+            {isPresale || isCourtesy ? "Agregar persona" : "Agregar invitado"}
           </button>
         </div>
       </div>
@@ -966,7 +1031,7 @@ function GuestsStep({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-lg font-semibold tracking-tight text-white">
-                  {index === 0 ? "Titular" : `Invitado ${index + 1}`}
+                  {isCourtesy ? `Persona ${index + 1}` : index === 0 ? "Titular" : `Invitado ${index + 1}`}
                 </p>
                 <p className="mt-1 text-sm text-slate-400">
                   {index === 0
@@ -1051,7 +1116,7 @@ function GuestsStep({
           ) : (
             <>
               <span className="font-medium text-white">{registeredGuests}</span> de{" "}
-              <span className="font-medium text-white">{guestCount}</span> invitados registrados ·{" "}
+              <span className="font-medium text-white">{guestCount}</span> {isCourtesy ? "personas registradas" : "invitados registrados"} ·{" "}
               <span className="font-medium text-white">{pendingGuests}</span> pendientes
             </>
           )}
@@ -1338,11 +1403,13 @@ function SummaryStep({
   frequent,
   notes,
   guests,
+  reference,
   selectedResource,
   selectedResourceSummary,
   selectedActiveReservation,
   selectedReservationConflictCount,
   isPresale,
+  isCourtesy,
   amount,
   advance,
   pendingNumber,
@@ -1366,11 +1433,13 @@ function SummaryStep({
   frequent: boolean;
   notes: string;
   guests: GuestDraft[];
+  reference: string;
   selectedResource: TableOption | null;
   selectedResourceSummary: TableSummary | null;
   selectedActiveReservation: ReservationRecord | null;
   selectedReservationConflictCount: number;
   isPresale: boolean;
+  isCourtesy: boolean;
   amount: string;
   advance: string;
   pendingNumber: number;
@@ -1398,9 +1467,9 @@ function SummaryStep({
         ["Hora", time],
         ["Tipo", reservationType],
         ["Observaciones", observations || "Sin observaciones"],
-      ],
+      ] as Array<[string, string]>,
     },
-    {
+    ...(!isCourtesy ? [{
       title: "Titular",
       rows: [
         ["Nombre", `${holderName} ${holderLastName}`.trim()],
@@ -1408,13 +1477,16 @@ function SummaryStep({
         ["WhatsApp", whatsapp],
         ["Email", email],
         ["Preferencias", preferences || "Sin preferencias"],
-      ],
-    },
+      ] as Array<[string, string]>,
+    }] : [{
+      title: "Referencia",
+      rows: [["Referencia", reference || "Sin referencia"]] as Array<[string, string]>,
+    }]),
     {
-      title: "Invitados",
-      rows: invitationRows,
+      title: isCourtesy ? "Personas" : "Invitados",
+      rows: invitationRows as Array<[string, string]>,
     },
-    ...(!isPresale
+    ...(!isPresale && !isCourtesy
       ? [{
           title: "Recurso",
           rows: [
@@ -1425,7 +1497,7 @@ function SummaryStep({
           ] as Array<[string, string]>,
         }]
       : []),
-    {
+    ...(!isCourtesy ? [{
       title: "Pagos",
       rows: [
         ["Monto", formatCurrency(amount)],
@@ -1433,9 +1505,9 @@ function SummaryStep({
         ["Pendiente", formatCurrency(String(pendingNumber))],
         ["Método", paymentMethod],
         ["Estado", paymentStatus],
-      ],
-    },
-  ];
+      ] as Array<[string, string]>,
+    }] : []),
+  ] as Array<{ title: string; rows: Array<[string, string]> }>;
 
   return (
     <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:p-5">

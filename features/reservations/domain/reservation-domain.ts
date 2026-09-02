@@ -197,6 +197,10 @@ function buildTimelineEntry(
 function deriveReservationType(name: string) {
   const normalized = name.toLowerCase();
 
+  if (normalized.includes("cortesía") || normalized.includes("cortesia")) {
+    return "Cortesía";
+  }
+
   if (normalized.includes("cumple")) {
     return "Cumpleaños";
   }
@@ -378,14 +382,15 @@ export function buildReservationMetrics(
   checkIns: CheckIn[],
 ): ReservationMetrics {
   const reservationGuests = guests.filter((guest) => guest.reservationId === reservation.id);
+  const isCourtesy = reservation.reservationType === "Cortesía";
   const guestCount = reservationGuests.length;
   const confirmedGuests = reservationGuests.filter((guest) => normalizeReservationStatus(guest.reservationStatus) === "Confirmed" || guest.admissionStatus === "Ingresó").length;
   const pendingGuests = reservationGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
   const checkedInGuests = reservationGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
   const cancelledGuests = reservationGuests.filter((guest) => normalizeReservationStatus(guest.reservationStatus) === "Cancelled" || guest.admissionStatus === "Anulada").length;
   const attendancePercent = Math.round((checkedInGuests / Math.max(guestCount, 1)) * 100);
-  const occupancyPercent = Math.round((guestCount / Math.max(reservation.tableCapacity, 1)) * 100);
-  const capacityRemaining = Math.max(reservation.tableCapacity - guestCount, 0);
+  const occupancyPercent = isCourtesy ? 0 : Math.round((guestCount / Math.max(reservation.tableCapacity, 1)) * 100);
+  const capacityRemaining = isCourtesy ? 0 : Math.max(reservation.tableCapacity - guestCount, 0);
   const latestAccess = [...checkIns]
     .filter(
       (checkIn) =>
@@ -423,11 +428,11 @@ export function buildReservationTimeline(
     items.push(buildTimelineEntry("Reserva creada", `Se abrió ${reservation.name}.`, "info", reservation.createdAt));
   }
 
-  if (reservation.paymentStatus === "Pagado") {
+  if (reservation.reservationType !== "Cortesía" && reservation.paymentStatus === "Pagado") {
     items.push(buildTimelineEntry("Pago confirmado", "El saldo quedó cubierto.", "success", reservation.updatedAt));
-  } else if (reservation.paymentStatus === "Parcial") {
+  } else if (reservation.reservationType !== "Cortesía" && reservation.paymentStatus === "Parcial") {
     items.push(buildTimelineEntry("Pago parcial", "La reserva mantiene saldo pendiente.", "warning", reservation.updatedAt));
-  } else if (reservation.paymentStatus === "Pendiente") {
+  } else if (reservation.reservationType !== "Cortesía" && reservation.paymentStatus === "Pendiente") {
     items.push(buildTimelineEntry("Pago pendiente", "La reserva sigue abierta.", "warning", reservation.updatedAt));
   }
 
@@ -491,6 +496,7 @@ export function buildReservationSummary(
     time: reservation.time,
     tableName: reservation.tableName,
     reservationType: reservation.reservationType,
+    reference: reservation.reference,
     status,
     statusTone: getReservationStatusTone(status),
     metrics,
@@ -576,9 +582,10 @@ export function createReservationBundle(input: ReservationCreationInput) {
   const createdAt = createTimeStamp();
   const selectedResource = getSelectedReservationResource(input);
   const isPresale = input.reservationType === "Preventa";
+  const isCourtesy = input.reservationType === "Cortesía";
   const paymentDraft = resolveReservationPaymentDraft(input.amount, input.advance, input.paymentStatus);
 
-  if (!isPresale && !selectedResource) {
+  if (!isPresale && !isCourtesy && !selectedResource) {
     throw new Error("A reservation resource is required.");
   }
 
@@ -586,12 +593,18 @@ export function createReservationBundle(input: ReservationCreationInput) {
     throw new Error("Preventa requires at least one complete access.");
   }
 
-  const codeBase = `${input.eventName}-${isPresale ? "PRE" : selectedResource?.id}-${Date.now().toString().slice(-4)}`;
+  if (isCourtesy && (!input.guests.length || input.guests.some((guest) => !isCompleteGuestDraft(guest)))) {
+    throw new Error("Cortesía requires at least one complete person.");
+  }
+
+  const codeBase = `${input.eventName}-${isPresale ? "PRE" : isCourtesy ? "COR" : selectedResource?.id}-${Date.now().toString().slice(-4)}`;
   const code = `RES-${codeBase.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase()}`;
   const name = isPresale
     ? `Preventa · ${input.holderName} ${input.holderLastName}`.trim()
+    : isCourtesy
+      ? input.reference?.trim() ? `Cortesía · ${input.reference.trim()}` : "Cortesía"
     : `${selectedResource?.name} · ${input.holderName} ${input.holderLastName}`.trim();
-  const status: ReservationStatus = input.paymentStatus === "Pagado" ? "Confirmed" : "Pending";
+  const status: ReservationStatus = isCourtesy || input.paymentStatus === "Pagado" ? "Confirmed" : "Pending";
   const reservation: ReservationRecord = {
     id: createUuid(),
     code,
@@ -600,23 +613,24 @@ export function createReservationBundle(input: ReservationCreationInput) {
     eventName: input.eventName,
     date: input.date,
     time: input.time,
-    resourceId: isPresale ? undefined : selectedResource?.id,
-    resourceName: isPresale ? undefined : selectedResource?.name,
-    sectorId: isPresale ? undefined : selectedResource?.sectorId,
-    sectorName: isPresale ? undefined : selectedResource?.location,
-    venueId: isPresale ? undefined : selectedResource?.venueId,
-    tableName: isPresale ? "" : selectedResource?.name ?? "",
-    tableId: isPresale ? undefined : selectedResource?.id,
-    tableCapacity: isPresale ? 0 : selectedResource?.capacity ?? 0,
-    holderName: `${input.holderName} ${input.holderLastName}`.trim(),
-    holderDocument: input.documentValue,
-    holderWhatsapp: input.whatsapp,
-    holderEmail: input.email,
+    resourceId: isPresale || isCourtesy ? undefined : selectedResource?.id,
+    resourceName: isPresale || isCourtesy ? undefined : selectedResource?.name,
+    sectorId: isPresale || isCourtesy ? undefined : selectedResource?.sectorId,
+    sectorName: isPresale || isCourtesy ? undefined : selectedResource?.location,
+    venueId: isPresale || isCourtesy ? undefined : selectedResource?.venueId,
+    tableName: isPresale || isCourtesy ? "" : selectedResource?.name ?? "",
+    tableId: isPresale || isCourtesy ? undefined : selectedResource?.id,
+    tableCapacity: isPresale || isCourtesy ? 0 : selectedResource?.capacity ?? 0,
+    holderName: isCourtesy ? "" : `${input.holderName} ${input.holderLastName}`.trim(),
+    holderDocument: isCourtesy ? "" : input.documentValue,
+    holderWhatsapp: isCourtesy ? "" : input.whatsapp,
+    holderEmail: isCourtesy ? "" : input.email,
     reservationType: input.reservationType,
-    paymentStatus: input.paymentStatus,
-    amount: input.amount,
-    advance: paymentDraft.advance,
-    commercialSnapshot: input.commercialSnapshot,
+    reference: input.reference?.trim() || undefined,
+    paymentStatus: isCourtesy ? "Pendiente" : input.paymentStatus,
+    amount: isCourtesy ? "0" : input.amount,
+    advance: isCourtesy ? "0" : paymentDraft.advance,
+    commercialSnapshot: isCourtesy ? undefined : input.commercialSnapshot,
     notes: [input.observations, input.preferences, input.notes].filter(Boolean).join(" · "),
     guestIds: [],
     status,
@@ -624,13 +638,15 @@ export function createReservationBundle(input: ReservationCreationInput) {
       buildTimelineEntry("Reserva creada", `${name} quedó en borrador operativo.`, "info", createdAt),
       buildTimelineEntry("Invitados registrados", `${input.guests.length} invitaciones preparadas.`, "warning", createdAt),
       buildTimelineEntry(
-        "Pago simulado",
-        input.paymentStatus === "Pagado"
+        isCourtesy ? "Cortesía emitida" : "Pago simulado",
+        isCourtesy
+          ? "Cortesía emitida sin operación comercial."
+          : input.paymentStatus === "Pagado"
           ? "Reserva confirmada con pago completo."
           : input.paymentStatus === "Parcial"
             ? "La reserva quedó con saldo pendiente."
             : "La reserva sigue pendiente de pago.",
-        input.paymentStatus === "Pagado" ? "success" : "warning",
+        isCourtesy ? "info" : input.paymentStatus === "Pagado" ? "success" : "warning",
         createdAt,
       ),
     ],
@@ -650,8 +666,8 @@ export function createReservationBundle(input: ReservationCreationInput) {
         reservationId: reservation.id,
         eventId: reservation.eventId,
         eventName: reservation.eventName,
-        tableId: isPresale ? undefined : reservation.tableId,
-        tableName: isPresale ? undefined : reservation.tableName,
+        tableId: isPresale || isCourtesy ? undefined : reservation.tableId,
+        tableName: isPresale || isCourtesy ? undefined : reservation.tableName,
         eventStatus: "Próximo" as const,
         invitationSequence: `${index + 1} de ${input.guests.length}`,
         invitationCode,

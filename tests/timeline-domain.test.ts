@@ -238,6 +238,23 @@ test("timeline quick read prioritizes action, target, actor and role", () => {
   assert.equal(quickRead.timestamp, "19:04");
 });
 
+test("timeline quick read exposes a courtesy reason only when metadata contains one", () => {
+  const event = {
+    id: "courtesy-event",
+    timestamp: "21:05",
+    kind: "guest.added",
+    icon: "guest",
+    tone: "info",
+    title: "Se agregó cortesía",
+    description: "Ana se agregó a la cortesía.",
+    guestName: "Ana",
+    metadata: { guestCarnet: "123", reason: "Prensa", reference: "Evento aliado" },
+  } satisfies TimelineEvent;
+
+  assert.equal(buildTimelineQuickReadSummary(event).reason, "Prensa");
+  assert.equal(buildTimelineQuickReadSummary({ ...event, metadata: {} }).reason, "");
+});
+
 test("timeline quick read resolves guest identity from metadata when guestName is missing", () => {
   const quickRead = buildTimelineQuickReadSummary({
     id: "timeline-cancelled",
