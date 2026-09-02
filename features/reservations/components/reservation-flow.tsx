@@ -243,6 +243,11 @@ function ReservationFlowWorkspace({
   const reservationSubmissionGateRef = useRef(createReservationSubmissionGate());
   const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
   const [submissionActionLabel, setSubmissionActionLabel] = useState("Creando reserva…");
+  const editReservationId = searchParams.get("editReservationId") ?? "";
+  const editAction = searchParams.get("action");
+  const editingReservation = editReservationId
+    ? reservations.find((reservation) => reservation.id === editReservationId) ?? null
+    : null;
   const canEditGuest = can("guest.edit");
   const isPresale = reservationType === "Preventa";
   const isCourtesy = reservationType === "Cortesía";
@@ -251,9 +256,10 @@ function ReservationFlowWorkspace({
   const currentPaymentAmount = isCourtesy
     ? "0"
     : isPresale
-      ? String(commercialConfig.presale.pricePerAccess * guestDrafts.length)
+      ? wizardMode === "edit" && editingReservation?.commercialSnapshot?.saleType === "presale"
+        ? String(editingReservation.commercialSnapshot.totalPrice ?? 0)
+        : String(commercialConfig.presale.pricePerAccess * guestDrafts.length)
       : amount;
-
   const eventOptions = useMemo(
     () =>
       events
@@ -505,11 +511,6 @@ function ReservationFlowWorkspace({
   );
   const selectedActiveReservation = selectedResourceReservations[0] ?? null;
   const selectedReservationConflictCount = selectedResourceReservations.length;
-  const editReservationId = searchParams.get("editReservationId") ?? "";
-  const editAction = searchParams.get("action");
-  const editingReservation = editReservationId
-    ? reservations.find((reservation) => reservation.id === editReservationId) ?? null
-    : null;
   const wizardReservation = editingReservation ?? selectedActiveReservation;
   const editingReservationGuests = useMemo(
     () =>

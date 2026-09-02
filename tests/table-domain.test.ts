@@ -166,3 +166,19 @@ test("resourceId-only reservations still count toward occupancy after reload rec
   assert.equal(summary.metrics.occupancyPercent, 50);
   assert.equal(summary.status, "Partially Occupied");
 });
+
+test("extra wristband Guests remain linked but do not consume physical table capacity", () => {
+  const table = buildTable({ capacity: 5 });
+  const reservation = buildReservation({ guestIds: ["base-1", "extra-1", "extra-2"] });
+  const guests = [
+    { id: "base-1", reservationId: reservation.id, guestName: "Base", admissionStatus: "Pendiente" },
+    { id: "extra-1", reservationId: reservation.id, extraWristbandSaleId: "sale-1", guestName: "Extra 1", admissionStatus: "Pendiente" },
+    { id: "extra-2", reservationId: reservation.id, extraWristbandSaleId: "sale-1", guestName: "Extra 2", admissionStatus: "Pendiente" },
+  ] as never;
+
+  const summary = buildTableSummary(table, [reservation], guests, [], "event-current");
+
+  assert.equal(summary.guests.length, 3);
+  assert.equal(summary.metrics.assignedGuests, 1);
+  assert.equal(summary.metrics.capacityRemaining, 4);
+});

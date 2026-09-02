@@ -1730,8 +1730,9 @@ export function WorkspaceServiceProvider({
         checkIns,
         attempts,
         timelineEvents,
+        extraWristbandSales,
       }),
-    [attempts, checkIns, currentEvent, events, guests, reservationSummaries, reservations, tableSummaries, timelineEvents],
+    [attempts, checkIns, currentEvent, events, extraWristbandSales, guests, reservationSummaries, reservations, tableSummaries, timelineEvents],
   );
   const workspacePriority = useMemo(() => buildWorkspacePrioritySnapshot(workspaceIntelligence), [workspaceIntelligence]);
 

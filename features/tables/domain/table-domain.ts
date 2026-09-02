@@ -128,6 +128,10 @@ function getTableGuests(table: TableRecord, reservations: ReservationRecord[], g
   return [];
 }
 
+function getPhysicalTableGuests(table: TableRecord, reservations: ReservationRecord[], guests: Guest[], currentEventId?: string) {
+  return getTableGuests(table, reservations, guests, currentEventId).filter((guest) => !guest.extraWristbandSaleId);
+}
+
 function deriveTableStatus(table: TableRecord, reservations: ReservationRecord[], guests: Guest[], currentEventId?: string) {
   if (table.closed) {
     return "Closed" as const;
@@ -138,7 +142,7 @@ function deriveTableStatus(table: TableRecord, reservations: ReservationRecord[]
   }
 
   const tableReservations = getActiveTableReservations(table, reservations, currentEventId);
-  const tableGuests = getTableGuests(table, reservations, guests, currentEventId);
+  const tableGuests = getPhysicalTableGuests(table, reservations, guests, currentEventId);
   const assignedGuests = tableGuests.length;
 
   if (!tableReservations.length && !assignedGuests) {
@@ -172,7 +176,7 @@ export function buildTableMetrics(
   currentEventId?: string,
 ): TableMetrics {
   const tableReservations = getActiveTableReservations(table, reservations, currentEventId);
-  const tableGuests = getTableGuests(table, reservations, guests, currentEventId);
+  const tableGuests = getPhysicalTableGuests(table, reservations, guests, currentEventId);
   const assignedGuests = tableGuests.length;
   const checkedInGuests = tableGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
   const pendingGuests = tableGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;

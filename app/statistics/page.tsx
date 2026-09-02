@@ -106,6 +106,7 @@ function StatisticsContent() {
   const health = workspaceIntelligence.health;
   const activity = workspaceIntelligence.activity;
   const prioritySummary = workspacePriority.summary;
+  const commercial = statistics.commercial;
 
   return (
     <div className="space-y-6">
@@ -154,6 +155,30 @@ function StatisticsContent() {
           ))}
         </div>
       </section>
+
+      {commercial ? <section className="surface-panel p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="kicker">Valor comercial registrado</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Consolidado histórico</h2>
+          </div>
+          <p className="text-2xl font-semibold text-white">{commercial.currency} {commercial.totals.commercialValue.toLocaleString("es-BO")}</p>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["Mesas", `${commercial.currency} ${commercial.mesa.value.toLocaleString("es-BO")}`],
+            ["Preventa", `${commercial.currency} ${commercial.presale.value.toLocaleString("es-BO")}`],
+            ["Manillas extra", `${commercial.currency} ${commercial.extraWristbands.value.toLocaleString("es-BO")}`],
+            ["Cortesías", `${commercial.courtesy.people} personas`],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
+              <p className="text-sm text-slate-400">{label}</p>
+              <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-sm text-slate-400">Personas registradas: {commercial.totals.registeredPeople}</p>
+      </section> : null}
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <div className="surface-panel p-5">

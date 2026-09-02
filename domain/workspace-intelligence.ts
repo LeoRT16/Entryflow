@@ -8,6 +8,8 @@ import { buildTimelineSummary } from "@/features/timeline/domain/timeline-domain
 import type { TimelineEvent } from "@/features/timeline/types";
 import type { CheckIn, CheckInAttempt, Guest } from "@/features/check-in/types";
 import { buildDashboardSnapshot } from "@/features/check-in/domain/check-in-domain";
+import { buildCommercialSummary, type CommercialSummary } from "@/features/reservations/domain/commercial-summary";
+import type { ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
 
 type WorkspaceIntensityTone = "success" | "warning" | "danger" | "info";
 type WorkspaceInsightPriority = "critical" | "high" | "medium" | "low";
@@ -162,6 +164,7 @@ type WorkspaceTimelineInsight = {
 };
 
 type WorkspaceStatisticsInsight = {
+  commercial?: CommercialSummary;
   metrics: WorkspaceMetric[];
   cards: {
     totalReservations: number;
@@ -940,6 +943,7 @@ export function buildWorkspaceIntelligence({
   checkIns,
   attempts,
   timelineEvents,
+  extraWristbandSales = [],
 }: {
   event: PlatformEvent;
   events: PlatformEvent[];
@@ -950,6 +954,7 @@ export function buildWorkspaceIntelligence({
   checkIns: CheckIn[];
   attempts: CheckInAttempt[];
   timelineEvents: TimelineEvent[];
+  extraWristbandSales?: ExtraWristbandSale[];
 }): WorkspaceIntelligence {
   const eventReservations = reservations.filter((reservation) => reservation.eventId === event.id);
   const eventReservationSummaries = reservationSummaries.filter((reservation) => eventReservations.some((item) => item.id === reservation.id));
@@ -988,6 +993,7 @@ export function buildWorkspaceIntelligence({
   const duplicateAccessAttempts = eventCheckIns.filter((checkIn) => checkIn.status === "Duplicate Attempt").length;
   const rejectedAccessAttempts = eventCheckIns.filter((checkIn) => checkIn.status === "Rejected" || checkIn.status === "Blocked" || checkIn.status === "Expired" || checkIn.status === "Cancelled" || checkIn.status === "No Show").length;
   const recentAccessEvents = eventTimeline.filter((entry) => entry.metadata?.entryType === "access.grant" || entry.kind.startsWith("checkin.")).length;
+  const commercial = buildCommercialSummary({ eventId: event.id, reservations, guests, extraWristbandSales });
 
   const rate = buildTimelineRates(eventCheckIns);
   const activeOperators = countActiveOperators(eventTimeline, eventGuests, eventCheckIns);
@@ -1139,6 +1145,7 @@ export function buildWorkspaceIntelligence({
   });
 
   const statistics: WorkspaceStatisticsInsight = {
+    commercial,
     metrics: [
       { label: "Reservas activas", value: `${reservationsActive}`, detail: "Reservas confirmadas o en curso.", tone: "info" },
       { label: "Reservas canceladas", value: `${reservationsCancelled}`, detail: "Reservas fuera del flujo activo.", tone: "danger" },
