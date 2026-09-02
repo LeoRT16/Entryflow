@@ -15,9 +15,11 @@ import {
 import {
   buildGuestList,
   createGuestDraft,
+  syncPresaleFirstGuestDraftWithHolder,
   syncGuestDraftsWithHolder,
 } from "../features/reservations/domain/reservation-draft";
-import { resolveReservationPaymentDraft } from "../features/reservations/domain/reservation-domain";
+import { createReservationBundle, resolveReservationPaymentDraft } from "../features/reservations/domain/reservation-domain";
+import { createPresaleCommercialSnapshot, defaultEventCommercialConfig } from "../features/events/domain/commercial-config";
 import type { GuestDraft } from "../features/reservations/types";
 
 test("reservation guest progress is scoped to the draft", () => {
@@ -31,6 +33,113 @@ test("reservation guest progress is scoped to the draft", () => {
 
   assert.equal(countDraftRegisteredGuests(guestDrafts), 2);
   assert.equal(countDraftPendingGuests(5, 2), 3);
+});
+
+test("presale creates one purchase with one independent access per complete person", () => {
+  const guests = ["Ana", "Carlos", "María", "José", "Pedro"].map((name, index) => ({
+    ...createGuestDraft(index),
+    name,
+    document: `CI-${index + 1}`,
+    whatsapp: `7000000${index + 1}`,
+  }));
+  const reservation = createReservationBundle({
+    eventId: "event-1",
+    eventName: "Evento de prueba",
+    date: "2026-09-02",
+    time: "21:00",
+    reservationType: "Preventa",
+    holderName: "Leo",
+    holderLastName: "Rodríguez",
+    documentValue: "CI-COMPRADOR",
+    whatsapp: "70000000",
+    email: "leo@example.com",
+    preferences: "",
+    vip: false,
+    frequent: false,
+    notes: "",
+    guests,
+    amount: "250",
+    advance: "0",
+    paymentMethod: "Efectivo",
+    paymentStatus: "Pendiente",
+    observations: "",
+    commercialSnapshot: createPresaleCommercialSnapshot({
+      ...defaultEventCommercialConfig,
+      currency: "BOB",
+      presale: { enabled: true, pricePerAccess: 50 },
+    }, guests.length),
+  });
+
+  assert.equal(reservation.reservation.tableId, undefined);
+  assert.equal(reservation.reservation.resourceId, undefined);
+  assert.equal(reservation.reservation.name, "Preventa · Leo Rodríguez");
+  assert.equal(reservation.reservation.commercialSnapshot?.quantity, 5);
+  assert.equal(reservation.reservation.commercialSnapshot?.totalPrice, 250);
+  assert.equal(reservation.guests.length, 5);
+  assert.equal(new Set(reservation.guests.map((guest) => guest.invitationCode)).size, 5);
+  assert.equal(reservation.guests.every((guest) => guest.tableId === undefined && guest.tableName === undefined), true);
+  assert.equal(reservation.guests.some((guest) => guest.guestName === "Leo Rodríguez"), false);
+});
+
+test("mesa still requires a resource and presale rejects incomplete people", () => {
+  const input = {
+    eventId: "event-1",
+    eventName: "Evento de prueba",
+    date: "2026-09-02",
+    time: "21:00",
+    reservationType: "Mesa" as const,
+    holderName: "Leo",
+    holderLastName: "Rodríguez",
+    documentValue: "CI",
+    whatsapp: "70000000",
+    email: "leo@example.com",
+    preferences: "",
+    vip: false,
+    frequent: false,
+    notes: "",
+    guests: [createGuestDraft(0)],
+    amount: "400",
+    advance: "0",
+    paymentMethod: "Efectivo" as const,
+    paymentStatus: "Pendiente" as const,
+    observations: "",
+  };
+
+  assert.throws(() => createReservationBundle(input), /resource is required/);
+  assert.throws(() => createReservationBundle({ ...input, reservationType: "Preventa", selectedResource: undefined }), /complete access/);
+});
+
+test("presale preloads the first access once and preserves an explicit replacement", () => {
+  const holder = { holderName: "Leo", holderLastName: "Rojas", documentValue: "CI-1", whatsapp: "70000001" };
+  const firstDraft = createGuestDraft(0);
+  const preloaded = syncPresaleFirstGuestDraftWithHolder([firstDraft], holder, null);
+
+  assert.equal(preloaded[0].name, "Leo Rojas");
+  assert.equal(preloaded[0].document, "CI-1");
+  assert.equal(preloaded[0].whatsapp, "70000001");
+
+  const replaced = [{ ...preloaded[0], name: "Ana Ruiz", document: "CI-2", whatsapp: "70000002" }];
+  const afterHolderChange = syncPresaleFirstGuestDraftWithHolder(replaced, { ...holder, holderName: "Marta" }, holder);
+  assert.equal(afterHolderChange[0].name, "Ana Ruiz");
+  assert.equal(afterHolderChange[0].document, "CI-2");
+  assert.equal(afterHolderChange[0].whatsapp, "70000002");
+});
+
+test("paid payment follows the current total for presale and mesa drafts", () => {
+  assert.equal(resolveReservationPaymentDraft("50", "0", "Pagado").advance, "50");
+  assert.equal(resolveReservationPaymentDraft("250", "0", "Pagado").advance, "250");
+  assert.equal(resolveReservationPaymentDraft("850", "0", "Pagado").advance, "850");
+});
+
+test("presale draft economics allow zero accesses until confirmation", () => {
+  const snapshot = createPresaleCommercialSnapshot({
+    ...defaultEventCommercialConfig,
+    currency: "BOB",
+    presale: { enabled: true, pricePerAccess: 50 },
+  }, 0);
+
+  assert.equal(snapshot.quantity, 0);
+  assert.equal(snapshot.totalPrice, 0);
 });
 
 test("existing guests from the same event do not inflate draft progress", () => {

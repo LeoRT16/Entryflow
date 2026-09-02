@@ -35,6 +35,10 @@ export function buildGuestList(count: number) {
   return Array.from({ length: count }, (_, index) => createGuestDraft(index));
 }
 
+export function isCompleteGuestDraft(guest: GuestDraft) {
+  return Boolean(guest.name.trim() && guest.document.trim() && guest.whatsapp.trim());
+}
+
 export function syncGuestDraftsWithHolder(
   guestDrafts: GuestDraft[],
   holder: {
@@ -59,6 +63,28 @@ export function syncGuestDraftsWithHolder(
         }
       : guest,
   );
+}
+
+export function syncPresaleFirstGuestDraftWithHolder(
+  guestDrafts: GuestDraft[],
+  holder: Parameters<typeof syncGuestDraftsWithHolder>[1],
+  previousPreloadedHolder: Parameters<typeof syncGuestDraftsWithHolder>[1] | null,
+) {
+  const firstGuest = guestDrafts[0];
+  if (!firstGuest) {
+    return guestDrafts;
+  }
+
+  const previousName = previousPreloadedHolder
+    ? [previousPreloadedHolder.holderName, previousPreloadedHolder.holderLastName].filter(Boolean).join(" ").trim()
+    : "";
+  const firstGuestMatchesPreload = previousPreloadedHolder
+    ? firstGuest.name === previousName &&
+      firstGuest.document === previousPreloadedHolder.documentValue &&
+      firstGuest.whatsapp === previousPreloadedHolder.whatsapp
+    : !firstGuest.name.trim() && !firstGuest.document.trim() && !firstGuest.whatsapp.trim();
+
+  return firstGuestMatchesPreload ? syncGuestDraftsWithHolder(guestDrafts, holder) : guestDrafts;
 }
 
 export function buildGuestDraftsFromGuests(guests: Guest[]) {

@@ -22,8 +22,12 @@ export type EventCommercialConfig = {
 
 export type ReservationCommercialSnapshot = {
   version: 1;
+  saleType?: "reservation" | "presale";
   currency: string;
   reservationPrice: number;
+  unitPrice?: number;
+  quantity?: number;
+  totalPrice?: number;
   includedAccesses: number;
   benefits: CommercialBenefit[];
 };
@@ -100,5 +104,22 @@ export function createReservationCommercialSnapshot(config: EventCommercialConfi
     reservationPrice: config.reservation.basePrice,
     includedAccesses: config.reservation.includedAccesses,
     benefits: normalizeCommercialBenefits(config.reservation.benefits),
+  };
+}
+
+export function createPresaleCommercialSnapshot(config: EventCommercialConfig, quantity: number): ReservationCommercialSnapshot {
+  const normalizedQuantity = Math.max(0, Math.floor(quantity));
+  const unitPrice = config.presale.pricePerAccess;
+
+  return {
+    version: 1,
+    saleType: "presale",
+    currency: config.currency,
+    reservationPrice: unitPrice,
+    unitPrice,
+    quantity: normalizedQuantity,
+    totalPrice: unitPrice * normalizedQuantity,
+    includedAccesses: normalizedQuantity,
+    benefits: [],
   };
 }

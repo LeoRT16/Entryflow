@@ -92,6 +92,7 @@ import {
   persistCompletedCheckInBundle,
 } from "@/features/check-in/domain/check-in-persistence";
 import { buildWorkspaceIntelligence, type WorkspaceIntelligence } from "@/domain/workspace-intelligence";
+import { isCompleteGuestDraft } from "@/features/reservations/domain/reservation-draft";
 import { buildWorkspacePrioritySnapshot, type WorkspacePrioritySnapshot } from "@/domain/workspace-priority";
 import { clearInvalidSupabaseBrowserSession, getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/helpers";
@@ -2205,44 +2206,51 @@ export function WorkspaceServiceProvider({
       try {
         const bundle = createReservationBundle(input);
         const event = currentEvent;
+        const isPresale = input.reservationType === "Preventa";
         const selectedResource = input.selectedResource ?? input.selectedTable;
 
-        if (!selectedResource) {
+        if (!isPresale && !selectedResource) {
           throw new Error("A resource is required to create a reservation.");
         }
 
-        const selectedTable = findTableInCurrentEventContext(currentEventTables, selectedResource.id, currentEvent, currentVenue);
-        const persistedTableId = resolvePersistedReservationTableId(tables, selectedTable.id);
-        const selectedEventLayoutResource = resolveCurrentEventLayoutResource({
-          currentEventLayout,
-          resourceId: selectedTable.id,
-          venueLayoutResources,
-          eventLayoutResources,
-        });
-        const canonicalVenueId = currentVenue?.id ?? currentEvent.venueId ?? selectedResource.venueId ?? undefined;
+        const selectedTable = !isPresale && selectedResource
+          ? findTableInCurrentEventContext(currentEventTables, selectedResource.id, currentEvent, currentVenue)
+          : null;
+        const persistedTableId = selectedTable ? resolvePersistedReservationTableId(tables, selectedTable.id) : undefined;
+        const selectedEventLayoutResource = selectedTable
+          ? resolveCurrentEventLayoutResource({
+              currentEventLayout,
+              resourceId: selectedTable.id,
+              venueLayoutResources,
+              eventLayoutResources,
+            })
+          : null;
+        const canonicalVenueId = isPresale
+          ? currentEvent.venueId ?? undefined
+          : currentVenue?.id ?? currentEvent.venueId ?? selectedResource?.venueId ?? undefined;
         const tableId = persistedTableId;
-        const tableName = bundle.reservation.tableName ?? selectedTable.name;
+        const tableName = isPresale ? "" : bundle.reservation.tableName ?? selectedTable?.name ?? "";
         const reservation: ReservationRecord = {
           ...bundle.reservation,
           eventId: event.id,
           eventName: event.name,
-          eventLayoutId: selectedEventLayoutResource?.eventLayoutId ?? currentEventLayout?.id ?? undefined,
+          eventLayoutId: selectedEventLayoutResource?.eventLayoutId ?? (isPresale ? undefined : currentEventLayout?.id),
           eventLayoutResourceId: selectedEventLayoutResource?.id ?? undefined,
           tableId,
           tableName,
-          resourceId: selectedTable.id,
-          resourceName: bundle.reservation.resourceName ?? selectedTable.name,
-          sectorId: bundle.reservation.sectorId ?? selectedTable.sectorId,
-          sectorName: bundle.reservation.sectorName ?? selectedTable.location,
+          resourceId: isPresale ? undefined : selectedTable?.id,
+          resourceName: isPresale ? undefined : bundle.reservation.resourceName ?? selectedTable?.name,
+          sectorId: isPresale ? undefined : bundle.reservation.sectorId ?? selectedTable?.sectorId,
+          sectorName: isPresale ? undefined : bundle.reservation.sectorName ?? selectedTable?.location,
           venueId: canonicalVenueId,
-          tableCapacity: selectedTable.capacity,
+          tableCapacity: isPresale ? 0 : selectedTable?.capacity ?? 0,
         };
         const reservationGuests = bundle.guests.map((guest) => ({
           ...guest,
           eventId: event.id,
           eventName: event.name,
-          tableId,
-          tableName,
+          tableId: isPresale ? undefined : tableId,
+          tableName: isPresale ? undefined : tableName,
         }));
         const reservationGuestsWithAccess = reservationGuests.map(hydrateGuestAccessGrant);
         const grantTimestamp = nowIso();
@@ -2425,6 +2433,103 @@ export function WorkspaceServiceProvider({
           href: "/reservations",
         });
         return undefined;
+      }
+
+      if (reservation.reservationType === "Preventa") {
+        if (input.reservationType !== "Preventa") {
+          throw new Error("A presale cannot change reservation type.");
+        }
+
+        const existingGuests = guests
+          .filter((guest) => guest.reservationId === reservation.id)
+          .sort((a, b) => a.id.localeCompare(b.id));
+        const expectedGuestCount = reservation.commercialSnapshot?.quantity ?? existingGuests.length;
+
+        if (input.guests.length !== expectedGuestCount || input.guests.some((guest) => !isCompleteGuestDraft(guest))) {
+          throw new Error(`Preventa requires exactly ${expectedGuestCount} complete accesses.`);
+        }
+
+        const timestamp = nowIso();
+        const paymentDraft = resolveReservationPaymentDraft(reservation.amount, input.advance, input.paymentStatus);
+        const currentStatus = normalizeReservationStatus(reservation.status);
+        const nextStatus: ReservationStatus =
+          currentStatus === "Cancelled" || currentStatus === "No Show" || currentStatus === "Completed" || currentStatus === "Checked In"
+            ? currentStatus
+            : input.paymentStatus === "Pagado"
+              ? "Confirmed"
+              : "Pending";
+        const nextName = `Preventa · ${input.holderName} ${input.holderLastName}`.trim();
+        const nextGuests = input.guests.map((guestDraft, index) => ({
+          ...existingGuests[index],
+          guestName: guestDraft.name.trim(),
+          reservationName: nextName,
+          eventId: currentEvent.id,
+          eventName: currentEvent.name,
+          tableId: undefined,
+          tableName: undefined,
+          invitationSequence: `${index + 1} de ${expectedGuestCount}`,
+          carnet: guestDraft.document.trim(),
+          whatsapp: guestDraft.whatsapp.trim(),
+          reservationStatus: nextStatus,
+          recentChange: true,
+        }));
+        const nextReservation: ReservationRecord = {
+          ...reservation,
+          eventId: currentEvent.id,
+          eventName: currentEvent.name,
+          date: input.date,
+          time: input.time,
+          resourceId: undefined,
+          resourceName: undefined,
+          sectorId: undefined,
+          sectorName: undefined,
+          venueId: currentEvent.venueId ?? reservation.venueId,
+          tableName: "",
+          tableId: undefined,
+          tableCapacity: 0,
+          holderName: `${input.holderName} ${input.holderLastName}`.trim(),
+          holderDocument: input.documentValue,
+          holderWhatsapp: input.whatsapp,
+          holderEmail: input.email,
+          paymentStatus: input.paymentStatus,
+          amount: reservation.amount,
+          advance: paymentDraft.advance,
+          notes: [input.observations, input.preferences, input.notes].filter(Boolean).join(" · "),
+          guestIds: nextGuests.map((guest) => guest.id),
+          status: nextStatus,
+          timeline: [
+            ...reservation.timeline,
+            buildReservationTimelineEntry(
+              reservation.id,
+              timestamp,
+              "Preventa actualizada",
+              `${expectedGuestCount} accesos siguen vinculados a la compra.`,
+              "info",
+              { actor: currentAccount.displayName, actorRole: currentAccount.roleName, context: currentEvent.name, target: nextName },
+            ),
+          ],
+          updatedAt: timestamp,
+        };
+
+        setReservations((current) => current.map((item) => (item.id === reservation.id ? nextReservation : item)));
+        setGuests((current) => [
+          ...current.filter((guest) => guest.reservationId !== reservation.id),
+          ...nextGuests,
+        ]);
+        await repositories.reservations.upsert(nextReservation);
+        for (const guest of nextGuests) {
+          await repositories.guests.upsert(guest);
+        }
+
+        notify({
+          title: "Preventa actualizada",
+          description: `${nextReservation.name} quedó sincronizada en Supabase.`,
+          tone: "success",
+          icon: "reservation",
+          href: "/reservations",
+        });
+
+        return nextReservation;
       }
 
       const selectedResource = input.selectedResource ?? input.selectedTable;
@@ -2709,6 +2814,17 @@ export function WorkspaceServiceProvider({
         return undefined;
       }
 
+      if (reservation.reservationType === "Preventa") {
+        notify({
+          title: "Preventa cerrada para nuevos accesos",
+          description: "La cantidad comercial de una Preventa no se puede alterar después de confirmarla.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return;
+      }
+
       const snapshot = captureSnapshot();
 
       try {
@@ -2832,6 +2948,17 @@ export function WorkspaceServiceProvider({
         notify({
           title: "Reserva cerrada",
           description: "Esta reserva ya es histórica y no admite más invitados.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return;
+      }
+
+      if (reservation.reservationType === "Preventa") {
+        notify({
+          title: "Preventa cerrada para nuevos accesos",
+          description: "La cantidad comercial de una Preventa no se puede alterar después de confirmarla.",
           tone: "warning",
           icon: "alert",
           href: "/reservations",
@@ -2965,6 +3092,17 @@ export function WorkspaceServiceProvider({
         return;
       }
 
+      if (reservation.reservationType === "Preventa" && action === "remove") {
+        notify({
+          title: "Acceso no eliminado",
+          description: "La cantidad comercial de una Preventa no se puede alterar después de confirmarla.",
+          tone: "warning",
+          icon: "alert",
+          href: "/reservations",
+        });
+        return;
+      }
+
       const snapshot = captureSnapshot();
       const targetGuest = guests.find((guest) => guest.id === guestId);
 
@@ -2983,8 +3121,8 @@ export function WorkspaceServiceProvider({
                   reservationStatus: "Confirmed",
                   admissionStatus: guest.admissionStatus === "Ingresó" ? guest.admissionStatus : "Pendiente",
                   qrStatus: guest.admissionStatus === "Ingresó" ? guest.qrStatus : "Válido",
-                  tableId: guest.tableId ?? reservation.tableId,
-                  tableName: guest.tableName ?? reservation.tableName,
+                  tableId: reservation.reservationType === "Preventa" ? undefined : guest.tableId ?? reservation.tableId,
+                  tableName: reservation.reservationType === "Preventa" ? undefined : guest.tableName ?? reservation.tableName,
                 };
               }
               if (action === "cancel") {
@@ -3010,8 +3148,8 @@ export function WorkspaceServiceProvider({
                   checkInMethod: undefined,
                   gate: undefined,
                   manualAdmission: false,
-                  tableId: reservation.tableId,
-                  tableName: reservation.tableName,
+                  tableId: reservation.reservationType === "Preventa" ? undefined : reservation.tableId,
+                  tableName: reservation.reservationType === "Preventa" ? undefined : reservation.tableName,
                 };
               }
               return guest;

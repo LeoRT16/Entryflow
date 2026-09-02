@@ -55,7 +55,7 @@ export const wizardSteps: Array<{ step: WizardStep; title: string; subtitle: str
   },
 ];
 
-const reservationTypes: ReservationType[] = ["Mesa", "Cumpleaños", "VIP", "Corporativo"];
+const reservationTypes: ReservationType[] = ["Mesa", "Preventa", "Cumpleaños", "VIP", "Corporativo"];
 const paymentMethods: PaymentMethod[] = ["Efectivo", "Transferencia", "Tarjeta", "Cortesía"];
 const paymentStatuses: PaymentStatus[] = ["Pendiente", "Parcial", "Pagado"];
 
@@ -196,13 +196,15 @@ export default function ReservationWizardModal({
 }) {
   const currentStep = wizardSteps.find((item) => item.step === step) ?? wizardSteps[0];
   const isCreateMode = wizardMode === "create";
+  const isPresale = reservationType === "Preventa";
+  const visibleResource = isPresale ? null : selectedResource;
   const modeLabel =
     wizardMode === "edit" ? "Editar reserva" : wizardMode === "append" ? "Agregar manillas" : "Crear reserva";
 
   const liveSummary = [
     { label: "Código", value: "RES-0108-DB" },
     { label: "Invitados", value: `${guestCount}` },
-    { label: "Recurso", value: selectedResource?.name ?? "Sin recurso" },
+    { label: "Recurso", value: visibleResource?.name ?? "Sin recurso" },
     { label: "Monto", value: formatCurrency(amount) },
     { label: "Pago", value: paymentStatus },
   ];
@@ -253,7 +255,7 @@ export default function ReservationWizardModal({
             <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
               <main className="min-w-0 border-b border-white/10 px-5 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:border-white/10 lg:px-8 lg:py-6">
                 <div className="space-y-5">
-                  <WizardProgress step={step} completion={completion} />
+                  <WizardProgress step={step} completion={completion} isPresale={isPresale} />
 
                   <div
                     key={step}
@@ -273,6 +275,8 @@ export default function ReservationWizardModal({
                         updateGuestCount={updateGuestCount}
                         reservationType={reservationType}
                         setReservationType={setReservationType}
+                        presaleEnabled={commercialConfig.presale.enabled}
+                        isPresale={isPresale}
                         observations={observations}
                         setObservations={setObservations}
                       />
@@ -305,6 +309,7 @@ export default function ReservationWizardModal({
                       <GuestsStep
                         wizardMode={wizardMode}
                         guests={guests}
+                        isPresale={isPresale}
                         guestCount={guestCount}
                         registeredGuests={registeredGuests}
                         pendingGuests={pendingGuests}
@@ -314,7 +319,7 @@ export default function ReservationWizardModal({
                       />
                     ) : null}
 
-                    {step === 4 ? (
+                    {step === 4 && !isPresale ? (
                       <TableStep
                         selectedResourceId={selectedResourceId}
                         setSelectedResourceId={setSelectedResourceId}
@@ -325,6 +330,7 @@ export default function ReservationWizardModal({
                     {step === 5 ? (
                       <PaymentStep
                         amount={amount}
+                        isPresale={isPresale}
                         setAmount={setAmount}
                         advance={advance}
                         setAdvance={setAdvance}
@@ -355,10 +361,11 @@ export default function ReservationWizardModal({
                         frequent={frequent}
                         notes={notes}
                         guests={guests}
-                        selectedResource={selectedResource}
-                        selectedResourceSummary={selectedResourceSummary}
-                        selectedActiveReservation={selectedActiveReservation}
+                        selectedResource={visibleResource}
+                        selectedResourceSummary={isPresale ? null : selectedResourceSummary}
+                        selectedActiveReservation={isPresale ? null : selectedActiveReservation}
                         selectedReservationConflictCount={selectedReservationConflictCount}
+                        isPresale={isPresale}
                         amount={amount}
                         advance={advance}
                         pendingNumber={pendingNumber}
@@ -414,14 +421,14 @@ export default function ReservationWizardModal({
                               frequent,
                               notes,
                               guests,
-                              selectedResource: selectedResource ?? undefined,
+                              selectedResource: isPresale ? undefined : selectedResource ?? undefined,
                               amount,
                               advance,
                               paymentMethod,
                               paymentStatus,
                               observations,
                             };
-                            const isAppendFlow = wizardMode === "append" || (wizardMode === "create" && Boolean(selectedActiveReservation));
+                            const isAppendFlow = wizardMode === "append" || (wizardMode === "create" && !isPresale && Boolean(selectedActiveReservation));
 
                             void (
                               wizardMode === "edit"
@@ -473,11 +480,19 @@ export default function ReservationWizardModal({
                   {wizardMode === "create" ? (
                     <div className="surface-panel p-4 sm:p-5">
                       <p className="kicker">Condiciones aplicadas</p>
-                      <div className="mt-3 space-y-2 text-sm text-slate-300">
-                        <p>Reserva: <span className="font-medium text-white">{commercialConfig.currency} {commercialConfig.reservation.basePrice}</span></p>
-                        <p>Accesos incluidos: <span className="font-medium text-white">{commercialConfig.reservation.includedAccesses}</span></p>
-                        <p>Beneficios: <span className="font-medium text-white">{commercialConfig.reservation.benefits.length ? commercialConfig.reservation.benefits.map((benefit) => `${benefit.quantity} × ${benefit.label}`).join(", ") : "Ninguno"}</span></p>
-                      </div>
+                      {isPresale ? (
+                        <div className="mt-3 space-y-2 text-sm text-slate-300">
+                          <p>Preventa: <span className="font-medium text-white">{commercialConfig.currency} {commercialConfig.presale.pricePerAccess} por acceso</span></p>
+                          <p>Accesos: <span className="font-medium text-white">{guestCount}</span></p>
+                          <p>Total: <span className="font-medium text-white">{commercialConfig.currency} {amount}</span></p>
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2 text-sm text-slate-300">
+                          <p>Reserva: <span className="font-medium text-white">{commercialConfig.currency} {commercialConfig.reservation.basePrice}</span></p>
+                          <p>Accesos incluidos: <span className="font-medium text-white">{commercialConfig.reservation.includedAccesses}</span></p>
+                          <p>Beneficios: <span className="font-medium text-white">{commercialConfig.reservation.benefits.length ? commercialConfig.reservation.benefits.map((benefit) => `${benefit.quantity} × ${benefit.label}`).join(", ") : "Ninguno"}</span></p>
+                        </div>
+                      )}
                     </div>
                   ) : null}
 
@@ -493,7 +508,7 @@ export default function ReservationWizardModal({
                         />
                       </div>
                       <div className="grid gap-3">
-                        {wizardSteps.map((item) => (
+                      {wizardSteps.filter((item) => !isPresale || item.step !== 4).map((item) => (
                           <WizardStepChip
                             key={item.step}
                             step={item.step}
@@ -513,7 +528,7 @@ export default function ReservationWizardModal({
                     </p>
                     <div className="mt-4 grid gap-3">
                       <LiveSummaryRow label="Estado de pago" value={paymentStatus} />
-                      <LiveSummaryRow label="Recurso" value={selectedResource?.name ?? "Sin recurso"} />
+                      <LiveSummaryRow label="Recurso" value={visibleResource?.name ?? "Sin recurso"} />
                       <LiveSummaryRow
                         label="Invitados"
                         value={`${registeredGuests} / ${guestCount}`}
@@ -557,9 +572,11 @@ export default function ReservationWizardModal({
 function WizardProgress({
   step,
   completion,
+  isPresale,
 }: {
   step: WizardStep;
   completion: number;
+  isPresale: boolean;
 }) {
   return (
     <section className="surface-panel p-4 sm:p-5">
@@ -583,7 +600,7 @@ function WizardProgress({
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        {wizardSteps.map((item) => (
+        {wizardSteps.filter((item) => !isPresale || item.step !== 4).map((item) => (
           <WizardStepChip
             key={item.step}
             step={item.step}
@@ -660,6 +677,8 @@ function GeneralStep({
   observations,
   setObservations,
   eventOptions,
+  presaleEnabled,
+  isPresale,
 }: {
   eventName: string;
   setEventName: Dispatch<SetStateAction<string>>;
@@ -674,6 +693,8 @@ function GeneralStep({
   setReservationType: Dispatch<SetStateAction<ReservationType>>;
   observations: string;
   setObservations: Dispatch<SetStateAction<string>>;
+  presaleEnabled: boolean;
+  isPresale: boolean;
 }) {
   return (
     <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
@@ -698,7 +719,7 @@ function GeneralStep({
             onChange={(event) => setReservationType(event.target.value as ReservationType)}
             className={selectClassName}
           >
-            {reservationTypes.map((type) => (
+            {reservationTypes.filter((type) => type !== "Preventa" || presaleEnabled).map((type) => (
               <option key={type} value={type}>
                 {type}
               </option>
@@ -714,16 +735,22 @@ function GeneralStep({
           <input value={time} onChange={(event) => setTime(event.target.value)} className={inputClassName} />
         </Field>
 
-        <Field label="Cantidad de invitados">
-          <input
-            type="number"
-            min={1}
-            max={10}
-            value={guestCount}
-            onChange={(event) => updateGuestCount(Number(event.target.value))}
-            className={inputClassName}
-          />
-        </Field>
+        {!isPresale ? (
+          <Field label="Cantidad de invitados">
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={guestCount}
+              onChange={(event) => updateGuestCount(Number(event.target.value))}
+              className={inputClassName}
+            />
+          </Field>
+        ) : (
+          <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.04] p-4 text-sm text-slate-300">
+            Agrega las personas que compraron acceso en el paso Invitados. La cantidad y el total se calculan automáticamente.
+          </div>
+        )}
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -883,6 +910,7 @@ function HolderStep({
 
 function GuestsStep({
   wizardMode,
+  isPresale,
   guests,
   guestCount,
   registeredGuests,
@@ -892,6 +920,7 @@ function GuestsStep({
   updateGuest,
 }: {
   wizardMode: "create" | "edit" | "append";
+  isPresale: boolean;
   guests: GuestDraft[];
   guestCount: number;
   registeredGuests: number;
@@ -905,23 +934,25 @@ function GuestsStep({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-            Invitados
+            {isPresale ? "Accesos" : "Invitados"}
           </p>
           <p className="mt-2 text-sm text-slate-400">
-            Lista interactiva simulada con edición individual y estado visual por invitado.
+            {isPresale
+              ? "Cada persona debe tener nombre, carnet y WhatsApp para generar su acceso individual."
+              : "Lista interactiva simulada con edición individual y estado visual por invitado."}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <StatusBadge variant="info">
-            {registeredGuests} de {guestCount} invitados registrados
+            {registeredGuests} {isPresale ? "accesos completos" : `de ${guestCount} invitados registrados`}
           </StatusBadge>
           <button
             type="button"
             onClick={addGuest}
             className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
           >
-            Agregar invitado
+            {isPresale ? "Agregar persona" : "Agregar invitado"}
           </button>
         </div>
       </div>
@@ -939,7 +970,7 @@ function GuestsStep({
                 </p>
                 <p className="mt-1 text-sm text-slate-400">
                   {index === 0
-                    ? "Sincronizado con el titular de la reserva"
+                    ? isPresale ? "Preload inicial editable" : "Sincronizado con el titular de la reserva"
                     : index < registeredGuests
                       ? "Registro completado"
                       : "Aún pendiente"}
@@ -964,7 +995,7 @@ function GuestsStep({
             </div>
 
             <div className="mt-4 grid gap-4 xl:grid-cols-4">
-              <Field label="Nombre">
+                  <Field label="Nombre">
                 <input
                   value={guest.name}
                   onChange={(event) => updateGuest(index, "name", event.target.value)}
@@ -1013,9 +1044,17 @@ function GuestsStep({
 
       <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
         <p className="text-sm text-slate-300">
-          <span className="font-medium text-white">{registeredGuests}</span> de{" "}
-          <span className="font-medium text-white">{guestCount}</span> invitados registrados ·{" "}
-          <span className="font-medium text-white">{pendingGuests}</span> pendientes
+          {isPresale ? (
+            <>
+              <span className="font-medium text-white">{registeredGuests}</span> accesos completos
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-white">{registeredGuests}</span> de{" "}
+              <span className="font-medium text-white">{guestCount}</span> invitados registrados ·{" "}
+              <span className="font-medium text-white">{pendingGuests}</span> pendientes
+            </>
+          )}
         </p>
       </div>
     </section>
@@ -1118,6 +1157,7 @@ function TableStep({
 
 function PaymentStep({
   amount,
+  isPresale,
   setAmount,
   advance,
   setAdvance,
@@ -1128,6 +1168,7 @@ function PaymentStep({
   pendingNumber,
 }: {
   amount: string;
+  isPresale: boolean;
   setAmount: Dispatch<SetStateAction<string>>;
   advance: string;
   setAdvance: Dispatch<SetStateAction<string>>;
@@ -1145,6 +1186,7 @@ function PaymentStep({
             type="number"
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
+            readOnly={isPresale}
             className={inputClassName}
             placeholder="850"
           />
@@ -1300,6 +1342,7 @@ function SummaryStep({
   selectedResourceSummary,
   selectedActiveReservation,
   selectedReservationConflictCount,
+  isPresale,
   amount,
   advance,
   pendingNumber,
@@ -1327,6 +1370,7 @@ function SummaryStep({
   selectedResourceSummary: TableSummary | null;
   selectedActiveReservation: ReservationRecord | null;
   selectedReservationConflictCount: number;
+  isPresale: boolean;
   amount: string;
   advance: string;
   pendingNumber: number;
@@ -1370,15 +1414,17 @@ function SummaryStep({
       title: "Invitados",
       rows: invitationRows,
     },
-    {
-      title: "Recurso",
-      rows: [
-        ["Recurso", selectedResource?.name ?? "Sin recurso"],
-        ["Sector", selectedResource?.location ?? "Sin sector"],
-        ["Capacidad", `${selectedResource?.capacity ?? 0}`],
-        ["Estado", selectedResource ? formatTableStatus(selectedResource.status) : "Sin estado"],
-      ],
-    },
+    ...(!isPresale
+      ? [{
+          title: "Recurso",
+          rows: [
+            ["Recurso", selectedResource?.name ?? "Sin recurso"],
+            ["Sector", selectedResource?.location ?? "Sin sector"],
+            ["Capacidad", `${selectedResource?.capacity ?? 0}`],
+            ["Estado", selectedResource ? formatTableStatus(selectedResource.status) : "Sin estado"],
+          ] as Array<[string, string]>,
+        }]
+      : []),
     {
       title: "Pagos",
       rows: [

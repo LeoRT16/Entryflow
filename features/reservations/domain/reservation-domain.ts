@@ -11,6 +11,7 @@ import type {
   ReservationTimelineEntry,
   ReservationTone,
 } from "@/features/reservations/types";
+import { isCompleteGuestDraft } from "@/features/reservations/domain/reservation-draft";
 import { createUuid } from "@/lib/supabase/helpers";
 
 function createTimeStamp() {
@@ -489,6 +490,7 @@ export function buildReservationSummary(
     date: reservation.date,
     time: reservation.time,
     tableName: reservation.tableName,
+    reservationType: reservation.reservationType,
     status,
     statusTone: getReservationStatusTone(status),
     metrics,
@@ -573,15 +575,22 @@ export function describeReservationSubmissionError(error: unknown, fallback = "N
 export function createReservationBundle(input: ReservationCreationInput) {
   const createdAt = createTimeStamp();
   const selectedResource = getSelectedReservationResource(input);
+  const isPresale = input.reservationType === "Preventa";
   const paymentDraft = resolveReservationPaymentDraft(input.amount, input.advance, input.paymentStatus);
 
-  if (!selectedResource) {
+  if (!isPresale && !selectedResource) {
     throw new Error("A reservation resource is required.");
   }
 
-  const codeBase = `${input.eventName}-${selectedResource.id}-${Date.now().toString().slice(-4)}`;
+  if (isPresale && (!input.guests.length || input.guests.some((guest) => !isCompleteGuestDraft(guest)))) {
+    throw new Error("Preventa requires at least one complete access.");
+  }
+
+  const codeBase = `${input.eventName}-${isPresale ? "PRE" : selectedResource?.id}-${Date.now().toString().slice(-4)}`;
   const code = `RES-${codeBase.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase()}`;
-  const name = `${selectedResource.name} · ${input.holderName} ${input.holderLastName}`.trim();
+  const name = isPresale
+    ? `Preventa · ${input.holderName} ${input.holderLastName}`.trim()
+    : `${selectedResource?.name} · ${input.holderName} ${input.holderLastName}`.trim();
   const status: ReservationStatus = input.paymentStatus === "Pagado" ? "Confirmed" : "Pending";
   const reservation: ReservationRecord = {
     id: createUuid(),
@@ -591,14 +600,14 @@ export function createReservationBundle(input: ReservationCreationInput) {
     eventName: input.eventName,
     date: input.date,
     time: input.time,
-    resourceId: selectedResource.id,
-    resourceName: selectedResource.name,
-    sectorId: selectedResource.sectorId,
-    sectorName: selectedResource.location,
-    venueId: selectedResource.venueId,
-    tableName: selectedResource.name,
-    tableId: selectedResource.id,
-    tableCapacity: selectedResource.capacity,
+    resourceId: isPresale ? undefined : selectedResource?.id,
+    resourceName: isPresale ? undefined : selectedResource?.name,
+    sectorId: isPresale ? undefined : selectedResource?.sectorId,
+    sectorName: isPresale ? undefined : selectedResource?.location,
+    venueId: isPresale ? undefined : selectedResource?.venueId,
+    tableName: isPresale ? "" : selectedResource?.name ?? "",
+    tableId: isPresale ? undefined : selectedResource?.id,
+    tableCapacity: isPresale ? 0 : selectedResource?.capacity ?? 0,
     holderName: `${input.holderName} ${input.holderLastName}`.trim(),
     holderDocument: input.documentValue,
     holderWhatsapp: input.whatsapp,
@@ -641,8 +650,8 @@ export function createReservationBundle(input: ReservationCreationInput) {
         reservationId: reservation.id,
         eventId: reservation.eventId,
         eventName: reservation.eventName,
-        tableId: reservation.tableId,
-        tableName: reservation.tableName,
+        tableId: isPresale ? undefined : reservation.tableId,
+        tableName: isPresale ? undefined : reservation.tableName,
         eventStatus: "Próximo" as const,
         invitationSequence: `${index + 1} de ${input.guests.length}`,
         invitationCode,

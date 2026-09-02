@@ -158,6 +158,7 @@ export default function ReservationOperationsBoard({
 }: ReservationOperationsBoardProps) {
   const { showToast, confirm } = useFeedback();
   const [query, setQuery] = useState("");
+  const [reservationFilter, setReservationFilter] = useState<"all" | "tables" | "presale">("all");
   const [isAddGuestFormOpen, setIsAddGuestFormOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
@@ -172,17 +173,21 @@ export default function ReservationOperationsBoard({
   const normalizedQuery = query.trim().toLowerCase();
 
   const visibleReservations = useMemo(() => {
-    if (!normalizedQuery) {
-      return reservations;
-    }
+    const filteredReservations = reservationFilter === "presale"
+      ? reservations.filter((reservation) => reservation.reservationType === "Preventa")
+      : reservationFilter === "tables"
+        ? reservations.filter((reservation) => reservation.reservationType !== "Preventa")
+        : reservations;
 
-    return reservations.filter((reservation) =>
+    if (!normalizedQuery) return filteredReservations;
+
+    return filteredReservations.filter((reservation) =>
       [reservation.name, reservation.code, reservation.eventName, reservation.tableName]
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery),
     );
-  }, [normalizedQuery, reservations]);
+  }, [normalizedQuery, reservationFilter, reservations]);
 
   const activeReservation =
     visibleReservations.find((reservation) => reservation.id === activeReservationId) ??
@@ -545,6 +550,28 @@ export default function ReservationOperationsBoard({
           />
         </div>
 
+        <div className="mt-3 flex flex-wrap gap-2" aria-label="Filtrar reservas">
+          {(["all", "tables", "presale"] as const).map((filter) => {
+            const selected = reservationFilter === filter;
+            const label = filter === "all" ? "Todas" : filter === "tables" ? "Mesas" : "Preventa";
+            return (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setReservationFilter(filter)}
+                className={[
+                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                  selected
+                    ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-50"
+                    : "border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.08]",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         <p className="mt-3 text-xs uppercase tracking-[0.22em] text-slate-500">
           Mostrando {visibleReservations.length} de {reservations.length}
         </p>
@@ -582,8 +609,13 @@ export default function ReservationOperationsBoard({
 
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
                   <span className="max-w-full break-words rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 normal-case tracking-normal">
-                    Mesa {reservation.tableName}
+                    {reservation.reservationType === "Preventa" ? `${reservation.metrics.guestCount} preventas` : `Mesa ${reservation.tableName}`}
                   </span>
+                  {reservation.reservationType === "Preventa" && reservation.commercialSnapshot ? (
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+                      {formatCommercialCurrency(reservation.commercialSnapshot.currency)} {formatCommercialAmount(getPresaleUnitPrice(reservation.commercialSnapshot))} c/u
+                    </span>
+                  ) : null}
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
                     Invitados {reservation.metrics.guestCount}
                   </span>
@@ -611,7 +643,7 @@ export default function ReservationOperationsBoard({
               </StatusBadge>
               {canConfirmReservation ? (
                 <button
-                  type="button"
+                type="button"
                   onClick={() => onMarkConfirmed(activeReservation.id)}
                   className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
                 >
@@ -693,7 +725,9 @@ export default function ReservationOperationsBoard({
 
           <div className="min-w-0">
             <h2 className="text-2xl font-semibold tracking-tight text-white">
-              {activeReservation.tableName} · {activeReservation.eventName}
+              {activeReservation.reservationType === "Preventa"
+                ? activeReservation.name
+                : `${activeReservation.tableName} · ${activeReservation.eventName}`}
             </h2>
             <p className="mt-2 break-words text-sm text-slate-400">
               {activeReservation.code} · {activeReservation.name}
@@ -708,7 +742,10 @@ export default function ReservationOperationsBoard({
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <ReservationInfoRow label="Fecha" value={activeReservation.date} />
           <ReservationInfoRow label="Hora" value={activeReservation.time} />
-          <ReservationInfoRow label="Mesa / espacio" value={activeReservation.tableName} />
+          <ReservationInfoRow
+            label={activeReservation.reservationType === "Preventa" ? "Tipo" : "Mesa / espacio"}
+            value={activeReservation.reservationType === "Preventa" ? "Preventa" : activeReservation.tableName}
+          />
           <ReservationInfoRow label="Pago" value={activeReservation.paymentStatus} />
         </div>
 
@@ -724,14 +761,20 @@ export default function ReservationOperationsBoard({
           {activeReservation.commercialSnapshot ? (
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <ReservationInfoRow
-                label="Precio vendido"
-                value={`${formatCommercialCurrency(activeReservation.commercialSnapshot.currency)} ${formatCommercialAmount(activeReservation.commercialSnapshot.reservationPrice)}`}
+                label={activeReservation.commercialSnapshot.saleType === "presale" ? "Precio por acceso" : "Precio vendido"}
+                value={`${formatCommercialCurrency(activeReservation.commercialSnapshot.currency)} ${formatCommercialAmount(getPresaleUnitPrice(activeReservation.commercialSnapshot))}`}
               />
               <ReservationInfoRow label="Moneda" value={activeReservation.commercialSnapshot.currency} />
               <ReservationInfoRow
-                label="Accesos incluidos"
-                value={`${activeReservation.commercialSnapshot.includedAccesses}`}
+                label={activeReservation.commercialSnapshot.saleType === "presale" ? "Preventas compradas" : "Accesos incluidos"}
+                value={`${getPresaleQuantity(activeReservation.commercialSnapshot)}`}
               />
+              {activeReservation.commercialSnapshot.saleType === "presale" ? (
+                <ReservationInfoRow
+                  label="Total vendido"
+                  value={`${formatCommercialCurrency(activeReservation.commercialSnapshot.currency)} ${formatCommercialAmount(getPresaleTotal(activeReservation.commercialSnapshot))}`}
+                />
+              ) : null}
               <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:col-span-3">
                 <p className="break-words text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
                   Beneficios incluidos
@@ -764,14 +807,14 @@ export default function ReservationOperationsBoard({
               </p>
             </div>
 
-            <button
+            {activeReservation.reservationType !== "Preventa" ? <button
               type="button"
               onClick={() => setIsAddGuestFormOpen((current) => !current)}
               disabled={isTerminalReservation}
               className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              + Agregar invitado
-            </button>
+                + Agregar invitado
+            </button> : null}
           </div>
 
           <div className="mt-4 space-y-3">
@@ -783,6 +826,7 @@ export default function ReservationOperationsBoard({
                   guest={guest}
                   eventTerminal={isTerminalEvent}
                   canEditGuest={canEditGuest}
+                  allowRemove={activeReservation.reservationType !== "Preventa"}
                   onEdit={() => onEditGuest(guest.id)}
                   onConfirm={() => {
                     onGuestAction({ reservationId: activeReservation.id, guestId: guest.id, action: "confirm" });
@@ -942,6 +986,7 @@ function ReservationGuestRow({
   reservationStatus,
   eventTerminal,
   canEditGuest,
+  allowRemove,
   onEdit,
   onConfirm,
   onCancel,
@@ -953,6 +998,7 @@ function ReservationGuestRow({
   reservationStatus: ReservationSummary["status"];
   eventTerminal: boolean;
   canEditGuest: boolean;
+  allowRemove: boolean;
   onEdit: () => void;
   onConfirm: () => void;
   onCancel: () => void;
@@ -994,7 +1040,7 @@ function ReservationGuestRow({
           onSelect: onCancel,
         }
       : null,
-    actionVisibility.showRemove && canHardDelete
+    allowRemove && actionVisibility.showRemove && canHardDelete
       ? {
           id: "remove",
           label: "Eliminar",
@@ -1206,4 +1252,16 @@ function formatCommercialAmount(value: number) {
 
 function formatCommercialCurrency(currency: string) {
   return currency === "BOB" ? "Bs" : currency;
+}
+
+function getPresaleUnitPrice(snapshot: NonNullable<ReservationSummary["commercialSnapshot"]>) {
+  return snapshot.unitPrice ?? snapshot.reservationPrice;
+}
+
+function getPresaleQuantity(snapshot: NonNullable<ReservationSummary["commercialSnapshot"]>) {
+  return snapshot.quantity ?? snapshot.includedAccesses;
+}
+
+function getPresaleTotal(snapshot: NonNullable<ReservationSummary["commercialSnapshot"]>) {
+  return snapshot.totalPrice ?? getPresaleUnitPrice(snapshot) * getPresaleQuantity(snapshot);
 }
