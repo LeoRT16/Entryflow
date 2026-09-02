@@ -720,6 +720,41 @@ export default function ReservationOperationsBoard({
         </div>
 
         <section className="surface-elevated min-w-0 p-4">
+          <p className="kicker">Condiciones comerciales</p>
+          {activeReservation.commercialSnapshot ? (
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <ReservationInfoRow
+                label="Precio vendido"
+                value={`${formatCommercialCurrency(activeReservation.commercialSnapshot.currency)} ${formatCommercialAmount(activeReservation.commercialSnapshot.reservationPrice)}`}
+              />
+              <ReservationInfoRow label="Moneda" value={activeReservation.commercialSnapshot.currency} />
+              <ReservationInfoRow
+                label="Accesos incluidos"
+                value={`${activeReservation.commercialSnapshot.includedAccesses}`}
+              />
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:col-span-3">
+                <p className="break-words text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  Beneficios incluidos
+                </p>
+                {activeReservation.commercialSnapshot.benefits.length ? (
+                  <ul className="mt-2 space-y-1 text-sm font-medium text-white">
+                    {activeReservation.commercialSnapshot.benefits.map((benefit) => (
+                      <li key={benefit.id}>
+                        {benefit.label} ×{benefit.quantity}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">Ninguno</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-slate-400">Sin condiciones comerciales registradas.</p>
+          )}
+        </section>
+
+        <section className="surface-elevated min-w-0 p-4">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="kicker">Invitados ({activeReservation.guests.length})</p>
@@ -1160,4 +1195,15 @@ function ReservationInfoRow({
       <p className="break-words text-sm font-medium text-white">{value}</p>
     </div>
   );
+}
+
+function formatCommercialAmount(value: number) {
+  return new Intl.NumberFormat("es-BO", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatCommercialCurrency(currency: string) {
+  return currency === "BOB" ? "Bs" : currency;
 }

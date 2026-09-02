@@ -21,7 +21,7 @@ import {
   mergeEventInvitationOverlayLayoutMetadata,
   type InvitationOverlayLayout,
 } from "@/features/events/domain/invitation-overlay";
-import { getEventTypeLabel, isTerminalEventStatus } from "@/features/events/domain";
+import { getEventTypeLabel, getEventCommercialConfig, isTerminalEventStatus, mergeEventCommercialConfig, type CommercialBenefit, type EventCommercialConfig } from "@/features/events/domain";
 import { buildEventVenueChangeConfirmation, shouldWarnBeforeChangingEventVenue } from "@/features/events/domain/event-venue-assignment";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CheckIn } from "@/features/check-in/types";
@@ -150,6 +150,7 @@ export default function EventEditorModal({
   const [eventCapacity, setEventCapacity] = useState(String(event.capacity));
   const [eventStartAt, setEventStartAt] = useState(event.startAt);
   const [eventStatus, setEventStatus] = useState(event.status);
+  const [commercialConfig, setCommercialConfig] = useState<EventCommercialConfig>(() => getEventCommercialConfig(event));
   const pendingVenueEventRef = useRef<Event | null>(null);
 
   useEffect(() => {
@@ -186,9 +187,33 @@ export default function EventEditorModal({
   });
   const buildNextMetadata = (nextArtwork: EventInvitationArtwork | null = eventArtwork, nextOverlayLayout: InvitationOverlayLayout | null = eventOverlayLayout) =>
     mergeEventInvitationOverlayLayoutMetadata(
-      mergeEventInvitationArtworkMetadata(event.metadata, nextArtwork),
+      mergeEventCommercialConfig(mergeEventInvitationArtworkMetadata(event.metadata, nextArtwork), commercialConfig),
       nextOverlayLayout,
     );
+
+  const updateCommercialConfig = (update: (current: EventCommercialConfig) => EventCommercialConfig) => {
+    setCommercialConfig((current) => update(current));
+  };
+
+  const addBenefit = () => {
+    updateCommercialConfig((current) => ({
+      ...current,
+      reservation: {
+        ...current.reservation,
+        benefits: [...current.reservation.benefits, { id: "", label: "", quantity: 1 }],
+      },
+    }));
+  };
+
+  const updateBenefit = (index: number, update: Partial<CommercialBenefit>) => {
+    updateCommercialConfig((current) => ({
+      ...current,
+      reservation: {
+        ...current.reservation,
+        benefits: current.reservation.benefits.map((benefit, benefitIndex) => benefitIndex === index ? { ...benefit, ...update } : benefit),
+      },
+    }));
+  };
 
   const saveEvent = async (nextEvent: Event) => {
     setIsSaving(true);
@@ -470,6 +495,31 @@ export default function EventEditorModal({
               disabled={!canEditEvent}
             />
           </div>
+
+          <section className="mt-4 rounded-[1.5rem] border border-cyan-400/15 bg-cyan-400/[0.04] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-200/70">Configuración comercial</p>
+                <p className="mt-2 text-sm text-slate-300">Defaults para nuevas reservas. Las reservas existentes conservan sus condiciones.</p>
+              </div>
+              <StatusBadge variant="info">{commercialConfig.currency}</StatusBadge>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="Precio base de reserva" value={String(commercialConfig.reservation.basePrice)} onChange={(value) => updateCommercialConfig((current) => ({ ...current, reservation: { ...current.reservation, basePrice: Math.max(0, Number(value) || 0) } }))} type="number" disabled={!canEditEvent} />
+              <Field label="Accesos incluidos" value={String(commercialConfig.reservation.includedAccesses)} onChange={(value) => updateCommercialConfig((current) => ({ ...current, reservation: { ...current.reservation, includedAccesses: Math.max(0, Number(value) || 0) } }))} type="number" disabled={!canEditEvent} />
+            </div>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/30 p-3">
+              <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-white">Beneficios incluidos</p><button type="button" onClick={addBenefit} disabled={!canEditEvent} className="text-xs font-semibold text-cyan-200 disabled:opacity-50">Agregar beneficio</button></div>
+              <div className="mt-3 grid gap-2">
+                {commercialConfig.reservation.benefits.map((benefit, index) => <div key={`${benefit.id}-${index}`} className="grid gap-2 sm:grid-cols-[1fr_100px_auto]"><input value={benefit.label} onChange={(changeEvent) => updateBenefit(index, { label: changeEvent.target.value })} placeholder="Ej. Botella, parking, consumo" disabled={!canEditEvent} className="h-10 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white" /><input type="number" min="0" value={benefit.quantity} onChange={(changeEvent) => updateBenefit(index, { quantity: Math.max(0, Number(changeEvent.target.value) || 0) })} disabled={!canEditEvent} className="h-10 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white" /><button type="button" onClick={() => updateCommercialConfig((current) => ({ ...current, reservation: { ...current.reservation, benefits: current.reservation.benefits.filter((_, benefitIndex) => benefitIndex !== index) } }))} disabled={!canEditEvent} className="text-xs text-slate-400 disabled:opacity-50">Quitar</button></div>)}
+                {!commercialConfig.reservation.benefits.length ? <p className="text-xs text-slate-500">Sin beneficios configurados.</p> : null}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="flex items-center gap-3 text-sm text-slate-200"><input type="checkbox" checked={commercialConfig.presale.enabled} onChange={(changeEvent) => updateCommercialConfig((current) => ({ ...current, presale: { ...current.presale, enabled: changeEvent.target.checked } }))} disabled={!canEditEvent} /> Preventa habilitada</label>
+              <Field label="Precio preventa por acceso" value={String(commercialConfig.presale.pricePerAccess)} onChange={(value) => updateCommercialConfig((current) => ({ ...current, presale: { ...current.presale, pricePerAccess: Math.max(0, Number(value) || 0) } }))} type="number" disabled={!canEditEvent || !commercialConfig.presale.enabled} />
+            </div>
+          </section>
 
           <section className="mt-4 rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

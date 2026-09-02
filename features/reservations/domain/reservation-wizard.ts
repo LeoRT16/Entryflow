@@ -1,5 +1,6 @@
 import type { GuestDraft } from "@/features/reservations/types";
 import type { Resource } from "@/features/domain/types";
+import type { EventCommercialConfig } from "@/features/events/domain/commercial-config";
 import type { PaymentMethod, PaymentStatus, ReservationType } from "@/features/reservations/types";
 import { buildGuestList } from "@/features/reservations/domain/reservation-draft";
 
@@ -68,7 +69,7 @@ export async function runReservationSubmission<T>(
   }
 }
 
-export function createReservationWizardDefaults(currentEvent: Pick<{ name: string; startAt: string }, "name" | "startAt">): ReservationWizardDefaults {
+export function createReservationWizardDefaults(currentEvent: Pick<{ name: string; startAt: string }, "name" | "startAt">, commercialConfig?: EventCommercialConfig): ReservationWizardDefaults {
   const [eventDate, eventTime] = currentEvent.startAt.trim().split(/\s+(?=\d{1,2}:\d{2}$)/);
 
   return {
@@ -88,7 +89,7 @@ export function createReservationWizardDefaults(currentEvent: Pick<{ name: strin
     notes: "",
     guestDrafts: buildGuestList(5),
     selectedResourceId: "",
-    amount: "",
+    amount: String(commercialConfig?.reservation.basePrice ?? 0),
     advance: "",
     paymentMethod: "Efectivo",
     paymentStatus: "Pendiente",

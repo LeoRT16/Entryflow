@@ -21,6 +21,7 @@ import type {
   ReservationTimelineEntry,
   ReservationType,
 } from "@/features/reservations/types";
+import type { ReservationCommercialSnapshot } from "@/features/events/domain/commercial-config";
 import type { TableStatus } from "@/features/tables/types";
 import type { TimelineIcon, TimelineKind, TimelineTone } from "@/features/timeline/types";
 
@@ -223,6 +224,7 @@ export type ReservationRow = SupabaseRowBase & {
   payment_status: PaymentStatus;
   amount: string;
   advance: string;
+  commercial_snapshot: ReservationCommercialSnapshot | null;
   notes: string;
   guest_ids: string[];
   status: ReservationStatus;

@@ -20,6 +20,7 @@ import type {
   TableOption,
   WizardStep,
 } from "@/features/reservations/types";
+import type { EventCommercialConfig } from "@/features/events/domain/commercial-config";
 
 export const wizardSteps: Array<{ step: WizardStep; title: string; subtitle: string }> = [
   {
@@ -124,6 +125,7 @@ export default function ReservationWizardModal({
   onUpdateReservation,
   onAddManillas,
   eventOptions,
+  commercialConfig,
 }: {
   step: WizardStep;
   setStep: Dispatch<SetStateAction<WizardStep>>;
@@ -190,6 +192,7 @@ export default function ReservationWizardModal({
   onUpdateReservation: (input: Omit<ReservationUpdateInput, "eventId">) => Promise<void>;
   onAddManillas: (input: Omit<ReservationCreationInput, "eventId">) => Promise<void>;
   eventOptions: string[];
+  commercialConfig: EventCommercialConfig;
 }) {
   const currentStep = wizardSteps.find((item) => item.step === step) ?? wizardSteps[0];
   const isCreateMode = wizardMode === "create";
@@ -466,6 +469,17 @@ export default function ReservationWizardModal({
                       ))}
                     </div>
                   </div>
+
+                  {wizardMode === "create" ? (
+                    <div className="surface-panel p-4 sm:p-5">
+                      <p className="kicker">Condiciones aplicadas</p>
+                      <div className="mt-3 space-y-2 text-sm text-slate-300">
+                        <p>Reserva: <span className="font-medium text-white">{commercialConfig.currency} {commercialConfig.reservation.basePrice}</span></p>
+                        <p>Accesos incluidos: <span className="font-medium text-white">{commercialConfig.reservation.includedAccesses}</span></p>
+                        <p>Beneficios: <span className="font-medium text-white">{commercialConfig.reservation.benefits.length ? commercialConfig.reservation.benefits.map((benefit) => `${benefit.quantity} × ${benefit.label}`).join(", ") : "Ninguno"}</span></p>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="surface-elevated p-4 sm:p-5">
                     <p className="kicker">

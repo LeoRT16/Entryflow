@@ -1,4 +1,5 @@
 import type { TableOption } from "@/features/tables/types";
+import type { ReservationCommercialSnapshot } from "@/features/events/domain/commercial-config";
 export type { TableOption } from "@/features/tables/types";
 
 export type ReservationType = "Mesa" | "Cumpleaños" | "VIP" | "Corporativo";
@@ -77,6 +78,7 @@ export type ReservationCreationInput = {
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   observations: string;
+  commercialSnapshot?: ReservationCommercialSnapshot;
 };
 
 export type ReservationUpdateInput = ReservationCreationInput & {
@@ -109,6 +111,7 @@ export type ReservationRecord = {
   paymentStatus: PaymentStatus;
   amount: string;
   advance: string;
+  commercialSnapshot?: ReservationCommercialSnapshot;
   notes: string;
   guestIds: string[];
   status: ReservationStatus;
@@ -163,6 +166,7 @@ export type ReservationSummary = {
   statusTone: ReservationTone;
   metrics: ReservationMetrics;
   paymentStatus: PaymentStatus;
+  commercialSnapshot?: ReservationCommercialSnapshot;
   notes: string;
   holderName: string;
   holderDocument: string;

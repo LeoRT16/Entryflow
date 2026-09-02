@@ -119,7 +119,7 @@ test("create defaults always start blank for the selected resource", () => {
   assert.equal(defaults.guestDrafts.length, 5);
   assert.equal(defaults.holderName, "");
   assert.equal(defaults.holderLastName, "");
-  assert.equal(defaults.amount, "");
+  assert.equal(defaults.amount, "0");
   assert.equal(defaults.advance, "");
   assert.equal(defaults.paymentStatus, "Pendiente");
   assert.equal(defaults.guestDrafts[0]?.transferBadge, "Titular");

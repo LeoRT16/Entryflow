@@ -41,6 +41,7 @@ import { useCheckInStore } from "@/services/workspace-service";
 import { resolveCurrentEventLayout, resolveCurrentEventLayoutResource } from "@/services/workspace-layout-resolution";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { isTerminalEventStatus } from "@/features/events/domain";
+import { createReservationCommercialSnapshot, getEventCommercialConfig } from "@/features/events/domain";
 import type { WorkspaceIntelligence } from "@/domain/workspace-intelligence";
 
 type CheckInStore = ReturnType<typeof useCheckInStore>;
@@ -180,9 +181,10 @@ function ReservationFlowWorkspace({
   registerCheckIn,
 }: ReservationFlowWorkspaceProps) {
   const { showToast } = useFeedback();
+  const commercialConfig = useMemo(() => getEventCommercialConfig(currentEvent), [currentEvent]);
   const wizardDefaults = useMemo(
-    () => createReservationWizardDefaults(currentEvent),
-    [currentEvent],
+    () => createReservationWizardDefaults(currentEvent, commercialConfig),
+    [commercialConfig, currentEvent],
   );
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [step, setStep] = useState<WizardStep>(1);
@@ -842,6 +844,7 @@ function ReservationFlowWorkspace({
           ...input,
           eventId: currentEvent.id,
           eventName: currentEvent.name,
+          commercialSnapshot: createReservationCommercialSnapshot(commercialConfig),
         };
 
         const selectedResource = payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
@@ -1179,6 +1182,7 @@ function ReservationFlowWorkspace({
           onUpdateReservation={completeEditedReservation}
           onAddManillas={completeAppendReservation}
           eventOptions={eventOptions}
+          commercialConfig={commercialConfig}
           submissionError={submissionError}
         />
       ) : null}
