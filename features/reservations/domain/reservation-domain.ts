@@ -97,6 +97,10 @@ export function isReservationOperational(status: ReservationStatus | string) {
   return !isTerminalReservationStatus(status);
 }
 
+export function isOperationalReservationGuest(guest: Pick<Guest, "admissionStatus" | "reservationStatus">) {
+  return guest.admissionStatus !== "Anulada" && normalizeReservationStatus(guest.reservationStatus) !== "Cancelled";
+}
+
 export function getReservationStatusTone(status: ReservationStatus | string) {
   return reservationToneForStatus(normalizeReservationStatus(status));
 }
@@ -383,11 +387,12 @@ export function buildReservationMetrics(
   checkIns: CheckIn[],
 ): ReservationMetrics {
   const reservationGuests = guests.filter((guest) => guest.reservationId === reservation.id);
+  const operationalGuests = reservationGuests.filter(isOperationalReservationGuest);
   const isCourtesy = reservation.reservationType === "Cortesía";
-  const guestCount = reservationGuests.length;
-  const confirmedGuests = reservationGuests.filter((guest) => normalizeReservationStatus(guest.reservationStatus) === "Confirmed" || guest.admissionStatus === "Ingresó").length;
-  const pendingGuests = reservationGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
-  const checkedInGuests = reservationGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
+  const guestCount = operationalGuests.length;
+  const confirmedGuests = operationalGuests.filter((guest) => normalizeReservationStatus(guest.reservationStatus) === "Confirmed" || guest.admissionStatus === "Ingresó").length;
+  const pendingGuests = operationalGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
+  const checkedInGuests = operationalGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
   const cancelledGuests = reservationGuests.filter((guest) => normalizeReservationStatus(guest.reservationStatus) === "Cancelled" || guest.admissionStatus === "Anulada").length;
   const attendancePercent = Math.round((checkedInGuests / Math.max(guestCount, 1)) * 100);
   const occupancyPercent = isCourtesy ? 0 : Math.round((guestCount / Math.max(reservation.tableCapacity, 1)) * 100);
@@ -484,6 +489,7 @@ export function buildReservationSummary(
   checkIns: CheckIn[],
 ): ReservationSummary {
   const reservationGuests = guests.filter((guest) => guest.reservationId === reservation.id);
+  const operationalGuests = reservationGuests.filter(isOperationalReservationGuest);
   const metrics = buildReservationMetrics(reservation, guests, checkIns);
   const timeline = buildReservationTimeline(reservation, guests);
   const status = inferReservationStatus(reservationGuests, reservation.status);
@@ -507,7 +513,7 @@ export function buildReservationSummary(
     holderName: reservation.holderName,
     holderDocument: reservation.holderDocument,
     holderWhatsapp: reservation.holderWhatsapp,
-    guests: reservationGuests.map((guest) => getGuestReservationSummary(guest)),
+    guests: operationalGuests.map((guest) => getGuestReservationSummary(guest)),
     timeline,
   };
 }

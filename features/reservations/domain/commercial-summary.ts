@@ -1,5 +1,5 @@
 import type { Guest } from "@/features/check-in/types";
-import { normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
+import { isOperationalReservationGuest, normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
 import type { ReservationRecord } from "@/features/reservations/types";
 import type { ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
 
@@ -33,7 +33,7 @@ function isCommerciallyRegistered(reservation: ReservationRecord) {
 }
 
 function isActiveGuest(guest: Guest) {
-  return guest.admissionStatus !== "Anulada" && normalizeReservationStatus(guest.reservationStatus) !== "Cancelled";
+  return isOperationalReservationGuest(guest);
 }
 
 function snapshotValue(reservation: ReservationRecord, saleType: "reservation" | "presale") {

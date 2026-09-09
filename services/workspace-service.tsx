@@ -51,6 +51,7 @@ import { compareTimelineEventsDescending, mergeTimelineEvents } from "@/features
 import {
   buildReservationSummaries,
   createReservationBundle,
+  isOperationalReservationGuest,
   isTerminalReservationStatus,
   normalizeReservationStatus,
   prependUniqueById,
@@ -791,7 +792,7 @@ function buildCourtesyAddedTimelineEvent(
 ): TimelineEvent {
   return withAuditContext(
     {
-      id: `courtesy-added-${guest.id}-${createUuid()}`,
+      id: createUuid(),
       eventId: guest.eventId,
       createdAt: timestamp,
       timestamp: timestamp.slice(11, 16),
@@ -1597,10 +1598,11 @@ export function WorkspaceServiceProvider({
   const currentEventCheckIns = useMemo(() => getAdmissionsForEvent(currentEvent.id, checkIns), [checkIns, currentEvent.id]);
   const currentEventAttempts = useMemo(() => attempts.filter((attempt) => attempt.eventId === currentEvent.id), [attempts, currentEvent.id]);
   const currentEventMetrics = useMemo(() => {
-    const checkedIn = currentEventGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
-    const expectedGuests = currentEventGuests.length;
-    const pending = Math.max(expectedGuests - checkedIn, 0);
-    const attention = currentEventGuests.filter((guest) => Boolean(guest.attention)).length;
+    const operationalGuests = currentEventGuests.filter(isOperationalReservationGuest);
+    const checkedIn = operationalGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
+    const expectedGuests = operationalGuests.length;
+    const pending = operationalGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
+    const attention = operationalGuests.filter((guest) => Boolean(guest.attention)).length;
 
     return {
       expectedGuests,
@@ -3099,51 +3101,16 @@ export function WorkspaceServiceProvider({
         manualAdmission: false,
       } as Guest;
       const nextGuestWithAccess = hydrateGuestAccessGrant(nextGuest);
-      const persistedGuest = await repositories.guests.createWithAccessOrdinal(nextGuestWithAccess);
-
-      setGuests((current) => [persistedGuest, ...current]);
-      setReservations((current) =>
-        current.map((item) =>
-          item.id === reservationId
-            ? {
-                ...item,
-                guestIds: [...item.guestIds, guestId],
-                timeline: reservation.reservationType === "Cortesía"
-                  ? item.timeline
-                  : [
-                      ...item.timeline,
-                      buildReservationTimelineEntry(
-                        item.id,
-                        nowIso(),
-                        "Invitado agregado",
-                        `${guestInput.guestName} se sumó a la reserva.`,
-                        "info",
-                        {
-                          actor: currentAccount.displayName,
-                          actorRole: currentAccount.roleName,
-                          context: currentEvent.name,
-                          target: item.name,
-                        },
-                      ),
-                    ],
-                updatedAt: nowIso().slice(11, 16),
-              }
-            : item,
-        ),
-      );
-
-      if (reservation.reservationType === "Cortesía") {
-        const courtesyEvent = buildCourtesyAddedTimelineEvent(
-          persistedGuest,
+      const courtesyEvent = reservation.reservationType === "Cortesía"
+        ? buildCourtesyAddedTimelineEvent(
+          nextGuestWithAccess,
           reservation,
           nowIso(),
           guestInput.reason?.trim() || undefined,
-        );
-        upsertPersistedTimelineEvent(courtesyEvent);
-        void repositories.timeline.upsert(courtesyEvent).catch(() => restoreSnapshot(snapshot));
-      }
+        )
+        : undefined;
       const timelineEntry = withAuditContext(
-        buildAccessGrantTimelineEvent(persistedGuest, reservation, nowIso()),
+        buildAccessGrantTimelineEvent(nextGuestWithAccess, reservation, nowIso()),
         {
           actor: currentAccount.displayName,
           actorRole: currentAccount.roleName,
@@ -3153,12 +3120,23 @@ export function WorkspaceServiceProvider({
           reference: reservation.reference,
         },
       );
+      const persistedGuest = await repositories.reservations.addGuestAtomic({
+        reservationId,
+        guest: nextGuestWithAccess,
+        courtesyEvent,
+        accessEvent: timelineEntry,
+      });
+
+      setGuests((current) => [persistedGuest, ...current]);
+      setReservations((current) =>
+        current.map((item) =>
+          item.id === reservationId
+            ? { ...item, guestIds: [...item.guestIds, persistedGuest.id], updatedAt: nowIso().slice(11, 16) }
+            : item,
+        ),
+      );
+      if (courtesyEvent) upsertPersistedTimelineEvent(courtesyEvent);
       upsertPersistedTimelineEvent(timelineEntry);
-      void repositories.timeline.upsert(timelineEntry).catch(() => restoreSnapshot(snapshot));
-      void repositories.reservations.upsert({
-        ...reservation,
-        guestIds: [...reservation.guestIds, guestId],
-      }).catch(() => restoreSnapshot(snapshot));
 
       notify({
         title: reservation.reservationType === "Cortesía" ? "Cortesía agregada" : "Invitado agregado",
@@ -3172,12 +3150,13 @@ export function WorkspaceServiceProvider({
           onUndo: () => restoreSnapshot(snapshot),
         },
       });
+      await reloadWorkspace();
     },
-    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
+    [captureSnapshot, currentEvent, currentEvent.status, notify, reloadWorkspace, repositories.reservations, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
   );
 
   const updateReservationGuest = useCallback(
-    ({
+    async ({
       reservationId,
       guestId,
       action,
@@ -3229,6 +3208,39 @@ export function WorkspaceServiceProvider({
         return;
       }
 
+      if (action === "cancel") {
+        const cancellation = await repositories.reservations.cancelGuestAtomic({
+          reservationId,
+          guestId,
+          reason: "Anulación manual en Reservations",
+        });
+        const nextGuests = guests.map((guest) => guest.id === guestId ? cancellation.guest : guest);
+
+        setGuests(nextGuests);
+        setReservations((current) =>
+          current.map((item) =>
+            item.id === reservationId
+              ? updateReservationStatusFromGuests({ ...item, guestIds: nextGuests.filter((guest) => guest.reservationId === reservationId).map((guest) => guest.id) }, nextGuests)
+              : item,
+          ),
+        );
+        upsertPersistedTimelineEvent(cancellation.timelineEvent);
+        notify({
+          title: reservation.reservationType === "Cortesía" ? "Cortesía anulada" : "Invitado cancelado",
+          description: `${cancellation.guest.guestName} fue anulado correctamente.`,
+          tone: "danger",
+          icon: "guest",
+          href: "/reservations",
+          undo: {
+            label: "Deshacer",
+            timeoutMs: 6000,
+            onUndo: () => restoreSnapshot(snapshot),
+          },
+        });
+        await reloadWorkspace();
+        return;
+      }
+
       const nextGuests: Guest[] =
         action === "remove"
           ? guests.filter((guest) => guest.id !== guestId)
@@ -3242,25 +3254,6 @@ export function WorkspaceServiceProvider({
                   qrStatus: guest.admissionStatus === "Ingresó" ? guest.qrStatus : "Válido",
                   tableId: reservation.reservationType === "Preventa" ? undefined : guest.tableId ?? reservation.tableId,
                   tableName: reservation.reservationType === "Preventa" ? undefined : guest.tableName ?? reservation.tableName,
-                };
-              }
-              if (action === "cancel") {
-                return {
-                  ...guest,
-                  reservationStatus: "Cancelled",
-                  admissionStatus: guest.admissionStatus === "Ingresó" ? guest.admissionStatus : "Anulada",
-                  qrStatus: guest.admissionStatus === "Ingresó" ? guest.qrStatus : "Anulado",
-                  checkInTime: guest.admissionStatus === "Ingresó" ? guest.checkInTime : undefined,
-                  checkInMethod: guest.admissionStatus === "Ingresó" ? guest.checkInMethod : undefined,
-                  gate: guest.admissionStatus === "Ingresó" ? guest.gate : undefined,
-                  tableId: guest.admissionStatus === "Ingresó" ? guest.tableId : undefined,
-                  tableName: guest.admissionStatus === "Ingresó" ? guest.tableName : undefined,
-                  operatorActivity: [
-                    ...guest.operatorActivity,
-                    ...(reservation.reservationType === "Cortesía"
-                      ? [{ time: nowIso().slice(11, 16), action: "Cortesía anulada", operator: currentAccount.displayName, reason: "Anulación manual en Reservations" }]
-                      : []),
-                  ],
                 };
               }
               if (action === "revert") {
@@ -3306,27 +3299,20 @@ export function WorkspaceServiceProvider({
                     nowIso(),
                     action === "confirm"
                       ? "Invitado confirmado"
-                      : action === "cancel"
-                        ? "Invitado cancelado"
-                        : action === "revert"
-                          ? "Ingreso revertido"
-                          : "Invitado eliminado",
+                      : action === "revert"
+                        ? "Ingreso revertido"
+                        : "Invitado eliminado",
                     action === "confirm"
                       ? "La invitación quedó confirmada."
-                      : action === "cancel"
-                        ? "La invitación fue anulada."
-                        : action === "revert"
-                          ? "El ingreso volvió a estado pendiente."
-                          : "Se retiró un invitado del grupo.",
-                    action === "cancel" ? "danger" : action === "confirm" ? "info" : "warning",
+                      : action === "revert"
+                        ? "El ingreso volvió a estado pendiente."
+                        : "Se retiró un invitado del grupo.",
+                    action === "confirm" ? "info" : "warning",
                     {
                       actor: currentAccount.displayName,
                       actorRole: currentAccount.roleName,
                       context: currentEvent.name,
                       target: item.name,
-                      ...(reservation.reservationType === "Cortesía" && action === "cancel"
-                        ? { reason: "Anulación manual en Reservations", reference: reservation.reference }
-                        : {}),
                     },
                   ),
                 ],
@@ -3342,23 +3328,19 @@ export function WorkspaceServiceProvider({
       }
 
       notify({
-        title:
+          title:
           action === "confirm"
             ? "Invitado confirmado"
-            : action === "cancel"
-              ? "Invitado cancelado"
-              : action === "revert"
-                ? "Ingreso revertido"
-                : "Invitado eliminado",
-        description:
+            : action === "revert"
+              ? "Ingreso revertido"
+              : "Invitado eliminado",
+          description:
           action === "confirm"
             ? "La invitación quedó confirmada."
-            : action === "cancel"
-              ? "La invitación fue anulada."
-              : action === "revert"
-                ? "El ingreso volvió a estado pendiente."
-                : "Se retiró un invitado del grupo.",
-        tone: action === "confirm" ? "info" : action === "cancel" ? "danger" : "warning",
+            : action === "revert"
+              ? "El ingreso volvió a estado pendiente."
+              : "Se retiró un invitado del grupo.",
+        tone: action === "confirm" ? "info" : "warning",
         icon: "guest",
         href: "/reservations",
         undo: {
@@ -3368,7 +3350,7 @@ export function WorkspaceServiceProvider({
         },
       });
     },
-    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
+    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, reloadWorkspace, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
   );
 
   const setReservationStatus = useCallback(

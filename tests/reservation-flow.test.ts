@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { buildReservationFlowTotals } from "../features/reservations/components/reservation-flow";
 import {
+  buildReservationSummary,
   describeReservationSubmissionError,
   prependUniqueById,
   resolvePersistedReservationTableId,
@@ -33,6 +34,64 @@ test("reservation flow metrics reuse the canonical occupancy snapshot", () => {
   assert.equal(totals.checkedInGuests, 13);
   assert.equal(totals.pendingGuests, 12);
   assert.equal(totals.capacityRemaining, 34);
+});
+
+test("reservation summaries hide cancelled guests operationally but retain them in timeline history", () => {
+  const reservation = {
+    id: "reservation-1",
+    code: "RES-1",
+    name: "Cortesía Prensa",
+    eventId: "event-1",
+    eventName: "Evento",
+    date: "2026-09-02",
+    time: "20:00",
+    tableName: "",
+    tableCapacity: 0,
+    holderName: "",
+    holderDocument: "",
+    holderWhatsapp: "",
+    holderEmail: "",
+    reservationType: "Cortesía" as const,
+    paymentStatus: "Pendiente" as const,
+    amount: "0",
+    advance: "0",
+    notes: "",
+    guestIds: ["active", "cancelled"],
+    status: "Confirmed" as const,
+    timeline: [],
+    createdAt: "2026-09-02T10:00:00.000Z",
+    updatedAt: "2026-09-02T10:00:00.000Z",
+  };
+  const guest = (id: string, admissionStatus: string, reservationStatus: string) => ({
+    id,
+    guestName: id,
+    reservationId: reservation.id,
+    reservationName: reservation.name,
+    reservationCode: reservation.code,
+    eventId: reservation.eventId,
+    eventName: reservation.eventName,
+    invitationSequence: "01",
+    invitationCode: `RES-1-${id}`,
+    carnet: "1",
+    whatsapp: "70000000",
+    deliveryStatus: "Enviada",
+    admissionStatus,
+    reservationStatus,
+    deliveryHistory: [],
+    operatorActivity: [],
+    qrStatus: "Válido",
+  }) as never;
+  const summary = buildReservationSummary(
+    reservation,
+    [guest("active", "Pendiente", "Confirmed"), guest("cancelled", "Anulada", "Cancelled")],
+    [],
+  );
+
+  assert.deepEqual(summary.guests.map((item) => item.id), ["active"]);
+  assert.equal(summary.metrics.guestCount, 1);
+  assert.equal(summary.metrics.pendingGuests, 1);
+  assert.equal(summary.metrics.cancelledGuests, 1);
+  assert.equal(summary.timeline.some((item) => item.detail.includes("cancelled")), true);
 });
 
 test("reservation flow wires edit, delete, and cancel callbacks into the operations board", () => {
@@ -74,6 +133,16 @@ test("reservation persistence resolves the selected resource through the current
   assert.match(updateReservationBlock, /tableId: persistedTableId,/);
   assert.doesNotMatch(createReservationBlock, /findTableInCurrentEventContext\(tables, selectedResource\.id, currentEvent, currentVenue\)/);
   assert.doesNotMatch(updateReservationBlock, /findTableInCurrentEventContext\(tables, selectedResource\.id, currentEvent, currentVenue\)/);
+});
+
+test("reservation edit keeps the canonical reservation when the selected resource changes", () => {
+  const source = readFileSync(new URL("../features/reservations/components/reservation-flow.tsx", import.meta.url), "utf8");
+  const editBlock = extractBlock(source, "const completeEditedReservation = async", "  const completeAppendReservation = async");
+
+  assert.match(editBlock, /const existingReservation = editingReservation \?\? selectedActiveReservation;/);
+  assert.match(editBlock, /if \(!existingReservation\)/);
+  assert.match(editBlock, /existingReservation\.reservationType === "Cortesía"/);
+  assert.doesNotMatch(editBlock, /selectedActiveReservation\.reservationType === "Cortesía"/);
 });
 
 test("reservation persistence only writes a table id when a matching persisted table exists", () => {

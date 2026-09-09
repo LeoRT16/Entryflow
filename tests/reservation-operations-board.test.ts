@@ -122,6 +122,15 @@ test("courtesy actions use courtesy terminology without changing mesa terminolog
   assert.match(source, /placeholder=\{activeReservation\.reservationType === "Cortesía" \? "Nombre de la persona" : "Nombre del invitado"\}/);
 });
 
+test("courtesy inline additions normalize structured persistence errors", () => {
+  const source = readFileSync(new URL("../features/reservations/components/reservation-operations-board.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /await onAddGuest\(activeReservation\.id/);
+  assert.match(source, /describeReservationSubmissionError\(error, "La operación no pudo completarse\."\)/);
+  assert.match(source, /title: "No se pudo agregar la cortesía"/);
+  assert.doesNotMatch(source, /description: String\(error\)/);
+});
+
 test("courtesy inline inputs keep entered values and placeholders legible", () => {
   const source = readFileSync(new URL("../features/reservations/components/reservation-operations-board.tsx", import.meta.url), "utf8");
 

@@ -1,7 +1,7 @@
 import type { Event as PlatformEvent } from "@/features/domain/types";
 import { buildOperationsSnapshot, type OperationsSnapshot } from "@/features/operations/domain/operations-domain";
 import { buildAccessGrantFromGuest } from "@/features/access/domain/access-ledger";
-import { normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
+import { isOperationalReservationGuest, normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
 import type { ReservationRecord, ReservationSummary } from "@/features/reservations/types";
 import type { TableSummary } from "@/features/tables/types";
 import { buildTimelineSummary } from "@/features/timeline/domain/timeline-domain";
@@ -56,7 +56,7 @@ type WorkspaceHealth = {
     detail: string;
     tone: WorkspaceIntensityTone;
   }>;
-  blockers: string[];
+  blockers: Array<{ id: string; label: string }>;
 };
 
 type WorkspaceActivity = {
@@ -343,7 +343,7 @@ function buildWorkspaceAlerts({
     alerts.push({
       id: "capacity-critical",
       title: "Capacidad crítica",
-      description: `La ocupación actual está en ${occupancyPercent}%.`,
+      description: `La asignación de mesas está en ${occupancyPercent}%.`,
       tone: "danger",
     });
   }
@@ -527,7 +527,7 @@ function buildWorkspaceSignals({
       priority: occupancyPercent >= 90 || overCapacityTables > 0 ? "critical" : "high",
       type: "risk",
       title: occupancyPercent >= 90 ? "Capacidad crítica" : "Capacidad alta",
-      description: `${occupancyPercent}% de ocupación y ${capacityRemaining} cupos disponibles.`,
+      description: `${occupancyPercent}% de asignación de mesas y ${capacityRemaining} cupos disponibles.`,
       suggestedAction: freeTables > 0 ? "Usar mesas libres cercanas." : "Revisar asignaciones y liberar capacidad.",
       module: "Dashboard",
       timestamp: lastActivity,
@@ -667,7 +667,7 @@ function buildWorkspaceSignals({
       priority: "critical",
       type: "risk",
       title: "Capacidad crítica",
-      description: `La ocupación alcanzó ${occupancyPercent}% sobre ${capacityUsed} invitados activos.`,
+      description: `La asignación de mesas alcanzó ${occupancyPercent}% sobre ${capacityUsed} invitados activos.`,
       suggestedAction: "Liberar capacidad o reasignar reservas ahora.",
       module: "Operations",
       timestamp: lastActivity,
@@ -821,7 +821,7 @@ function buildWorkspaceSignals({
       module: "Tables" as WorkspaceInsightModule,
       label: "Tables",
       state: overCapacityTables > 0 || occupancyPercent >= 90 ? "Crítico" : freeTables > 0 ? "Correcto" : "Atención",
-      detail: overCapacityTables > 0 ? "Existen mesas sobreocupadas." : freeTables > 0 ? "Hay capacidad disponible." : "La ocupación necesita revisión.",
+      detail: overCapacityTables > 0 ? "Existen mesas sobreocupadas." : freeTables > 0 ? "Hay capacidad disponible." : "La asignación de mesas necesita revisión.",
       tone: overCapacityTables > 0 || occupancyPercent >= 90 ? "danger" as WorkspaceIntensityTone : freeTables > 0 ? "success" as WorkspaceIntensityTone : "warning" as WorkspaceIntensityTone,
     },
     {
@@ -883,7 +883,7 @@ function buildWorkspaceSignals({
           ? "La capacidad está crítica."
           : freeTables > 0
             ? "Hay capacidad cercana disponible."
-            : "La ocupación sigue controlada.",
+            : "La asignación de mesas sigue controlada.",
   };
 
   const flow: WorkspaceFlow = {
@@ -925,7 +925,9 @@ function buildWorkspaceSignals({
             ? "El evento está estable, pero con señales para vigilar."
             : "La operación se mantiene sincronizada.",
       modules,
-      blockers: recommendationsByModule.all.filter((item) => item.state === "blocked" || item.priority === "critical").map((item) => item.title),
+      blockers: recommendationsByModule.all
+        .filter((item) => item.state === "blocked" || item.priority === "critical")
+        .map((item) => ({ id: item.id, label: item.title })),
     },
     activity,
     capacity,
@@ -959,6 +961,7 @@ export function buildWorkspaceIntelligence({
   const eventReservations = reservations.filter((reservation) => reservation.eventId === event.id);
   const eventReservationSummaries = reservationSummaries.filter((reservation) => eventReservations.some((item) => item.id === reservation.id));
   const eventGuests = guests.filter((guest) => guest.eventId === event.id);
+  const operationalEventGuests = eventGuests.filter(isOperationalReservationGuest);
   const eventTables = tableSummaries.filter((table) => table.reservationIds.some((reservationId) => eventReservations.some((item) => item.id === reservationId)));
   const eventCheckIns = checkIns.filter((checkIn) => checkIn.eventId === event.id);
   const eventAccessGrants = eventGuests.map((guest) => {
@@ -967,9 +970,9 @@ export function buildWorkspaceIntelligence({
   });
   const eventTimeline = timelineEvents.filter((entry) => entry.reservationId ? eventReservations.some((reservation) => reservation.id === entry.reservationId) : entry.guestId ? eventGuests.some((guest) => guest.id === entry.guestId) : true);
 
-  const checkedInGuests = eventGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
-  const pendingGuests = eventGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
-  const expectedGuests = eventGuests.length;
+  const checkedInGuests = operationalEventGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
+  const pendingGuests = operationalEventGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
+  const expectedGuests = operationalEventGuests.length;
   const reservationsActive = eventReservationSummaries.filter((reservation) => normalizeReservationStatus(reservation.status) === "Confirmed" || normalizeReservationStatus(reservation.status) === "Checked In" || normalizeReservationStatus(reservation.status) === "Completed").length;
   const reservationsCancelled = eventReservationSummaries.filter((reservation) => normalizeReservationStatus(reservation.status) === "Cancelled").length;
   const reservationsPending = eventReservationSummaries.filter((reservation) => normalizeReservationStatus(reservation.status) === "Pending" || normalizeReservationStatus(reservation.status) === "Draft").length;
@@ -1009,20 +1012,21 @@ export function buildWorkspaceIntelligence({
   const customers: WorkspaceCustomersInsight = {
     eventStats: events.reduce<Record<string, { expectedGuests: number; checkedIn: number; pending: number; attention: number }>>((accumulator, currentEvent) => {
       const currentGuests = guests.filter((guest) => guest.eventId === currentEvent.id);
-      const eventCheckedIn = currentGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
+      const operationalGuests = currentGuests.filter(isOperationalReservationGuest);
+      const eventCheckedIn = operationalGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
       accumulator[currentEvent.id] = {
-        expectedGuests: currentGuests.length,
+        expectedGuests: operationalGuests.length,
         checkedIn: eventCheckedIn,
-        pending: Math.max(currentGuests.length - eventCheckedIn, 0),
-        attention: currentGuests.filter((guest) => Boolean(guest.attention)).length,
+        pending: operationalGuests.filter((guest) => guest.admissionStatus === "Pendiente").length,
+        attention: operationalGuests.filter((guest) => Boolean(guest.attention)).length,
       };
       accumulator[currentEvent.name] = accumulator[currentEvent.id];
       return accumulator;
     }, {}),
-    attentionGuests: eventGuests.filter((guest) => Boolean(guest.attention)),
-    longPendingGuests: eventGuests.filter((guest) => guest.admissionStatus === "Pendiente" && !guest.checkInTime),
-    neverCheckedInGuests: eventGuests.filter((guest) => !guest.checkInTime && normalizeReservationStatus(guest.reservationStatus) !== "Cancelled"),
-    followUpGuests: eventGuests.filter((guest) => guest.attentionTone === "warning" || guest.attentionTone === "danger" || guest.manualAdmission),
+    attentionGuests: operationalEventGuests.filter((guest) => Boolean(guest.attention)),
+    longPendingGuests: operationalEventGuests.filter((guest) => guest.admissionStatus === "Pendiente" && !guest.checkInTime),
+    neverCheckedInGuests: operationalEventGuests.filter((guest) => !guest.checkInTime),
+    followUpGuests: operationalEventGuests.filter((guest) => guest.attentionTone === "warning" || guest.attentionTone === "danger" || guest.manualAdmission),
     blockedGuests: eventGuests.filter((guest) => guest.admissionStatus === "Bloqueada" || guest.admissionStatus === "Anulada").length,
   };
 
@@ -1038,7 +1042,7 @@ export function buildWorkspaceIntelligence({
     lastCheckInAt,
     lastModificationAt,
     presentGuests: checkedInGuests,
-    remainingGuests: Math.max(expectedGuests - checkedInGuests, 0),
+    remainingGuests: pendingGuests,
   };
 
   const tablesInsight: WorkspaceTableInsight = {
@@ -1154,7 +1158,7 @@ export function buildWorkspaceIntelligence({
       { label: "Invitados esperados", value: `${expectedGuests}`, detail: "Total de invitados del evento activo.", tone: "info" },
       { label: "Invitados ingresados", value: `${checkedInGuests}`, detail: "Accesos confirmados.", tone: "success" },
       { label: "Invitados pendientes", value: `${pendingGuests}`, detail: "Invitados por ingresar.", tone: "warning" },
-      { label: "Capacidad utilizada", value: `${capacityUsed}`, detail: `${occupancyPercent}% de ocupación sobre la capacidad total.`, tone: "info" },
+      { label: "Asignación de mesas", value: `${capacityUsed}`, detail: `${occupancyPercent}% de asignación sobre la capacidad física de mesas vinculadas.`, tone: "info" },
       { label: "Capacidad restante", value: `${capacityRemaining}`, detail: "Espacios libres en mesas activas.", tone: "success" },
       { label: "No Shows", value: `${noShows}`, detail: "Reservas marcadas como no show.", tone: "warning" },
       { label: "Check-ins por minuto", value: `${rate.checkInsPerMinute}`, detail: "Promedio derivado del flujo activo.", tone: "info" },

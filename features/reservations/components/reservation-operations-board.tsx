@@ -16,6 +16,7 @@ import {
 } from "@/features/access/domain/whatsapp-reservation-invitations";
 import { getLegacyWhatsAppDeliveryStatus } from "@/features/access/domain/whatsapp-delivery-tracking";
 import {
+  describeReservationSubmissionError,
   formatReservationStatus,
   getReservationStatusTone,
   isTerminalReservationStatus,
@@ -308,12 +309,21 @@ export default function ReservationOperationsBoard({
       return;
     }
 
-    await onAddGuest(activeReservation.id, {
-      guestName,
-      carnet: guestDocument,
-      whatsapp: guestWhatsapp,
-      reason: guestReason.trim() || undefined,
-    });
+    try {
+      await onAddGuest(activeReservation.id, {
+        guestName,
+        carnet: guestDocument,
+        whatsapp: guestWhatsapp,
+        reason: guestReason.trim() || undefined,
+      });
+    } catch (error) {
+      showToast({
+        title: "No se pudo agregar la cortesía",
+        description: describeReservationSubmissionError(error, "La operación no pudo completarse."),
+        tone: "error",
+      });
+      return;
+    }
 
     setIsAddGuestFormOpen(false);
     resetGuestForm();

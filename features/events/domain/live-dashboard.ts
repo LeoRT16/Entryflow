@@ -196,7 +196,7 @@ export function buildLiveDashboardQuickActions({
     {
       id: "quick-action-tables",
       label: "Mesas / Recursos",
-      description: "Controlar ocupación y conflictos.",
+      description: "Controlar asignación de mesas y conflictos.",
       route: "/tables",
       tone: "warning",
       shortcut: "⌘3",
@@ -302,9 +302,9 @@ export function buildLiveDashboardModel({
         tone: statisticsCards.pendingGuests > 0 ? "warning" : "success",
       },
       {
-        label: "Ocupación",
+        label: "Asignación de mesas",
         value: `${occupancyPercent}%`,
-        detail: `${workspaceIntelligence.capacity.used}/${totalCapacity} ocupados`,
+        detail: `${workspaceIntelligence.capacity.used}/${totalCapacity} personas asignadas`,
         tone: occupancyPercent >= 90 || workspaceIntelligence.capacity.state === "blocked" ? "danger" : occupancyPercent >= 80 ? "warning" : "info",
       },
       {

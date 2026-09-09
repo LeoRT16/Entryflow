@@ -172,7 +172,18 @@ test("workspace timeline rehydrates the newest persisted event even when timesta
 });
 
 test("workspace intelligence keeps ingresados canonical while the timeline stays historical", () => {
-  const guests = Array.from({ length: 13 }, (_, index) => buildGuest(index + 1));
+  const guests = [
+    ...Array.from({ length: 13 }, (_, index) => buildGuest(index + 1)),
+    buildGuest(14),
+  ];
+  guests[13] = {
+    ...guests[13],
+    guestName: "Anulado",
+    admissionStatus: "Anulada",
+    reservationStatus: "Cancelled",
+    qrStatus: "Anulado",
+    checkInTime: undefined,
+  };
   const checkIns = [
     ...Array.from({ length: 12 }, (_, index) => buildCheckIn(index + 1, "QR")),
     buildCheckIn(13, "Manual"),
@@ -244,7 +255,80 @@ test("workspace intelligence keeps ingresados canonical while the timeline stays
   });
 
   assert.equal(intelligence.statistics.cards.checkedInGuests, 13);
+  assert.equal(intelligence.statistics.cards.expectedGuests, 13);
+  assert.equal(intelligence.statistics.cards.pendingGuests, 0);
+  assert.equal(intelligence.reservations.expectedGuests, 13);
+  assert.equal(intelligence.reservations.remainingGuests, 0);
+  assert.equal(intelligence.customers.eventStats["event-1"]?.expectedGuests, 13);
   assert.equal(intelligence.timeline.summary.checkedIn, 13);
   assert.equal(intelligence.timeline.summary.total, 26);
   assert.equal(intelligence.timeline.events.length, 26);
+});
+
+test("workspace capacity uses linked physical table resources and keeps blocker identities", () => {
+  const event = {
+    id: "event-1",
+    name: "Evento E2E",
+    status: "live",
+    startAt: "2026-08-17 21:00",
+    venue: "Sala Principal",
+    eventType: "nightlife",
+  } as PlatformEvent;
+  const reservation = { id: "reservation-1", eventId: "event-1", timeline: [] } as unknown as ReservationRecord;
+  const table = (id: string, capacity: number, assignedGuests: number): TableSummary => ({
+    id,
+    name: id,
+    capacity,
+    location: "Sala Principal",
+    status: "Full",
+    statusTone: "warning",
+    metrics: {
+      assignedGuests,
+      checkedInGuests: 0,
+      pendingGuests: assignedGuests,
+      capacityRemaining: Math.max(capacity - assignedGuests, 0),
+      occupancyPercent: Math.round((assignedGuests / capacity) * 100),
+      overCapacity: Math.max(assignedGuests - capacity, 0),
+      activeReservations: 1,
+    },
+    reservationIds: [reservation.id],
+    guestIds: [],
+    reservations: [],
+    guests: [],
+  });
+
+  const intelligence = buildWorkspaceIntelligence({
+    event,
+    events: [event],
+    reservations: [reservation],
+    reservationSummaries: [],
+    guests: [],
+    tableSummaries: [table("mesa-1", 5, 5), table("mesa-2", 5, 2)],
+    checkIns: [],
+    attempts: [],
+    timelineEvents: [],
+  });
+
+  assert.equal(intelligence.capacity.used, 7);
+  assert.equal(intelligence.capacity.remaining, 3);
+  assert.equal(intelligence.capacity.occupancyPercent, 70);
+  assert.deepEqual(intelligence.health.blockers, []);
+
+  const critical = buildWorkspaceIntelligence({
+    event,
+    events: [event],
+    reservations: [reservation],
+    reservationSummaries: [],
+    guests: [],
+    tableSummaries: [table("mesa-1", 5, 5), table("mesa-2", 5, 5)],
+    checkIns: [],
+    attempts: [],
+    timelineEvents: [],
+  });
+
+  assert.deepEqual(
+    critical.health.blockers.filter((blocker) => blocker.id.includes("capacity")).map((blocker) => blocker.id),
+    ["dashboard-capacity-pressure", "tables-capacity-critical"],
+  );
+  assert.equal(new Set(critical.health.blockers.map((blocker) => blocker.id)).size, critical.health.blockers.length);
 });

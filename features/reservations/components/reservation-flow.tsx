@@ -1012,9 +1012,15 @@ function ReservationFlowWorkspace({
           eventId: currentEvent.id,
           eventName: currentEvent.name,
         };
+        const existingReservation = editingReservation ?? selectedActiveReservation;
+
+        if (!existingReservation) {
+          throw new Error("No se encontró la reserva que se está editando.");
+        }
+
         const selectedResource = payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
         const capacityViolation = resolveReservationCapacityViolation({
-          resourceCapacity: selectedActiveReservation.reservationType === "Cortesía" ? undefined : selectedResource?.capacity,
+          resourceCapacity: existingReservation.reservationType === "Cortesía" ? undefined : selectedResource?.capacity,
           guestCount: payload.guests.length,
           resourceName: selectedResource?.name,
         });

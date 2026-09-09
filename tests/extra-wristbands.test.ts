@@ -79,6 +79,34 @@ test("access-code migration allocates monotonic ordinals and protects event code
   assert.match(sql, /invitation_code := format\('%s-%s'/i);
 });
 
+test("reservation guest migration keeps guest, reservation, and timeline writes in one RPC", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const sql = await readFile(new URL("../supabase/migrations/20260902000003_atomic_reservation_guest_add.sql", import.meta.url), "utf8");
+  assert.match(sql, /create or replace function public\.add_reservation_guest_atomic/);
+  assert.match(sql, /security invoker/i);
+  assert.match(sql, /for update/);
+  assert.match(sql, /create_guest_with_access_ordinal/);
+  assert.match(sql, /update public\.reservations/);
+  assert.match(sql, /insert into public\.timeline_events select v_timeline\.\*/g);
+  assert.match(sql, /reservation\.edit/);
+  assert.match(sql, /grant execute on function public\.add_reservation_guest_atomic/);
+});
+
+test("guest cancellation migration atomically invalidates access and records Activity", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const sql = await readFile(new URL("../supabase/migrations/20260902000004_atomic_reservation_guest_cancel.sql", import.meta.url), "utf8");
+  assert.match(sql, /create or replace function public\.cancel_reservation_guest_atomic/);
+  assert.match(sql, /security invoker/i);
+  assert.match(sql, /for update/g);
+  assert.match(sql, /admission_status = 'Anulada'/);
+  assert.match(sql, /reservation_status = 'Cancelled'/);
+  assert.match(sql, /qr_status = 'Anulado'/);
+  assert.match(sql, /operator_activity/);
+  assert.match(sql, /kind := 'guest\.cancelled'/);
+  assert.match(sql, /insert into public\.timeline_events/);
+  assert.match(sql, /Missing reservation\.edit permission/);
+});
+
 test("event config keeps extra wristband pricing optional and accepts zero", () => {
   const config = getEventCommercialConfig({ metadata: { commercial: { reservation: { extraWristbandPrice: 0 } } } });
   assert.equal(config.reservation.extraWristbandPrice, 0);

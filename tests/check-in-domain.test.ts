@@ -103,6 +103,8 @@ test("dashboard pending guests follow the operational admission state instead of
 
   assert.equal(snapshot.currentEvent.pending, 1);
   assert.equal(snapshot.currentEventSummary.pending, 1);
+  assert.equal(snapshot.currentEvent.expectedGuests, 2);
+  assert.equal(snapshot.currentEventSummary.expectedGuests, 2);
   assert.equal(snapshot.summaryMetrics.find((item) => item.label === "Ingresados")?.value, "1");
 });
 

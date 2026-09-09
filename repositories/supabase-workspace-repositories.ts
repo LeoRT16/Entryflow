@@ -175,6 +175,8 @@ type SupabaseWorkspaceRepositories = {
   };
   reservations: SupabaseCrudRepository<ReservationRecord> & {
     addGuest(reservationId: string, guest: ReservationGuestInput): Promise<void>;
+    addGuestAtomic(input: { reservationId: string; guest: Guest; courtesyEvent?: TimelineEvent; accessEvent: TimelineEvent }): Promise<Guest>;
+    cancelGuestAtomic(input: { reservationId: string; guestId: string; reason: string }): Promise<{ guest: Guest; timelineEvent: TimelineEvent }>;
     updateGuest(params: { reservationId: string; guestId: string; action: ReservationGuestAction }): Promise<void>;
     setStatus(reservationId: string, status: ReservationStatus): Promise<void>;
     assignToTable(reservationId: string, tableId: string): Promise<void>;
@@ -877,6 +879,36 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     },
     reservations: {
       ...reservations,
+      async cancelGuestAtomic({ reservationId, guestId, reason }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+
+        const { data, error } = await client.rpc("cancel_reservation_guest_atomic" as never, {
+          p_reservation_id: reservationId,
+          p_guest_id: guestId,
+          p_reason: reason,
+          p_timeline_id: null,
+        } as never);
+
+        if (error) throw error;
+        const result = data as { guest: GuestRow; timelineEvent: TimelineRow };
+        return {
+          guest: mapGuestRowToDomain(result.guest),
+          timelineEvent: mapTimelineRowToDomain(result.timelineEvent),
+        };
+      },
+      async addGuestAtomic({ reservationId, guest, courtesyEvent, accessEvent }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+
+        const { data, error } = await client.rpc("add_reservation_guest_atomic" as never, {
+          p_reservation_id: reservationId,
+          p_guest: mapGuestToRow(guest),
+          p_courtesy_event: courtesyEvent ? mapTimelineToRow(courtesyEvent, guest.eventId) : null,
+          p_access_event: mapTimelineToRow(accessEvent, guest.eventId),
+        } as never);
+
+        if (error) throw error;
+        return mapGuestRowToDomain(data as GuestRow);
+      },
       async addGuest(reservationId: string, guest: ReservationGuestInput) {
         const currentReservation = await reservations.findById(reservationId);
 

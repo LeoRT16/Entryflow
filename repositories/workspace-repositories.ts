@@ -26,6 +26,8 @@ export type EventRepository = CrudRepository<PlatformEvent> & {
 
 export type ReservationRepository = CrudRepository<ReservationRecord, ReservationCreationInput> & {
   addGuest(reservationId: string, guest: ReservationGuestInput): void;
+  addGuestAtomic(input: { reservationId: string; guest: Guest; courtesyEvent?: TimelineEvent; accessEvent: TimelineEvent }): Promise<Guest>;
+  cancelGuestAtomic(input: { reservationId: string; guestId: string; reason: string }): Promise<{ guest: Guest; timelineEvent: TimelineEvent }>;
   updateGuest(params: { reservationId: string; guestId: string; action: ReservationGuestAction }): void;
   setStatus(reservationId: string, status: ReservationStatus): void;
   assignToTable(reservationId: string, tableId: string): void;
@@ -150,6 +152,43 @@ export function createMemoryWorkspaceRepositories(adapter: WorkspaceMemoryAdapte
     });
   };
 
+  reservations.addGuestAtomic = async ({ reservationId, guest, accessEvent }) => {
+    const reservation = adapter.reservations.find((item) => item.id === reservationId);
+    if (!reservation) throw new Error("Reservation not found.");
+    const persistedGuest = await guests.createWithAccessOrdinal(guest);
+    adapter.setReservationsState(
+      adapter.reservations.map((item) => item.id === reservationId
+        ? { ...item, guestIds: [...item.guestIds, persistedGuest.id], updatedAt: new Date().toISOString() }
+        : item),
+    );
+    void accessEvent;
+    return persistedGuest;
+  };
+
+  reservations.cancelGuestAtomic = async ({ reservationId, guestId, reason }) => {
+    const guest = adapter.guests.find((item) => item.id === guestId && item.reservationId === reservationId);
+    if (!guest) throw new Error("Guest not found.");
+    const nextGuest: Guest = { ...guest, reservationStatus: "Cancelled", admissionStatus: "Anulada", qrStatus: "Anulado" };
+    adapter.setGuestsState(adapter.guests.map((item) => item.id === guestId ? nextGuest : item));
+    void reason;
+    return {
+      guest: nextGuest,
+      timelineEvent: {
+        id: "local-cancelled-guest",
+        eventId: guest.eventId,
+        timestamp: new Date().toISOString(),
+        kind: "guest.cancelled",
+        icon: "guest",
+        tone: "danger",
+        title: "Invitado cancelado",
+        description: `${guest.guestName} fue anulado.`,
+        reservationId,
+        guestId,
+        guestName: guest.guestName,
+      } as TimelineEvent,
+    };
+  };
+
   const tables = buildCrudRepository<TableRecord>(
     () => adapter.tables,
     adapter.setTablesState,
@@ -262,6 +301,8 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       update: notImplemented,
       delete: notImplemented,
       addGuest: notImplemented,
+      addGuestAtomic: notImplemented,
+      cancelGuestAtomic: notImplemented,
       updateGuest: notImplemented,
       setStatus: notImplemented,
       assignToTable: notImplemented,

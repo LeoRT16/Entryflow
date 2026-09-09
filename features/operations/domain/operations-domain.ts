@@ -323,7 +323,7 @@ export function buildOperationsSnapshot({
     buildMetric("Confirmados", `${confirmedGuests}`, "Invitados con reserva validada", "success"),
     buildMetric("Access", `${activeAccessGrants}`, "Grants activos para el evento", "info"),
     buildMetric("Check-in", `${checkedInGuests}`, "Ingresos ya registrados", "success"),
-    buildMetric("Ocupación", `${occupancyPercent}%`, "Promedio sobre mesas activas", "info"),
+    buildMetric("Asignación de mesas", `${occupancyPercent}%`, "Sobre capacidad física de mesas activas", "info"),
     buildMetric("Capacidad restante", `${capacityRemaining}`, "Asientos libres en mesas abiertas", "warning"),
   ],
   quickSummary: [

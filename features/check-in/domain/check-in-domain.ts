@@ -2,7 +2,7 @@ import type { Event as LegacyEvent, Guest, CheckInMethod, EntryStatus } from "@/
 import type { Event as PlatformEvent } from "@/features/domain/types";
 import type { ReservationRecord } from "@/features/reservations/types";
 import { resolveAccessGrantByQuery } from "@/features/access/domain/access-ledger";
-import { normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
+import { isOperationalReservationGuest, normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
 import type { ReservationSummary } from "@/features/reservations/types";
 import type { TableSummary } from "@/features/tables/types";
 import { buildGuestSearchIndex, normalizeCheckInText } from "@/features/check-in/utils";
@@ -232,10 +232,11 @@ export function buildDashboardSnapshot(
   reservations: ReservationSummary[],
   tables: TableSummary[] = [],
 ) {
-  const checkedIn = guests.filter((guest) => guest.admissionStatus === "Ingresó").length;
-  const expectedGuests = guests.length;
-  const pending = guests.filter((guest) => guest.admissionStatus === "Pendiente").length;
-  const attention = guests.filter((guest) => Boolean(guest.attention)).length;
+  const operationalGuests = guests.filter(isOperationalReservationGuest);
+  const checkedIn = operationalGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
+  const expectedGuests = operationalGuests.length;
+  const pending = operationalGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
+  const attention = operationalGuests.filter((guest) => Boolean(guest.attention)).length;
   const reservationsCount = reservations.length;
   const activeTables = tables.filter((table) => table.status !== "Closed").length;
   const fullTables = tables.filter((table) => table.status === "Full").length;

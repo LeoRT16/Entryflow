@@ -206,8 +206,8 @@ function StatisticsContent() {
               <p className="kicker">Bloqueadores</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {health.blockers.map((blocker) => (
-                  <span key={blocker} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">
-                    {blocker}
+                  <span key={blocker.id} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">
+                    {blocker.label}
                   </span>
                 ))}
               </div>

@@ -507,12 +507,12 @@ test("buildLiveDashboardModel derives the main KPIs and keeps scanner first", ()
     "Invitados esperados",
     "Invitados ingresados",
     "Invitados pendientes",
-    "Ocupación",
+    "Asignación de mesas",
     "Check-ins/min",
   ]);
   assert.equal(model.kpis.find((item) => item.label === "Invitados ingresados")?.value, "30");
   assert.equal(model.kpis.find((item) => item.label === "Invitados pendientes")?.value, "20");
-  assert.equal(model.kpis.find((item) => item.label === "Ocupación")?.value, "80%");
+  assert.equal(model.kpis.find((item) => item.label === "Asignación de mesas")?.value, "80%");
   assert.equal(model.kpis.find((item) => item.label === "Check-ins/min")?.value, "2");
   assert.equal(model.capacity.occupancyPercent, 80);
   assert.equal(model.alertCount, 10);
