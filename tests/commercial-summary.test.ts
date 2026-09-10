@@ -133,3 +133,17 @@ test("reports missing snapshots without using amount", () => {
   assert.equal(summary.mesa.value, 0);
   assert.equal(summary.diagnostics.missingHistoricalValue, 1);
 });
+
+test("active extra wristbands from a cancelled reservation do not contaminate commercial value", () => {
+  const summary = buildCommercialSummary({
+    eventId: "event-1",
+    reservations: [reservation({ status: "Cancelled", commercialSnapshot: mesaSnapshot })],
+    guests: [guest("extra", "reservation-1", { extraWristbandSaleId: "sale-1" })],
+    extraWristbandSales: [sale()],
+  });
+
+  assert.equal(summary.extraWristbands.sales, 0);
+  assert.equal(summary.extraWristbands.people, 0);
+  assert.equal(summary.extraWristbands.value, 0);
+  assert.equal(summary.totals.commercialValue, 0);
+});

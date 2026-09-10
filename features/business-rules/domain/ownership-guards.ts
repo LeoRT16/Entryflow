@@ -2,6 +2,7 @@ import type { Event as PlatformEvent, Venue } from "@/features/domain/types";
 import type { Guest } from "@/features/check-in/types";
 import type { ReservationRecord } from "@/features/reservations/types";
 import type { TableRecord } from "@/features/tables/types";
+import { isResourceAvailableForNewOperations } from "@/features/tables/domain/resource-lifecycle";
 
 function resolveCurrentVenueId(currentEvent: Pick<PlatformEvent, "venueId" | "id">, currentVenue?: Venue | null) {
   return currentVenue?.id ?? currentEvent.venueId ?? undefined;
@@ -42,6 +43,10 @@ export function findTableInCurrentEventContext(
 
   if (!table) {
     throw new Error("La mesa seleccionada no pertenece al evento o venue actual.");
+  }
+
+  if (!isResourceAvailableForNewOperations(table.status)) {
+    throw new Error("El espacio seleccionado está desactivado o bloqueado para nuevas operaciones.");
   }
 
   return assertTableInCurrentEventContext(table, currentEvent, currentVenue);

@@ -128,8 +128,12 @@ function getTableGuests(table: TableRecord, reservations: ReservationRecord[], g
   return [];
 }
 
+export function isPhysicalTableGuest(guest: Pick<Guest, "extraWristbandSaleId">) {
+  return !guest.extraWristbandSaleId;
+}
+
 function getPhysicalTableGuests(table: TableRecord, reservations: ReservationRecord[], guests: Guest[], currentEventId?: string) {
-  return getTableGuests(table, reservations, guests, currentEventId).filter((guest) => !guest.extraWristbandSaleId);
+  return getTableGuests(table, reservations, guests, currentEventId).filter(isPhysicalTableGuest);
 }
 
 function deriveTableStatus(table: TableRecord, reservations: ReservationRecord[], guests: Guest[], currentEventId?: string) {

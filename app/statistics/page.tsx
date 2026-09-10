@@ -4,6 +4,7 @@ import Topbar from "@/components/topbar";
 import StatusBadge from "@/components/status-badge";
 import { useCheckInStore } from "@/services/workspace-service";
 import PermissionGuard from "@/components/permission-guard";
+import { buildStatisticsViewModel, displayMoney } from "@/features/reporting/domain/statistics-view-model";
 
 function StatCard({
   label,
@@ -95,18 +96,16 @@ export default function StatisticsPage() {
 }
 
 function StatisticsContent() {
-  const { workspaceIntelligence, workspacePriority, tableSummaries } = useCheckInStore();
+  const { eventReport, workspaceIntelligence, workspacePriority } = useCheckInStore();
 
-  const currentEventSummary = workspaceIntelligence.dashboard.currentEventSummary;
-  const tableInsight = workspaceIntelligence.tables;
   const dashboard = workspaceIntelligence.dashboard;
-  const occupancy = tableInsight.occupancyPercent;
   const statistics = workspaceIntelligence.statistics;
+  const reportStatistics = buildStatisticsViewModel(eventReport, workspaceIntelligence);
   const statisticsInsights = workspacePriority.byModule.Statistics;
   const health = workspaceIntelligence.health;
   const activity = workspaceIntelligence.activity;
   const prioritySummary = workspacePriority.summary;
-  const commercial = statistics.commercial;
+  const commercial = reportStatistics.commercial;
 
   return (
     <div className="space-y-6">
@@ -146,30 +145,30 @@ function StatisticsContent() {
               Esta superficie resume el comportamiento del evento activo con los indicadores que ya alimentan el workspace.
             </p>
           </div>
-          <StatusBadge variant="info">{statistics.metrics.length} métricas</StatusBadge>
+          <StatusBadge variant="info">{reportStatistics.metrics.length} métricas</StatusBadge>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {statistics.metrics.map((metric) => (
+          {reportStatistics.metrics.map((metric) => (
             <MetricCard key={metric.label} label={metric.label} value={metric.value} detail={metric.detail} tone={metric.tone} />
           ))}
         </div>
       </section>
 
-      {commercial ? <section className="surface-panel p-5">
+      <section className="surface-panel p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="kicker">Valor comercial registrado</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Consolidado histórico</h2>
           </div>
-          <p className="text-2xl font-semibold text-white">{commercial.currency} {commercial.totals.commercialValue.toLocaleString("es-BO")}</p>
+          <p className="text-2xl font-semibold text-white">{displayMoney(commercial.total)}</p>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            ["Mesas", `${commercial.currency} ${commercial.mesa.value.toLocaleString("es-BO")}`],
-            ["Preventa", `${commercial.currency} ${commercial.presale.value.toLocaleString("es-BO")}`],
-            ["Manillas extra", `${commercial.currency} ${commercial.extraWristbands.value.toLocaleString("es-BO")}`],
-            ["Cortesías", `${commercial.courtesy.people} personas`],
+            ["Mesas", displayMoney(commercial.mesas.value)],
+            ["Preventa", displayMoney(commercial.presales.value)],
+            ["Manillas extra", displayMoney(commercial.extraWristbands.value)],
+            ["Cortesías", `${commercial.courtesies.people} personas`],
           ].map(([label, value]) => (
             <div key={label} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
               <p className="text-sm text-slate-400">{label}</p>
@@ -177,8 +176,13 @@ function StatisticsContent() {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-sm text-slate-400">Personas registradas: {commercial.totals.registeredPeople}</p>
-      </section> : null}
+        <p className="mt-4 text-sm text-slate-400">Personas operativas: {eventReport.summary.operationalPeople}</p>
+        {reportStatistics.diagnostics.hasRelevantDiagnostics ? (
+          <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/8 px-3 py-2 text-sm text-amber-100">
+            Datos incompletos: revisá los diagnósticos comerciales o de recursos históricos del evento.
+          </p>
+        ) : null}
+      </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <div className="surface-panel p-5">
@@ -296,18 +300,18 @@ function StatisticsContent() {
               <p className="kicker">Capacidad operativa</p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Distribución del evento</h2>
             </div>
-            <StatusBadge variant="info">{occupancy}%</StatusBadge>
+            <StatusBadge variant="info">{reportStatistics.capacity.occupancyPercent}%</StatusBadge>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {tableSummaries.slice(0, 4).map((table) => (
-              <div key={table.id} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-sm font-medium text-white">{table.name}</p>
-                <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-500">{table.status}</p>
+            {reportStatistics.resources.slice(0, 4).map((resource) => (
+              <div key={resource.resourceId} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-sm font-medium text-white">{resource.resourceName}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-500">{resource.sectorName ?? "Sin zona"}</p>
                 <p className="mt-3 text-sm text-slate-300">
-                  {table.metrics.assignedGuests}/{table.capacity} ocupados
+                  {resource.capacityAssigned}/{resource.physicalCapacity} ocupados
                 </p>
-                <p className="mt-1 text-xs text-slate-500">Restantes: {table.metrics.capacityRemaining}</p>
+                <p className="mt-1 text-xs text-slate-500">Restantes: {resource.capacityRemaining}</p>
               </div>
             ))}
           </div>
@@ -319,10 +323,10 @@ function StatisticsContent() {
 
           <div className="mt-5 space-y-3">
             {[
-              ["Reservas", currentEventSummary.reservations],
-              ["Invitados", currentEventSummary.expectedGuests],
-              ["Ingresados", currentEventSummary.checkedIn],
-              ["Pendientes", currentEventSummary.pending],
+              ["Reservas", eventReport.summary.activeReservations],
+              ["Invitados", eventReport.summary.operationalPeople],
+              ["Ingresados", eventReport.summary.checkedInPeople],
+              ["Pendientes", eventReport.summary.pendingPeople],
               ["Atención", workspaceIntelligence.dashboard.summaryMetrics.find((item) => item.label === "Atención")?.value ?? "0"],
             ].map(([label, value]) => (
               <div key={label} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">

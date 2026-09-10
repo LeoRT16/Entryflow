@@ -127,6 +127,21 @@ type EventLayoutResourceRepository = SupabaseCrudRepository<EventLayoutResource>
   getByEventLayout(eventLayoutId: string): Promise<EventLayoutResource[]>;
 };
 
+export async function softDeleteResource(
+  client: SupabaseClient<Database>,
+  resourceId: string,
+) {
+  const { data, error } = await client.rpc("soft_delete_resource" as never, {
+    p_resource_id: resourceId,
+  } as never);
+
+  if (error) {
+    throw error;
+  }
+
+  return data === true;
+}
+
 function createNoopCrudRepository<TEntity>(): SupabaseCrudRepository<TEntity> {
   const unavailable = async () => {
     throw new Error("Supabase client is unavailable.");
@@ -845,6 +860,13 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     },
     resources: {
       ...resources,
+      async delete(resourceId: string) {
+        if (!client) {
+          return resources.delete(resourceId);
+        }
+
+        return softDeleteResource(client, resourceId);
+      },
       async setStatus(resourceId: string, status: Resource["status"]) {
         if (!client) {
           return;

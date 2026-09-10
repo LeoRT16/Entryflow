@@ -7,6 +7,7 @@ import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
 import ResourceReservationModal from "@/features/tables/components/resource-reservation-modal";
 import { getPrimaryActiveTableReservation } from "@/features/tables/domain/table-domain";
+import { canDeleteResource } from "@/features/tables/domain/resource-lifecycle";
 import { canPersistResourceName } from "@/features/tables/domain/resource-validation";
 import { getVenuesForOrganization } from "@/features/domain/selectors";
 import {
@@ -84,7 +85,7 @@ export default function TablesFlow() {
 }
 
 function TablesFlowWorkspace() {
-  const { showToast } = useFeedback();
+  const { confirm, showToast } = useFeedback();
   const {
     currentOrganization,
     currentEvent,
@@ -97,6 +98,8 @@ function TablesFlowWorkspace() {
     eventLayoutResources,
     reservations,
     guests,
+    tables,
+    timelineEvents,
     tableSummaries,
     venues,
     sectors,
@@ -109,6 +112,7 @@ function TablesFlowWorkspace() {
     createResource,
     updateResource,
     setResourceStatus,
+    deleteResource,
     moveResourceToSector,
   } = useCheckInStore();
   const router = useRouter();
@@ -972,6 +976,15 @@ function TablesFlowWorkspace() {
                     reservations,
                     currentEvent.id,
                   );
+                  const deleteDecision = canDeleteResource({
+                    resourceId: resource.id,
+                    reservations,
+                    guests,
+                    venueLayoutResources,
+                    eventLayoutResources,
+                    tables,
+                    timelineEvents,
+                  });
 
                   return (
                     <article
@@ -1073,6 +1086,50 @@ function TablesFlowWorkspace() {
                           className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white"
                         >
                           {resource.status === "Closed" ? "Activar" : "Desactivar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (isTerminalEvent) {
+                              showToast({
+                                title: "Evento cerrado",
+                                description: "No puedes eliminar un espacio desde un evento cerrado.",
+                                tone: "warning",
+                              });
+                              return;
+                            }
+                            if (!deleteDecision.allowed) {
+                              showToast({
+                                title: "No se puede eliminar",
+                                description: "Este espacio ya tiene historial asociado. Puedes desactivarlo, pero no eliminarlo.",
+                                tone: "warning",
+                              });
+                              return;
+                            }
+                            confirm({
+                              title: "Eliminar espacio",
+                              description: `${resource.name} desaparecerá del inventario porque nunca tuvo uso.`,
+                              confirmLabel: "Eliminar espacio",
+                              tone: "danger",
+                              onConfirm: () => {
+                                void deleteResource(resource.id)
+                                  .then(() => showToast({
+                                    title: "Espacio eliminado",
+                                    description: `${resource.name} ya no forma parte del inventario.`,
+                                    tone: "success",
+                                  }))
+                                  .catch((error: unknown) => showToast({
+                                    title: "No se pudo eliminar",
+                                    description: error instanceof Error ? error.message : "No se pudo eliminar el espacio.",
+                                    tone: "error",
+                                  }));
+                              },
+                            });
+                          }}
+                          className="rounded-full border border-rose-400/25 bg-rose-400/10 px-3 py-1.5 text-xs font-medium text-rose-100"
+                        >
+                          Eliminar
                         </button>
                       </div>
                     </article>

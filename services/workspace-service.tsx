@@ -71,6 +71,7 @@ import type {
 } from "@/features/reservations/types";
 import type { ExtraWristbandPerson, ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
 import { buildTableSummaries } from "@/features/tables/domain/table-domain";
+import { canDeleteResource, runOptimisticResourceDelete } from "@/features/tables/domain/resource-lifecycle";
 import type { TableRecord, TableSummary } from "@/features/tables/types";
 import type { CheckIn, CheckInAttempt, CheckInMethod, Event as LegacyEvent, Guest } from "@/features/check-in/types";
 import type { TimelineEvent } from "@/features/timeline/types";
@@ -96,6 +97,8 @@ import {
 import { buildWorkspaceIntelligence, type WorkspaceIntelligence } from "@/domain/workspace-intelligence";
 import { isCompleteGuestDraft } from "@/features/reservations/domain/reservation-draft";
 import { buildWorkspacePrioritySnapshot, type WorkspacePrioritySnapshot } from "@/domain/workspace-priority";
+import { buildEventReport } from "@/features/reporting/domain/event-report";
+import type { EventReport } from "@/features/reporting/types";
 import { clearInvalidSupabaseBrowserSession, getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/helpers";
 import { createUuid, nowIso } from "@/lib/supabase/helpers";
@@ -265,6 +268,7 @@ type WorkspaceServiceValue = {
   checkIns: CheckIn[];
   attempts: CheckInAttempt[];
   timelineEvents: TimelineEvent[];
+  eventReport: EventReport;
   workspaceIntelligence: WorkspaceIntelligence;
   workspacePriority: WorkspacePrioritySnapshot;
   dashboard: WorkspaceIntelligence["dashboard"];
@@ -304,6 +308,7 @@ type WorkspaceServiceValue = {
   createResource: (resource: Resource) => Promise<Resource>;
   updateResource: (resource: Resource) => Promise<Resource>;
   setResourceStatus: (resourceId: string, status: Resource["status"]) => Promise<void>;
+  deleteResource: (resourceId: string) => Promise<void>;
   moveResourceToSector: (resourceId: string, sectorId: string) => Promise<void>;
   findGuestByQuery: (query: string) => Guest | null;
   searchGuests: (query: string) => Guest[];
@@ -1720,6 +1725,27 @@ export function WorkspaceServiceProvider({
     return mergeTimelineEvents(persistedScoped, syntheticTimelineEvents);
   }, [currentEvent.id, currentEventGuests, currentEventReservations, persistedTimelineEvents, syntheticTimelineEvents]);
 
+  const eventReport = useMemo(
+    () => buildEventReport({
+      organization: currentOrganization,
+      event: currentEvent,
+      ...(currentVenue ? { venue: currentVenue } : {}),
+      resources,
+      sectors,
+      tables,
+      eventLayouts,
+      eventLayoutResources,
+      eventLayoutSectors,
+      reservations,
+      guests,
+      extraWristbandSales,
+      checkIns,
+      timelineEvents: persistedTimelineEvents,
+      generatedAt: nowIso(),
+    }),
+    [checkIns, currentEvent, currentOrganization, currentVenue, eventLayoutResources, eventLayoutSectors, eventLayouts, extraWristbandSales, guests, persistedTimelineEvents, reservations, resources, sectors, tables],
+  );
+
   const workspaceIntelligence = useMemo(
     () =>
       buildWorkspaceIntelligence({
@@ -2209,6 +2235,33 @@ export function WorkspaceServiceProvider({
       await repositories.resources.setStatus(resourceId, status).catch(() => restoreSnapshot(snapshot));
     },
     [captureSnapshot, repositories.resources, requirePermission, restoreSnapshot],
+  );
+
+  const deleteResource = useCallback(
+    async (resourceId: string) => {
+      requirePermission("resource.manage");
+      const decision = canDeleteResource({
+        resourceId,
+        reservations,
+        guests,
+        venueLayoutResources,
+        eventLayoutResources,
+        tables,
+        timelineEvents: persistedTimelineEvents,
+      });
+      if (!decision.allowed) {
+        throw new Error("Este espacio ya tiene historial asociado. Puedes desactivarlo, pero no eliminarlo.");
+      }
+
+      const snapshot = captureSnapshot();
+      await runOptimisticResourceDelete({
+        resourceId,
+        removeOptimistically: () => setResources((current) => current.filter((resource) => resource.id !== resourceId)),
+        persistDelete: repositories.resources.delete,
+        restoreSnapshot: () => restoreSnapshot(snapshot),
+      });
+    },
+    [captureSnapshot, eventLayoutResources, guests, persistedTimelineEvents, repositories.resources, requirePermission, reservations, restoreSnapshot, tables, venueLayoutResources],
   );
 
   const moveResourceToSector = useCallback(
@@ -4140,6 +4193,7 @@ export function WorkspaceServiceProvider({
       checkIns,
       attempts,
       timelineEvents,
+      eventReport,
       workspaceIntelligence,
       workspacePriority,
       dashboard,
@@ -4161,6 +4215,7 @@ export function WorkspaceServiceProvider({
       createResource,
       updateResource,
       setResourceStatus,
+      deleteResource,
       moveResourceToSector,
       setReservationStatus,
       findGuestByQuery,
@@ -4240,6 +4295,7 @@ export function WorkspaceServiceProvider({
       dashboard,
       error,
       events,
+      eventReport,
       extraWristbandSales,
       effectivePermissions,
       findGuestByQuery,
@@ -4265,6 +4321,7 @@ export function WorkspaceServiceProvider({
       moveResourceToSector,
       setAccountStatus,
       deleteAccount,
+      deleteResource,
       createVenue,
       updateVenue,
       createSector,

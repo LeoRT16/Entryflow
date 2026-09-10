@@ -27,7 +27,7 @@ type BuildCommercialSummaryInput = {
   currency?: string;
 };
 
-function isCommerciallyRegistered(reservation: ReservationRecord) {
+export function isCommerciallyRegistered(reservation: ReservationRecord) {
   const status = normalizeReservationStatus(reservation.status);
   return status !== "Cancelled" && status !== "Draft";
 }
@@ -36,10 +36,26 @@ function isActiveGuest(guest: Guest) {
   return isOperationalReservationGuest(guest);
 }
 
-function snapshotValue(reservation: ReservationRecord, saleType: "reservation" | "presale") {
+export function getReservationCommercialSnapshotValue(reservation: ReservationRecord, saleType: "reservation" | "presale") {
   const snapshot = reservation.commercialSnapshot;
   if (!snapshot || (saleType === "presale" && snapshot.saleType !== "presale")) return null;
   return saleType === "presale" ? snapshot.totalPrice ?? null : snapshot.reservationPrice;
+}
+
+export function getActiveExtraWristbandSales({
+  eventId,
+  reservations,
+  extraWristbandSales,
+}: Pick<BuildCommercialSummaryInput, "eventId" | "reservations" | "extraWristbandSales">) {
+  const commerciallyRegisteredIds = new Set(
+    reservations
+      .filter((reservation) => reservation.eventId === eventId && reservation.reservationType === "Mesa" && isCommerciallyRegistered(reservation))
+      .map((reservation) => reservation.id),
+  );
+
+  return extraWristbandSales.filter(
+    (sale) => sale.eventId === eventId && sale.status === "active" && commerciallyRegisteredIds.has(sale.reservationId),
+  );
 }
 
 export function buildCommercialSummary({
@@ -54,10 +70,7 @@ export function buildCommercialSummary({
   const validReservationIds = new Set(validReservations.map((reservation) => reservation.id));
   const eventGuests = guests.filter((guest) => guest.eventId === eventId && validReservationIds.has(guest.reservationId));
   const activeGuests = eventGuests.filter(isActiveGuest);
-  const reservationById = new Map(eventReservations.map((reservation) => [reservation.id, reservation]));
-  const activeSales = extraWristbandSales.filter(
-    (sale) => sale.eventId === eventId && sale.status === "active" && reservationById.get(sale.reservationId)?.reservationType === "Mesa",
-  );
+  const activeSales = getActiveExtraWristbandSales({ eventId, reservations: eventReservations, extraWristbandSales });
   const activeSaleIds = new Set(activeSales.map((sale) => sale.id));
   const mesaReservations = validReservations.filter((reservation) => reservation.reservationType === "Mesa");
   const presaleReservations = validReservations.filter((reservation) => reservation.reservationType === "Preventa");
@@ -68,7 +81,7 @@ export function buildCommercialSummary({
   for (const reservation of validReservations) {
     const snapshot = reservation.commercialSnapshot;
     if (snapshot?.currency) currencies.add(snapshot.currency);
-    if ((reservation.reservationType === "Mesa" || reservation.reservationType === "Preventa") && snapshotValue(reservation, reservation.reservationType === "Preventa" ? "presale" : "reservation") === null) {
+    if ((reservation.reservationType === "Mesa" || reservation.reservationType === "Preventa") && getReservationCommercialSnapshotValue(reservation, reservation.reservationType === "Preventa" ? "presale" : "reservation") === null) {
       diagnostics.missingHistoricalValue += 1;
     }
   }
@@ -81,7 +94,7 @@ export function buildCommercialSummary({
   const canSumValues = currencies.size <= 1;
   const sumReservations = (items: ReservationRecord[], saleType: "reservation" | "presale") =>
     canSumValues
-      ? items.reduce((total, reservation) => total + (snapshotValue(reservation, saleType) ?? 0), 0)
+      ? items.reduce((total, reservation) => total + (getReservationCommercialSnapshotValue(reservation, saleType) ?? 0), 0)
       : 0;
   const guestsFor = (reservationIds: Set<string>, predicate?: (guest: Guest) => boolean) =>
     activeGuests.filter((guest) => reservationIds.has(guest.reservationId) && (!predicate || predicate(guest)));

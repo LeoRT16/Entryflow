@@ -134,6 +134,10 @@ test("tenant ownership guards keep event, reservation, guest, and table writes s
   assert.throws(() => assertEventWriteOwnership(buildEvent({ venueId: "venue-b" }), "org-a", [currentVenue, otherVenue]), /venue seleccionado/);
 
   assert.equal(findTableInCurrentEventContext([currentTable], currentTable.id, currentEvent, currentVenue).id, currentTable.id);
+  assert.throws(
+    () => findTableInCurrentEventContext([{ ...currentTable, status: "Closed", closed: true }], currentTable.id, currentEvent, currentVenue),
+    /desactivado o bloqueado/,
+  );
   assert.doesNotThrow(() => assertTableInCurrentEventContext(currentTable, currentEvent, currentVenue));
   assert.throws(() => assertTableInCurrentEventContext(foreignTable, currentEvent, currentVenue), /mesa seleccionada/);
 
