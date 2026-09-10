@@ -142,6 +142,29 @@ export async function softDeleteResource(
   return data === true;
 }
 
+async function runBooleanLifecycleRpc(
+  client: SupabaseClient<Database>,
+  name: "soft_delete_guest" | "soft_delete_reservation" | "cancel_reservation_atomic",
+  argument: "p_guest_id" | "p_reservation_id",
+  id: string,
+) {
+  const { data, error } = await client.rpc(name as never, { [argument]: id } as never);
+  if (error) throw error;
+  return data === true;
+}
+
+export function softDeleteGuest(client: SupabaseClient<Database>, guestId: string) {
+  return runBooleanLifecycleRpc(client, "soft_delete_guest", "p_guest_id", guestId);
+}
+
+export function softDeleteReservation(client: SupabaseClient<Database>, reservationId: string) {
+  return runBooleanLifecycleRpc(client, "soft_delete_reservation", "p_reservation_id", reservationId);
+}
+
+export function cancelReservationAtomic(client: SupabaseClient<Database>, reservationId: string) {
+  return runBooleanLifecycleRpc(client, "cancel_reservation_atomic", "p_reservation_id", reservationId);
+}
+
 function createNoopCrudRepository<TEntity>(): SupabaseCrudRepository<TEntity> {
   const unavailable = async () => {
     throw new Error("Supabase client is unavailable.");
@@ -192,6 +215,7 @@ type SupabaseWorkspaceRepositories = {
     addGuest(reservationId: string, guest: ReservationGuestInput): Promise<void>;
     addGuestAtomic(input: { reservationId: string; guest: Guest; courtesyEvent?: TimelineEvent; accessEvent: TimelineEvent }): Promise<Guest>;
     cancelGuestAtomic(input: { reservationId: string; guestId: string; reason: string }): Promise<{ guest: Guest; timelineEvent: TimelineEvent }>;
+    cancelAtomic(reservationId: string): Promise<boolean>;
     updateGuest(params: { reservationId: string; guestId: string; action: ReservationGuestAction }): Promise<void>;
     setStatus(reservationId: string, status: ReservationStatus): Promise<void>;
     assignToTable(reservationId: string, tableId: string): Promise<void>;
@@ -771,6 +795,11 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     toRow: mapGuestToRow,
   }) as SupabaseWorkspaceRepositories["guests"];
 
+  guests.delete = async (guestId: string) => {
+    if (!client) throw new Error("Supabase client is unavailable.");
+    return softDeleteGuest(client, guestId);
+  };
+
   guests.createWithAccessOrdinal = async (guest) => {
     if (!client) throw new Error("Supabase client is unavailable.");
 
@@ -901,6 +930,14 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     },
     reservations: {
       ...reservations,
+      async delete(reservationId: string) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        return softDeleteReservation(client, reservationId);
+      },
+      async cancelAtomic(reservationId: string) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        return cancelReservationAtomic(client, reservationId);
+      },
       async cancelGuestAtomic({ reservationId, guestId, reason }) {
         if (!client) throw new Error("Supabase client is unavailable.");
 

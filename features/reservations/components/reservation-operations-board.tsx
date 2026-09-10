@@ -46,6 +46,7 @@ type ReservationOperationsBoardProps = {
   activeReservationId: string;
   isTerminalEvent?: boolean;
   canEditGuest: boolean;
+  canRemoveGuest: boolean;
   canEditReservation: boolean;
   canDeleteReservation: boolean;
   canIssueWhatsAppInvitations: boolean;
@@ -53,14 +54,14 @@ type ReservationOperationsBoardProps = {
   onSelectReservation: (reservationId: string) => void;
   onEditReservation: (reservationId: string) => void;
   onDeleteReservation: (reservationId: string) => Promise<void>;
-  onCancelReservation: (reservationId: string) => void;
+  onCancelReservation: (reservationId: string) => Promise<void>;
   onMarkConfirmed: (reservationId: string) => void;
   onAddGuest: (reservationId: string, guest: ReservationGuestInput) => Promise<void>;
   onGuestAction: (params: {
     reservationId: string;
     guestId: string;
     action: ReservationGuestAction;
-  }) => void;
+  }) => Promise<void>;
   onRegisterCheckIn: (reservationId: string, guestId: string) => Promise<void>;
   onEditGuest: (guestId: string) => void;
   extraWristbandSales: ExtraWristbandSale[];
@@ -156,6 +157,7 @@ export default function ReservationOperationsBoard({
   onRegisterCheckIn,
   onEditGuest,
   canEditGuest,
+  canRemoveGuest,
   canEditReservation,
   canDeleteReservation,
   canIssueWhatsAppInvitations,
@@ -778,9 +780,9 @@ export default function ReservationOperationsBoard({
                         type="button"
                         onClick={() =>
                           confirm({
-                            title: "Eliminar reserva",
-                            description: `Vas a eliminar ${activeReservation.name}. Se liberará ${activeReservation.tableName} y los invitados asociados dejarán de mostrarse.`,
-                            confirmLabel: "Eliminar reserva",
+                            title: "Eliminar borrador",
+                            description: `Vas a eliminar ${activeReservation.name}. Este borrador no tiene actividad registrada.`,
+                            confirmLabel: "Eliminar borrador",
                             cancelLabel: "Cancelar",
                             tone: "danger",
                             onConfirm: () => {
@@ -790,7 +792,19 @@ export default function ReservationOperationsBoard({
                         }
                         className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 text-sm font-medium text-rose-50 transition hover:bg-rose-400/15"
                       >
-                        Eliminar reserva
+                        Eliminar borrador
+                      </button>
+                    ) : activeReservation.status === "Draft" ? (
+                      <button
+                        type="button"
+                        onClick={() => showToast({
+                          title: "Borrador con información",
+                          description: "Este borrador contiene información que debe preservarse y no puede eliminarse.",
+                          tone: "warning",
+                        })}
+                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-300"
+                      >
+                        Borrador no eliminable
                       </button>
                     ) : (
                       <button
@@ -803,7 +817,7 @@ export default function ReservationOperationsBoard({
                             cancelLabel: "Cancelar",
                             tone: "warning",
                             onConfirm: () => {
-                              onCancelReservation(activeReservation.id);
+                              void onCancelReservation(activeReservation.id);
                             },
                           })
                         }
@@ -973,7 +987,7 @@ export default function ReservationOperationsBoard({
                   guest={guest}
                   eventTerminal={isTerminalEvent}
                   canEditGuest={canEditGuest}
-                  allowRemove={activeReservation.reservationType !== "Preventa" && activeReservation.reservationType !== "Cortesía"}
+                  allowRemove={canRemoveGuest && activeReservation.reservationType !== "Preventa" && activeReservation.reservationType !== "Cortesía"}
                   onEdit={() => onEditGuest(guest.id)}
                   onConfirm={() => {
                     onGuestAction({ reservationId: activeReservation.id, guestId: guest.id, action: "confirm" });
@@ -1188,7 +1202,7 @@ function ReservationGuestRow({
   onRevert: () => void;
   onRemove: () => void;
 }) {
-  const { showToast } = useFeedback();
+  const { confirm, showToast } = useFeedback();
   const actionVisibility = getReservationGuestActionVisibility(reservationStatus, guest, eventTerminal);
   const canHardDelete = canHardDeleteGuest(guest);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
@@ -1224,12 +1238,27 @@ function ReservationGuestRow({
           onSelect: onCancel,
         }
       : null,
-    allowRemove && actionVisibility.showRemove && canHardDelete
+    allowRemove && actionVisibility.showRemove
       ? {
           id: "remove",
           label: "Eliminar",
           tone: "danger",
-          onSelect: onRemove,
+          onSelect: canHardDelete
+            ? () => confirm({
+                title: "Eliminar invitado",
+                description: "Este invitado no tiene actividad registrada. Se eliminará de la reserva.",
+                confirmLabel: "Eliminar invitado",
+                cancelLabel: "Cancelar",
+                tone: "danger",
+                onConfirm: onRemove,
+              })
+            : () => showToast({
+                title: "Invitado con historial",
+                description: guest.admissionStatus === "Ingresó"
+                  ? "Este invitado ya ingresó y debe conservarse como historia."
+                  : "Este invitado ya tiene actividad registrada. Puedes cancelarlo para conservar el historial.",
+                tone: "warning",
+              }),
         }
       : null,
   ].filter((item): item is GuestOverflowActionItem => item !== null);

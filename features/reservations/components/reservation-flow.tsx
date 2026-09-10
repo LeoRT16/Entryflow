@@ -81,6 +81,7 @@ type ReservationFlowWorkspaceProps = Pick<
   | "createReservation"
   | "updateReservation"
   | "deleteReservation"
+  | "cancelReservation"
   | "appendReservationGuests"
   | "addReservationGuest"
   | "updateReservationGuest"
@@ -146,6 +147,7 @@ export default function ReservationFlow() {
       createReservation={store.createReservation}
       updateReservation={store.updateReservation}
       deleteReservation={store.deleteReservation}
+      cancelReservation={store.cancelReservation}
       appendReservationGuests={store.appendReservationGuests}
       addReservationGuest={store.addReservationGuest}
       updateReservationGuest={store.updateReservationGuest}
@@ -179,6 +181,7 @@ function ReservationFlowWorkspace({
   createReservation,
   updateReservation,
   deleteReservation,
+  cancelReservation,
   appendReservationGuests,
   addReservationGuest,
   updateReservationGuest,
@@ -1143,12 +1146,15 @@ function ReservationFlowWorkspace({
     [deleteReservation, prioritizedReservations, setActiveReservationId, showToast],
   );
 
-  const handleCancelReservation = useCallback(
-    (reservationId: string) => {
-      setReservationStatus(reservationId, "Cancelled");
-    },
-    [setReservationStatus],
-  );
+  const handleCancelReservation = useCallback(async (reservationId: string) => {
+    try {
+      const cancelledReservation = await cancelReservation(reservationId);
+      if (!cancelledReservation) return;
+      showToast({ title: "Reserva cancelada", description: `${cancelledReservation.name} quedó preservada como historia.`, tone: "success" });
+    } catch (error) {
+      showToast({ title: "No se pudo cancelar la reserva", description: error instanceof Error ? error.message : "Supabase rechazó la cancelación.", tone: "error" });
+    }
+  }, [cancelReservation, showToast]);
 
   return (
     <div className="space-y-6">
@@ -1222,8 +1228,16 @@ function ReservationFlowWorkspace({
           onAddGuest={async (reservationId, guest) => {
             await addReservationGuest(reservationId, guest);
           }}
-          onGuestAction={(params) => {
-            updateReservationGuest(params);
+          onGuestAction={async (params) => {
+            try {
+              await updateReservationGuest(params);
+            } catch (error) {
+              showToast({
+                title: params.action === "remove" ? "No se pudo eliminar el invitado" : "No se pudo actualizar el invitado",
+                description: error instanceof Error ? error.message : "Supabase rechazó la operación.",
+                tone: "error",
+              });
+            }
           }}
           onRegisterCheckIn={async (reservationId, guestId) => {
             const reservation = reservationSummaries.find((item) => item.id === reservationId);
@@ -1240,6 +1254,7 @@ function ReservationFlowWorkspace({
             });
           }}
           canEditGuest={canEditGuest}
+          canRemoveGuest={can("guest.remove")}
           onEditGuest={(guestId) => {
             setEditingGuestId(guestId);
           }}

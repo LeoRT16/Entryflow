@@ -81,9 +81,10 @@ test("guest hard delete only stays available before WhatsApp or check-in activit
   assert.equal(canHardDeleteGuest({ admissionStatus: "Ingresó", deliveryStatus: "Pendiente de envío" }), false);
 });
 
-test("reservation hard delete is reserved for empty reservations", () => {
-  assert.equal(canHardDeleteReservation({ guests: [] }), true);
-  assert.equal(canHardDeleteReservation({ guests: [{ id: "guest-1" }] as never }), false);
+test("reservation hard delete is reserved for empty Drafts", () => {
+  assert.equal(canHardDeleteReservation({ status: "Draft", guests: [], timeline: [] }), true);
+  assert.equal(canHardDeleteReservation({ status: "Pending", guests: [], timeline: [] }), false);
+  assert.equal(canHardDeleteReservation({ status: "Draft", guests: [{ id: "guest-1" }] as never, timeline: [] }), false);
 });
 
 test("reservation operations board exposes edit and delete actions for active reservations", () => {
@@ -106,7 +107,8 @@ test("reservation operations board exposes edit and delete actions for active re
   assert.match(source, /hasReservationGuests/);
   assert.match(source, /canIssueWhatsAppInvitations && hasReservationGuests/);
   assert.match(source, /sendReservationWhatsAppInvitation/);
-  assert.match(source, /confirm\(\{\s*title:\s*"Eliminar reserva"/);
+  assert.match(source, /confirm\(\{\s*title:\s*"Eliminar borrador"/);
+  assert.match(source, /title: "Eliminar invitado"/);
   assert.match(source, /onEditReservation/);
   assert.match(source, /onDeleteReservation/);
   assert.doesNotMatch(source, /bulkPreviewGuestId/);

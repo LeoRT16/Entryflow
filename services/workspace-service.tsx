@@ -59,6 +59,12 @@ import {
   resolveReservationPaymentDraft,
   updateReservationStatusFromGuests,
 } from "@/features/reservations/domain/reservation-domain";
+import {
+  canCancelReservation,
+  canDeleteGuest,
+  canDeleteReservation,
+  describeReservationLifecycleError,
+} from "@/features/reservations/domain/reservation-deletion";
 import type {
   ReservationCreationInput,
   ReservationGuestAction,
@@ -325,6 +331,7 @@ type WorkspaceServiceValue = {
   createReservation: (input: ReservationCreationInput) => Promise<ReservationRecord | undefined>;
   updateReservation: (input: ReservationUpdateInput) => Promise<ReservationRecord | undefined>;
   deleteReservation: (reservationId: string) => Promise<ReservationRecord | undefined>;
+  cancelReservation: (reservationId: string) => Promise<ReservationRecord | undefined>;
   createOrganization: (organization: Organization) => Promise<Organization>;
   addReservationGuest: (reservationId: string, guest: ReservationGuestInput) => Promise<void>;
   appendReservationGuests: (reservationId: string, guests: ReservationGuestInput[]) => Promise<ReservationRecord | undefined>;
@@ -332,7 +339,7 @@ type WorkspaceServiceValue = {
     reservationId: string;
     guestId: string;
     action: ReservationGuestAction;
-  }) => void;
+  }) => Promise<void>;
   setReservationStatus: (reservationId: string, status: ReservationStatus) => void;
   assignReservationToTable: (reservationId: string, tableId: string) => void;
   moveGuestToTable: (guestId: string, tableId: string) => void;
@@ -2756,6 +2763,9 @@ export function WorkspaceServiceProvider({
 
         const nextGuestIds = nextGuestsWithAccess.map((guest) => guest.id);
         const removedGuests = existingGuests.slice(nextGuestCount);
+        if (removedGuests.length) {
+          throw new Error("Elimina cada invitado desde su acción individual para validar su historial antes de guardar la reserva.");
+        }
         const nextReservation: ReservationRecord = {
           ...reservation,
           eventId: currentEvent.id,
@@ -2827,10 +2837,6 @@ export function WorkspaceServiceProvider({
           ...current.filter((guest) => guest.reservationId !== reservation.id),
           ...persistedNextGuests,
         ]);
-        for (const guest of removedGuests) {
-          await repositories.guests.delete(guest.id);
-        }
-
         notify({
           title: "Reserva actualizada",
           description: `${nextReservation.name} quedó sincronizada en Supabase.`,
@@ -2875,19 +2881,10 @@ export function WorkspaceServiceProvider({
         return undefined;
       }
 
-      if (isTerminalReservationStatus(reservation.status)) {
-        notify({
-          title: "Reserva cerrada",
-          description: "Esta reserva ya es histórica y no admite eliminación operativa.",
-          tone: "warning",
-          icon: "alert",
-          href: "/reservations",
-        });
-        return undefined;
-      }
+      const deleteDecision = canDeleteReservation({ reservation, guests, checkIns, timelineEvents: persistedTimelineEvents, extraWristbandSales });
+      if (!deleteDecision.allowed) throw new Error(deleteDecision.reason);
 
       const snapshot = captureSnapshot();
-      const reservationGuests = guests.filter((guest) => guest.reservationId === reservationId);
       const resourceId = reservation.resourceId ?? reservation.tableId ?? undefined;
       const remainingReservationsOnResource = resourceId
         ? reservations.some(
@@ -2906,18 +2903,41 @@ export function WorkspaceServiceProvider({
       }
 
       try {
-        await repositories.reservations.delete(reservationId);
-        await Promise.all([
-          ...reservationGuests.map((guest) => repositories.guests.delete(guest.id)),
-          resourceId && !remainingReservationsOnResource ? repositories.tables.release(resourceId) : Promise.resolve(),
-        ]);
+        const deleted = await repositories.reservations.delete(reservationId);
+        if (!deleted) throw new Error("No se pudo eliminar el borrador.");
+        await reloadWorkspace();
         return reservation;
       } catch (exception) {
         restoreSnapshot(snapshot);
-        throw exception;
+        throw new Error(describeReservationLifecycleError(exception, "No se pudo eliminar el borrador."));
       }
     },
-    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, repositories.tables, requirePermission, reservations, restoreSnapshot],
+    [captureSnapshot, checkIns, currentEvent, currentEvent.status, extraWristbandSales, guests, notify, persistedTimelineEvents, reloadWorkspace, repositories.reservations, requirePermission, reservations, restoreSnapshot],
+  );
+
+  const cancelReservation = useCallback(
+    async (reservationId: string) => {
+      requirePermission("reservation.cancel");
+      const reservation = reservations.find((item) => item.id === reservationId);
+      if (!reservation) return undefined;
+      assertReservationInCurrentEvent(reservation, currentEvent);
+      if (isTerminalEventStatus(currentEvent.status)) throw new Error("No puedes cancelar reservas sobre un evento cerrado.");
+
+      const cancelDecision = canCancelReservation(reservation, extraWristbandSales);
+      if (!cancelDecision.allowed) throw new Error(cancelDecision.reason);
+
+      const snapshot = captureSnapshot();
+      try {
+        const cancelled = await repositories.reservations.cancelAtomic(reservationId);
+        if (!cancelled) throw new Error("No se pudo cancelar la reserva.");
+        await reloadWorkspace();
+        return { ...reservation, status: "Cancelled" as const };
+      } catch (exception) {
+        restoreSnapshot(snapshot);
+        throw new Error(describeReservationLifecycleError(exception, "No se pudo cancelar la reserva."));
+      }
+    },
+    [captureSnapshot, currentEvent, currentEvent.status, extraWristbandSales, reloadWorkspace, repositories.reservations, requirePermission, reservations, restoreSnapshot],
   );
 
   const appendReservationGuests = useCallback(
@@ -3218,7 +3238,7 @@ export function WorkspaceServiceProvider({
       guestId: string;
       action: ReservationGuestAction;
     }) => {
-      requirePermission("reservation.edit");
+      requirePermission(action === "remove" ? "guest.remove" : "reservation.edit");
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) return;
       assertReservationInCurrentEvent(reservation, currentEvent);
@@ -3261,6 +3281,35 @@ export function WorkspaceServiceProvider({
         return;
       }
 
+      if (action === "remove" && targetGuest) {
+        const deleteDecision = canDeleteGuest({ guest: targetGuest, reservation, checkIns, timelineEvents: persistedTimelineEvents });
+        if (!deleteDecision.allowed) throw new Error(deleteDecision.reason);
+
+        const nextGuests = guests.filter((guest) => guest.id !== guestId);
+        setGuests(nextGuests);
+        setReservations((current) => current.map((item) => item.id === reservationId
+          ? { ...item, guestIds: item.guestIds.filter((id) => id !== guestId) }
+          : item));
+
+        try {
+          const deleted = await repositories.guests.delete(guestId);
+          if (!deleted) throw new Error("No se pudo eliminar el invitado.");
+          await reloadWorkspace();
+        } catch (exception) {
+          restoreSnapshot(snapshot);
+          throw new Error(describeReservationLifecycleError(exception, "No se pudo eliminar el invitado."));
+        }
+
+        notify({
+          title: "Invitado eliminado",
+          description: "Se retiró un invitado sin actividad de la reserva.",
+          tone: "warning",
+          icon: "guest",
+          href: "/reservations",
+        });
+        return;
+      }
+
       if (action === "cancel") {
         const cancellation = await repositories.reservations.cancelGuestAtomic({
           reservationId,
@@ -3294,10 +3343,7 @@ export function WorkspaceServiceProvider({
         return;
       }
 
-      const nextGuests: Guest[] =
-        action === "remove"
-          ? guests.filter((guest) => guest.id !== guestId)
-          : guests.map((guest): Guest => {
+      const nextGuests: Guest[] = guests.map((guest): Guest => {
               if (guest.id !== guestId) return guest;
               if (action === "confirm") {
                 return {
@@ -3328,13 +3374,9 @@ export function WorkspaceServiceProvider({
 
       setGuests(nextGuests);
 
-      if (action === "remove") {
-        void repositories.guests.delete(guestId).catch(() => restoreSnapshot(snapshot));
-      } else {
-        const nextGuest = nextGuests.find((guest) => guest.id === guestId);
-        if (nextGuest) {
-          void repositories.guests.upsert(nextGuest).catch(() => restoreSnapshot(snapshot));
-        }
+      const nextGuest = nextGuests.find((guest) => guest.id === guestId);
+      if (nextGuest) {
+        void repositories.guests.upsert(nextGuest).catch(() => restoreSnapshot(snapshot));
       }
 
       setReservations((current) =>
@@ -3374,12 +3416,6 @@ export function WorkspaceServiceProvider({
         ),
       );
 
-      if (action === "remove") {
-        void repositories.reservations.update(reservationId, {
-          guestIds: nextGuests.filter((guest) => guest.reservationId === reservationId).map((guest) => guest.id),
-        } as never).catch(() => restoreSnapshot(snapshot));
-      }
-
       notify({
           title:
           action === "confirm"
@@ -3403,7 +3439,7 @@ export function WorkspaceServiceProvider({
         },
       });
     },
-    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, reloadWorkspace, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
+    [captureSnapshot, checkIns, currentEvent, currentEvent.status, guests, notify, persistedTimelineEvents, reloadWorkspace, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
   );
 
   const setReservationStatus = useCallback(
@@ -4224,6 +4260,7 @@ export function WorkspaceServiceProvider({
       createReservation,
       updateReservation,
       deleteReservation,
+      cancelReservation,
       createOrganization,
       appendReservationGuests,
       addReservationGuest,
@@ -4272,6 +4309,7 @@ export function WorkspaceServiceProvider({
       createReservation,
       updateReservation,
       deleteReservation,
+      cancelReservation,
       cancelExtraWristbandSaleMutation,
       currentEvent,
       currentEventId,
