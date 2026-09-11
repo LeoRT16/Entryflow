@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useFeedback } from "@/components/premium-feedback";
 import PermissionGuard from "@/components/permission-guard";
@@ -11,6 +11,9 @@ import { useCheckInStore } from "@/services/workspace-service";
 import { buildOrganizationSwitcherOptions } from "@/features/settings/domain/organization-settings";
 import { buildSlugFromName } from "@/lib/slug";
 import { formatTimezoneLabel, getDefaultTimezone } from "@/lib/timezone";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getReportingDestination, requestReportingSync, upsertReportingDestination } from "@/repositories/reporting-sync-repositories";
+import { buildReportingSyncStatus } from "@/features/reporting/sync/status";
 
 function Input({
   label,
@@ -61,7 +64,7 @@ function ReadOnlyField({
 }
 
 export default function SettingsPage() {
-  const { status, error, organizations, can, currentOrganization } = useCheckInStore();
+  const { status, error, organizations, can, currentOrganization, currentOrganizationId, currentEvent, browserAuthReady } = useCheckInStore();
   const canManageOrganization = can("organization.manage");
 
   if (status === "loading") {
@@ -90,10 +93,73 @@ export default function SettingsPage() {
       <PermissionGuard permission="settings.view">
         <section className="grid gap-4">
           <OrganizationSettingsCard key={currentOrganization.id} canManage={canManageOrganization} />
+          <GoogleSheetsSettingsCard eventId={currentEvent.id} organizationId={currentOrganizationId} authReady={browserAuthReady} canManage={canManageOrganization} />
         </section>
       </PermissionGuard>
     </div>
   );
+}
+
+function GoogleSheetsSettingsCard({ eventId, organizationId, authReady, canManage }: { eventId: string; organizationId: string; authReady: boolean; canManage: boolean }) {
+  const { showToast } = useFeedback();
+  const [destination, setDestination] = useState<Record<string, unknown> | null>(null);
+  const [draftSpreadsheetId, setDraftSpreadsheetId] = useState("");
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [busy, setBusy] = useState(false);
+  const mutationLockRef = useRef(false);
+  const requestVersion = useRef(0);
+  const loadedEventId = useRef("");
+  const client = getSupabaseBrowserClient();
+  const load = async () => {
+    if (!client || !authReady || !organizationId || !eventId) return;
+    const version = ++requestVersion.current;
+    if (loadedEventId.current && loadedEventId.current !== eventId) setDestination(null);
+    loadedEventId.current = eventId;
+    setLoadState("loading");
+    try {
+      const value = await getReportingDestination(client, eventId);
+      const next = value as Record<string, unknown> | null;
+      if (version !== requestVersion.current || loadedEventId.current !== eventId) return;
+      setDestination(next);
+      setDraftSpreadsheetId(String(next?.spreadsheet_id ?? ""));
+      setLoadState("ready");
+    } catch {
+      if (version === requestVersion.current && loadedEventId.current === eventId) setLoadState("error");
+    }
+  };
+  // The effect hydrates persisted integration state after the event context is ready.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(); }, [eventId, organizationId, authReady]);
+  const status = buildReportingSyncStatus({ destination: destination as never });
+  const persistedSpreadsheetId = String(destination?.spreadsheet_id ?? "");
+  const save = async (nextEnabled: boolean, nextSpreadsheetId: string, operation: "save" | "disable" | "enable") => {
+    if (!client || busy || mutationLockRef.current) return;
+    mutationLockRef.current = true;
+    setBusy(true);
+    const wasConfigured = status.configured;
+    const changedSheet = wasConfigured && persistedSpreadsheetId !== nextSpreadsheetId;
+    const shouldRequest = nextEnabled && (operation === "enable" || !wasConfigured || changedSheet);
+    const success = operation === "disable" ? { title: "Sincronización pausada", description: "La sincronización con Google Sheets está pausada." } : operation === "enable" ? { title: "Sincronización activada", description: "La sincronización con Google Sheets está activa." } : { title: wasConfigured ? "Hoja actualizada" : "Google Sheets conectado", description: "La configuración quedó actualizada." };
+    try {
+      const saved = await upsertReportingDestination(client, eventId, nextSpreadsheetId, nextEnabled);
+      setDestination((current) => ({ ...(current ?? {}), ...(saved ?? {}), enabled: nextEnabled, spreadsheet_id: nextSpreadsheetId, last_requested_sequence: Number((current?.last_requested_sequence as number | undefined) ?? 0) + (shouldRequest ? 1 : 0) }));
+      if (!shouldRequest) showToast({ ...success, tone: "success" });
+      if (shouldRequest) {
+        try {
+          await requestReportingSync(client, eventId);
+          showToast({ title: success.title, description: operation === "enable" ? "Se solicitó una nueva sincronización." : changedSheet ? "Se solicitó la sincronización de la nueva hoja." : "Se solicitó la primera sincronización.", tone: "success" });
+        } catch {
+          showToast({ title: "Google Sheets quedó configurado, pero no pudimos solicitar la sincronización.", description: "Puedes usar “Sincronizar ahora”.", tone: "warning" });
+        }
+      }
+      try { await load(); } catch { showToast({ title: "La configuración se guardó, pero no pudimos actualizar su estado.", description: "Actualiza la página para reconciliar el estado.", tone: "warning" }); }
+    } catch (error) {
+      showToast({ title: operation === "disable" ? "No pudimos pausar la sincronización" : operation === "enable" ? "No pudimos activar la sincronización" : "No pudimos guardar Google Sheets", description: error instanceof Error && error.message === "reporting_spreadsheet_required" ? "La hoja configurada no es válida." : "Revisá la conexión e inténtalo nuevamente.", tone: "error" });
+    } finally { mutationLockRef.current = false; setBusy(false); }
+  };
+  const sync = async () => { if (!client || busy || mutationLockRef.current) return; mutationLockRef.current = true; setBusy(true); try { await requestReportingSync(client, eventId); showToast({ title: "Sincronización solicitada", description: "Se procesará en segundo plano.", tone: "success" }); try { await load(); } catch { showToast({ title: "La solicitud se guardó, pero no pudimos actualizar su estado.", description: "Actualiza la página para reconciliar el estado.", tone: "warning" }); } } catch { showToast({ title: "No se pudo solicitar la sincronización", description: "Revisá la conexión e inténtalo nuevamente.", tone: "error" }); } finally { mutationLockRef.current = false; setBusy(false); } };
+  const title = loadState === "error" ? "No pudimos cargar Google Sheets" : status.enabled ? "Google Sheets guardado" : "No pudimos pausar la sincronización";
+  return <section className="surface-panel p-4 sm:p-5"><p className="kicker">Integraciones · Evento</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Google Sheets</h2><p className="mt-1 text-sm text-slate-400">{loadState === "loading" ? "Cargando integración…" : loadState === "error" ? "No pudimos cargar la integración de Google Sheets." : status.configured ? status.enabled ? "Google Sheets conectado" : "Sincronización pausada" : "No configurado"}</p><div className="mt-4 grid gap-3"><Input label="Spreadsheet ID" value={draftSpreadsheetId} onChange={setDraftSpreadsheetId} placeholder="ID de la hoja de Google Sheets" disabled={!canManage || busy || loadState !== "ready"} /><p className="text-xs text-slate-500">Comparte la hoja con el Service Account del entorno. Nunca introduzcas credenciales aquí.</p>{status.lastSuccessAt ? <p className="text-xs text-slate-400">Última sincronización exitosa: {new Date(status.lastSuccessAt).toLocaleString()}</p> : null}{status.error ? <p className="text-sm text-rose-300">No se pudo sincronizar: {status.error}</p> : null}<div className="flex flex-wrap gap-2">{loadState === "error" ? <button type="button" disabled={busy} onClick={() => void load()} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white">Reintentar</button> : null}{canManage && loadState === "ready" ? <button type="button" disabled={busy || !draftSpreadsheetId.trim()} onClick={() => void save(true, draftSpreadsheetId.trim(), "save")} className="inline-flex h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 disabled:opacity-50">{busy ? "Guardando…" : status.configured ? "Cambiar hoja" : "Guardar conexión"}</button> : null}{status.configured && canManage && loadState === "ready" ? <button type="button" disabled={busy || !persistedSpreadsheetId} onClick={() => void save(!status.enabled, persistedSpreadsheetId, status.enabled ? "disable" : "enable")} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white">{status.enabled ? "Desactivar" : "Activar"}</button> : null}{status.configured && status.enabled && loadState === "ready" ? <button type="button" disabled={busy} onClick={() => void sync()} className="inline-flex h-10 items-center rounded-xl border border-cyan-300/30 px-4 text-sm font-semibold text-cyan-200">Sincronizar ahora</button> : null}</div></div></section>;
 }
 
 function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {

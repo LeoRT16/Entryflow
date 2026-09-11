@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "reporting:google-test": "tsx scripts/reporting-google-test.ts",
+    "reporting:worker-test": "tsx scripts/reporting-worker-test.ts",
     "backfill:phase4": "node scripts/backfill-phase4.mjs dry-run",
     "backfill:phase4:apply": "node scripts/backfill-phase4.mjs apply",
     "backfill:phase4:rollback": "node scripts/backfill-phase4.mjs rollback",
@@ -17,6 +19,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
+    "googleapis": "^144.0.0",
     "html-to-image": "^1.11.13",
     "next": "16.3.0",
     "qrcode.react": "^4.2.0",
@@ -31,6 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

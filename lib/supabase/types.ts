@@ -34,6 +34,24 @@ export type SupabaseRowBase = {
   deleted_at: string | null;
 };
 
+export type ReportingDestinationRow = SupabaseRowBase & {
+  organization_id: string; event_id: string; provider: "google_sheets"; enabled: boolean;
+  spreadsheet_id: string | null; drive_folder_id: string | null; sheet_schema_version: number;
+  config: Json; last_requested_sequence: number; last_processed_sequence: number;
+  last_sync_at: string | null; last_success_at: string | null; last_error: string | null;
+};
+export type ReportingOutboxRow = SupabaseRowBase & {
+  destination_id: string; organization_id: string; event_id: string; requested_sequence: number;
+  status: "pending" | "processing" | "retry" | "synced" | "failed" | "dead"; attempts: number;
+  available_at: string; locked_at: string | null; locked_by: string | null; processed_at: string | null; last_error: string | null;
+};
+export type ReportingSyncRunRow = {
+  id: string; destination_id: string; organization_id: string; event_id: string; requested_sequence: number;
+  processed_sequence: number | null; dataset_hash: string | null; sheet_schema_version: number;
+  status: "processing" | "synced" | "retry" | "failed" | "dead"; attempt: number; started_at: string;
+  finished_at: string | null; error_code: string | null; error_message: string | null; created_at: string;
+};
+
 export type OrganizationRow = SupabaseRowBase & {
   name: string;
   slug: string;
@@ -489,6 +507,24 @@ export type Database = {
         Insert: Omit<RoleRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<RoleRow, "created_at" | "updated_at" | "deleted_at">>;
         Update: Partial<RoleRow>;
       };
+      reporting_destinations: {
+        Row: ReportingDestinationRow;
+        Insert: Omit<ReportingDestinationRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<ReportingDestinationRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<ReportingDestinationRow>;
+      };
+      reporting_outbox: {
+        Row: ReportingOutboxRow;
+        Insert: Omit<ReportingOutboxRow, "created_at" | "updated_at" | "deleted_at"> & Partial<Pick<ReportingOutboxRow, "created_at" | "updated_at" | "deleted_at">>;
+        Update: Partial<ReportingOutboxRow>;
+      };
+      reporting_sync_runs: {
+        Row: ReportingSyncRunRow;
+        Insert: Omit<ReportingSyncRunRow, "created_at"> & Partial<Pick<ReportingSyncRunRow, "created_at">>;
+        Update: Partial<ReportingSyncRunRow>;
+      };
+    };
+    Functions: {
+      request_reporting_sync: { Args: { p_event_id: string }; Returns: { outbox_id: string; destination_id: string; requested_sequence: number }[] };
     };
   };
 };

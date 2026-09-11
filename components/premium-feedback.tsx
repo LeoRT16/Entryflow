@@ -265,12 +265,6 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
         removeToast(id);
       }, toast.duration ?? 3600);
 
-      notify({
-        title: toast.title,
-        description: toast.description,
-        tone: toast.tone === "error" ? "danger" : toast.tone,
-        icon: toast.tone === "success" ? "check" : toast.tone === "warning" || toast.tone === "error" ? "alert" : "bell",
-      });
     },
     [notify, removeToast],
   );

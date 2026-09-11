@@ -19,6 +19,7 @@ import {
   validateGuestProfileUpdateInput,
 } from "@/features/customers/domain/customer-directory";
 import { searchGuests } from "@/features/check-in/domain/check-in-domain";
+import { requestReportingSyncAfterSuccess } from "@/features/reporting/sync/request-after-success";
 import type {
   Event as PlatformEvent,
   EventLayout,
@@ -369,6 +370,7 @@ type WorkspaceServiceValue = {
   setAttemptsState: Dispatch<SetStateAction<CheckInAttempt[]>>;
   repositories: SupabaseWorkspaceRepositories;
   status: WorkspaceServiceStatus;
+  browserAuthReady: boolean;
   error: Error | null;
   reloadWorkspace: () => Promise<void>;
 };
@@ -1080,6 +1082,9 @@ export function WorkspaceServiceProvider({
 }) {
   const { notify } = useFeedback();
   const repositories = useMemo(() => createSupabaseWorkspaceRepositories(getSupabaseBrowserClient()), []);
+  const requestReportingAfterSuccess = useCallback(async (eventId: string) => {
+    await requestReportingSyncAfterSuccess(getSupabaseBrowserClient(), eventId);
+  }, []);
 
   const [organizations, setOrganizations] = useState<Organization[]>(initialWorkspace?.organizations ?? []);
   const [venues, setVenues] = useState<Venue[]>(initialWorkspace?.venues ?? []);
@@ -1095,6 +1100,10 @@ export function WorkspaceServiceProvider({
   const [profiles, setProfiles] = useState<OrganizationMembership[]>(initialWorkspace?.profiles ?? []);
   const [roles, setRoles] = useState<AccountRolePreset[]>(initialWorkspace?.roles ?? []);
   const [events, setEvents] = useState<PlatformEvent[]>(initialWorkspace?.events ?? []);
+  const requestReportingForVenue = useCallback(async (venueId: string | undefined) => {
+    if (!venueId) return;
+    await Promise.all(events.filter((event) => event.venueId === venueId).map((event) => requestReportingAfterSuccess(event.id)));
+  }, [events, requestReportingAfterSuccess]);
   const [guests, setGuests] = useState<Guest[]>(initialWorkspace?.guests ?? []);
   const [reservations, setReservations] = useState<ReservationRecord[]>(initialWorkspace?.reservations ?? []);
   const [extraWristbandSales, setExtraWristbandSales] = useState<ExtraWristbandSale[]>(initialWorkspace?.extraWristbandSales ?? []);
@@ -2042,6 +2051,7 @@ export function WorkspaceServiceProvider({
       try {
         setEvents((current) => (current.some((item) => item.id === event.id) ? current.map((item) => (item.id === event.id ? event : item)) : [event, ...current]));
         await persist("event", event);
+        await requestReportingAfterSuccess(event.id);
         setCurrentOrganizationIdState(event.organizationId);
         setCurrentEventIdState(event.id);
         return event;
@@ -2050,7 +2060,7 @@ export function WorkspaceServiceProvider({
         throw exception;
       }
     },
-    [captureSnapshot, currentOrganization.id, events, notify, persist, requirePermission, restoreSnapshot, venues],
+    [captureSnapshot, currentOrganization.id, events, notify, persist, requestReportingAfterSuccess, requirePermission, restoreSnapshot, venues],
   );
 
   const updateEvent = useCallback(
@@ -2080,31 +2090,34 @@ export function WorkspaceServiceProvider({
       try {
         setEvents((current) => current.map((item) => (item.id === event.id ? event : item)));
         await persist("event", event);
+        await requestReportingAfterSuccess(event.id);
         return event;
       } catch (exception) {
         restoreSnapshot(snapshot);
         throw exception;
       }
     },
-    [captureSnapshot, currentOrganization.id, events, notify, persist, requirePermission, restoreSnapshot, venues],
+    [captureSnapshot, currentOrganization.id, events, notify, persist, requestReportingAfterSuccess, requirePermission, restoreSnapshot, venues],
   );
 
   const createExtraWristbandSaleMutation = useCallback(
     async (input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[] }) => {
       requirePermission("reservation.edit");
       await repositories.extraWristbandSales.create({ ...input, actor: currentAccount.displayName });
+      await requestReportingAfterSuccess(input.eventId);
       await reloadWorkspace();
     },
-    [currentAccount.displayName, reloadWorkspace, repositories.extraWristbandSales, requirePermission],
+    [currentAccount.displayName, reloadWorkspace, repositories.extraWristbandSales, requirePermission, requestReportingAfterSuccess],
   );
 
   const cancelExtraWristbandSaleMutation = useCallback(
     async (input: { saleId: string; reason: string }) => {
       requirePermission("reservation.cancel");
       await repositories.extraWristbandSales.cancel({ ...input, actor: currentAccount.displayName });
+      await requestReportingAfterSuccess(currentEvent.id);
       await reloadWorkspace();
     },
-    [currentAccount.displayName, reloadWorkspace, repositories.extraWristbandSales, requirePermission],
+    [currentAccount.displayName, currentEvent.id, reloadWorkspace, repositories.extraWristbandSales, requirePermission, requestReportingAfterSuccess],
   );
 
   const createOrganization = useCallback(
@@ -2153,10 +2166,11 @@ export function WorkspaceServiceProvider({
       requirePermission("venue.manage");
       const snapshot = captureSnapshot();
       setVenues((current) => (current.some((item) => item.id === venue.id) ? current.map((item) => (item.id === venue.id ? venue : item)) : [venue, ...current]));
-      await persist("venue", venue).catch(() => restoreSnapshot(snapshot));
+      try { await persist("venue", venue); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingForVenue(venue.id);
       return venue;
     },
-    [captureSnapshot, persist, requirePermission, restoreSnapshot],
+    [captureSnapshot, persist, requestReportingForVenue, requirePermission, restoreSnapshot],
   );
 
   const updateVenue = useCallback(
@@ -2164,10 +2178,11 @@ export function WorkspaceServiceProvider({
       requirePermission("venue.manage");
       const snapshot = captureSnapshot();
       setVenues((current) => current.map((item) => (item.id === venue.id ? venue : item)));
-      await persist("venue", venue).catch(() => restoreSnapshot(snapshot));
+      try { await persist("venue", venue); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingForVenue(venue.id);
       return venue;
     },
-    [captureSnapshot, persist, requirePermission, restoreSnapshot],
+    [captureSnapshot, persist, requestReportingForVenue, requirePermission, restoreSnapshot],
   );
 
   const setVenueStatus = useCallback(
@@ -2175,9 +2190,10 @@ export function WorkspaceServiceProvider({
       requirePermission("venue.manage");
       const snapshot = captureSnapshot();
       setVenues((current) => current.map((venue) => (venue.id === venueId ? { ...venue, status, updatedAt: nowIso() } : venue)));
-      await repositories.venues.setStatus(venueId, status).catch(() => restoreSnapshot(snapshot));
+      try { await repositories.venues.setStatus(venueId, status); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingForVenue(venueId);
     },
-    [captureSnapshot, repositories.venues, requirePermission, restoreSnapshot],
+    [captureSnapshot, repositories.venues, requestReportingForVenue, requirePermission, restoreSnapshot],
   );
 
   const createSector = useCallback(
@@ -2185,10 +2201,11 @@ export function WorkspaceServiceProvider({
       requirePermission("venue.manage");
       const snapshot = captureSnapshot();
       setSectors((current) => (current.some((item) => item.id === sector.id) ? current.map((item) => (item.id === sector.id ? sector : item)) : [sector, ...current]));
-      await persist("sector", sector).catch(() => restoreSnapshot(snapshot));
+      try { await persist("sector", sector); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingForVenue(sector.venueId);
       return sector;
     },
-    [captureSnapshot, persist, requirePermission, restoreSnapshot],
+    [captureSnapshot, persist, requestReportingForVenue, requirePermission, restoreSnapshot],
   );
 
   const updateSector = useCallback(
@@ -2196,10 +2213,11 @@ export function WorkspaceServiceProvider({
       requirePermission("venue.manage");
       const snapshot = captureSnapshot();
       setSectors((current) => current.map((item) => (item.id === sector.id ? sector : item)));
-      await persist("sector", sector).catch(() => restoreSnapshot(snapshot));
+      try { await persist("sector", sector); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingForVenue(sector.venueId);
       return sector;
     },
-    [captureSnapshot, persist, requirePermission, restoreSnapshot],
+    [captureSnapshot, persist, requestReportingForVenue, requirePermission, restoreSnapshot],
   );
 
   const setSectorStatus = useCallback(
@@ -2207,9 +2225,11 @@ export function WorkspaceServiceProvider({
       requirePermission("venue.manage");
       const snapshot = captureSnapshot();
       setSectors((current) => current.map((sector) => (sector.id === sectorId ? { ...sector, status, updatedAt: nowIso() } : sector)));
-      await repositories.sectors.setStatus(sectorId, status).catch(() => restoreSnapshot(snapshot));
+      try { await repositories.sectors.setStatus(sectorId, status); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      const sector = sectors.find((item) => item.id === sectorId);
+      await requestReportingForVenue(sector?.venueId);
     },
-    [captureSnapshot, repositories.sectors, requirePermission, restoreSnapshot],
+    [captureSnapshot, repositories.sectors, requestReportingForVenue, requirePermission, restoreSnapshot, sectors],
   );
 
   const createResource = useCallback(
@@ -2217,10 +2237,11 @@ export function WorkspaceServiceProvider({
       requirePermission("resource.manage");
       const snapshot = captureSnapshot();
       setResources((current) => (current.some((item) => item.id === resource.id) ? current.map((item) => (item.id === resource.id ? resource : item)) : [resource, ...current]));
-      await persist("resource", resource).catch(() => restoreSnapshot(snapshot));
+      try { await persist("resource", resource); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingAfterSuccess(currentEvent.id);
       return resource;
     },
-    [captureSnapshot, persist, requirePermission, restoreSnapshot],
+    [captureSnapshot, currentEvent.id, persist, requirePermission, requestReportingAfterSuccess, restoreSnapshot],
   );
 
   const updateResource = useCallback(
@@ -2228,10 +2249,11 @@ export function WorkspaceServiceProvider({
       requirePermission("resource.manage");
       const snapshot = captureSnapshot();
       setResources((current) => current.map((item) => (item.id === resource.id ? resource : item)));
-      await persist("resource", resource).catch(() => restoreSnapshot(snapshot));
+      try { await persist("resource", resource); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingAfterSuccess(currentEvent.id);
       return resource;
     },
-    [captureSnapshot, persist, requirePermission, restoreSnapshot],
+    [captureSnapshot, currentEvent.id, persist, requirePermission, requestReportingAfterSuccess, restoreSnapshot],
   );
 
   const setResourceStatus = useCallback(
@@ -2239,9 +2261,10 @@ export function WorkspaceServiceProvider({
       requirePermission("resource.manage");
       const snapshot = captureSnapshot();
       setResources((current) => current.map((resource) => (resource.id === resourceId ? { ...resource, status, updatedAt: nowIso() } : resource)));
-      await repositories.resources.setStatus(resourceId, status).catch(() => restoreSnapshot(snapshot));
+      try { await repositories.resources.setStatus(resourceId, status); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingAfterSuccess(currentEvent.id);
     },
-    [captureSnapshot, repositories.resources, requirePermission, restoreSnapshot],
+    [captureSnapshot, currentEvent.id, repositories.resources, requestReportingAfterSuccess, requirePermission, restoreSnapshot],
   );
 
   const deleteResource = useCallback(
@@ -2267,8 +2290,9 @@ export function WorkspaceServiceProvider({
         persistDelete: repositories.resources.delete,
         restoreSnapshot: () => restoreSnapshot(snapshot),
       });
+      await requestReportingAfterSuccess(currentEvent.id);
     },
-    [captureSnapshot, eventLayoutResources, guests, persistedTimelineEvents, repositories.resources, requirePermission, reservations, restoreSnapshot, tables, venueLayoutResources],
+    [captureSnapshot, currentEvent.id, eventLayoutResources, guests, persistedTimelineEvents, repositories.resources, requestReportingAfterSuccess, requirePermission, reservations, restoreSnapshot, tables, venueLayoutResources],
   );
 
   const moveResourceToSector = useCallback(
@@ -2276,13 +2300,14 @@ export function WorkspaceServiceProvider({
       requirePermission("resource.manage");
       const snapshot = captureSnapshot();
       setResources((current) => current.map((resource) => (resource.id === resourceId ? { ...resource, sectorId, updatedAt: nowIso() } : resource)));
-      await repositories.resources.moveToSector(resourceId, sectorId).catch(() => restoreSnapshot(snapshot));
+      try { await repositories.resources.moveToSector(resourceId, sectorId); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingAfterSuccess(currentEvent.id);
     },
-    [captureSnapshot, repositories.resources, requirePermission, restoreSnapshot],
+    [captureSnapshot, currentEvent.id, repositories.resources, requestReportingAfterSuccess, requirePermission, restoreSnapshot],
   );
 
   const setEventStatus = useCallback(
-    (eventId: string, status: PlatformEvent["status"]) => {
+    async (eventId: string, status: PlatformEvent["status"]) => {
       requirePermission("event.edit");
       const targetEvent = events.find((event) => event.id === eventId);
       if (!targetEvent) return;
@@ -2300,7 +2325,8 @@ export function WorkspaceServiceProvider({
 
       const snapshot = captureSnapshot();
       setEvents((current) => current.map((event) => (event.id === eventId ? { ...event, status } : event)));
-      void repositories.events.setStatus(eventId, status).catch(() => restoreSnapshot(snapshot));
+      try { await repositories.events.setStatus(eventId, status); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      await requestReportingAfterSuccess(eventId);
       notify({
         title: status === "published" ? "Evento publicado" : status === "finished" ? "Evento cerrado" : "Evento actualizado",
         description:
@@ -2319,7 +2345,7 @@ export function WorkspaceServiceProvider({
         },
       });
     },
-    [captureSnapshot, events, notify, repositories.events, requirePermission, restoreSnapshot],
+    [captureSnapshot, events, notify, repositories.events, requestReportingAfterSuccess, requirePermission, restoreSnapshot],
   );
 
   const createReservation = useCallback(
@@ -2415,6 +2441,7 @@ export function WorkspaceServiceProvider({
 
         setReservations((current) => prependUniqueById(current, [reservation]));
         setGuests((current) => prependUniqueById(current, persistedReservationGuests));
+        await requestReportingAfterSuccess(event.id);
 
         notify({
           title: "Reserva creada",
@@ -2435,7 +2462,7 @@ export function WorkspaceServiceProvider({
         throw exception;
       }
     },
-    [captureSnapshot, currentEvent, currentEventLayout, currentEventTables, currentVenue, eventLayoutResources, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, restoreSnapshot, upsertPersistedTimelineEvent, venueLayoutResources],
+    [captureSnapshot, currentEvent, currentEventLayout, currentEventTables, currentVenue, eventLayoutResources, notify, repositories.guests, repositories.reservations, repositories.timeline, requestReportingAfterSuccess, requirePermission, restoreSnapshot, upsertPersistedTimelineEvent, venueLayoutResources],
   );
 
   const updateGuestWhatsApp = useCallback(
@@ -2466,6 +2493,7 @@ export function WorkspaceServiceProvider({
       }
 
       setGuests((current) => current.map((item) => (item.id === guestId ? nextGuest : item)));
+      await requestReportingAfterSuccess(currentEvent.id);
       notify({
         title: "WhatsApp actualizado",
         description: `${guest.guestName} quedó listo para compartir por WhatsApp.`,
@@ -2526,6 +2554,7 @@ export function WorkspaceServiceProvider({
       }
 
       setGuests((current) => current.map((item) => (item.id === guestId ? nextGuest : item)));
+      await requestReportingAfterSuccess(currentEvent.id);
       notify({
         title: "Invitado actualizado",
         description: `${nextGuest.guestName} quedó sincronizado en el workspace activo.`,
@@ -2659,6 +2688,7 @@ export function WorkspaceServiceProvider({
           ...nextGuests,
         ]);
         await repositories.reservations.upsert(nextReservation);
+        await requestReportingAfterSuccess(currentEvent.id);
         for (const guest of nextGuests) {
           await repositories.guests.upsert(guest);
         }
@@ -2814,6 +2844,7 @@ export function WorkspaceServiceProvider({
 
         setReservations((current) => current.map((item) => (item.id === reservation.id ? nextReservation : item)));
         await repositories.reservations.upsert(nextReservation);
+        await requestReportingAfterSuccess(currentEvent.id);
         const existingGuestIds = new Set(existingGuests.map((guest) => guest.id));
         const persistedNextGuests: Guest[] = [];
         for (const guest of nextGuestsWithAccess) {
@@ -2905,6 +2936,7 @@ export function WorkspaceServiceProvider({
       try {
         const deleted = await repositories.reservations.delete(reservationId);
         if (!deleted) throw new Error("No se pudo eliminar el borrador.");
+        await requestReportingAfterSuccess(currentEvent.id);
         await reloadWorkspace();
         return reservation;
       } catch (exception) {
@@ -2912,7 +2944,7 @@ export function WorkspaceServiceProvider({
         throw new Error(describeReservationLifecycleError(exception, "No se pudo eliminar el borrador."));
       }
     },
-    [captureSnapshot, checkIns, currentEvent, currentEvent.status, extraWristbandSales, guests, notify, persistedTimelineEvents, reloadWorkspace, repositories.reservations, requirePermission, reservations, restoreSnapshot],
+    [captureSnapshot, checkIns, currentEvent, currentEvent.status, extraWristbandSales, guests, notify, persistedTimelineEvents, reloadWorkspace, repositories.reservations, requestReportingAfterSuccess, requirePermission, reservations, restoreSnapshot],
   );
 
   const cancelReservation = useCallback(
@@ -2930,6 +2962,7 @@ export function WorkspaceServiceProvider({
       try {
         const cancelled = await repositories.reservations.cancelAtomic(reservationId);
         if (!cancelled) throw new Error("No se pudo cancelar la reserva.");
+        await requestReportingAfterSuccess(currentEvent.id);
         await reloadWorkspace();
         return { ...reservation, status: "Cancelled" as const };
       } catch (exception) {
@@ -2937,7 +2970,7 @@ export function WorkspaceServiceProvider({
         throw new Error(describeReservationLifecycleError(exception, "No se pudo cancelar la reserva."));
       }
     },
-    [captureSnapshot, currentEvent, currentEvent.status, extraWristbandSales, reloadWorkspace, repositories.reservations, requirePermission, reservations, restoreSnapshot],
+    [captureSnapshot, currentEvent, currentEvent.status, extraWristbandSales, reloadWorkspace, repositories.reservations, requestReportingAfterSuccess, requirePermission, reservations, restoreSnapshot],
   );
 
   const appendReservationGuests = useCallback(
@@ -3199,6 +3232,7 @@ export function WorkspaceServiceProvider({
         courtesyEvent,
         accessEvent: timelineEntry,
       });
+      await requestReportingAfterSuccess(currentEvent.id);
 
       setGuests((current) => [persistedGuest, ...current]);
       setReservations((current) =>
@@ -3225,7 +3259,7 @@ export function WorkspaceServiceProvider({
       });
       await reloadWorkspace();
     },
-    [captureSnapshot, currentEvent, currentEvent.status, notify, reloadWorkspace, repositories.reservations, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
+    [captureSnapshot, currentEvent, currentEvent.status, notify, reloadWorkspace, repositories.reservations, requestReportingAfterSuccess, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent],
   );
 
   const updateReservationGuest = useCallback(
@@ -3294,6 +3328,7 @@ export function WorkspaceServiceProvider({
         try {
           const deleted = await repositories.guests.delete(guestId);
           if (!deleted) throw new Error("No se pudo eliminar el invitado.");
+          await requestReportingAfterSuccess(currentEvent.id);
           await reloadWorkspace();
         } catch (exception) {
           restoreSnapshot(snapshot);
@@ -3316,6 +3351,7 @@ export function WorkspaceServiceProvider({
           guestId,
           reason: "Anulación manual en Reservations",
         });
+        await requestReportingAfterSuccess(currentEvent.id);
         const nextGuests = guests.map((guest) => guest.id === guestId ? cancellation.guest : guest);
 
         setGuests(nextGuests);
@@ -4149,6 +4185,7 @@ export function WorkspaceServiceProvider({
           consumedAccessGrantIdsRef.current.add(accessGrantKey);
         }
         upsertPersistedTimelineEvent(bundle.timelineEntry);
+        await requestReportingAfterSuccess(currentEvent.id);
         notify({
           title: result.title,
           description: result.note,
@@ -4162,7 +4199,7 @@ export function WorkspaceServiceProvider({
         checkInSubmissionInFlightRef.current = false;
       }
     },
-    [captureSnapshot, currentEvent, currentEventGuests, currentEventReservations, findGuestByQuery, notify, repositories.checkIns, repositories.guests, repositories.timeline, requirePermission, restoreSnapshot, upsertPersistedTimelineEvent],
+    [captureSnapshot, currentEvent, currentEventGuests, currentEventReservations, findGuestByQuery, notify, repositories.checkIns, repositories.guests, repositories.timeline, requestReportingAfterSuccess, requirePermission, restoreSnapshot, upsertPersistedTimelineEvent],
   );
 
   const value = useMemo<WorkspaceServiceValue>(
@@ -4288,6 +4325,7 @@ export function WorkspaceServiceProvider({
       setAttemptsState: setAttempts,
       repositories,
       status,
+      browserAuthReady,
       error,
       reloadWorkspace,
     }),
