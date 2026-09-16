@@ -94,10 +94,23 @@ export default function SettingsPage() {
         <section className="grid gap-4">
           <OrganizationSettingsCard key={currentOrganization.id} canManage={canManageOrganization} />
           <GoogleSheetsSettingsCard eventId={currentEvent.id} organizationId={currentOrganizationId} authReady={browserAuthReady} canManage={canManageOrganization} />
+          <GoogleDriveSettingsCard organizationId={currentOrganizationId} canManage={canManageOrganization} />
         </section>
       </PermissionGuard>
     </div>
   );
+}
+
+function GoogleDriveSettingsCard({ organizationId, canManage }: { organizationId: string; canManage: boolean }) {
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [integration, setIntegration] = useState<Record<string, unknown> | null>(null);
+  const requestVersion = useRef(0);
+  const load = async () => { const version = ++requestVersion.current; try { const response = await fetch(`/api/integrations/google-drive/status?organizationId=${encodeURIComponent(organizationId)}`); if (!response.ok) throw new Error(); const next = await response.json(); if (version !== requestVersion.current) return; setIntegration(next); setState("ready"); } catch { if (version === requestVersion.current) setState("error"); } };
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load(); }, [organizationId]);
+  const disconnect = async () => { const response = await fetch("/api/integrations/google-drive/disconnect", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ organizationId }) }); if (response.ok) void load(); };
+  const connected = integration?.connected === true;
+  return <section className="surface-panel p-4 sm:p-5"><p className="kicker">Integraciones · Organización</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Google Drive</h2><p className="mt-1 text-sm text-slate-400">{state === "loading" ? "Cargando integración…" : state === "error" ? "No pudimos cargar la integración." : connected ? `Conectado como ${String(integration?.accountEmail ?? "cuenta de Google")}` : integration?.status === "needs_reauth" ? "Necesita reconexión" : integration?.status === "disabled" ? "Desactivado" : "No conectado"}</p><div className="mt-4 flex flex-wrap gap-2">{canManage && !connected ? <a href={`/api/integrations/google-drive/connect?organizationId=${encodeURIComponent(organizationId)}`} className="inline-flex h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950">Conectar Google Drive</a> : null}{canManage && connected ? <button type="button" onClick={() => void disconnect()} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white">Desconectar</button> : null}</div></section>;
 }
 
 function GoogleSheetsSettingsCard({ eventId, organizationId, authReady, canManage }: { eventId: string; organizationId: string; authReady: boolean; canManage: boolean }) {

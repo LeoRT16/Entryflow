@@ -1131,6 +1131,7 @@ export function WorkspaceServiceProvider({
   const hydratedRef = useRef(hasWorkspaceData(initialWorkspace) || !hasSupabaseConfig());
   const restoredWorkspacePreferenceRef = useRef(false);
   const reloadWorkspaceRef = useRef<() => Promise<void>>(async () => {});
+  const reloadGenerationRef = useRef(0);
   const checkInSubmissionInFlightRef = useRef(false);
 
   useEffect(() => {
@@ -1272,12 +1273,14 @@ export function WorkspaceServiceProvider({
   }, []);
 
   const reloadWorkspace = useCallback(async () => {
+    const generation = ++reloadGenerationRef.current;
     try {
       if (getWorkspaceReloadStatus(status) === "loading") {
         setStatus("loading");
       }
 
       const snapshot = await loadWorkspaceFromRepositories(repositories, initialCurrentUserId);
+      if (generation !== reloadGenerationRef.current) return;
       const accessibleProfiles = initialCurrentUserId
         ? snapshot.profiles.filter((profile) => profile.userId === initialCurrentUserId && !profile.deletedAt)
         : snapshot.profiles.filter((profile) => !profile.deletedAt);
