@@ -23,6 +23,7 @@ import {
 } from "@/features/events/domain/invitation-overlay";
 import { getEventTypeLabel, getEventCommercialConfig, isTerminalEventStatus, mergeEventCommercialConfig, type CommercialBenefit, type EventCommercialConfig } from "@/features/events/domain";
 import { buildEventVenueChangeConfirmation, shouldWarnBeforeChangingEventVenue } from "@/features/events/domain/event-venue-assignment";
+import { toEventDateTimeInputValue } from "@/features/events/domain/event-date-time";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CheckIn } from "@/features/check-in/types";
 import type { Guest } from "@/features/check-in/types";
@@ -149,7 +150,7 @@ export default function EventEditorModal({
   const [eventVenue, setEventVenue] = useState(event.venue);
   const [eventDescription, setEventDescription] = useState(event.description ?? "");
   const [eventCapacity, setEventCapacity] = useState(String(event.capacity));
-  const [eventStartAt, setEventStartAt] = useState(event.startAt);
+  const [eventStartAt, setEventStartAt] = useState(() => toEventDateTimeInputValue(event.startAt, event.timezone));
   const [eventStatus, setEventStatus] = useState(event.status);
   const [commercialConfig, setCommercialConfig] = useState<EventCommercialConfig>(() => getEventCommercialConfig(event));
   const pendingVenueEventRef = useRef<Event | null>(null);

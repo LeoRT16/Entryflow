@@ -336,6 +336,7 @@ export default function EventCreationWizard({
                     label="Fecha"
                     value={draft.date}
                     onChange={(value) => updateDraft((current) => ({ ...current, date: value }))}
+                    type="date"
                   />
                   <TimezoneSelect
                     label="Zona horaria"
@@ -348,11 +349,13 @@ export default function EventCreationWizard({
                     label="Hora inicio"
                     value={draft.startTime}
                     onChange={(value) => updateDraft((current) => ({ ...current, startTime: value }))}
+                    type="time"
                   />
                   <Field
                     label="Hora fin"
                     value={draft.endTime}
                     onChange={(value) => updateDraft((current) => ({ ...current, endTime: value }))}
+                    type="time"
                   />
                   <Field
                     label="Capacidad"
