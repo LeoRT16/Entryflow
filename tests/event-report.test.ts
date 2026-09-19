@@ -85,6 +85,47 @@ test("ReservationReport exposes canonical identity, resource references and sepa
   assert.equal(mesa?.soldTotal.amount, 520);
 });
 
+test("ReservationReport carries holder contacts and historical commercial snapshot semantics", () => {
+  const report = buildEventReport(buildEventReportFixtureInput());
+  const mesa = report.reservations.find((item) => item.id === "mesa-active");
+  const presale = report.reservations.find((item) => item.id === "presale-group");
+  const courtesy = report.reservations.find((item) => item.id === "courtesy-active");
+  const legacy = report.reservations.find((item) => item.id === "legacy-draft-no-snapshot");
+
+  assert.equal(mesa?.holderCarnet, "123456");
+  assert.equal(mesa?.holderWhatsapp, "70000000");
+  assert.equal(mesa?.includedAccesses, 5);
+  assert.equal(mesa?.purchasedQuantity, null);
+  assert.equal(mesa?.price.amount, 400);
+  assert.equal(mesa?.pricingUnit, "per_reservation");
+  assert.deepEqual(mesa?.benefits?.map(({ id, label, quantity }) => ({ id, label, quantity })), [
+    { id: "drink", label: "Bebida", quantity: 2 },
+    { id: "vip", label: "Acceso VIP", quantity: 1 },
+  ]);
+  assert.equal(mesa?.extraWristbandQuantity, 2);
+  assert.equal(presale?.purchasedQuantity, 3);
+  assert.equal(presale?.includedAccesses, null);
+  assert.equal(presale?.price.amount, 50);
+  assert.equal(presale?.pricingUnit, "per_access");
+  assert.deepEqual(report.reservations.find((item) => item.id === "mesa-second")?.benefits, []);
+  assert.equal(courtesy?.price.amount, 0);
+  assert.equal(courtesy?.price.complete, true);
+  assert.equal(courtesy?.pricingUnit, "courtesy");
+  assert.equal(legacy?.commercialSnapshot, null);
+  assert.equal(legacy?.price.amount, null);
+  assert.equal(legacy?.price.complete, false);
+  assert.equal(legacy?.pricingUnit, "unknown");
+  assert.equal(legacy?.benefits, null);
+});
+
+test("attendees expose historical reservation holder, zone, and resource labels", () => {
+  const report = buildEventReport(buildEventReportFixtureInput());
+  const attendee = report.attendees.find((item) => item.guestId === "guest-1");
+  assert.equal(attendee?.reservationHolder, "Titular M-01");
+  assert.equal(attendee?.zoneName, "Patio");
+  assert.equal(attendee?.resourceName, "Mesa 1");
+});
+
 test("missing snapshots are unknown and emit structured diagnostics instead of false zero", () => {
   const input = structuredClone(buildEventReportFixtureInput());
   const target = input.reservations.find((item) => item.id === "mesa-active")!;
@@ -95,6 +136,17 @@ test("missing snapshots are unknown and emit structured diagnostics instead of f
   assert.equal(report.commercial.sold.total.amount, null);
   assert.equal(report.commercial.sold.total.complete, false);
   assert.equal(report.diagnostics.some((item) => item.code === "commercial_snapshot_missing" && item.entityId === target.id), true);
+});
+
+test("a presale without its historical snapshot keeps sold and pending quantities unknown", () => {
+  const input = structuredClone(buildEventReportFixtureInput());
+  input.reservations.find((item) => item.id === "presale-group")!.commercialSnapshot = undefined;
+  const report = buildEventReport(input);
+  const presale = report.presales.find((item) => item.reservationId === "presale-group");
+  assert.equal(presale?.quantityPurchased, null);
+  assert.equal(presale?.remainingToLoad, null);
+  assert.equal(report.summary.presaleAccessesSold, null);
+  assert.equal(report.summary.presalePendingToLoad, null);
 });
 
 test("mixed currencies are not summed and emit an event diagnostic", () => {

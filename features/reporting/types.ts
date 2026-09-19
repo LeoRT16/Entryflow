@@ -1,6 +1,7 @@
 import type { CheckIn, Guest } from "@/features/check-in/types";
 import type { Event, EventLayout, EventLayoutResource, EventLayoutSector, Organization, Resource, ResourceType, Sector, Venue } from "@/features/domain/types";
 import type { ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
+import type { ReservationCommercialSnapshot } from "@/features/events/domain/commercial-config";
 import type { ReservationRecord, ReservationStatus, ReservationType } from "@/features/reservations/types";
 import type { TimelineEvent } from "@/features/timeline/types";
 import type { TableRecord } from "@/features/tables/types";
@@ -54,7 +55,9 @@ export type EventReportSummary = {
   pendingPeople: number;
   activeCourtesyPeople: number;
   presalePurchases: number;
-  presaleAccessesSold: number;
+  presaleAccessesSold: number | null;
+  presalePeopleLoaded: number;
+  presalePendingToLoad: number | null;
   activeExtraWristbands: number;
 };
 
@@ -77,6 +80,8 @@ export type ReservationReport = {
   code: string;
   type: ReservationType;
   holder: string;
+  holderCarnet: string;
+  holderWhatsapp: string;
   status: ReservationStatus;
   operational: boolean;
   historical: boolean;
@@ -93,6 +98,13 @@ export type ReservationReport = {
   soldValue: MoneyValue;
   extraWristbandValue: MoneyValue;
   soldTotal: MoneyValue;
+  commercialSnapshot: ReservationCommercialSnapshot | null;
+  includedAccesses: number | null;
+  purchasedQuantity: number | null;
+  price: MoneyValue;
+  pricingUnit: "per_reservation" | "per_access" | "courtesy" | "unknown";
+  benefits: ReservationCommercialSnapshot["benefits"] | null;
+  extraWristbandQuantity: number;
   diagnostics: ReportDiagnostic[];
 };
 
@@ -153,6 +165,9 @@ export type AttendeeReport = {
   accessCode: string;
   reservationId: string;
   reservationCode: string;
+  reservationHolder: string | null;
+  zoneName: string | null;
+  resourceName: string | null;
   accessType: "mesa" | "presale" | "courtesy" | "extra_wristband" | "other";
   operational: boolean;
   admissionStatus: Guest["admissionStatus"];

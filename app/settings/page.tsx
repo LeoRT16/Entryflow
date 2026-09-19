@@ -12,7 +12,7 @@ import { buildOrganizationSwitcherOptions } from "@/features/settings/domain/org
 import { buildSlugFromName } from "@/lib/slug";
 import { formatTimezoneLabel, getDefaultTimezone } from "@/lib/timezone";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { getReportingDestination, requestReportingSync, upsertReportingDestination } from "@/repositories/reporting-sync-repositories";
+import { getReportingDestination, requestReportingSync, setReportingDestinationEnabled, upsertReportingDestination } from "@/repositories/reporting-sync-repositories";
 import { buildReportingSyncStatus } from "@/features/reporting/sync/status";
 
 function Input({
@@ -154,7 +154,9 @@ function GoogleSheetsSettingsCard({ eventId, organizationId, authReady, canManag
     const shouldRequest = nextEnabled && (operation === "enable" || !wasConfigured || changedSheet);
     const success = operation === "disable" ? { title: "Sincronización pausada", description: "La sincronización con Google Sheets está pausada." } : operation === "enable" ? { title: "Sincronización activada", description: "La sincronización con Google Sheets está activa." } : { title: wasConfigured ? "Hoja actualizada" : "Google Sheets conectado", description: "La configuración quedó actualizada." };
     try {
-      const saved = await upsertReportingDestination(client, eventId, nextSpreadsheetId, nextEnabled);
+      const saved = operation === "enable" || operation === "disable"
+        ? await setReportingDestinationEnabled(client, eventId, nextEnabled)
+        : await upsertReportingDestination(client, eventId, nextSpreadsheetId, nextEnabled);
       setDestination((current) => ({ ...(current ?? {}), ...(saved ?? {}), enabled: nextEnabled, spreadsheet_id: nextSpreadsheetId, last_requested_sequence: Number((current?.last_requested_sequence as number | undefined) ?? 0) + (shouldRequest ? 1 : 0) }));
       if (!shouldRequest) showToast({ ...success, tone: "success" });
       if (shouldRequest) {

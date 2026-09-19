@@ -162,14 +162,11 @@ test("localized legacy event date fails closed before generating or reserving a 
   const integration: any = { id: "i", organization_id: "o", enabled: true, status: "connected", oauth_secret_id: "s", organization_drive_folder_id: "root" };
   const location: any = { id: "l", organization_id: "o", event_id: "e", status: "pending", revision: 1, event_drive_folder_id: null, reserved_event_drive_folder_id: null, final_reports_folder_id: null, reserved_final_reports_folder_id: null };
   const event: any = { id: "e", name: "Sábado 29 de Agosto", start_at: "29 de agosto de 2026 21:00", timezone: "America/La_Paz" };
-  const rpcCalls: any[] = []; const stageLogs: any[] = []; let generated = 0;
+  const rpcCalls: any[] = []; let generated = 0;
   const make = (name: string) => { const value = name === "reporting_drive_integrations" ? integration : name === "event_drive_locations" ? location : event; const b: any = { select: () => b, eq: () => b, is: () => b, single: async () => ({ data: value, error: null }), update: (v: any) => { Object.assign(value, v); return b; } }; return b; };
   const db: any = { from: make, rpc: async (name: string, args: any) => { rpcCalls.push({ name, args }); return { data: true, error: null }; } };
   const transport: any = { getFileMetadata: async () => folder("root"), generateFolderId: async () => { generated++; return "unused"; }, createFolder: async () => { throw new Error("unexpected create"); }, listChildren: async () => { throw new Error("unexpected list"); } };
-  const originalWarn = console.warn; console.warn = (...args: any[]) => stageLogs.push(args);
-  let result: boolean;
-  try { result = await processDriveProvisioningJob(db, { outbox_id: "j", event_location_id: "l", organization_id: "o", integration_id: "i", target_revision: 1, claim_token: "t" }, () => transport, async () => "synthetic"); } finally { console.warn = originalWarn; }
+  const result = await processDriveProvisioningJob(db, { outbox_id: "j", event_location_id: "l", organization_id: "o", integration_id: "i", target_revision: 1, claim_token: "t" }, () => transport, async () => "synthetic");
   assert.equal(result!, false); assert.equal(generated, 0); assert.equal(rpcCalls.some((call) => call.name === "reserve_drive_event_folder_id"), false); assert.equal(location.event_drive_folder_id, null); assert.equal(location.reserved_event_drive_folder_id, null);
   const failed = rpcCalls.find((call) => call.name === "fail_drive_provisioning_job"); assert.equal(failed.args.p_status, "needs_action"); assert.equal(failed.args.p_error_code, "drive_event_start_at_invalid");
-  assert.equal(stageLogs.some((args) => args[0] === "drive_provisioning_stage_failure" && args[1]?.stage === "event_name_format"), true);
 });

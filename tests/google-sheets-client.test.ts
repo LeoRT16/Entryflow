@@ -18,26 +18,33 @@ test("service account config normalizes escaped newlines and never uses NEXT_PUB
 test("schema creates only missing canonical tabs and preserves extras", async () => {
   const calls: unknown[] = [];
   const metadata = await ensureWorkbookSchema(fakeTransport({ getSpreadsheetMetadata: async () => ({ spreadsheetId: "s", title: "t", sheetTitles: ["Resumen", "Extra"] }), batchUpdate: async (request) => { calls.push(request); } }), "s");
-  assert.deepEqual(metadata.sheetTitles, ["Resumen", "Extra", "Reservas", "Preventa", "Invitados", "Cortesías", "Reportes finales"]);
+  assert.deepEqual(metadata.sheetTitles, ["Resumen", "Extra", "Reservas", "Invitados"]);
   assert.equal(calls.length, 1);
 });
 
-test("serialization keeps null, numbers, booleans, ISO dates and text safety", () => {
+test("serialization preserves text, numeric values and formula safety", () => {
   assert.equal(sanitizeTextCell("=1+1"), "'=1+1");
   assert.equal(sanitizeTextCell("+59170000000"), "'+59170000000");
   const sheet = buildGoogleSheetsProjection(buildEventReport(buildEventReportFixtureInput())).sheets.attendees;
   const serialized = serializeSheet(sheet);
   assert.equal(typeof serialized.values?.[1]?.[4], "string");
-  assert.equal(typeof serialized.values?.[1]?.[12], "boolean");
+  assert.equal(typeof serialized.values?.[1]?.[12], "string");
+  assert.equal(serialized.values?.[1]?.[12], "No");
+  const summaryValues = serializeSheet(buildGoogleSheetsProjection(buildEventReport(buildEventReportFixtureInput())).sheets.summary).values ?? [];
+  const summaryRows = new Map(summaryValues.slice(1).map((row) => [row?.[1], row?.[2]]));
+  assert.equal(summaryRows.get("Mesas"), 800);
+  assert.equal(summaryRows.get("Preventa"), 200);
+  assert.equal(summaryRows.get("Manillas extra"), 120);
+  assert.equal(summaryRows.get("Total"), 1120);
 });
 
-test("first write clears and batches only five live sheets, never final reports", async () => {
+test("first write clears and batches exactly three live sheets", async () => {
   const projection = buildGoogleSheetsProjection(buildEventReport(buildEventReportFixtureInput()));
   const calls = { clear: 0, update: 0 };
   const result = await writeWorkbookProjection(fakeTransport({ clear: async (_id, ranges) => { calls.clear += ranges.length; }, updateValues: async (_id, data) => { calls.update = data.length; } }), "sheet-1", projection, hashWorkbookDataset(buildWorkbookDatasetHashInput(projection)));
-  assert.deepEqual(result.sheetsUpdated, ["Resumen", "Reservas", "Preventa", "Invitados", "Cortesías"]);
-  assert.equal(calls.clear, 5);
-  assert.equal(calls.update, 5);
+  assert.deepEqual(result.sheetsUpdated, ["Resumen", "Reservas", "Invitados"]);
+  assert.equal(calls.clear, 3);
+  assert.equal(calls.update, 3);
 });
 
 test("projection data is never included in client error text", async () => {

@@ -193,6 +193,7 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
   );
 
   const isCheckedIn = (guest: Guest) => isPersistedCheckIn(checkInByGuestId.get(guest.id)) || guest.admissionStatus === "Ingresó";
+  const resourceByReservationId = new Map(resourceReport.resources.flatMap((resource) => resource.reservationIds.map((id) => [id, resource] as const)));
 
   for (const guest of eventGuests) {
     const persisted = isPersistedCheckIn(checkInByGuestId.get(guest.id));
@@ -222,6 +223,7 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
 
   const attendees: AttendeeReport[] = eventGuests.map((guest) => {
     const reservation = reservationById.get(guest.reservationId);
+    const resource = resourceByReservationId.get(guest.reservationId);
     const checkIn = checkInByGuestId.get(guest.id);
     const checkedIn = isCheckedIn(guest);
     return {
@@ -232,6 +234,9 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
       accessCode: guest.accessCode ?? guest.invitationCode,
       reservationId: guest.reservationId,
       reservationCode: guest.reservationCode,
+      reservationHolder: reservation?.holderName ?? null,
+      zoneName: resource?.sectorName ?? reservation?.sectorName ?? null,
+      resourceName: resource?.resourceName ?? reservation?.resourceName ?? reservation?.tableName ?? null,
       accessType: resolveAccessType(guest, reservation),
       operational: operationalGuestIds.has(guest.id),
       admissionStatus: guest.admissionStatus,
@@ -253,11 +258,28 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
     const reservationSales = soldSales.filter((sale) => sale.reservationId === reservation.id);
     const soldValue = isCommerciallyRegistered(reservation) ? reservationMoney(reservation) : knownMoney(0, null);
     const extraWristbandValue = combineMoney(reservationSales.map(extraWristbandSaleMoney));
+    const snapshot = reservation.commercialSnapshot ?? null;
+    const price = reservation.reservationType === "Cortesía"
+      ? knownMoney(0, null)
+      : reservation.reservationType === "Preventa"
+        ? snapshot?.saleType === "presale" && typeof snapshot.unitPrice === "number"
+          ? knownMoney(snapshot.unitPrice, snapshot.currency)
+          : unknownMoney(snapshot?.currency ?? null)
+        : snapshot && typeof snapshot.reservationPrice === "number"
+          ? knownMoney(snapshot.reservationPrice, snapshot.currency)
+          : unknownMoney(snapshot?.currency ?? null);
+    const pricingUnit: ReservationReport["pricingUnit"] = reservation.reservationType === "Cortesía"
+      ? "courtesy"
+      : reservation.reservationType === "Preventa"
+        ? snapshot?.saleType === "presale" && typeof snapshot.unitPrice === "number" ? "per_access" : "unknown"
+        : snapshot && typeof snapshot.reservationPrice === "number" ? "per_reservation" : "unknown";
     return {
       id: reservation.id,
       code: reservation.code,
       type: reservation.reservationType,
       holder: reservation.holderName,
+      holderCarnet: reservation.holderDocument,
+      holderWhatsapp: reservation.holderWhatsapp,
       status: normalizeReservationStatus(reservation.status),
       operational: isActiveReservation(reservation),
       historical: !isActiveReservation(reservation),
@@ -274,6 +296,13 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
       soldValue,
       extraWristbandValue,
       soldTotal: combineMoney([soldValue, extraWristbandValue]),
+      commercialSnapshot: snapshot ? { ...snapshot, benefits: snapshot.benefits.map((benefit) => ({ ...benefit })) } : null,
+      includedAccesses: reservation.reservationType === "Mesa" ? snapshot?.includedAccesses ?? null : null,
+      purchasedQuantity: reservation.reservationType === "Preventa" && snapshot?.saleType === "presale" ? snapshot.quantity ?? null : null,
+      price,
+      pricingUnit,
+      benefits: snapshot ? snapshot.benefits.map((benefit) => ({ ...benefit })) : null,
+      extraWristbandQuantity: reservationSales.reduce((total, sale) => total + sale.quantity, 0),
       diagnostics: [],
     };
   });
@@ -362,6 +391,9 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
   }
 
   const sortedDiagnostics = sortReportDiagnostics(diagnostics);
+  const soldPresales = soldReservations.filter((reservation) => reservation.reservationType === "Preventa");
+  const presaleQuantities = soldPresales.map((reservation) => reservation.commercialSnapshot?.saleType === "presale" && typeof reservation.commercialSnapshot.quantity === "number" ? reservation.commercialSnapshot.quantity : null);
+  const operationalPresales = presales.filter((presale) => presale.operational);
   const diagnosticsForReservation = (reservationId: string) => sortedDiagnostics.filter(
     (diagnostic) => diagnostic.entityType === "reservation" && diagnostic.entityId === reservationId,
   );
@@ -389,9 +421,13 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
       pendingPeople: operationalGuests.filter((guest) => !isCheckedIn(guest)).length,
       activeCourtesyPeople: operationalGuests.filter((guest) => reservationById.get(guest.reservationId)?.reservationType === "Cortesía").length,
       presalePurchases: soldReservations.filter((reservation) => reservation.reservationType === "Preventa").length,
-      presaleAccessesSold: soldReservations
-        .filter((reservation) => reservation.reservationType === "Preventa")
-        .reduce((total, reservation) => total + (reservation.commercialSnapshot?.quantity ?? 0), 0),
+      presaleAccessesSold: presaleQuantities.every((quantity) => quantity !== null)
+        ? presaleQuantities.reduce<number>((total, quantity) => total + (quantity ?? 0), 0)
+        : null,
+      presalePeopleLoaded: operationalPresales.reduce((total, presale) => total + presale.loadedPeople, 0),
+      presalePendingToLoad: operationalPresales.some((presale) => presale.remainingToLoad === null)
+        ? null
+        : operationalPresales.reduce((total, presale) => total + (presale.remainingToLoad ?? 0), 0),
       activeExtraWristbands: operationalSales.reduce((total, sale) => total + sale.quantity, 0),
     },
     commercial: { sold: soldCommercial, operational: operationalCommercial },

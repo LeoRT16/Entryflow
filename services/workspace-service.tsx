@@ -43,6 +43,8 @@ import {
   findTableInCurrentEventContext,
 } from "@/features/business-rules/domain/ownership-guards";
 import { resolveCanonicalCurrentVenue } from "@/features/events/domain/event-venue-boundary";
+import { createResourceOperation, moveResourceToSectorOperation } from "@/features/resources/application/resource-mutations";
+import { updateEventOperation } from "@/features/events/application/update-event";
 import {
   buildEventSelectionCandidate,
   isTerminalEventStatus,
@@ -2068,7 +2070,6 @@ export function WorkspaceServiceProvider({
 
   const updateEvent = useCallback(
     async (event: PlatformEvent) => {
-      requirePermission("event.edit");
       const existingEvent = events.find((item) => item.id === event.id);
 
       if (!existingEvent) {
@@ -2092,9 +2093,12 @@ export function WorkspaceServiceProvider({
       const snapshot = captureSnapshot();
       try {
         setEvents((current) => current.map((item) => (item.id === event.id ? event : item)));
-        await persist("event", event);
-        await requestReportingAfterSuccess(event.id);
-        return event;
+        return await updateEventOperation(event, {
+          assertPermission: requirePermission,
+          assertOwnership: (value) => assertEventWriteOwnership(value, currentOrganization.id, venues),
+          persist: (value) => persist("event", value),
+          requestReporting: requestReportingAfterSuccess,
+        });
       } catch (exception) {
         restoreSnapshot(snapshot);
         throw exception;
@@ -2237,12 +2241,9 @@ export function WorkspaceServiceProvider({
 
   const createResource = useCallback(
     async (resource: Resource) => {
-      requirePermission("resource.manage");
       const snapshot = captureSnapshot();
       setResources((current) => (current.some((item) => item.id === resource.id) ? current.map((item) => (item.id === resource.id ? resource : item)) : [resource, ...current]));
-      try { await persist("resource", resource); } catch (error) { restoreSnapshot(snapshot); throw error; }
-      await requestReportingAfterSuccess(currentEvent.id);
-      return resource;
+      try { return await createResourceOperation(resource, { assertPermission: requirePermission, persist: (value) => persist("resource", value), moveToSector: repositories.resources.moveToSector, requestReporting: () => requestReportingAfterSuccess(currentEvent.id) }); } catch (error) { restoreSnapshot(snapshot); throw error; }
     },
     [captureSnapshot, currentEvent.id, persist, requirePermission, requestReportingAfterSuccess, restoreSnapshot],
   );
@@ -2300,11 +2301,9 @@ export function WorkspaceServiceProvider({
 
   const moveResourceToSector = useCallback(
     async (resourceId: string, sectorId: string) => {
-      requirePermission("resource.manage");
       const snapshot = captureSnapshot();
       setResources((current) => current.map((resource) => (resource.id === resourceId ? { ...resource, sectorId, updatedAt: nowIso() } : resource)));
-      try { await repositories.resources.moveToSector(resourceId, sectorId); } catch (error) { restoreSnapshot(snapshot); throw error; }
-      await requestReportingAfterSuccess(currentEvent.id);
+      try { await moveResourceToSectorOperation(resourceId, sectorId, { assertPermission: requirePermission, persist: (value) => persist("resource", value), moveToSector: repositories.resources.moveToSector, requestReporting: () => requestReportingAfterSuccess(currentEvent.id) }); } catch (error) { restoreSnapshot(snapshot); throw error; }
     },
     [captureSnapshot, currentEvent.id, repositories.resources, requestReportingAfterSuccess, requirePermission, restoreSnapshot],
   );

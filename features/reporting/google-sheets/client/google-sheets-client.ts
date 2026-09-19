@@ -1,8 +1,8 @@
 import { google, type sheets_v4 } from "googleapis";
-import type { WorkbookProjection, SheetProjection, SheetCellValue } from "@/features/reporting/google-sheets/workbook-projection";
+import { GOOGLE_SHEETS_TAB_NAMES, type WorkbookProjection, type SheetProjection, type SheetCellValue } from "@/features/reporting/google-sheets/workbook-projection";
 
 export const GOOGLE_SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"] as const;
-const CANONICAL_TABS = ["Resumen", "Reservas", "Preventa", "Invitados", "Cortesías", "Reportes finales"] as const;
+const CANONICAL_TABS = GOOGLE_SHEETS_TAB_NAMES;
 
 export type GoogleSheetsErrorCode = "google_auth_failed" | "google_permission_denied" | "google_spreadsheet_not_found" | "google_rate_limited" | "google_schema_mismatch" | "google_write_failed";
 export class GoogleSheetsClientError extends Error {
@@ -54,7 +54,7 @@ export function createGoogleSheetsTransport(api = createGoogleSheetsApi()): Goog
 export function sanitizeTextCell(value: string): string { return /^[=+\-@]/.test(value) ? `'${value}` : value; }
 export function serializeCell(value: SheetCellValue, type: string): SheetCellValue {
   if (value === null) return null;
-  if (type === "text" || type === "date" || type === "datetime") return sanitizeTextCell(String(value));
+  if ((type === "text" || type === "date" || type === "datetime" || type === "mixed") && typeof value === "string") return sanitizeTextCell(value);
   return value;
 }
 export function serializeSheet(sheet: SheetProjection): sheets_v4.Schema$ValueRange {
@@ -73,7 +73,7 @@ export async function ensureWorkbookSchema(transport: GoogleSheetsTransport, spr
 export type WorkbookWriteResult = { success: true; spreadsheetId: string; sheetsUpdated: string[]; datasetHash: string };
 export async function writeWorkbookProjection(transport: GoogleSheetsTransport, spreadsheetId: string, projection: WorkbookProjection, datasetHash: string): Promise<WorkbookWriteResult> {
   const metadata = await ensureWorkbookSchema(transport, spreadsheetId);
-  const liveSheets = [projection.sheets.summary, projection.sheets.reservations, projection.sheets.presales, projection.sheets.attendees, projection.sheets.courtesies];
+  const liveSheets = [projection.sheets.summary, projection.sheets.reservations, projection.sheets.attendees];
   try {
     await transport.clear(spreadsheetId, liveSheets.map((sheet) => `'${sheet.title}'!A:ZZ`));
     await transport.updateValues(spreadsheetId, liveSheets.map(serializeSheet));

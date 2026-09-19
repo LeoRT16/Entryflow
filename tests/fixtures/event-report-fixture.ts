@@ -50,6 +50,7 @@ function reservation({
   status,
   price,
   quantity,
+  benefits,
   resource,
 }: {
   id: string;
@@ -58,6 +59,7 @@ function reservation({
   status: ReservationStatus;
   price?: number;
   quantity?: number;
+  benefits?: Array<{ id: string; label: string; quantity: number }>;
   resource?: "mesa-1" | "mesa-2";
 }): ReservationRecord {
   const isPresale = type === "Preventa";
@@ -95,7 +97,7 @@ function reservation({
       reservationPrice: isPresale ? price / Math.max(quantity ?? 1, 1) : price,
       ...(isPresale ? { unitPrice: price / Math.max(quantity ?? 1, 1), quantity, totalPrice: price } : {}),
       includedAccesses: quantity ?? 0,
-      benefits: [],
+      benefits: benefits ?? [],
     },
     notes: "",
     guestIds: [],
@@ -107,12 +109,13 @@ function reservation({
 }
 
 export const reportReservations: ReservationRecord[] = [
-  reservation({ id: "mesa-active", code: "M-01", type: "Mesa", status: "Confirmed", price: 400, quantity: 5, resource: "mesa-1" }),
+  reservation({ id: "mesa-active", code: "M-01", type: "Mesa", status: "Confirmed", price: 400, quantity: 5, benefits: [{ id: "drink", label: "Bebida", quantity: 2 }, { id: "vip", label: "Acceso VIP", quantity: 1 }], resource: "mesa-1" }),
   reservation({ id: "mesa-second", code: "M-02", type: "Mesa", status: "Confirmed", price: 400, quantity: 2, resource: "mesa-2" }),
   reservation({ id: "presale-individual", code: "P-01", type: "Preventa", status: "Confirmed", price: 50, quantity: 1 }),
   reservation({ id: "presale-group", code: "P-02", type: "Preventa", status: "Confirmed", price: 150, quantity: 3 }),
   reservation({ id: "courtesy-active", code: "C-01", type: "Cortesía", status: "Confirmed" }),
   reservation({ id: "cart5-cancelled", code: "CART5", type: "Mesa", status: "Cancelled", price: 999 }),
+  reservation({ id: "legacy-draft-no-snapshot", code: "LEGACY-01", type: "Mesa", status: "Draft" }),
 ];
 
 function guest(index: number, reservationId: string, overrides: Partial<Guest> = {}): Guest {

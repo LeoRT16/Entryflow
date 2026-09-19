@@ -1,51 +1,154 @@
 import { createHash } from "node:crypto";
-import type { EventReport, MoneyValue, ReportDiagnostic } from "@/features/reporting/types";
+import { formatReservationStatus } from "@/features/reservations/domain/reservation-domain";
+import { combineMoney, knownMoney, unknownMoney } from "@/features/reporting/domain/report-money";
+import type { EventReport, MoneyValue, ReservationReport } from "@/features/reporting/types";
 
-export const GOOGLE_SHEETS_SCHEMA_VERSION = 1 as const;
-export const GOOGLE_SHEETS_TAB_NAMES = ["Resumen", "Reservas", "Preventa", "Invitados", "Cortesías", "Reportes finales"] as const;
+export const GOOGLE_SHEETS_SCHEMA_VERSION = 2 as const;
+export const GOOGLE_SHEETS_TAB_NAMES = ["Resumen", "Reservas", "Invitados"] as const;
 export type SheetCellValue = string | number | boolean | null;
-export type SheetColumnType = "text" | "integer" | "number" | "boolean" | "date" | "datetime" | "money";
-export type SheetColumn = { key: string; header: string; type: SheetColumnType };
+export type SheetColumnType = "text" | "integer" | "number" | "mixed" | "boolean" | "date" | "datetime" | "money";
+export type SheetColumn = {
+  key: string;
+  header: string;
+  type: SheetColumnType;
+  visibility?: "visible" | "hidden";
+  widthPx: number;
+  numberFormat?: string;
+};
 export type SheetProjection = {
   title: string;
   columns: readonly SheetColumn[];
   rowIdentity: string;
   ordering: string;
   rows: ReadonlyArray<Record<string, SheetCellValue>>;
+  filterRange: string | null;
+  frozenRows: number;
+  frozenColumns?: number;
+  rowNumberFormats?: Readonly<Record<string, string>>;
 };
 export type WorkbookProjection = {
   schemaVersion: typeof GOOGLE_SHEETS_SCHEMA_VERSION;
   eventId: string;
   generatedAt: string;
+  snapshotTimestamp: string | null;
   datasetHashInput: unknown;
   sheets: {
     summary: SheetProjection;
     reservations: SheetProjection;
-    presales: SheetProjection;
     attendees: SheetProjection;
-    courtesies: SheetProjection;
-    finalReports: SheetProjection;
   };
 };
+export type WorkbookProjectionOptions = { snapshotTimestamp?: string | null };
 
-const summaryKeys = ["organization", "event", "date", "venue", "status", "last_sync_at", "report_version", "sheet_schema_version", "dataset_hash", "active_reservations", "cancelled_reservations", "operational_people", "checked_in", "pending", "courtesies", "presales", "presale_accesses_sold", "active_extra_wristbands", "physical_capacity", "assigned_capacity", "remaining_capacity", "currency", "tables_value", "presale_value", "extras_value", "total_commercial", "integrity_status", "diagnostics_count"] as const;
-const columns = (keys: readonly string[], headers: readonly string[], types: readonly SheetColumnType[]) => keys.map((key, index) => ({ key, header: headers[index], type: types[index] })) as readonly SheetColumn[];
-const summaryColumns = columns(["key", "value", "type"], ["Clave", "Valor", "Tipo"], ["text", "text", "text"]);
-const reservationColumns = columns(["reservation_id","code","type","status","operational","holder","holder_carnet","holder_whatsapp","venue","zone","resource_name","resource_id","physical_capacity","base_accesses","extra_wristbands","operational_people","checked_in","pending","currency","sold_value","extra_value","sold_total","created_at","updated_at"], ["ID reserva","Código","Tipo","Estado","Operativa","Titular","Carnet titular","WhatsApp titular","Venue","Zona","Recurso/Mesa","ID recurso","Capacidad física","Accesos base","Manillas extra","Personas operativas","Ingresados","Pendientes","Moneda","Valor vendido","Valor extras","Total vendido","Creada","Actualizada"], ["text","text","text","text","boolean","text","text","text","text","text","text","text","integer","integer","integer","integer","integer","integer","text","money","money","money","datetime","datetime"]);
-const presaleColumns = columns(["reservation_id","code","holder","status","quantity_purchased","loaded_people","remaining_to_load","checked_in","pending","currency","unit_price","sold_total","date"], ["ID reserva","Código","Titular","Estado","Cantidad comprada","Personas cargadas","Pendiente por cargar","Ingresados","Pendientes","Moneda","Precio unitario","Total vendido","Fecha"], ["text","text","text","text","integer","integer","integer","integer","integer","text","money","money","date"]);
-const attendeeColumns = columns(["guest_id","name","carnet","whatsapp","access_code","access_type","reservation_id","reservation_code","reservation_type","resource_name","resource_id","zone","operational","admission_status","reservation_status","qr_status","checked_in","check_in_at","method","gate","extra_wristband","extra_sale_id"], ["ID invitado","Nombre","Carnet","WhatsApp","Código de acceso","Tipo de acceso","ID reserva","Código reserva","Tipo de reserva","Recurso/Mesa","ID recurso","Zona","Operativo","Estado admisión","Estado reserva","Estado QR","Ingresó","Hora ingreso","Método","Puerta","Manilla extra","ID venta extra"], ["text","text","text","text","text","text","text","text","text","text","text","text","boolean","text","text","text","boolean","datetime","text","text","boolean","text"]);
-const courtesyColumns = columns(["reservation_id","reference","guest_id","name","carnet","whatsapp","access_code","operational","checked_in","status","check_in_at","cancelled_historical","reason","commercial_value"], ["ID reserva","Referencia/Grupo","ID invitado","Nombre","Carnet","WhatsApp","Código de acceso","Operativo","Ingresó","Estado","Hora ingreso","Anulada histórica","Motivo","Valor comercial"], ["text","text","text","text","text","text","text","boolean","boolean","text","datetime","boolean","text","money"]);
-const finalReportColumns = columns(["report_run_id","event_id","version","cutoff_at","generated_at","generated_by","operational_people","checked_in","pending","sold_total","currency","integrity_status","dataset_hash","pdf_url","sheet_version","notes","status"], ["ID ejecución","ID evento","Versión","Corte","Generado","Generado por","Personas operativas","Ingresados","Pendientes","Total vendido","Moneda","Integridad","Hash dataset","URL PDF","Versión hoja","Notas","Estado"], ["text","text","integer","datetime","datetime","text","integer","integer","integer","money","text","text","text","text","integer","text","text"]);
+const makeColumns = (items: Array<[string, string, SheetColumnType, number, ("visible" | "hidden")?, string?]>): readonly SheetColumn[] => items.map(([key, header, type, widthPx, visibility = "visible", numberFormat]) => ({ key, header, type, widthPx, visibility, ...(numberFormat ? { numberFormat } : {}) }));
+const summaryColumns = makeColumns([
+  ["section", "Sección", "text", 145], ["metric", "Indicador", "text", 230], ["value", "Valor", "mixed", 150], ["currency", "Moneda", "text", 115], ["summary_key", "Clave interna", "text", 0, "hidden"],
+]);
+const reservationColumns = makeColumns([
+  ["code", "Código", "text", 125], ["type", "Tipo", "text", 110], ["status", "Estado", "text", 115], ["holder", "Titular", "text", 220], ["zone", "Zona", "text", 150], ["resource_name", "Mesa/Recurso", "text", 165], ["access_quantity", "Accesos incluidos/comprados", "integer", 175, "visible", "0"], ["registered_people", "Personas registradas", "integer", 145, "visible", "0"], ["checked_in", "Ingresados", "integer", 100, "visible", "0"], ["pending", "Pendientes", "integer", 100, "visible", "0"], ["extra_wristbands", "Manillas extra", "integer", 115, "visible", "0"], ["benefits", "Beneficios", "text", 240], ["holder_carnet", "Carnet titular", "text", 135], ["holder_whatsapp", "WhatsApp titular", "text", 145], ["currency", "Moneda", "text", 105], ["price", "Precio", "money", 125, "visible", "#,##0.00"], ["price_unit", "Unidad de precio", "text", 125], ["base_value", "Valor base", "money", 125, "visible", "#,##0.00"], ["extra_value", "Valor extras", "money", 125, "visible", "#,##0.00"], ["total", "Total", "money", 125, "visible", "#,##0.00"],
+  ["reservation_id", "ID reserva", "text", 0, "hidden"], ["resource_id", "ID recurso", "text", 0, "hidden"], ["sector_id", "ID zona", "text", 0, "hidden"],
+]);
+const attendeeColumns = makeColumns([
+  ["access_code", "Código de acceso", "text", 155], ["name", "Nombre", "text", 220], ["type", "Tipo", "text", 125], ["reservation_status", "Estado de la invitación", "text", 145], ["admission_status", "Estado ingreso", "text", 125], ["reservation_code", "Reserva", "text", 120], ["holder", "Titular", "text", 210], ["zone", "Zona", "text", 130], ["resource_name", "Mesa/Recurso", "text", 150], ["carnet", "Carnet", "text", 135], ["whatsapp", "WhatsApp", "text", 145], ["check_in_at", "Hora ingreso", "datetime", 155, "visible", "dd/mm/yyyy hh:mm"], ["extra_wristband", "Manilla extra", "text", 120],
+  ["guest_id", "ID invitado", "text", 0, "hidden"], ["reservation_id", "ID reserva", "text", 0, "hidden"],
+]);
 
-function amount(value: MoneyValue) { return value.complete ? value.amount : null; }
-function currency(value: MoneyValue) { return value.currency; }
-function integrity(diagnostics: ReportDiagnostic[]) { return diagnostics.some((item) => item.severity === "error") ? "error" : diagnostics.some((item) => item.severity === "warning") ? "warning" : "ok"; }
-function reportDate(report: EventReport) { return report.metadata.eventStartAt.slice(0, 10); }
-function resourceFor(report: EventReport, id: string | null) { return id ? report.resources.find((resource) => resource.resourceId === id) : undefined; }
-function stableRows(rows: Array<Record<string, SheetCellValue>>, key: string) { return rows.sort((a, b) => String(a[key]).localeCompare(String(b[key]))); }
+function excelColumnName(index: number) {
+  let number = index + 1;
+  let result = "";
+  while (number > 0) { const remainder = (number - 1) % 26; result = String.fromCharCode(65 + remainder) + result; number = Math.floor((number - 1) / 26); }
+  return result;
+}
+function filterRange(columns: readonly SheetColumn[], rows: number) { return `A1:${excelColumnName(columns.length - 1)}${rows + 1}`; }
+function moneyAmount(value: MoneyValue): SheetCellValue {
+  if (value.currencies.length > 1) return "Monedas mixtas";
+  return value.complete && value.amount !== null ? value.amount : "Sin dato";
+}
+function moneyCurrency(value: MoneyValue) {
+  if (value.currencies.length > 1) return "Monedas mixtas";
+  return value.currency ?? (value.complete ? "—" : "Sin dato");
+}
+function eventStatusLabel(status: EventReport["metadata"]["eventStatus"]) {
+  const labels = { draft: "Borrador", published: "Publicado", live: "En curso", finished: "Finalizado", cancelled: "Cancelado" } as const;
+  return labels[status];
+}
+function reservationTypeLabel(type: ReservationReport["type"]) {
+  const labels = { Mesa: "Mesa", Preventa: "Preventa", "Cortesía": "Cortesía", Cumpleaños: "Cumpleaños", VIP: "VIP", Corporativo: "Corporativo" } as const;
+  return labels[type];
+}
+function accessTypeLabel(type: EventReport["attendees"][number]["accessType"]) {
+  const labels = { mesa: "Mesa", presale: "Preventa", courtesy: "Cortesía", extra_wristband: "Manilla extra", other: "Otro" } as const;
+  return labels[type];
+}
+function admissionStatusLabel(status: EventReport["attendees"][number]["admissionStatus"]) {
+  const labels = { Pendiente: "Pendiente", Ingresó: "Ingresó", Anulada: "Anulada", Bloqueada: "Bloqueada" } as const;
+  return labels[status];
+}
+function textOrUnknown(value: string | null | undefined) { return value?.trim() || "Sin dato"; }
+function formatBenefits(reservation: ReservationReport) {
+  if (reservation.benefits === null) return "Sin dato";
+  const values = reservation.benefits
+    .filter((benefit) => benefit.quantity > 0)
+    .slice()
+    .sort((left, right) => left.label.localeCompare(right.label, "es", { sensitivity: "base" }) || left.id.localeCompare(right.id));
+  return values.length ? values.map((benefit) => `${benefit.label} ×${benefit.quantity}`).join(" · ") : "—";
+}
+function priceUnitLabel(reservation: ReservationReport) {
+  if (reservation.pricingUnit === "per_reservation") return "Por reserva";
+  if (reservation.pricingUnit === "per_access") return "Por acceso";
+  if (reservation.pricingUnit === "courtesy") return "Cortesía";
+  return "Sin dato";
+}
+function historicalBaseValue(reservation: ReservationReport): MoneyValue {
+  if (reservation.type === "Cortesía") return knownMoney(0, null);
+  const snapshot = reservation.commercialSnapshot;
+  const amount = reservation.type === "Preventa"
+    ? snapshot?.saleType === "presale" ? snapshot.totalPrice : null
+    : snapshot?.reservationPrice ?? null;
+  return typeof amount === "number" ? knownMoney(amount, snapshot?.currency ?? null) : unknownMoney(snapshot?.currency ?? null);
+}
+function accessQuantity(reservation: ReservationReport): SheetCellValue {
+  if (reservation.type === "Mesa") return reservation.includedAccesses ?? "Sin dato";
+  if (reservation.type === "Preventa") return reservation.purchasedQuantity ?? "Sin dato";
+  return reservation.type === "Cortesía" ? "—" : "Sin dato";
+}
+function localDateTime(value: string, timeZone: string): string {
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) return "Sin dato";
+  try {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(instant).map((part) => [part.type, part.value]));
+    return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
+  } catch { return "Sin dato"; }
+}
+function nullableLocalDateTime(value: string | undefined, timeZone: string, checkedIn: boolean): string {
+  if (!value) return checkedIn ? "Sin dato" : "—";
+  return localDateTime(value, timeZone);
+}
+function stableCompare(left: string | null | undefined, right: string | null | undefined) {
+  const leftValue = left?.trim() ?? "";
+  const rightValue = right?.trim() ?? "";
+  if (!leftValue && rightValue) return 1;
+  if (leftValue && !rightValue) return -1;
+  return leftValue.localeCompare(rightValue, "es", { sensitivity: "base", numeric: true });
+}
+function historicalMoneyRows(report: EventReport) {
+  return [
+    ["COMERCIAL HISTÓRICO", "Mesas", report.commercial.sold.mesas.value, "tables"],
+    ["COMERCIAL HISTÓRICO", "Preventa", report.commercial.sold.presales.value, "presales"],
+    ["COMERCIAL HISTÓRICO", "Manillas extra", report.commercial.sold.extraWristbands.value, "extras"],
+    ["COMERCIAL HISTÓRICO", "Total", report.commercial.sold.total, "total"],
+  ] as const;
+}
 
 export function buildWorkbookDatasetHashInput(projection: WorkbookProjection) {
-  return Object.fromEntries(Object.entries(projection.sheets).map(([name, sheet]) => [name, { columns: sheet.columns, rowIdentity: sheet.rowIdentity, rows: sheet.rows }]));
+  return Object.fromEntries(Object.entries(projection.sheets).map(([name, sheet]) => [name, {
+    columns: sheet.columns,
+    rowIdentity: sheet.rowIdentity,
+    rowNumberFormats: sheet.rowNumberFormats ?? {},
+    frozenRows: sheet.frozenRows,
+    frozenColumns: sheet.frozenColumns ?? 0,
+    rows: sheet.rows.filter((row) => row.summary_key !== "last_sync"),
+  }]));
 }
 
 export function canonicalize(value: unknown): string {
@@ -56,23 +159,122 @@ export function canonicalize(value: unknown): string {
 
 export function hashWorkbookDataset(input: unknown) { return createHash("sha256").update(canonicalize(input)).digest("hex"); }
 
-export function buildGoogleSheetsProjection(report: EventReport): WorkbookProjection {
-  const diagnostics = report.diagnostics;
-  const integrityStatus = integrity(diagnostics);
-  const resourceMap = new Map(report.resources.flatMap((resource) => resource.reservationIds.map((id) => [id, resource] as const)));
-  const summaryValues: Record<string, SheetCellValue> = {
-    organization: report.metadata.organizationName, event: report.metadata.eventName, date: reportDate(report), venue: report.metadata.venueName, status: report.metadata.eventStatus, last_sync_at: null, report_version: report.version, sheet_schema_version: GOOGLE_SHEETS_SCHEMA_VERSION, dataset_hash: null,
-    active_reservations: report.summary.activeReservations, cancelled_reservations: report.summary.cancelledReservations, operational_people: report.summary.operationalPeople, checked_in: report.summary.checkedInPeople, pending: report.summary.pendingPeople, courtesies: report.summary.activeCourtesyPeople, presales: report.summary.presalePurchases, presale_accesses_sold: report.summary.presaleAccessesSold, active_extra_wristbands: report.summary.activeExtraWristbands,
-    physical_capacity: report.resources.reduce((sum, resource) => sum + resource.physicalCapacity, 0), assigned_capacity: report.resources.reduce((sum, resource) => sum + resource.capacityAssigned, 0), remaining_capacity: report.resources.reduce((sum, resource) => sum + Math.max(resource.physicalCapacity - resource.capacityAssigned, 0), 0), currency: report.commercial.sold.total.currency, tables_value: amount(report.commercial.sold.mesas.value), presale_value: amount(report.commercial.sold.presales.value), extras_value: amount(report.commercial.sold.extraWristbands.value), total_commercial: amount(report.commercial.sold.total), integrity_status: integrityStatus, diagnostics_count: diagnostics.length,
+export function buildGoogleSheetsProjection(report: EventReport, options: WorkbookProjectionOptions = {}): WorkbookProjection {
+  const resourceByReservationId = new Map(report.resources.flatMap((resource) => resource.reservationIds.map((id) => [id, resource] as const)));
+  const reservations = report.reservations.map((item) => {
+    const resource = resourceByReservationId.get(item.id) ?? (item.resourceId ? report.resources.find((candidate) => candidate.resourceId === item.resourceId) : undefined);
+    const baseValue = historicalBaseValue(item);
+    const total = combineMoney([baseValue, item.extraWristbandValue]);
+    const cellCurrency = total.currencies.length > 1 ? "Monedas mixtas" : item.commercialSnapshot?.currency ?? item.soldValue.currency ?? item.extraWristbandValue.currency ?? (total.complete ? "—" : "Sin dato");
+    return {
+      reservation_id: item.id,
+      code: item.code,
+      type: reservationTypeLabel(item.type),
+      status: formatReservationStatus(item.status),
+      holder: item.holder,
+      holder_carnet: textOrUnknown(item.holderCarnet),
+      holder_whatsapp: textOrUnknown(item.holderWhatsapp),
+      zone: textOrUnknown(resource?.sectorName ?? (item.sectorId ? null : undefined)),
+      resource_name: textOrUnknown(resource?.resourceName),
+      access_quantity: accessQuantity(item),
+      registered_people: item.operationalPeople,
+      checked_in: item.checkedInPeople,
+      pending: item.pendingPeople,
+      extra_wristbands: item.extraWristbandQuantity,
+      benefits: formatBenefits(item),
+      currency: cellCurrency,
+      price: moneyAmount(item.price),
+      price_unit: priceUnitLabel(item),
+      base_value: moneyAmount(baseValue),
+      extra_value: moneyAmount(item.extraWristbandValue),
+      total: moneyAmount(total),
+      resource_id: item.resourceId,
+      sector_id: item.sectorId,
+    } satisfies Record<string, SheetCellValue>;
+  }).sort((left, right) => stableCompare(left.zone === "Sin dato" ? null : left.zone, right.zone === "Sin dato" ? null : right.zone)
+    || stableCompare(left.resource_name === "Sin dato" ? null : left.resource_name, right.resource_name === "Sin dato" ? null : right.resource_name)
+    || stableCompare(left.type, right.type)
+    || stableCompare(left.code, right.code)
+    || left.code.localeCompare(right.code, "es", { sensitivity: "base", numeric: true })
+    || left.reservation_id.localeCompare(right.reservation_id));
+
+  const attendees = report.attendees.map((item) => {
+    const resource = resourceByReservationId.get(item.reservationId);
+    return {
+      guest_id: item.guestId,
+      access_code: item.accessCode,
+      name: item.name,
+      carnet: item.carnet,
+      whatsapp: item.whatsapp,
+      type: accessTypeLabel(item.accessType),
+      reservation_code: item.reservationCode,
+      reservation_id: item.reservationId,
+      holder: textOrUnknown(item.reservationHolder),
+      zone: textOrUnknown(item.zoneName ?? resource?.sectorName),
+      resource_name: textOrUnknown(item.resourceName ?? resource?.resourceName),
+      reservation_status: formatReservationStatus(item.reservationStatus),
+      admission_status: admissionStatusLabel(item.admissionStatus),
+      check_in_at: nullableLocalDateTime(item.checkInAt, report.metadata.timezone, item.checkedIn),
+      extra_wristband: item.extraWristband ? "Sí" : "No",
+    } satisfies Record<string, SheetCellValue>;
+  }).sort((left, right) => stableCompare(left.name, right.name)
+    || stableCompare(left.carnet, right.carnet)
+    || left.access_code.localeCompare(right.access_code, "es", { sensitivity: "base", numeric: true })
+    || String(left.guest_id).localeCompare(String(right.guest_id)));
+
+  const summaryRows: Array<Record<string, SheetCellValue>> = [];
+  let lastSummarySection = "";
+  const addSummary = (section: string, metric: string, value: SheetCellValue, key: string, currency = "") => {
+    if (section !== lastSummarySection) summaryRows.push({ section, metric: null, value: null, currency: "", summary_key: `section_${section.toLowerCase().replace(/[^a-z0-9]+/g, "_")}` });
+    lastSummarySection = section;
+    summaryRows.push({ section: "", metric, value, currency, summary_key: key });
   };
-  const summaryRows = summaryKeys.map((key) => ({ key, value: summaryValues[key], type: typeof summaryValues[key] === "number" ? "number" : summaryValues[key] === null ? "null" : "text" }));
-  const reservations = stableRows(report.reservations.map((item) => { const resource = resourceMap.get(item.id) ?? resourceFor(report, item.resourceId); return { reservation_id: item.id, code: item.code, type: item.type, status: item.status, operational: item.operational, holder: item.holder, holder_carnet: null, holder_whatsapp: null, venue: resource?.venueName ?? report.metadata.venueName, zone: resource?.sectorName ?? null, resource_name: resource?.resourceName ?? null, resource_id: item.resourceId, physical_capacity: resource?.physicalCapacity ?? null, base_accesses: resource?.baseAccesses ?? null, extra_wristbands: resource?.extraWristbands ?? null, operational_people: item.operationalPeople, checked_in: item.checkedInPeople, pending: item.pendingPeople, currency: currency(item.soldValue), sold_value: amount(item.soldValue), extra_value: amount(item.extraWristbandValue), sold_total: amount(item.soldTotal), created_at: null, updated_at: null }; }), "reservation_id");
-  const presales = stableRows(report.presales.map((item) => ({ reservation_id: item.reservationId, code: item.reservationCode, holder: item.holder, status: item.status, quantity_purchased: item.quantityPurchased, loaded_people: item.loadedPeople, remaining_to_load: item.remainingToLoad, checked_in: item.checkedInPeople, pending: item.pendingPeople, currency: item.soldTotal.currency, unit_price: amount(item.unitPrice), sold_total: amount(item.soldTotal), date: reportDate(report) })), "reservation_id");
-  const attendeesById = new Map(report.attendees.map((item) => [item.guestId, item]));
-  const attendees = stableRows(report.attendees.map((item) => { const resource = resourceMap.get(item.reservationId); return { guest_id: item.guestId, name: item.name, carnet: item.carnet, whatsapp: item.whatsapp, access_code: item.accessCode, access_type: item.accessType, reservation_id: item.reservationId, reservation_code: item.reservationCode, reservation_type: null, resource_name: resource?.resourceName ?? null, resource_id: resource?.resourceId ?? null, zone: resource?.sectorName ?? null, operational: item.operational, admission_status: item.admissionStatus, reservation_status: item.reservationStatus, qr_status: item.qrStatus, checked_in: item.checkedIn, check_in_at: item.checkInAt ?? null, method: null, gate: null, extra_wristband: item.extraWristband, extra_sale_id: item.extraWristbandSaleId ?? null }; }), "guest_id");
-  const courtesies = stableRows(report.courtesies.flatMap((item) => [...new Set([...item.attendeeIds, ...item.cancelledAttendeeIds])].map((guestId) => { const attendee = attendeesById.get(guestId); return { reservation_id: item.reservationId, reference: item.reference, guest_id: guestId, name: attendee?.name ?? null, carnet: attendee?.carnet ?? null, whatsapp: attendee?.whatsapp ?? null, access_code: attendee?.accessCode ?? null, operational: attendee?.operational ?? item.operational, checked_in: attendee?.checkedIn ?? false, status: attendee?.reservationStatus ?? item.status, check_in_at: attendee?.checkInAt ?? null, cancelled_historical: item.cancelledAttendeeIds.includes(guestId), reason: null, commercial_value: 0 }; })), "guest_id");
-  const sheets = { summary: { title: "Resumen", columns: summaryColumns, rowIdentity: "key", ordering: "fixed summary key order", rows: summaryRows }, reservations: { title: "Reservas", columns: reservationColumns, rowIdentity: "reservation_id", ordering: "reservation_id ascending", rows: reservations }, presales: { title: "Preventa", columns: presaleColumns, rowIdentity: "reservation_id", ordering: "reservation_id ascending", rows: presales }, attendees: { title: "Invitados", columns: attendeeColumns, rowIdentity: "guest_id", ordering: "guest_id ascending", rows: attendees }, courtesies: { title: "Cortesías", columns: courtesyColumns, rowIdentity: "guest_id", ordering: "guest_id ascending", rows: courtesies }, finalReports: { title: "Reportes finales", columns: finalReportColumns, rowIdentity: "report_run_id", ordering: "append-only by generated_at", rows: [] } } as const;
-  const projection = { schemaVersion: GOOGLE_SHEETS_SCHEMA_VERSION, eventId: report.metadata.eventId, generatedAt: report.metadata.generatedAt, datasetHashInput: null, sheets } as unknown as WorkbookProjection;
+  addSummary("EVENTO", "Evento", report.metadata.eventName, "event");
+  addSummary("EVENTO", "Fecha y hora local", localDateTime(report.metadata.eventStartAt, report.metadata.timezone), "event_local_datetime");
+  addSummary("EVENTO", "Lugar", report.metadata.venueName, "venue");
+  addSummary("EVENTO", "Estado", eventStatusLabel(report.metadata.eventStatus), "event_status");
+  addSummary("EVENTO", "Última sincronización", options.snapshotTimestamp ? localDateTime(options.snapshotTimestamp, report.metadata.timezone) : "Sin sincronización", "last_sync");
+  addSummary("PERSONAS", "Registradas", report.summary.operationalPeople, "people_registered");
+  addSummary("PERSONAS", "Ingresadas", report.summary.checkedInPeople, "people_checked_in");
+  addSummary("PERSONAS", "Pendientes", report.summary.pendingPeople, "people_pending");
+  addSummary("RESERVAS", "Operativas", report.summary.activeReservations, "reservations_operational");
+  addSummary("RESERVAS", "Completadas", report.historical.completedReservationIds.length, "reservations_completed");
+  addSummary("RESERVAS", "No asistieron", report.historical.noShowReservationIds.length, "reservations_no_show");
+  addSummary("RESERVAS", "Canceladas", report.historical.cancelledReservationIds.length, "reservations_cancelled");
+  addSummary("PREVENTA", "Compras", report.summary.presalePurchases, "presale_purchases");
+  addSummary("PREVENTA", "Accesos vendidos", report.summary.presaleAccessesSold ?? "Sin dato", "presale_accesses_sold");
+  addSummary("PREVENTA", "Personas cargadas", report.summary.presalePeopleLoaded, "presale_people_loaded");
+  addSummary("PREVENTA", "Pendientes de cargar", report.summary.presalePendingToLoad ?? "Sin dato", "presale_people_pending");
+  const courtesyAttendees = report.attendees.filter((item) => item.accessType === "courtesy" && item.operational);
+  addSummary("CORTESÍAS", "Personas operativas", courtesyAttendees.length, "courtesy_people");
+  addSummary("CORTESÍAS", "Ingresadas", courtesyAttendees.filter((item) => item.checkedIn).length, "courtesy_checked_in");
+  addSummary("CORTESÍAS", "Pendientes", courtesyAttendees.filter((item) => !item.checkedIn).length, "courtesy_pending");
+  addSummary("CORTESÍAS", "Valor comercial", 0, "courtesy_commercial_value", "—");
+  const hasResources = report.resources.length > 0;
+  const physicalCapacity = hasResources ? report.resources.reduce((sum, resource) => sum + resource.physicalCapacity, 0) : null;
+  const assignedCapacity = hasResources ? report.resources.reduce((sum, resource) => sum + resource.capacityAssigned, 0) : null;
+  addSummary("CAPACIDAD", "Capacidad física", physicalCapacity ?? "Sin dato", "physical_capacity", hasResources ? "personas" : "");
+  addSummary("CAPACIDAD", "Asignada", assignedCapacity ?? "Sin dato", "assigned_capacity", hasResources ? "personas" : "");
+  addSummary("CAPACIDAD", "Disponible", physicalCapacity === null || assignedCapacity === null ? "Sin dato" : Math.max(physicalCapacity - assignedCapacity, 0), "available_capacity", hasResources ? "personas" : "");
+  addSummary("CAPACIDAD", "Utilización", physicalCapacity && assignedCapacity !== null ? assignedCapacity / physicalCapacity : "Sin dato", "capacity_utilization", hasResources ? "%" : "");
+  for (const [section, metric, value, key] of historicalMoneyRows(report)) addSummary(section, metric, moneyAmount(value), key, moneyCurrency(value));
+
+  const summaryNumberFormats = Object.fromEntries(summaryRows.flatMap((row) => {
+    if (typeof row.value !== "number") return [];
+    const key = String(row.summary_key);
+    return [[key, ["tables", "presales", "extras", "total"].includes(key) ? "#,##0.00" : key === "capacity_utilization" ? "0%" : "0"]];
+  }));
+  const summary: SheetProjection = { title: "Resumen", columns: summaryColumns, rowIdentity: "summary_key", ordering: "fixed EntryFlow summary block order", rows: summaryRows, filterRange: null, frozenRows: 1, frozenColumns: 2, rowNumberFormats: { ...summaryNumberFormats, capacity_utilization: "0%" } };
+  const reservationSheet: SheetProjection = { title: "Reservas", columns: reservationColumns, rowIdentity: "reservation_id", ordering: "zone, resource, type, code, reservation_id tie-breaker; nulls last", rows: reservations, filterRange: filterRange(reservationColumns, reservations.length), frozenRows: 1, frozenColumns: 3 };
+  const attendeeSheet: SheetProjection = { title: "Invitados", columns: attendeeColumns, rowIdentity: "guest_id", ordering: "name, carnet, access_code, guest_id tie-breaker; case-insensitive Spanish collation", rows: attendees, filterRange: filterRange(attendeeColumns, attendees.length), frozenRows: 1, frozenColumns: 2 };
+  const projection = {
+    schemaVersion: GOOGLE_SHEETS_SCHEMA_VERSION,
+    eventId: report.metadata.eventId,
+    generatedAt: report.metadata.generatedAt,
+    snapshotTimestamp: options.snapshotTimestamp ?? null,
+    datasetHashInput: null,
+    sheets: { summary, reservations: reservationSheet, attendees: attendeeSheet },
+  } as WorkbookProjection;
   projection.datasetHashInput = buildWorkbookDatasetHashInput(projection);
   return projection;
 }

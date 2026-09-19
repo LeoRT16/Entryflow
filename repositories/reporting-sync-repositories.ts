@@ -3,11 +3,21 @@ import type { Database } from "@/lib/supabase/types";
 import type { ReportingSyncRequest } from "@/features/reporting/sync/types";
 
 export async function requestReportingSync(client: SupabaseClient<Database>, eventId: string): Promise<ReportingSyncRequest> {
-  const { data, error } = await (client as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: Error | null }> }).rpc("request_reporting_sync", { p_event_id: eventId });
+  const routed = client as unknown as {
+    from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { eq: (column: string, value: string) => { is: (column: string, value: null) => Promise<{ data: unknown; error: Error | null }> } } } };
+    rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: Error | null }>;
+  };
+  const destination = await routed.from("reporting_destinations").select("writer_mode,sheet_schema_version,enabled").eq("event_id", eventId).eq("provider", "google_sheets").is("deleted_at", null);
+  if (destination.error) throw destination.error;
+  const row = Array.isArray(destination.data) ? destination.data[0] as Record<string, unknown> | undefined : destination.data as Record<string, unknown> | null;
+  const rpcName = row?.writer_mode === "oauth_user" && Number(row.sheet_schema_version) === 2
+    ? "request_reporting_oauth_sync"
+    : "request_reporting_sync";
+  const { data, error } = await routed.rpc(rpcName, { p_event_id: eventId });
   if (error) throw error;
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row) throw new Error("Reporting sync request returned no work item.");
-  const result = row as { outbox_id: string; destination_id: string; requested_sequence: number };
+  const resultRow = Array.isArray(data) ? data[0] : data;
+  if (!resultRow) throw new Error("Reporting sync request returned no work item.");
+  const result = resultRow as { outbox_id: string; destination_id: string; requested_sequence: number };
   return { outboxId: result.outbox_id, destinationId: result.destination_id, requestedSequence: Number(result.requested_sequence) };
 }
 
@@ -29,6 +39,12 @@ export async function getReportingDestination(client: SupabaseClient<Database>, 
 
 export async function upsertReportingDestination(client: SupabaseClient<Database>, eventId: string, spreadsheetId: string, enabled = true) {
   const { data, error } = await (client as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: Error | null }> }).rpc("upsert_reporting_destination", { p_event_id: eventId, p_spreadsheet_id: spreadsheetId, p_enabled: enabled });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) as Record<string, unknown>;
+}
+
+export async function setReportingDestinationEnabled(client: SupabaseClient<Database>, eventId: string, enabled: boolean) {
+  const { data, error } = await (client as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: Error | null }> }).rpc("set_reporting_destination_enabled", { p_event_id: eventId, p_enabled: enabled });
   if (error) throw error;
   return (Array.isArray(data) ? data[0] : data) as Record<string, unknown>;
 }

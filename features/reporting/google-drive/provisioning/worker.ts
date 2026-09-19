@@ -66,46 +66,14 @@ export async function ensureChild(transport: GoogleDriveTransport, parentId: str
   }
   return transport.createFolder(name, parentId, await transport.generateFolderId());
 }
-async function ensureReserved(transport: GoogleDriveTransport, parentId: string | undefined, definitive: string | null, reserved: string | null, name: string, reserve: (candidate: string) => Promise<string>, confirm: (id: string) => Promise<boolean>, stages: { generate: string; metadata: string; create: string; confirm: string }) {
-  const candidate = reserved ?? (definitive ? null : await atProvisioningStage(stages.generate, () => transport.generateFolderId()));
+async function ensureReserved(transport: GoogleDriveTransport, parentId: string | undefined, definitive: string | null, reserved: string | null, name: string, reserve: (candidate: string) => Promise<string>, confirm: (id: string) => Promise<boolean>) {
+  const candidate = reserved ?? (definitive ? null : await transport.generateFolderId());
   const authoritative = definitive ?? await reserve(candidate!);
   let file;
-  try { file = await atProvisioningStage(stages.metadata, () => transport.getFileMetadata(authoritative)); if (file.trashed || file.mimeType !== FOLDER_MIME_TYPE || parentId !== undefined && !file.parents.includes(parentId)) throw new Error("drive_folder_drift"); }
-  catch (error) { if (classifyDriveError(error) !== "NOT_FOUND") throw error; file = await atProvisioningStage(stages.create, () => transport.createFolder(name, parentId, authoritative)); }
-  if (!definitive && !(await atProvisioningStage(stages.confirm, () => confirm(file.id)))) throw new Error("drive_reservation_conflict");
+  try { file = await transport.getFileMetadata(authoritative); if (file.trashed || file.mimeType !== FOLDER_MIME_TYPE || parentId !== undefined && !file.parents.includes(parentId)) throw new Error("drive_folder_drift"); }
+  catch (error) { if (classifyDriveError(error) !== "NOT_FOUND") throw error; file = await transport.createFolder(name, parentId, authoritative); }
+  if (!definitive && !(await confirm(file.id))) throw new Error("drive_reservation_conflict");
   return file;
-}
-
-function safeDiagnosticText(value: unknown) {
-  if (typeof value !== "string") return undefined;
-  return value.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "[redacted-id]").replace(/\b[A-Za-z0-9_-]{24,}\b/g, "[redacted-value]").replace(/[\r\n]+/g, " ").slice(0, 180);
-}
-function reportProvisioningStageError(stage: string, error: unknown) {
-  const e = error as any; const googleError = e?.response?.data?.error; const nested = Array.isArray(googleError?.errors) ? googleError.errors[0] : undefined;
-  console.warn("drive_provisioning_stage_failure", {
-    stage,
-    errorType: e?.constructor?.name ?? typeof error,
-    code: safeDiagnosticText(String(e?.code ?? googleError?.code ?? "")) || undefined,
-    httpStatus: e?.response?.status ?? e?.status,
-    googleErrorCode: googleError?.code,
-    googleErrorReason: safeDiagnosticText(nested?.reason),
-    message: safeDiagnosticText(googleError?.message ?? e?.message),
-    details: safeDiagnosticText(e?.details ?? e?.response?.data?.details),
-    hint: safeDiagnosticText(e?.hint ?? e?.response?.data?.hint),
-  });
-}
-async function atProvisioningStage<T>(stage: string, operation: () => Promise<T>): Promise<T> {
-  try { return await operation(); } catch (error) { reportProvisioningStageError(stage, error); throw error; }
-}
-async function reserveViaRpc(db: Db, stage: string, name: string, args: Record<string, unknown>) {
-  const result = await db.rpc(name, args);
-  if (result.error) { reportProvisioningStageError(stage, result.error); throw result.error; }
-  return result.data as string;
-}
-async function confirmViaRpc(db: Db, stage: string, name: string, args: Record<string, unknown>) {
-  const result = await db.rpc(name, args);
-  if (result.error) { reportProvisioningStageError(stage, result.error); throw result.error; }
-  return result.data === true;
 }
 
 export async function processDriveProvisioningJob(db: Db, job: Job, transportFactory = createAuthenticatedGoogleDriveTransport, readToken = readDriveRefreshTokenSecret) {
@@ -119,22 +87,22 @@ export async function processDriveProvisioningJob(db: Db, job: Job, transportFac
   try {
     const refresh = await readToken(integration.data.oauth_secret_id);
     const transport = transportFactory(refresh);
-    const root = integration.data.organization_drive_folder_id ? await atProvisioningStage("root_metadata", () => ensureOrganizationDriveRoot(transport, integration.data.organization_drive_folder_id, "La Rota Carlota")) : await ensureReserved(transport, undefined, null, integration.data.reserved_organization_drive_folder_id, integration.data.manage_root_name ? (integration.data.last_applied_root_name ?? "La Rota Carlota") : "La Rota Carlota", async (candidate) => reserveViaRpc(db, "reserve_root_folder_id", "reserve_drive_organization_folder_id", { p_integration_id: job.integration_id, p_candidate_file_id: candidate }), async (id) => confirmViaRpc(db, "confirm_root_folder", "confirm_drive_organization_folder", { p_integration_id: job.integration_id, p_file_id: id }), { generate: "generate_root_folder_id", metadata: "root_metadata", create: "root_create", confirm: "confirm_root_folder" });
-    const desiredEventDate = await atProvisioningStage("event_name_format", async () => canonicalEventDateKey(event.data));
+    const root = integration.data.organization_drive_folder_id ? await ensureOrganizationDriveRoot(transport, integration.data.organization_drive_folder_id, "La Rota Carlota") : await ensureReserved(transport, undefined, null, integration.data.reserved_organization_drive_folder_id, integration.data.manage_root_name ? (integration.data.last_applied_root_name ?? "La Rota Carlota") : "La Rota Carlota", async (candidate) => (async () => { const result = await db.rpc("reserve_drive_organization_folder_id", { p_integration_id: job.integration_id, p_candidate_file_id: candidate }); if (result.error) throw result.error; return result.data as string; })(), async (id) => (async () => { const result = await db.rpc("confirm_drive_organization_folder", { p_integration_id: job.integration_id, p_file_id: id }); if (result.error) throw result.error; return result.data === true; })());
+    const desiredEventDate = await canonicalEventDateKey(event.data);
     const desiredEventName = `${desiredEventDate} — ${event.data.name}`;
-    const folder = await ensureReserved(transport, root.id, location.data.event_drive_folder_id, location.data.reserved_event_drive_folder_id, desiredEventName, async (candidate) => reserveViaRpc(db, "reserve_event_folder_id", "reserve_drive_event_folder_id", { p_location_id: job.event_location_id, p_candidate_file_id: candidate, p_revision: job.target_revision }), async (id) => confirmViaRpc(db, "confirm_event_folder", "confirm_drive_event_folder", { p_location_id: job.event_location_id, p_file_id: id }), { generate: "generate_folder_id", metadata: "event_metadata", create: "event_create", confirm: "confirm_event_folder" });
+    const folder = await ensureReserved(transport, root.id, location.data.event_drive_folder_id, location.data.reserved_event_drive_folder_id, desiredEventName, async (candidate) => (async () => { const result = await db.rpc("reserve_drive_event_folder_id", { p_location_id: job.event_location_id, p_candidate_file_id: candidate, p_revision: job.target_revision }); if (result.error) throw result.error; return result.data as string; })(), async (id) => (async () => { const result = await db.rpc("confirm_drive_event_folder", { p_location_id: job.event_location_id, p_file_id: id }); if (result.error) throw result.error; return result.data === true; })());
     if (location.data.event_drive_folder_id && folder.name !== desiredEventName) {
       if (location.data.last_applied_event_name && folder.name !== location.data.last_applied_event_name) throw new Error("drive_manual_rename_detected");
       await transport.renameFile(folder.id, desiredEventName);
     }
-    const reports = await ensureReserved(transport, folder.id, location.data.final_reports_folder_id, location.data.reserved_final_reports_folder_id, "Reportes finales", async (candidate) => reserveViaRpc(db, "reserve_reports_folder_id", "reserve_drive_reports_folder_id", { p_location_id: job.event_location_id, p_candidate_file_id: candidate, p_revision: job.target_revision }), async (id) => confirmViaRpc(db, "confirm_reports_folder", "confirm_drive_reports_folder", { p_location_id: job.event_location_id, p_file_id: id }), { generate: "generate_folder_id", metadata: "reports_metadata", create: "reports_create", confirm: "confirm_reports_folder" });
-    await atProvisioningStage("persistence", async () => {
+    const reports = await ensureReserved(transport, folder.id, location.data.final_reports_folder_id, location.data.reserved_final_reports_folder_id, "Reportes finales", async (candidate) => (async () => { const result = await db.rpc("reserve_drive_reports_folder_id", { p_location_id: job.event_location_id, p_candidate_file_id: candidate, p_revision: job.target_revision }); if (result.error) throw result.error; return result.data as string; })(), async (id) => (async () => { const result = await db.rpc("confirm_drive_reports_folder", { p_location_id: job.event_location_id, p_file_id: id }); if (result.error) throw result.error; return result.data === true; })());
+    await (async () => {
       const result = await db.from("event_drive_locations").update({ last_applied_event_name: desiredEventName, last_applied_event_date: desiredEventDate }).eq("id", job.event_location_id).eq("organization_id", job.organization_id);
       if (result.error) throw result.error;
       return result;
-    });
+    })();
     const completed = await db.rpc("complete_drive_provisioning_job", { p_outbox_id: job.outbox_id, p_claim_token: job.claim_token, p_target_revision: job.target_revision, p_event_drive_folder_id: folder.id, p_final_reports_folder_id: reports.id });
-    if (completed.error) { reportProvisioningStageError("complete_job", completed.error); throw completed.error; }
+    if (completed.error) throw completed.error;
     const ok = completed;
     if (ok.data !== true) return false;
     return true;
