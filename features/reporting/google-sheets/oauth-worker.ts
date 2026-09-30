@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import { readDriveRefreshTokenSecret } from "@/features/reporting/google-drive/oauth/token-store";
 import { buildGoogleSheetsProjection, buildWorkbookDatasetHashInput, hashWorkbookDataset } from "./workbook-projection";
-import { AtomicWorkbookWriterError, createAtomicGoogleSheetsTransport, updateAtomicWorkbookSyncTimestamp, writeAtomicWorkbookSnapshot, type AtomicGoogleSheetsTransport } from "./atomic-writer";
+import { AtomicWorkbookWriterError, createAtomicGoogleSheetsTransport, safeGoogleSheetsDiagnostic, updateAtomicWorkbookSyncTimestamp, writeAtomicWorkbookSnapshot, type AtomicGoogleSheetsTransport } from "./atomic-writer";
 import { canSkipReportingWrite } from "@/features/reporting/sync/skip";
 import { computeReportingRetryAt } from "@/features/reporting/sync/worker/retry";
 
@@ -26,6 +26,7 @@ function classify(error: unknown): { code: string; status: OAuthFailureStatus; r
     if (error.recoverable) return { code: error.code, status: "retry", recoverable: true };
     return { code: error.code, status: "failed", recoverable: false };
   }
+  if (process.env.NODE_ENV !== "production") console.error("[oauth-reporting]", safeGoogleSheetsDiagnostic(error, "oauth_reporting_sync"));
   return { code: "reporting_sync_failed", status: "retry", recoverable: true };
 }
 

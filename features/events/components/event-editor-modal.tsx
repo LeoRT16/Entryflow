@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
-import type { Event, Venue } from "@/features/domain/types";
+import type { Event, EventModule, Venue } from "@/features/domain/types";
 import {
   buildInvitationArtworkLabel,
   buildInvitationArtworkStoragePath,
@@ -21,9 +21,9 @@ import {
   mergeEventInvitationOverlayLayoutMetadata,
   type InvitationOverlayLayout,
 } from "@/features/events/domain/invitation-overlay";
-import { getEventTypeLabel, getEventCommercialConfig, isTerminalEventStatus, mergeEventCommercialConfig, type CommercialBenefit, type EventCommercialConfig } from "@/features/events/domain";
+import { getEventBlueprint, getEventModuleLabel, getEventTypeLabel, getEventCommercialConfig, isTerminalEventStatus, mergeEventCommercialConfig, resolveEventMetadataForSave, type CommercialBenefit, type EventCommercialConfig } from "@/features/events/domain";
 import { buildEventVenueChangeConfirmation, shouldWarnBeforeChangingEventVenue } from "@/features/events/domain/event-venue-assignment";
-import { toEventDateTimeInputValue } from "@/features/events/domain/event-date-time";
+import { resolveEventStartAtForSave, toEventDateTimeInputValue } from "@/features/events/domain/event-date-time";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { CheckIn } from "@/features/check-in/types";
 import type { Guest } from "@/features/check-in/types";
@@ -120,6 +120,36 @@ function TextArea({
   );
 }
 
+function ModuleToggle({
+  module,
+  selected,
+  required = false,
+  disabled = false,
+  onToggle,
+}: {
+  module: EventModule;
+  selected: boolean;
+  required?: boolean;
+  disabled?: boolean;
+  onToggle?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className={`rounded-[1.25rem] border px-4 py-3 text-left transition ${selected ? "border-cyan-400/50 bg-cyan-400/10" : "border-white/10 bg-black/10 hover:border-white/20 hover:bg-white/[0.04]"} ${disabled ? "cursor-default" : ""}`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-white">{getEventModuleLabel(module)}</span>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+          {required ? "Esencial" : selected ? "Activo" : "Opcional"}
+        </span>
+      </div>
+    </button>
+  );
+}
+
 export default function EventEditorModal({
   open,
   event,
@@ -151,9 +181,21 @@ export default function EventEditorModal({
   const [eventDescription, setEventDescription] = useState(event.description ?? "");
   const [eventCapacity, setEventCapacity] = useState(String(event.capacity));
   const [eventStartAt, setEventStartAt] = useState(() => toEventDateTimeInputValue(event.startAt, event.timezone));
+  const [eventStartAtTouched, setEventStartAtTouched] = useState(false);
   const [eventStatus, setEventStatus] = useState(event.status);
+  const [enabledModules, setEnabledModules] = useState<Event["enabledModules"]>(() => [...event.enabledModules]);
   const [commercialConfig, setCommercialConfig] = useState<EventCommercialConfig>(() => getEventCommercialConfig(event));
+  const [metadataTouched, setMetadataTouched] = useState(false);
   const pendingVenueEventRef = useRef<Event | null>(null);
+  const blueprint = useMemo(() => getEventBlueprint(event.eventType), [event.eventType]);
+
+  const toggleModule = (module: EventModule) => {
+    if (blueprint.requiredModules.includes(module) || blueprint.futureModules.includes(module)) {
+      return;
+    }
+
+    setEnabledModules((current) => current.includes(module) ? current.filter((item) => item !== module) : [...current, module]);
+  };
 
   useEffect(() => {
     if (!open) {
@@ -194,6 +236,7 @@ export default function EventEditorModal({
     );
 
   const updateCommercialConfig = (update: (current: EventCommercialConfig) => EventCommercialConfig) => {
+    setMetadataTouched(true);
     setCommercialConfig((current) => update(current));
   };
 
@@ -263,9 +306,10 @@ export default function EventEditorModal({
       venue: eventVenue.trim() || selectedVenue?.name || event.venue,
       description: eventDescription.trim() || undefined,
       capacity: Number.parseInt(eventCapacity, 10) || event.capacity,
-      startAt: eventStartAt,
+      startAt: resolveEventStartAtForSave({ original: event.startAt, input: eventStartAt, touched: eventStartAtTouched }),
       status: eventStatus,
-      metadata: buildNextMetadata(),
+      enabledModules,
+      metadata: resolveEventMetadataForSave(event.metadata, metadataTouched, buildNextMetadata()),
     };
 
     const shouldWarn = shouldWarnBeforeChangingEventVenue({
@@ -367,6 +411,7 @@ export default function EventEditorModal({
         ...event,
         metadata: buildNextMetadata(nextArtwork),
       };
+      setMetadataTouched(true);
       const savedEvent = await persistEvent(nextEvent);
 
       if (!savedEvent) {
@@ -405,6 +450,7 @@ export default function EventEditorModal({
         ...event,
         metadata: buildNextMetadata(null),
       };
+      setMetadataTouched(true);
       const savedEvent = await persistEvent(nextEvent);
 
       if (!savedEvent) {
@@ -459,7 +505,16 @@ export default function EventEditorModal({
         <div className="mt-6 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Field label="Nombre del evento" value={eventName} onChange={setEventName} placeholder="Evento principal" disabled={!canEditEvent} />
-            <Field label="Fecha y hora" value={eventStartAt} onChange={setEventStartAt} type="datetime-local" disabled={!canEditEvent} />
+            <Field
+              label="Fecha y hora"
+              value={eventStartAt}
+              onChange={(value) => {
+                setEventStartAtTouched(true);
+                setEventStartAt(value);
+              }}
+              type="datetime-local"
+              disabled={!canEditEvent}
+            />
             <Field label="Capacidad" value={eventCapacity} onChange={setEventCapacity} placeholder="800" type="number" disabled={!canEditEvent} />
             {venueOptions.length ? (
               <label className="block">
@@ -497,6 +552,40 @@ export default function EventEditorModal({
               disabled={!canEditEvent}
             />
           </div>
+
+          <section className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Módulos</p>
+              <p className="mt-2 text-sm leading-6 text-slate-400">Las capacidades actuales se conservan. Activá únicamente las opciones que este evento necesita.</p>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {blueprint.requiredModules.map((module) => (
+                <ModuleToggle
+                  key={module}
+                  module={module}
+                  selected={enabledModules.includes(module)}
+                  required
+                  disabled
+                />
+              ))}
+              {blueprint.optionalModules.map((module) => (
+                <ModuleToggle
+                  key={module}
+                  module={module}
+                  selected={enabledModules.includes(module)}
+                  onToggle={() => toggleModule(module)}
+                  disabled={!canEditEvent}
+                />
+              ))}
+            </div>
+
+            {blueprint.futureModules.length ? (
+              <p className="mt-4 text-xs leading-5 text-slate-500">
+                Próximamente: {blueprint.futureModules.map((module) => getEventModuleLabel(module)).join(", ")}.
+              </p>
+            ) : null}
+          </section>
 
           <section className="mt-4 rounded-[1.5rem] border border-cyan-400/15 bg-cyan-400/[0.04] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -574,6 +663,7 @@ export default function EventEditorModal({
                 <button
                   type="button"
                   onClick={() => {
+                    setMetadataTouched(true);
                     setEventOverlayLayout((current) => current ?? getDefaultInvitationOverlayLayout());
                     setOverlayEditorOpen((current) => !current);
                   }}
@@ -628,7 +718,10 @@ export default function EventEditorModal({
                 eventTimezone={event.timezone}
                 artworkUrl={eventArtwork?.url}
                 layout={eventOverlayLayout ?? getDefaultInvitationOverlayLayout()}
-                onChange={setEventOverlayLayout}
+                onChange={(layout) => {
+                  setMetadataTouched(true);
+                  setEventOverlayLayout(layout);
+                }}
               />
             </div>
           ) : null}

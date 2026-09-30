@@ -81,6 +81,16 @@ export function isAccessGrantAlreadyConsumed(
   return Boolean(accessGrantKey && consumedAccessGrantIds.has(accessGrantKey));
 }
 
+export function shouldBlockConsumedAccess(params: {
+  accessGrantKey: string | undefined;
+  consumedAccessGrantIds: ReadonlySet<string>;
+  admissionStatus: Guest["admissionStatus"] | undefined;
+  authoritativeConsumed: boolean;
+}) {
+  return isAccessGrantAlreadyConsumed(params.accessGrantKey, params.consumedAccessGrantIds) &&
+    (params.admissionStatus === "Ingresó" || params.authoritativeConsumed);
+}
+
 export function buildCompletedCheckInBundle(params: {
   guest: Guest;
   result: AdmissionEngineOutput;

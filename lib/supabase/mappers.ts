@@ -14,6 +14,8 @@ import type {
   VenueLayoutSector,
 } from "@/features/domain/types";
 import type { ReservationRecord } from "@/features/reservations/types";
+import type { ReservationCommercialSnapshot } from "@/features/events/domain/commercial-config";
+import { normalizeCommercialBenefits } from "@/features/events/domain/commercial-config";
 import type { TableRecord } from "@/features/tables/types";
 import type { TimelineEvent } from "@/features/timeline/types";
 import { buildAccessGrantFromGuest } from "@/features/access/domain/access-ledger";
@@ -43,6 +45,33 @@ import type {
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function optionalNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  return undefined;
+}
+
+export function mapCommercialSnapshotToDomain(value: unknown): ReservationCommercialSnapshot | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const currency = typeof (raw.currency) === "string" ? raw.currency : "BOB";
+  const reservationPrice = optionalNumber(raw.reservationPrice ?? raw.reservation_price ?? raw.amount);
+  if (reservationPrice === undefined) return undefined;
+  const includedAccesses = optionalNumber(raw.includedAccesses ?? raw.included_accesses ?? raw.access_count);
+  const snapshot = {
+    version: 1 as const,
+    ...(raw.saleType === "presale" || raw.sale_type === "presale" ? { saleType: "presale" as const } : {}),
+    currency,
+    reservationPrice,
+    ...(optionalNumber(raw.unitPrice ?? raw.unit_price) !== undefined ? { unitPrice: optionalNumber(raw.unitPrice ?? raw.unit_price) } : {}),
+    ...(optionalNumber(raw.quantity) !== undefined ? { quantity: optionalNumber(raw.quantity) } : {}),
+    ...(optionalNumber(raw.totalPrice ?? raw.total_price) !== undefined ? { totalPrice: optionalNumber(raw.totalPrice ?? raw.total_price) } : {}),
+    includedAccesses: includedAccesses ?? 0,
+    benefits: normalizeCommercialBenefits(raw.benefits),
+  } satisfies ReservationCommercialSnapshot;
+  return snapshot;
 }
 
 function normalizeAccessStatus(status?: string | null): CheckIn["status"] {
@@ -211,11 +240,9 @@ export function mapEventRowToDomain(row: EventRow): PlatformEvent {
 }
 
 export function mapEventToRow(event: PlatformEvent): Omit<EventRow, "created_at" | "updated_at" | "deleted_at"> {
+  // venue_id is the canonical column. Preserve metadata as supplied instead
+  // of materializing a duplicate venueId field during unrelated edits.
   const metadata = event.metadata && typeof event.metadata === "object" ? { ...(event.metadata as Record<string, unknown>) } : {};
-
-  if (event.venueId) {
-    metadata.venueId = event.venueId;
-  }
 
   return {
     id: event.id,
@@ -483,6 +510,7 @@ export function mapEventLayoutResourceRowToDomain(row: EventLayoutResourceRow): 
     eventLayoutId: row.event_layout_id,
     eventLayoutSectorId: row.event_layout_sector_id ?? undefined,
     sourceVenueLayoutResourceId: row.source_venue_layout_resource_id ?? undefined,
+    sourceResourceId: row.source_resource_id ?? undefined,
     type: row.type,
     name: row.name,
     capacity: row.capacity,
@@ -501,6 +529,7 @@ export function mapEventLayoutResourceToRow(layout: EventLayoutResource): Omit<E
     event_layout_id: layout.eventLayoutId,
     event_layout_sector_id: layout.eventLayoutSectorId ?? null,
     source_venue_layout_resource_id: layout.sourceVenueLayoutResourceId ?? null,
+    source_resource_id: layout.sourceResourceId ?? null,
     type: layout.type,
     name: layout.name,
     capacity: layout.capacity,
@@ -635,7 +664,7 @@ export function mapReservationRowToDomain(row: ReservationRow): ReservationRecor
     paymentStatus: row.payment_status,
     amount: row.amount,
     advance: row.advance,
-    commercialSnapshot: row.commercial_snapshot ?? undefined,
+    commercialSnapshot: mapCommercialSnapshotToDomain(row.commercial_snapshot),
     notes: row.notes,
     guestIds: row.guest_ids,
     status: row.status,

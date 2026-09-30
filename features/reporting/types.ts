@@ -168,6 +168,8 @@ export type AttendeeReport = {
   reservationHolder: string | null;
   zoneName: string | null;
   resourceName: string | null;
+  physicalResourceId: string | null;
+  physicalResourceName: string | null;
   accessType: "mesa" | "presale" | "courtesy" | "extra_wristband" | "other";
   operational: boolean;
   admissionStatus: Guest["admissionStatus"];

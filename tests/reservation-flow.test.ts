@@ -10,6 +10,7 @@ import {
   resolvePersistedReservationTableId,
 } from "../features/reservations/domain/reservation-domain";
 import { mapReservationRowToDomain, mapReservationToRow } from "../lib/supabase/mappers";
+import { buildEventReport } from "../features/reporting/domain/event-report";
 
 function extractBlock(source: string, startMarker: string, endMarker: string) {
   const start = source.indexOf(startMarker);
@@ -223,4 +224,43 @@ test("reservation submission errors normalize empty objects into a human-readabl
     describeReservationSubmissionError({ code: "42501", message: "new row violates row-level security policy" }),
     "new row violates row-level security policy · code 42501",
   );
+});
+test("reservation mapper normalizes persisted snake_case commercial snapshots", () => {
+  const domain = mapReservationRowToDomain({
+    id: "v2-reservation",
+    code: "V2-01",
+    name: "Mesa V2",
+    event_id: "v2-event",
+    event_name: "V2",
+    date: "2026-10-15",
+    time: "20:00",
+    event_layout_id: null,
+    event_layout_resource_id: null,
+    resource_id: "resource-a",
+    table_name: "Mesa A",
+    table_id: "resource-a",
+    table_capacity: 5,
+    holder_name: "Holder",
+    holder_document: "DOC",
+    holder_whatsapp: "70000000",
+    holder_email: "",
+    reservation_type: "Mesa",
+    reference: null,
+    payment_status: "Pagado",
+    amount: "400",
+    advance: "0",
+    commercial_snapshot: { amount: "400", currency: "BOB", unit_price: "400", access_count: 3, benefits: null } as never,
+    notes: "",
+    guest_ids: [],
+    status: "Confirmed",
+    timeline: [],
+    created_at: "2026-10-15T00:00:00Z",
+    updated_at: "2026-10-15T00:00:00Z",
+    deleted_at: null,
+  } as never);
+  assert.equal(domain.commercialSnapshot?.reservationPrice, 400);
+  assert.equal(domain.commercialSnapshot?.unitPrice, 400);
+  assert.equal(domain.commercialSnapshot?.includedAccesses, 3);
+  assert.equal(domain.commercialSnapshot?.currency, "BOB");
+  assert.deepEqual(domain.commercialSnapshot?.benefits, []);
 });

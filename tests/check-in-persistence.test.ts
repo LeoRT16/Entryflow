@@ -7,6 +7,7 @@ import {
   buildRejectedCheckInTimelineEntry,
   CheckInAlreadyConsumedError,
   isAccessGrantAlreadyConsumed,
+  shouldBlockConsumedAccess,
   persistCompletedCheckInBundle,
 } from "../features/check-in/domain/check-in-persistence";
 import type { Guest } from "../features/check-in/types";
@@ -125,6 +126,27 @@ test("duplicate access grants can be detected without mutating the admission sta
   assert.equal(isAccessGrantAlreadyConsumed("grant-1", consumed), true);
   assert.equal(isAccessGrantAlreadyConsumed("grant-2", consumed), false);
   assert.equal(isAccessGrantAlreadyConsumed(undefined, consumed), false);
+});
+
+test("compatible partial legacy state reaches atomic recovery instead of duplicate blocking", () => {
+  assert.equal(shouldBlockConsumedAccess({
+    accessGrantKey: "grant-partial",
+    consumedAccessGrantIds: new Set(["grant-partial"]),
+    admissionStatus: "Pendiente",
+    authoritativeConsumed: false,
+  }), false);
+  assert.equal(shouldBlockConsumedAccess({
+    accessGrantKey: "grant-complete",
+    consumedAccessGrantIds: new Set(["grant-complete"]),
+    admissionStatus: "Ingresó",
+    authoritativeConsumed: false,
+  }), true);
+  assert.equal(shouldBlockConsumedAccess({
+    accessGrantKey: "grant-authoritative",
+    consumedAccessGrantIds: new Set(["grant-authoritative"]),
+    admissionStatus: "Pendiente",
+    authoritativeConsumed: true,
+  }), true);
 });
 
 test("rejected duplicate attempts build the canonical blocked timeline entry", () => {

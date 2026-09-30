@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { toEventDateTimeInputValue } from "../features/events/domain/event-date-time";
+import { resolveEventStartAtForSave, toEventDateTimeInputValue } from "../features/events/domain/event-date-time";
 
 test("event editor adapts canonical local datetime text to datetime-local input", () => {
   assert.equal(toEventDateTimeInputValue("2026-08-29 21:00", "America/La_Paz"), "2026-08-29T21:00");
@@ -14,4 +14,13 @@ test("event editor displays zoned instants in the event timezone", () => {
 
 test("legacy localized event date stays blank so it must be deliberately normalized", () => {
   assert.equal(toEventDateTimeInputValue("29 de agosto de 2026 21:00", "America/La_Paz"), "");
+});
+
+test("date-only canonical startAt is preserved when the editor date was not touched", () => {
+  assert.equal(toEventDateTimeInputValue("2026-10-15", "America/La_Paz"), "");
+  assert.equal(resolveEventStartAtForSave({ original: "2026-10-15", input: "", touched: false }), "2026-10-15");
+});
+
+test("explicit editor date changes use the datetime-local value", () => {
+  assert.equal(resolveEventStartAtForSave({ original: "2026-10-15", input: "2026-10-16T20:30", touched: true }), "2026-10-16T20:30");
 });

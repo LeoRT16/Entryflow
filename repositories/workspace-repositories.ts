@@ -22,21 +22,52 @@ export type OrganizationRepository = CrudRepository<Organization> & {
 export type EventRepository = CrudRepository<PlatformEvent> & {
   setActive(eventId: string): void;
   setStatus(eventId: string, status: PlatformEvent["status"]): void;
+  setVenueAtomic(eventId: string, venueId: string | null): Promise<EventVenueAtomicResult>;
+};
+
+export type EventVenueAtomicResult = {
+  changed: boolean;
+  event_id: string;
+  previous_venue_id: string | null;
+  venue_id: string | null;
+  event_layout_id: string | null;
+  materialized: boolean;
+  previous_layout_archived: boolean;
 };
 
 export type ReservationRepository = CrudRepository<ReservationRecord, ReservationCreationInput> & {
+  createPhysicalAtomic(input: { reservation: ReservationRecord; guests: Guest[] }): Promise<{ reservation: ReservationRecord; guests: Guest[] }>;
   addGuest(reservationId: string, guest: ReservationGuestInput): void;
   addGuestAtomic(input: { reservationId: string; guest: Guest; courtesyEvent?: TimelineEvent; accessEvent: TimelineEvent }): Promise<Guest>;
   cancelGuestAtomic(input: { reservationId: string; guestId: string; reason: string }): Promise<{ guest: Guest; timelineEvent: TimelineEvent }>;
   updateGuest(params: { reservationId: string; guestId: string; action: ReservationGuestAction }): void;
   setStatus(reservationId: string, status: ReservationStatus): void;
+  setStatusAtomic(reservationId: string, status: ReservationStatus): Promise<{ reservationId: string; previousStatus: ReservationStatus; status: ReservationStatus; changed: boolean }>;
   assignToTable(reservationId: string, tableId: string): void;
+  assignReservationTableAtomic(input: { reservationId: string; resourceId: string }): Promise<ReservationTableAtomicResult>;
+  releaseReservationTableAtomic(input: { reservationId: string; expectedResourceId: string }): Promise<ReleaseReservationTableAtomicResult>;
 };
+
+export type ReservationTableAtomicResult = { reservation_id: string; source_table_id: string | null; destination_table_id: string; guest_ids: string[]; changed: boolean; reservation?: { resource_id: string | null; table_id: string | null; table_name?: string; table_capacity?: number | null } };
+export type ReleaseReservationTableAtomicResult = { reservation_id: string; released_table_id: string; guest_ids: string[]; changed: boolean; reservation?: { resource_id: string | null; table_id: string | null; table_capacity?: number | null } };
 
 export type GuestRepository = CrudRepository<Guest> & {
   createWithAccessOrdinal(guest: Guest): Promise<Guest>;
+  prepareAuthoritativeAccess(guest: Guest): Promise<Guest>;
   moveToTable(guestId: string, tableId: string): void;
+  moveGuestToResourceAtomic(input: { guestId: string; destinationResourceId: string }): Promise<GuestMoveAtomicResult>;
   checkIn(query: string): Promise<CheckInAttempt | null>;
+};
+
+export type GuestMoveAtomicResult = {
+  changed: boolean;
+  guest_id: string;
+  reservation_id: string;
+  source_resource_id: string | null;
+  destination_resource_id: string;
+  destination_resource_name: string;
+  table_id: string | null;
+  table_name: string | null;
 };
 
 export type TableRepository = CrudRepository<TableRecord> & {
@@ -44,10 +75,13 @@ export type TableRepository = CrudRepository<TableRecord> & {
   moveGuest(guestId: string, tableId: string): void;
   release(tableId: string): void;
   close(tableId: string): void;
+  closeTableAtomic(input: { resourceId: string }): Promise<{ table_id: string; status: string; closed: boolean; changed: boolean }>;
 };
 
 export type CheckInRepository = CrudRepository<CheckIn> & {
   register(query: string, method: "QR" | "Manual", operator?: string): Promise<CheckInAttempt | null>;
+  isAuthoritativeConsumed?(accessGrantId: string): Promise<boolean>;
+  persistCompletedAtomic?(input: { guestId: string; accessGrantId: string; operatorProfileId: string; source: string; method: string; operator: string; gate: string; checkedInAt: string; notes: string; auditTrail: unknown; timeline: unknown }): Promise<void>;
 };
 
 export type TimelineRepository = {
@@ -125,6 +159,15 @@ export function createMemoryWorkspaceRepositories(adapter: WorkspaceMemoryAdapte
     () => adapter.events,
     adapter.setEventsState,
   ) as EventRepository;
+  events.setVenueAtomic = async (eventId, venueId) => {
+    const event = adapter.events.find((item) => item.id === eventId);
+    if (!event) throw new Error("Event not found.");
+    if ((event.venueId ?? null) === venueId) {
+      return { changed: false, event_id: eventId, previous_venue_id: event.venueId ?? null, venue_id: venueId, event_layout_id: null, materialized: false, previous_layout_archived: false };
+    }
+    adapter.setEventsState(adapter.events.map((item) => item.id === eventId ? { ...item, venueId: venueId ?? undefined } : item));
+    return { changed: true, event_id: eventId, previous_venue_id: event.venueId ?? null, venue_id: venueId, event_layout_id: null, materialized: false, previous_layout_archived: false };
+  };
 
   const reservations = buildCrudRepository<ReservationRecord, ReservationCreationInput>(
     () => adapter.reservations,
@@ -241,8 +284,40 @@ export function createMemoryWorkspaceRepositories(adapter: WorkspaceMemoryAdapte
   reservations.addGuest = adapter.addReservationGuest;
   reservations.updateGuest = adapter.updateReservationGuest;
   reservations.setStatus = adapter.setReservationStatus;
+  reservations.setStatusAtomic = async (reservationId, status) => {
+    adapter.setReservationStatus(reservationId, status);
+    return { reservationId, previousStatus: status, status, changed: true };
+  };
   reservations.assignToTable = adapter.assignReservationToTable;
+  reservations.assignReservationTableAtomic = async ({ reservationId, resourceId }) => {
+    adapter.assignReservationToTable(reservationId, resourceId);
+    return { reservation_id: reservationId, source_table_id: null, destination_table_id: resourceId, guest_ids: [], changed: true };
+  };
+  reservations.createPhysicalAtomic = async ({ reservation, guests: inputGuests }) => {
+    return { reservation, guests: inputGuests };
+  };
+  reservations.releaseReservationTableAtomic = async ({ reservationId, expectedResourceId }) => {
+    adapter.releaseTable(expectedResourceId);
+    return { reservation_id: reservationId, released_table_id: expectedResourceId, guest_ids: [], changed: true };
+  };
   guests.moveToTable = adapter.moveGuestToTable;
+  guests.moveGuestToResourceAtomic = async ({ guestId, destinationResourceId }) => {
+    const guest = adapter.guests.find((item) => item.id === guestId);
+    const destination = adapter.tables.find((item) => item.id === destinationResourceId);
+    if (!guest || !destination) throw new Error("Guest or destination resource not found.");
+    const sourceResourceId = guest.tableId ?? null;
+    adapter.moveGuestToTable(guestId, destinationResourceId);
+    return {
+      changed: sourceResourceId !== destinationResourceId,
+      guest_id: guest.id,
+      reservation_id: guest.reservationId,
+      source_resource_id: sourceResourceId,
+      destination_resource_id: destinationResourceId,
+      destination_resource_name: destination.name,
+      table_id: destinationResourceId,
+      table_name: destination.name,
+    };
+  };
   guests.checkIn = async (query: string) => {
     const result = await adapter.registerCheckIn({ query, method: "QR" });
     return result.result ? adapter.attempts.find((attempt) => attempt.query === query) ?? null : null;
@@ -251,6 +326,10 @@ export function createMemoryWorkspaceRepositories(adapter: WorkspaceMemoryAdapte
   tables.moveGuest = adapter.moveGuestToTable;
   tables.release = adapter.releaseTable;
   tables.close = adapter.closeTable;
+  tables.closeTableAtomic = async ({ resourceId }) => {
+    adapter.closeTable(resourceId);
+    return { table_id: resourceId, status: "Closed", closed: true, changed: true };
+  };
   checkIns.register = async (query: string, method: "QR" | "Manual", operator = method === "Manual" ? "Recepción" : "Escáner") => {
     await adapter.registerCheckIn({ query, method, operator });
     return adapter.attempts.find((attempt) => attempt.query === query && attempt.method === method) ?? null;
@@ -292,6 +371,7 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       delete: notImplemented,
       setActive: notImplemented,
       setStatus: notImplemented,
+      setVenueAtomic: notImplemented,
     },
     reservations: {
       list: notImplemented,
@@ -300,12 +380,16 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       create: notImplemented,
       update: notImplemented,
       delete: notImplemented,
+      createPhysicalAtomic: notImplemented,
       addGuest: notImplemented,
       addGuestAtomic: notImplemented,
       cancelGuestAtomic: notImplemented,
       updateGuest: notImplemented,
       setStatus: notImplemented,
+      setStatusAtomic: notImplemented,
       assignToTable: notImplemented,
+      assignReservationTableAtomic: notImplemented,
+      releaseReservationTableAtomic: notImplemented,
     },
     guests: {
       list: notImplemented,
@@ -315,7 +399,9 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       update: notImplemented,
       delete: notImplemented,
       createWithAccessOrdinal: notImplemented,
+      prepareAuthoritativeAccess: async (guest) => guest,
       moveToTable: notImplemented,
+      moveGuestToResourceAtomic: notImplemented,
       checkIn: notImplemented,
     },
     tables: {
@@ -329,6 +415,7 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       moveGuest: notImplemented,
       release: notImplemented,
       close: notImplemented,
+      closeTableAtomic: notImplemented,
     },
     checkIns: {
       list: notImplemented,

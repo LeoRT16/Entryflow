@@ -33,7 +33,7 @@ export async function exchangeGoogleAuthorizationCode(client: Auth.OAuth2Client,
     if (!code || !verifier) throw new Error("missing_exchange_parameter");
     const { tokens } = await client.getToken({ code, codeVerifier: verifier });
     return tokens;
-  } catch (error) {
+  } catch {
     throw new GoogleOAuthError("google_oauth_code_exchange_failed", "Google authorization could not be completed.");
   }
 }

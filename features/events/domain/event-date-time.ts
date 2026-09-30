@@ -23,3 +23,15 @@ export function toEventDateTimeInputValue(value: string, timeZone: string) {
     return "";
   }
 }
+
+export function resolveEventStartAtForSave({
+  original,
+  input,
+  touched,
+}: {
+  original: string;
+  input: string;
+  touched: boolean;
+}) {
+  return touched ? input : original;
+}

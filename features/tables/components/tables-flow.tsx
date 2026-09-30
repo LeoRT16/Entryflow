@@ -114,6 +114,7 @@ function TablesFlowWorkspace() {
     setResourceStatus,
     deleteResource,
     moveResourceToSector,
+    moveGuestToTable,
   } = useCheckInStore();
   const router = useRouter();
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
@@ -141,7 +142,9 @@ function TablesFlowWorkspace() {
     const storedVenueId = readVenueContextPreference(window.localStorage, currentOrganization.id);
     const validStoredVenueId = organizationVenues.some((venue) => venue.id === storedVenueId) ? storedVenueId : "";
     const validEventVenueId = organizationVenues.some((venue) => venue.id === currentEvent.venueId) ? currentEvent.venueId : "";
-    const nextVenueId = validStoredVenueId || validEventVenueId || organizationVenues[0]?.id || "";
+    // An event-scoped venue is authoritative. A previous organization-level
+    // preference must not leak across event switches.
+    const nextVenueId = validEventVenueId || validStoredVenueId || organizationVenues[0]?.id || "";
 
     startTransition(() => {
       setSelectedVenueId(nextVenueId);
@@ -173,7 +176,10 @@ function TablesFlowWorkspace() {
     [currentEvent.venueId, organizationVenues, resources, sectors, selectedVenueId],
   );
   const venue = venueContext.currentVenue;
-  const venueOptions = venueContext.venueOptions;
+  const hasCanonicalEventVenue = organizationVenues.some((option) => option.id === currentEvent.venueId);
+  const venueOptions = hasCanonicalEventVenue
+    ? venueContext.venueOptions.filter((option) => option.id === currentEvent.venueId)
+    : venueContext.venueOptions;
   const currentVenueId = venue?.id ?? "";
   const currentEventLayout = useMemo(
     () => resolveCurrentEventLayout({ currentEventId: currentEvent.id, currentVenueId, eventLayouts }),
@@ -574,7 +580,9 @@ function TablesFlowWorkspace() {
                         updatedAt: timestamp,
                       });
 
-                      setSelectedVenueId(nextVenue.id);
+                      if (!hasCanonicalEventVenue) {
+                        setSelectedVenueId(nextVenue.id);
+                      }
                       setIsVenueCreateOpen(false);
                       setVenueNameDraft("");
                       showToast({
@@ -637,6 +645,7 @@ function TablesFlowWorkspace() {
             <select
               value={venue.id}
               onChange={(event) => setSelectedVenueId(event.target.value)}
+              disabled={hasCanonicalEventVenue}
               className="h-11 min-w-[16rem] rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-cyan-400/50 focus:bg-white/[0.06]"
             >
               {venueOptions.map((option) => (
@@ -1173,6 +1182,10 @@ function TablesFlowWorkspace() {
 
           openReservationEditor(selectedReservation.id, "edit");
         }}
+        availableResources={venueResources}
+        resourceSummaries={resourceSummaryMap}
+        canMoveGuests={can("resource.assign")}
+        onMoveGuest={moveGuestToTable}
       />
     </div>
   );

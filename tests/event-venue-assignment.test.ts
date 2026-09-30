@@ -174,10 +174,11 @@ test("workspace service updates an event without reselecting it as current", () 
   const source = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
   const updateEventBlock = extractBlock(source, "const updateEvent = useCallback(", "  const createOrganization = useCallback(");
 
-  assert.match(updateEventBlock, /requirePermission\("event\.edit"\);/);
-  assert.match(updateEventBlock, /setEvents\(\(current\) => current\.map\(\(item\) => \(item\.id === event\.id \? event : item\)\)\);/);
-  assert.match(updateEventBlock, /await persist\("event", event\);/);
-  assert.match(updateEventBlock, /return event;/);
+  assert.match(updateEventBlock, /assertPermission: requirePermission/);
+  assert.match(updateEventBlock, /venueChanged/);
+  assert.match(updateEventBlock, /setVenueAtomic/);
+  assert.match(updateEventBlock, /persist: \(value\) => persist\("event", value\)/);
+  assert.match(updateEventBlock, /await updateEventOperation/);
   assert.doesNotMatch(updateEventBlock, /setCurrentEventIdState\(event\.id\)/);
 });
 

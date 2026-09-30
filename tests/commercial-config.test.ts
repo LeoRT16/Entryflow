@@ -7,6 +7,7 @@ import {
   getEventCommercialConfig,
   mergeEventCommercialConfig,
   normalizeCommercialBenefits,
+  resolveEventMetadataForSave,
 } from "../features/events/domain/commercial-config";
 
 test("commercial event config merges without removing unrelated metadata", () => {
@@ -55,4 +56,18 @@ test("benefit ids are normalized and made unique", () => {
     { id: "botella-1", label: "Botella", quantity: 1 },
     { id: "botella-2", label: "Botella", quantity: 2 },
   ]);
+});
+
+test("metadata remains null when no metadata-backed editor field was touched", () => {
+  assert.equal(resolveEventMetadataForSave(undefined, false, { commercial: defaultEventCommercialConfig }), undefined);
+});
+
+test("existing metadata remains unchanged for non-metadata edits", () => {
+  const metadata = { blueprint: "custom", invitation: { theme: "gold" } };
+  assert.deepEqual(resolveEventMetadataForSave(metadata, false, { commercial: defaultEventCommercialConfig }), metadata);
+});
+
+test("explicit metadata edits use the built metadata payload", () => {
+  const next = { commercial: { ...defaultEventCommercialConfig, reservation: { ...defaultEventCommercialConfig.reservation, basePrice: 400 } } };
+  assert.deepEqual(resolveEventMetadataForSave(undefined, true, next), next);
 });

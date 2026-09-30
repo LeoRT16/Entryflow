@@ -24,7 +24,7 @@ const reservationHeaders = [
   "Moneda", "Precio", "Unidad de precio", "Valor base", "Valor extras", "Total",
 ];
 const attendeeHeaders = [
-  "Código de acceso", "Nombre", "Tipo", "Estado de la invitación", "Estado ingreso", "Reserva", "Titular", "Zona", "Mesa/Recurso", "Carnet", "WhatsApp", "Hora ingreso", "Manilla extra",
+  "Código de acceso", "Nombre", "Tipo", "Estado de la invitación", "Estado ingreso", "Reserva", "Titular", "Zona", "Mesa/Recurso", "Ubicación física", "Carnet", "WhatsApp", "Hora ingreso", "Manilla extra",
 ];
 
 test("projection exposes exactly three V2 tabs with exact human headers and hidden technical columns", () => {
@@ -123,6 +123,7 @@ test("reservation and attendee rows preserve historical facts, labels, and stabl
   assert.equal(checkedIn?.holder, "Titular M-01");
   assert.equal(checkedIn?.zone, "Patio");
   assert.equal(checkedIn?.resource_name, "Mesa 1");
+  assert.equal(checkedIn?.physical_resource_name, "Mesa 1");
   assert.equal(checkedIn?.admission_status, "Ingresó");
   assert.equal(typeof checkedIn?.check_in_at, "string");
   assert.equal(pending?.admission_status, "Pendiente");
@@ -160,7 +161,7 @@ test("successful snapshot timestamp is explicit, deterministic, and excluded fro
 test("metadata describes writer layout and numeric formats while IDs stay hidden", () => {
   const value = projection();
   assert.equal(value.sheets.reservations.filterRange, "A1:W8");
-  assert.equal(value.sheets.attendees.filterRange, "A1:O19");
+  assert.equal(value.sheets.attendees.filterRange, "A1:P19");
   assert.equal(value.sheets.reservations.columns.find((column) => column.key === "price")?.numberFormat, "#,##0.00");
   assert.equal(value.sheets.attendees.columns.find((column) => column.key === "check_in_at")?.numberFormat, "dd/mm/yyyy hh:mm");
   assert.equal(value.sheets.summary.rowNumberFormats?.total, "#,##0.00");
@@ -188,6 +189,26 @@ test("projection and ordering are deterministic, immutable, and hashed from func
   assert.deepEqual(first.sheets.attendees.rows, second.sheets.attendees.rows);
   assert.deepEqual(input, before);
   assert.equal(hashWorkbookDataset(buildWorkbookDatasetHashInput(first)), hashWorkbookDataset(buildWorkbookDatasetHashInput(second)));
+  const internalOnly = { ...first, generatedAt: "2099-01-01T00:00:00.000Z" };
+  assert.equal(hashWorkbookDataset(buildWorkbookDatasetHashInput(first)), hashWorkbookDataset(buildWorkbookDatasetHashInput(internalOnly)));
   const changed = { ...first, sheets: { ...first.sheets, attendees: { ...first.sheets.attendees, rows: first.sheets.attendees.rows.map((row, index) => index === 0 ? { ...row, name: "Cambio" } : row) } } };
   assert.notEqual(hashWorkbookDataset(buildWorkbookDatasetHashInput(first)), hashWorkbookDataset(buildWorkbookDatasetHashInput(changed)));
+});
+
+test("workbook separates commercial Reservation resource from physical Guest location", () => {
+  const input = structuredClone(buildEventReportFixtureInput());
+  input.guests.find((guest) => guest.id === "guest-1")!.tableId = "layout-mesa-2";
+  const value = buildGoogleSheetsProjection(buildEventReport(input));
+  const reservation = value.sheets.reservations.rows.find((row) => row.code === "M-01");
+  const attendee = value.sheets.attendees.rows.find((row) => row.access_code === "M-01-01");
+  assert.equal(reservation?.resource_name, "Mesa 1");
+  assert.equal(attendee?.reservation_code, "M-01");
+  assert.equal(attendee?.resource_name, "Mesa 1");
+  assert.equal(attendee?.physical_resource_name, "Mesa 2");
+
+  const unassigned = structuredClone(buildEventReportFixtureInput());
+  unassigned.guests.find((guest) => guest.id === "guest-1")!.tableId = undefined;
+  const unassignedProjection = buildGoogleSheetsProjection(buildEventReport(unassigned));
+  assert.equal(unassignedProjection.sheets.attendees.rows.find((row) => row.access_code === "M-01-01")?.physical_resource_name, "Sin dato");
+  assert.notEqual(hashWorkbookDataset(buildWorkbookDatasetHashInput(value)), hashWorkbookDataset(buildWorkbookDatasetHashInput(unassignedProjection)));
 });

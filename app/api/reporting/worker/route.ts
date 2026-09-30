@@ -6,6 +6,7 @@ import { loadWorkspaceBootstrap } from "@/services/workspace-loader";
 import { buildEventReport } from "@/features/reporting/domain/event-report";
 import { authorizeReportingCronRequest } from "@/lib/reporting/cron-auth";
 import { hasReportingRuntimeConfig } from "@/lib/reporting/runtime-config";
+import { createOAuthReportingWorkerDependencies, processOAuthReportingSyncBatch } from "@/features/reporting/google-sheets/oauth-worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,19 +20,21 @@ export async function POST(request: Request) {
   if (!workspaceUserId) return NextResponse.json({ error: "worker_not_configured" }, { status: 503 });
   try {
     const workspace = await loadWorkspaceBootstrap({ id: workspaceUserId });
+    const loadReport = async (eventId: string) => {
+      const event = workspace.events.find((item) => item.id === eventId);
+      const organization = workspace.organizations.find((item) => item.id === event?.organizationId);
+      const venue = workspace.venues.find((item) => item.id === event?.venueId);
+      if (!event || !organization) throw new Error("Reporting event scope unavailable.");
+      return buildEventReport({ organization, event, venue, resources: workspace.resources, sectors: workspace.sectors, tables: workspace.tables, eventLayoutResources: workspace.eventLayoutResources, eventLayoutSectors: workspace.eventLayoutSectors, eventLayouts: workspace.eventLayouts, reservations: workspace.reservations, guests: workspace.guests, extraWristbandSales: workspace.extraWristbandSales ?? [], checkIns: workspace.checkIns, timelineEvents: workspace.timelineEvents, generatedAt: new Date().toISOString() });
+    };
+    const oauthResult = await processOAuthReportingSyncBatch(createOAuthReportingWorkerDependencies(client, loadReport), workerId, 5);
     const result = await processReportingSyncBatch({
       repository: createReportingWorkerRepository(client),
       transport: createGoogleSheetsTransport(),
-      loadReport: async (eventId) => {
-        const event = workspace.events.find((item) => item.id === eventId);
-        const organization = workspace.organizations.find((item) => item.id === event?.organizationId);
-        const venue = workspace.venues.find((item) => item.id === event?.venueId);
-        if (!event || !organization) throw new Error("Reporting event scope unavailable.");
-        return buildEventReport({ organization, event, venue, resources: workspace.resources, sectors: workspace.sectors, tables: workspace.tables, eventLayoutResources: workspace.eventLayoutResources, eventLayoutSectors: workspace.eventLayoutSectors, eventLayouts: workspace.eventLayouts, reservations: workspace.reservations, guests: workspace.guests, extraWristbandSales: workspace.extraWristbandSales ?? [], checkIns: workspace.checkIns, timelineEvents: workspace.timelineEvents, generatedAt: new Date().toISOString() });
-      },
+      loadReport,
       logger: (entry) => console.info("reporting_worker", entry),
     }, workerId, 5);
-    return NextResponse.json(result);
+    return NextResponse.json({ claimed: oauthResult.claimed + result.claimed, synced: oauthResult.synced + result.synced, skipped: oauthResult.skipped + result.skipped, failed: oauthResult.failed + result.failed });
   } catch {
     return NextResponse.json({ error: "worker_failed_safely" }, { status: 500 });
   }

@@ -119,6 +119,10 @@ type WorkspaceScopeEventLike = {
 
 type WorkspacePayload = WorkspaceBootstrap;
 
+export function findWorkspaceUserRow<T extends { id: string; auth_user_id: string | null; deleted_at: string | null }>(rows: T[], identity: string) {
+  return rows.find((row) => row.deleted_at === null && (row.auth_user_id === identity || row.id === identity)) ?? null;
+}
+
 type FetchSupabaseTableOptions = {
   optional?: boolean;
 };
@@ -440,7 +444,11 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
   ]);
   const whatsappDeliveryAttemptRows = await fetchSupabaseTable<WhatsAppDeliveryAttemptRow>("whatsapp_delivery_attempts", { optional: true });
 
-  let linkedUserRow = userRows.find((row) => row.auth_user_id === authUser.id && row.deleted_at === null) ?? null;
+  // Reporting workers are configured with the durable workspace user id, while
+  // interactive callers pass the Supabase auth id. Accept both identities at
+  // this boundary so a valid worker scope does not degrade into an empty
+  // workspace and a later undefined EventReport access.
+  let linkedUserRow = findWorkspaceUserRow(userRows, authUser.id);
   const authEmail = typeof authUser.email === "string" ? authUser.email.trim().toLowerCase() : "";
 
   if (!linkedUserRow && authEmail) {

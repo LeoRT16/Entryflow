@@ -73,10 +73,10 @@ export type WorkspaceMutations = {
     action: ReservationGuestAction;
   }) => void;
   setReservationStatus: (reservationId: string, status: ReservationStatus) => void;
-  assignReservationToTable: (reservationId: string, tableId: string) => void;
+  assignReservationToTable: (reservationId: string, tableId: string) => void | Promise<void>;
   moveGuestToTable: (guestId: string, tableId: string) => void;
-  releaseTable: (tableId: string) => void;
-  closeTable: (tableId: string) => void;
+  releaseTable: (tableId: string) => void | Promise<void>;
+  closeTable: (tableId: string) => void | Promise<void>;
 };
 
 export type WorkspaceSnapshot = WorkspaceCollections & WorkspaceSetters & WorkspaceMutations & {

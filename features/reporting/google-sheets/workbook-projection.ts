@@ -49,7 +49,7 @@ const reservationColumns = makeColumns([
   ["reservation_id", "ID reserva", "text", 0, "hidden"], ["resource_id", "ID recurso", "text", 0, "hidden"], ["sector_id", "ID zona", "text", 0, "hidden"],
 ]);
 const attendeeColumns = makeColumns([
-  ["access_code", "Código de acceso", "text", 155], ["name", "Nombre", "text", 220], ["type", "Tipo", "text", 125], ["reservation_status", "Estado de la invitación", "text", 145], ["admission_status", "Estado ingreso", "text", 125], ["reservation_code", "Reserva", "text", 120], ["holder", "Titular", "text", 210], ["zone", "Zona", "text", 130], ["resource_name", "Mesa/Recurso", "text", 150], ["carnet", "Carnet", "text", 135], ["whatsapp", "WhatsApp", "text", 145], ["check_in_at", "Hora ingreso", "datetime", 155, "visible", "dd/mm/yyyy hh:mm"], ["extra_wristband", "Manilla extra", "text", 120],
+  ["access_code", "Código de acceso", "text", 155], ["name", "Nombre", "text", 220], ["type", "Tipo", "text", 125], ["reservation_status", "Estado de la invitación", "text", 145], ["admission_status", "Estado ingreso", "text", 125], ["reservation_code", "Reserva", "text", 120], ["holder", "Titular", "text", 210], ["zone", "Zona", "text", 130], ["resource_name", "Mesa/Recurso", "text", 150], ["physical_resource_name", "Ubicación física", "text", 150], ["carnet", "Carnet", "text", 135], ["whatsapp", "WhatsApp", "text", 145], ["check_in_at", "Hora ingreso", "datetime", 155, "visible", "dd/mm/yyyy hh:mm"], ["extra_wristband", "Manilla extra", "text", 120],
   ["guest_id", "ID invitado", "text", 0, "hidden"], ["reservation_id", "ID reserva", "text", 0, "hidden"],
 ]);
 
@@ -212,6 +212,7 @@ export function buildGoogleSheetsProjection(report: EventReport, options: Workbo
       holder: textOrUnknown(item.reservationHolder),
       zone: textOrUnknown(item.zoneName ?? resource?.sectorName),
       resource_name: textOrUnknown(item.resourceName ?? resource?.resourceName),
+      physical_resource_name: textOrUnknown(item.physicalResourceName),
       reservation_status: formatReservationStatus(item.reservationStatus),
       admission_status: admissionStatusLabel(item.admissionStatus),
       check_in_at: nullableLocalDateTime(item.checkInAt, report.metadata.timezone, item.checkedIn),

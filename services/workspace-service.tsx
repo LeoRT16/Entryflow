@@ -20,6 +20,10 @@ import {
 } from "@/features/customers/domain/customer-directory";
 import { searchGuests } from "@/features/check-in/domain/check-in-domain";
 import { requestReportingSyncAfterSuccess } from "@/features/reporting/sync/request-after-success";
+import { runAssignReservationTable, runReleaseReservationTable, runCloseTable } from "@/features/tables/application/atomic-table-operations";
+import { runMoveGuestToResource } from "@/features/tables/application/guest-move-operations";
+import { persistReservationThenGuests } from "@/features/reservations/application/preventa-ordering";
+import { setReservationStatusOperation } from "@/features/reservations/application/set-reservation-status";
 import type {
   Event as PlatformEvent,
   EventLayout,
@@ -99,7 +103,7 @@ import {
 import {
   buildCompletedCheckInBundle,
   CheckInAlreadyConsumedError,
-  isAccessGrantAlreadyConsumed,
+  shouldBlockConsumedAccess,
   buildRejectedCheckInTimelineEntry,
   persistCompletedCheckInBundle,
 } from "@/features/check-in/domain/check-in-persistence";
@@ -345,7 +349,7 @@ type WorkspaceServiceValue = {
   }) => Promise<void>;
   setReservationStatus: (reservationId: string, status: ReservationStatus) => void;
   assignReservationToTable: (reservationId: string, tableId: string) => void;
-  moveGuestToTable: (guestId: string, tableId: string) => void;
+  moveGuestToTable: (guestId: string, tableId: string) => Promise<void>;
   updateGuestProfile: (params: {
     guestId: string;
     guestName: string;
@@ -357,6 +361,7 @@ type WorkspaceServiceValue = {
   closeTable: (tableId: string) => void;
   createEvent: (event: PlatformEvent) => Promise<PlatformEvent | undefined>;
   updateEvent: (event: PlatformEvent) => Promise<PlatformEvent | undefined>;
+  prepareEventPhysicalLayout: (eventId: string) => Promise<import('@/repositories/supabase-workspace-repositories').EventLayoutMaterializationResult>;
   createExtraWristbandSale: (input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[] }) => Promise<void>;
   cancelExtraWristbandSale: (input: { saleId: string; reason: string }) => Promise<void>;
   setEventStatus: (eventId: string, status: PlatformEvent["status"]) => void;
@@ -1085,8 +1090,19 @@ export function WorkspaceServiceProvider({
   const { notify } = useFeedback();
   const repositories = useMemo(() => createSupabaseWorkspaceRepositories(getSupabaseBrowserClient()), []);
   const requestReportingAfterSuccess = useCallback(async (eventId: string) => {
-    await requestReportingSyncAfterSuccess(getSupabaseBrowserClient(), eventId);
-  }, []);
+    try {
+      await requestReportingSyncAfterSuccess(getSupabaseBrowserClient(), eventId);
+      return true;
+    } catch {
+      notify({
+        title: "Cambio guardado; reporte pendiente",
+        description: "El cambio se guardó, pero la actualización del reporte quedó pendiente.",
+        tone: "warning",
+        icon: "alert",
+      });
+      return false;
+    }
+  }, [notify]);
 
   const [organizations, setOrganizations] = useState<Organization[]>(initialWorkspace?.organizations ?? []);
   const [venues, setVenues] = useState<Venue[]>(initialWorkspace?.venues ?? []);
@@ -2092,20 +2108,42 @@ export function WorkspaceServiceProvider({
 
       const snapshot = captureSnapshot();
       try {
-        setEvents((current) => current.map((item) => (item.id === event.id ? event : item)));
-        return await updateEventOperation(event, {
+        const venueChanged = (existingEvent.venueId ?? null) !== (event.venueId ?? null);
+        if (venueChanged) {
+          await repositories.events.setVenueAtomic(event.id, event.venueId ?? null);
+        }
+        const nonVenueEvent = venueChanged ? { ...event, venueId: existingEvent.venueId, venue: existingEvent.venue } : event;
+        const saved = await updateEventOperation(nonVenueEvent, {
           assertPermission: requirePermission,
           assertOwnership: (value) => assertEventWriteOwnership(value, currentOrganization.id, venues),
           persist: (value) => persist("event", value),
-          requestReporting: requestReportingAfterSuccess,
+          requestReporting: venueChanged ? async () => undefined : requestReportingAfterSuccess,
         });
+        const committed = venueChanged ? event : saved;
+        setEvents((current) => current.map((item) => (item.id === event.id ? committed : item)));
+        if (venueChanged) await requestReportingAfterSuccess(event.id);
+        return committed;
       } catch (exception) {
         restoreSnapshot(snapshot);
         throw exception;
       }
     },
-    [captureSnapshot, currentOrganization.id, events, notify, persist, requestReportingAfterSuccess, requirePermission, restoreSnapshot, venues],
+    [captureSnapshot, currentOrganization.id, events, notify, persist, repositories.events, requestReportingAfterSuccess, requirePermission, restoreSnapshot, venues],
   );
+
+  const prepareEventPhysicalLayout = useCallback(async (eventId: string) => {
+    requirePermission("event.edit");
+    const result = await repositories.eventLayouts.materializeEventLayoutAtomic(eventId);
+    const [layouts, sectors, resourcesForLayout] = await Promise.all([
+      repositories.eventLayouts.getByEvent(eventId),
+      repositories.eventLayoutSectors.list(),
+      repositories.eventLayoutResources.list(),
+    ]);
+    setEventLayouts((current) => [...current.filter((item) => item.eventId !== eventId), ...layouts]);
+    setEventLayoutSectors((current) => [...current.filter((item) => !layouts.some((layout) => layout.id === item.eventLayoutId)), ...sectors.filter((item) => layouts.some((layout) => layout.id === item.eventLayoutId))]);
+    setEventLayoutResources((current) => [...current.filter((item) => !layouts.some((layout) => layout.id === item.eventLayoutId)), ...resourcesForLayout.filter((item) => layouts.some((layout) => layout.id === item.eventLayoutId))]);
+    return result;
+  }, [repositories.eventLayoutResources, repositories.eventLayoutSectors, repositories.eventLayouts, requirePermission]);
 
   const createExtraWristbandSaleMutation = useCallback(
     async (input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[] }) => {
@@ -2424,30 +2462,38 @@ export function WorkspaceServiceProvider({
         const persistedReservationGuests: Guest[] = [];
         const grantTimestamp = nowIso();
 
-        await repositories.reservations.upsert(reservation);
-        for (const guest of reservationGuestsWithAccess) {
-          const persistedGuest = await repositories.guests.createWithAccessOrdinal(guest);
-          persistedReservationGuests.push(persistedGuest);
+        const persistedPhysical = !isPresale && !isCourtesy
+          ? await repositories.reservations.createPhysicalAtomic({ reservation, guests: reservationGuestsWithAccess })
+          : null;
+        const persistedReservation = persistedPhysical?.reservation ?? reservation;
+        if (!persistedPhysical) await repositories.reservations.upsert(reservation);
+        for (const guest of (persistedPhysical?.guests ?? reservationGuestsWithAccess)) {
+          const persistedGuest = persistedPhysical ? hydrateGuestAccessGrant(guest) : await repositories.guests.createWithAccessOrdinal(guest);
+          const authoritativeGuest = repositories.guests.prepareAuthoritativeAccess
+            ? await repositories.guests.prepareAuthoritativeAccess(persistedGuest)
+            : persistedGuest;
+          const guestWithAuthoritativeAccess = hydrateGuestAccessGrant(authoritativeGuest);
+          persistedReservationGuests.push(guestWithAuthoritativeAccess);
           const timelineEntry = withAuditContext(
-            buildAccessGrantTimelineEvent(persistedGuest, reservation, grantTimestamp),
+            buildAccessGrantTimelineEvent(guestWithAuthoritativeAccess, persistedReservation, grantTimestamp),
             {
               actor: currentAccount.displayName,
               actorRole: currentAccount.roleName,
               context: event.name,
-              target: reservation.name,
+              target: persistedReservation.name,
             },
           );
           upsertPersistedTimelineEvent(timelineEntry);
           await repositories.timeline.upsert(timelineEntry);
         }
 
-        setReservations((current) => prependUniqueById(current, [reservation]));
+        setReservations((current) => prependUniqueById(current, [persistedReservation]));
         setGuests((current) => prependUniqueById(current, persistedReservationGuests));
         await requestReportingAfterSuccess(event.id);
 
         notify({
           title: "Reserva creada",
-          description: `${reservation.name} quedó registrada en Supabase.`,
+          description: `${persistedReservation.name} quedó registrada en Supabase.`,
           tone: "success",
           icon: "reservation",
           href: "/reservations",
@@ -2458,7 +2504,7 @@ export function WorkspaceServiceProvider({
           },
         });
 
-        return reservation;
+        return persistedReservation;
       } catch (exception) {
         restoreSnapshot(snapshot);
         throw exception;
@@ -2689,11 +2735,7 @@ export function WorkspaceServiceProvider({
           ...current.filter((guest) => guest.reservationId !== reservation.id),
           ...nextGuests,
         ]);
-        await repositories.reservations.upsert(nextReservation);
-        await requestReportingAfterSuccess(currentEvent.id);
-        for (const guest of nextGuests) {
-          await repositories.guests.upsert(guest);
-        }
+        await persistReservationThenGuests({ persistReservation: () => repositories.reservations.upsert(nextReservation), guests: nextGuests, persistGuest: (guest) => repositories.guests.upsert(guest), report: () => requestReportingAfterSuccess(currentEvent.id) });
 
         notify({
           title: "Preventa actualizada",
@@ -3481,243 +3523,64 @@ export function WorkspaceServiceProvider({
   );
 
   const setReservationStatus = useCallback(
-    (reservationId: string, status: ReservationStatus) => {
-      requirePermission("reservation.edit");
+    async (reservationId: string, status: ReservationStatus) => {
+      requirePermission(status === "Cancelled" ? "reservation.cancel" : "reservation.edit");
       const reservation = reservations.find((item) => item.id === reservationId);
       if (!reservation) return;
       assertReservationInCurrentEvent(reservation, currentEvent);
-      if (isTerminalEventStatus(currentEvent.status)) {
-        notify({
-          title: "Evento cerrado",
-          description: "No podés modificar reservas sobre un evento cerrado.",
-          tone: "warning",
-          icon: "alert",
-          href: "/reservations",
-        });
-        return;
-      }
-      if (isTerminalReservationStatus(reservation.status)) {
-        notify({
-          title: "Reserva cerrada",
-          description: "Esta reserva ya es histórica y no admite cambios.",
-          tone: "warning",
-          icon: "alert",
-          href: "/reservations",
-        });
+      if (isTerminalEventStatus(currentEvent.status) || isTerminalReservationStatus(reservation.status)) {
+        notify({ title: "Reserva cerrada", description: "Esta reserva no admite cambios en este estado.", tone: "warning", icon: "alert", href: "/reservations" });
         return;
       }
 
-      const snapshot = captureSnapshot();
-      const affectedGuests = guests.filter((guest) => guest.reservationId === reservationId);
-      setReservations((current) =>
-        current.map((item) =>
-          item.id === reservationId
-            ? {
-                ...item,
-                status,
-                tableId: status === "Cancelled" || status === "No Show" ? undefined : item.tableId,
-                tableName: status === "Cancelled" || status === "No Show"
-                  ? "Sin mesa"
-                  : item.tableName,
-                timeline: [
-                  ...item.timeline,
-                  buildReservationTimelineEntry(
-                    item.id,
-                    nowIso(),
-                    status === "Confirmed"
-                      ? "Reserva confirmada"
-                      : status === "Pending"
-                        ? "Reserva pendiente"
-                        : status === "Completed"
-                          ? "Reserva completada"
-                          : status === "Cancelled"
-                            ? "Reserva cancelada"
-                            : status === "No Show"
-                              ? "No show registrado"
-                              : "Reserva en borrador",
-                    status === "Cancelled" || status === "No Show" ? "Restado al ciclo operativo" : "Estado sincronizado con el flujo",
-                    status === "Cancelled" || status === "No Show" ? "danger" : status === "Pending" || status === "Draft" ? "warning" : "success",
-                    {
-                      actor: currentAccount.displayName,
-                      actorRole: currentAccount.roleName,
-                      context: currentEvent.name,
-                      target: item.name,
-                    },
-                  ),
-                ],
-              }
-            : item,
-        ),
-      );
-      setGuests((current) =>
-        current.map((guest): Guest => {
-          if (guest.reservationId !== reservationId) {
-            return guest;
-          }
-
-          if (status === "Cancelled") {
-            return {
-              ...guest,
-              reservationStatus: status,
-              admissionStatus: guest.admissionStatus === "Ingresó" ? guest.admissionStatus : "Anulada",
-              qrStatus: guest.admissionStatus === "Ingresó" ? guest.qrStatus : "Anulado",
-              tableId: guest.admissionStatus === "Ingresó" ? guest.tableId : undefined,
-              tableName: guest.admissionStatus === "Ingresó" ? guest.tableName : undefined,
-            };
-          }
-
-          if (status === "No Show") {
-            return {
-              ...guest,
-              reservationStatus: status,
-              admissionStatus: guest.admissionStatus === "Ingresó" ? guest.admissionStatus : "Bloqueada",
-              qrStatus: guest.admissionStatus === "Ingresó" ? guest.qrStatus : "Bloqueado",
-              tableId: guest.admissionStatus === "Ingresó" ? guest.tableId : undefined,
-              tableName: guest.admissionStatus === "Ingresó" ? guest.tableName : undefined,
-            };
-          }
-
-          return {
-            ...guest,
-            reservationStatus: status,
-            tableId: guest.tableId,
-            tableName: guest.tableName,
-          };
-        }),
-      );
-      affectedGuests.forEach((guest) => {
-        const nextGuest: Guest = {
-          ...guest,
-          reservationStatus: status,
-          admissionStatus:
-            status === "Cancelled"
-              ? guest.admissionStatus === "Ingresó"
-                ? guest.admissionStatus
-                : "Anulada"
-              : status === "No Show"
-                ? guest.admissionStatus === "Ingresó"
-                  ? guest.admissionStatus
-                  : "Bloqueada"
-                : guest.admissionStatus,
-          qrStatus:
-            status === "Cancelled"
-              ? guest.admissionStatus === "Ingresó"
-                ? guest.qrStatus
-                : "Anulado"
-              : status === "No Show"
-                ? guest.admissionStatus === "Ingresó"
-                  ? guest.qrStatus
-                  : "Bloqueado"
-                : guest.qrStatus,
-          operatorActivity: status === "Cancelled" && reservation.reservationType === "Cortesía"
-            ? [...guest.operatorActivity, { time: nowIso().slice(11, 16), action: "Cortesía anulada", operator: currentAccount.displayName, reason: "Anulación manual en Reservations" }]
-            : guest.operatorActivity,
-          tableId: status === "Cancelled" || status === "No Show" ? (guest.admissionStatus === "Ingresó" ? guest.tableId : undefined) : guest.tableId,
-          tableName: status === "Cancelled" || status === "No Show" ? (guest.admissionStatus === "Ingresó" ? guest.tableName : undefined) : guest.tableName,
-        };
-
-        void repositories.guests
-          .upsert(nextGuest)
-          .catch(() => restoreSnapshot(snapshot));
-      });
-      void repositories.reservations.setStatus(reservationId, status).catch(() => restoreSnapshot(snapshot));
-      notify({
-        title: status === "Confirmed" ? "Reserva confirmada" : status === "Pending" ? "Reserva pendiente" : status === "Completed" ? "Reserva completada" : status === "Cancelled" ? "Reserva cancelada" : status === "No Show" ? "No show registrado" : "Reserva actualizada",
-        description: `${reservation.name} quedó sincronizada con el estado ${status}.`,
-        tone: status === "Cancelled" || status === "No Show" ? "danger" : status === "Pending" || status === "Draft" ? "warning" : "success",
-        icon: "reservation",
-        href: "/reservations",
-        undo: status === "Cancelled" || status === "No Show" ? { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } : undefined,
-      });
+      try {
+        const result = await setReservationStatusOperation(reservation, status, {
+          persistOrdinary: async (id, target) => repositories.reservations.setStatusAtomic(id, target),
+          cancel: async (id) => {
+            const cancelled = await repositories.reservations.cancelAtomic(id);
+            if (!cancelled) throw new Error("No se pudo cancelar la reserva.");
+          },
+          requestReporting: (eventId) => requestReportingAfterSuccess(eventId),
+        });
+        setReservations((current) => current.map((item) => item.id === reservationId ? { ...item, status: result.status } : item));
+        if (status !== "Cancelled") {
+          setGuests((current) => current.map((guest) => guest.reservationId === reservationId ? { ...guest, reservationStatus: result.status } : guest));
+        }
+        notify({ title: result.status === "Confirmed" ? "Reserva confirmada" : "Reserva pendiente", description: `${reservation.name} quedó sincronizada en Supabase.`, tone: result.status === "Pending" ? "warning" : "success", icon: "reservation", href: "/reservations" });
+      } catch (error) {
+        if (error instanceof Error && error.name === "ReportingInvalidationError") throw error;
+        throw error;
+      }
     },
-    [captureSnapshot, currentEvent, currentEvent.status, guests, notify, repositories.guests, repositories.reservations, requirePermission, reservations, restoreSnapshot],
+    [currentEvent, notify, repositories.reservations, requestReportingAfterSuccess, requirePermission, reservations],
   );
 
-  const assignReservationToTable = useCallback(
-    (reservationId: string, tableId: string) => {
-      requirePermission("resource.assign");
-      const reservation = reservations.find((item) => item.id === reservationId);
-      const table = tables.find((item) => item.id === tableId);
-      if (!reservation || !table) return;
-      assertReservationInCurrentEvent(reservation, currentEvent);
-      assertTableInCurrentEventContext(table, currentEvent, currentVenue);
-      if (isTerminalEventStatus(currentEvent.status)) {
-        notify({
-          title: "Evento cerrado",
-          description: "No podés reasignar mesas sobre un evento cerrado.",
-          tone: "warning",
-          icon: "alert",
-          href: "/tables",
-        });
-        return;
-      }
-      if (isTerminalReservationStatus(reservation.status)) {
-        notify({
-          title: "Reserva cerrada",
-          description: "Esta reserva ya es histórica y no admite reasignación de mesa.",
-          tone: "warning",
-          icon: "alert",
-          href: "/tables",
-        });
-        return;
-      }
-
-      const snapshot = captureSnapshot();
-      const selectedEventLayoutResource = resolveCurrentEventLayoutResource({
-        currentEventLayout,
-        resourceId: table.id,
-        venueLayoutResources,
-        eventLayoutResources,
-      });
-      const canonicalVenueId = currentVenue?.id ?? currentEvent.venueId ?? undefined;
-      const nextReservation: ReservationRecord = {
-        ...reservation,
-        resourceId: table.id,
-        resourceName: table.name,
-        sectorId: table.sectorId,
-        sectorName: table.location,
-        venueId: canonicalVenueId,
-        tableId: table.id,
-        tableName: table.name,
-        tableCapacity: table.capacity,
-        eventLayoutId: selectedEventLayoutResource?.eventLayoutId ?? currentEventLayout?.id ?? reservation.eventLayoutId,
-        eventLayoutResourceId: selectedEventLayoutResource?.id ?? reservation.eventLayoutResourceId,
-        timeline: [
-          ...reservation.timeline,
-          buildReservationTimelineEntry(
-            reservation.id,
-            nowIso(),
-            "Mesa asignada",
-            `${table.name} quedó vinculada a la reserva.`,
-            "info",
-            {
-              actor: currentAccount.displayName,
-              actorRole: currentAccount.roleName,
-              context: currentEvent.name,
-              target: reservation.name,
-            },
-          ),
-        ],
-      };
-      setReservations((current) =>
-        current.map((item) => (item.id === reservationId ? nextReservation : item)),
-      );
-      setGuests((current) => current.map((guest) => (guest.reservationId === reservationId ? { ...guest, tableId: table.id, tableName: table.name } : guest)));
-      setTables((current) => current.map((item) => (item.id === table.id ? { ...item, status: "Reserved", closed: false } : item)));
-      void repositories.reservations.upsert(nextReservation).catch(() => restoreSnapshot(snapshot));
-      void repositories.tables.update(tableId, { status: "Reserved", closed: false } as never).catch(() => restoreSnapshot(snapshot));
-      notify({ title: "Mesa asignada", description: `${table.name} quedó vinculada a la reserva.`, tone: "info", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
-    },
-    [captureSnapshot, currentEvent, currentEvent.status, currentEventLayout, currentVenue, eventLayoutResources, notify, repositories.reservations, repositories.tables, requirePermission, reservations, restoreSnapshot, tables, venueLayoutResources],
-  );
+  const assignReservationToTable = useCallback(async (reservationId: string, tableId: string) => {
+    requirePermission("resource.assign");
+    const reservation = reservations.find((item) => item.id === reservationId);
+    const table = tables.find((item) => item.id === tableId);
+    if (!reservation || !table) return;
+    assertReservationInCurrentEvent(reservation, currentEvent);
+    assertTableInCurrentEventContext(table, currentEvent, currentVenue);
+    if (isTerminalEventStatus(currentEvent.status) || isTerminalReservationStatus(reservation.status)) return;
+    const result = await runAssignReservationTable({ reservationId, resourceId: tableId, persist: () => repositories.reservations.assignReservationTableAtomic({ reservationId, resourceId: tableId }), commit: (value) => { setReservations((current) => current.map((item) => item.id === reservationId ? { ...item, resourceId: tableId, tableId, tableName: table.name, resourceName: table.name, tableCapacity: value.reservation?.table_capacity ?? table.capacity, eventLayoutResourceId: reservation.eventLayoutResourceId } : item)); setGuests((current) => current.map((guest) => guest.reservationId === reservationId ? { ...guest, tableId, tableName: table.name } : guest)); setTables((current) => current.map((item) => item.id === tableId ? { ...item, status: "Reserved", closed: false } : item)); }, report: () => requestReportingAfterSuccess(currentEvent.id) });
+  }, [currentEvent, currentVenue, requestReportingAfterSuccess, repositories.reservations, requirePermission, reservations, setGuests, setReservations, setTables, tables]);
 
   const moveGuestToTable = useCallback(
-    (guestId: string, tableId: string) => {
+    async (guestId: string, tableId: string) => {
       requirePermission("resource.assign");
       const table = tables.find((item) => item.id === tableId);
+      const destinationResource = resources.find((item) => item.id === tableId);
       const guest = guests.find((item) => item.id === guestId);
-      if (!table || !guest) return;
-      assertTableInCurrentEventContext(table, currentEvent, currentVenue);
+      if (!guest || (!table && !destinationResource)) {
+        throw new Error("El espacio seleccionado no pertenece al evento o venue actual.");
+      }
+      if (destinationResource && currentVenue?.id && destinationResource.venueId !== currentVenue.id) {
+        throw new Error("El espacio seleccionado no pertenece al evento o venue actual.");
+      }
+      if (table) {
+        assertTableInCurrentEventContext(table, currentEvent, currentVenue);
+      }
       assertGuestInCurrentEvent(guest, currentEvent, reservations);
       const reservation = reservations.find((item) => item.id === guest.reservationId);
       if (isTerminalEventStatus(currentEvent.status)) {
@@ -3741,163 +3604,44 @@ export function WorkspaceServiceProvider({
         return;
       }
 
-      const snapshot = captureSnapshot();
-      setGuests((current) => current.map((item) => (item.id === guestId ? { ...item, tableId: table.id, tableName: table.name } : item)));
-      setReservations((current) =>
-        current.map((reservation) =>
-          reservation.id === guest.reservationId
-            ? {
-                ...reservation,
-                timeline: [
-                  ...reservation.timeline,
-                  buildReservationTimelineEntry(
-                    reservation.id,
-                    nowIso(),
-                    "Mesa cambiada",
-                    `${guest.guestName} pasó a ${table.name}.`,
-                    "warning",
-                    {
-                      actor: currentAccount.displayName,
-                      actorRole: currentAccount.roleName,
-                      context: currentEvent.name,
-                      target: reservation.name,
-                    },
-                  ),
-                ],
-              }
-            : reservation,
-        ),
-      );
-      void repositories.guests.moveToTable(guestId, tableId).catch(() => restoreSnapshot(snapshot));
-      notify({ title: "Mesa cambiada", description: `${guest.guestName} pasó a ${table.name}.`, tone: "warning", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
+      const result = await runMoveGuestToResource({
+        persist: () => repositories.guests.moveGuestToResourceAtomic({ guestId, destinationResourceId: tableId }),
+        commit: (result) => {
+          setGuests((current) => current.map((item) => item.id === guestId ? {
+            ...item,
+            tableId: result.table_id ?? result.destination_resource_id,
+            tableName: result.table_name ?? result.destination_resource_name,
+          } : item));
+        },
+        report: () => requestReportingAfterSuccess(currentEvent.id),
+      });
+      notify({ title: "Mesa cambiada", description: `${guest.guestName} pasó a ${result.destination_resource_name}.`, tone: "warning", icon: "table", href: "/tables" });
     },
-    [captureSnapshot, currentEvent, currentEvent.status, currentVenue, guests, notify, repositories.guests, requirePermission, reservations, restoreSnapshot, tables],
+    [currentEvent, currentVenue, guests, notify, repositories.guests, requestReportingAfterSuccess, requirePermission, reservations, resources, tables],
   );
 
-  const releaseTable = useCallback(
-    (tableId: string) => {
-      requirePermission("resource.manage");
-      const table = tables.find((item) => item.id === tableId);
-      if (!table) return;
-      assertTableInCurrentEventContext(table, currentEvent, currentVenue);
-      const affectedReservations = reservations.filter((reservation) => reservation.tableId === tableId || reservation.resourceId === tableId);
-      if (isTerminalEventStatus(currentEvent.status)) {
-        notify({
-          title: "Evento cerrado",
-          description: "No podés liberar mesas de un evento cerrado.",
-          tone: "warning",
-          icon: "alert",
-          href: "/tables",
-        });
-        return;
-      }
-      if (affectedReservations.some((reservation) => isTerminalReservationStatus(reservation.status))) {
-        notify({
-          title: "Reserva cerrada",
-          description: "La mesa sigue vinculada a una reserva histórica y no se puede liberar sin afectar el historial.",
-          tone: "warning",
-          icon: "alert",
-          href: "/tables",
-        });
-        return;
-      }
+  const releaseTable = useCallback(async (tableId: string) => {
+    requirePermission("resource.assign");
+    const table = tables.find((item) => item.id === tableId);
+    if (!table) return;
+    assertTableInCurrentEventContext(table, currentEvent, currentVenue);
+    const eligible = reservations.filter((reservation) => (reservation.tableId === tableId || reservation.resourceId === tableId) && !isTerminalReservationStatus(reservation.status));
+    if (eligible.length !== 1) {
+      notify({ title: eligible.length === 0 ? "Sin reserva activa" : "Conflicto histórico", description: eligible.length === 0 ? "No hay una reserva activa para liberar." : "Hay múltiples reservas activas asociadas a esta mesa.", tone: "warning", icon: "alert", href: "/tables" });
+      return;
+    }
+    const reservation = eligible[0];
+    await runReleaseReservationTable({ persist: () => repositories.reservations.releaseReservationTableAtomic({ reservationId: reservation.id, expectedResourceId: tableId }), commit: () => { setTables((current) => current.map((item) => item.id === tableId ? { ...item, status: "Available", closed: false } : item)); setReservations((current) => current.map((item) => item.id === reservation.id ? { ...item, resourceId: undefined, tableId: undefined, tableName: "Sin mesa", eventLayoutResourceId: undefined } : item)); setGuests((current) => current.map((guest) => guest.reservationId === reservation.id ? { ...guest, tableId: undefined, tableName: undefined } : guest)); }, report: () => requestReportingAfterSuccess(currentEvent.id) });
+  }, [currentEvent, currentVenue, notify, requestReportingAfterSuccess, repositories.reservations, requirePermission, reservations, setGuests, setReservations, setTables, tables]);
 
-      const snapshot = captureSnapshot();
-      setTables((current) => current.map((item) => (item.id === tableId ? { ...item, status: "Available", closed: false } : item)));
-      setReservations((current) =>
-        current.map((reservation) =>
-          reservation.tableId === tableId || reservation.resourceId === tableId
-            ? {
-                ...reservation,
-                tableId: undefined,
-                tableName: "Sin mesa",
-                timeline: [
-                  ...reservation.timeline,
-                  buildReservationTimelineEntry(
-                    reservation.id,
-                    nowIso(),
-                    "Mesa liberada",
-                    `${table.name} quedó disponible nuevamente.`,
-                    "warning",
-                    {
-                      actor: currentAccount.displayName,
-                      actorRole: currentAccount.roleName,
-                      context: currentEvent.name,
-                      target: reservation.name,
-                    },
-                  ),
-                ],
-              }
-            : reservation,
-        ),
-      );
-      setGuests((current) => current.map((guest) => (guest.tableId === tableId ? { ...guest, tableId: undefined, tableName: undefined } : guest)));
-      void repositories.tables.release(tableId).catch(() => restoreSnapshot(snapshot));
-      notify({ title: "Mesa liberada", description: `${table.name} quedó disponible nuevamente.`, tone: "warning", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
-    },
-    [captureSnapshot, currentEvent, currentEvent.status, currentVenue, notify, repositories.tables, requirePermission, reservations, restoreSnapshot, tables],
-  );
-
-  const closeTable = useCallback(
-    (tableId: string) => {
-      requirePermission("resource.manage");
-      const table = tables.find((item) => item.id === tableId);
-      if (!table) return;
-      assertTableInCurrentEventContext(table, currentEvent, currentVenue);
-      const affectedReservations = reservations.filter((reservation) => reservation.tableId === tableId || reservation.resourceId === tableId);
-      if (isTerminalEventStatus(currentEvent.status)) {
-        notify({
-          title: "Evento cerrado",
-          description: "No podés cerrar mesas de un evento cerrado.",
-          tone: "warning",
-          icon: "alert",
-          href: "/tables",
-        });
-        return;
-      }
-      if (affectedReservations.some((reservation) => isTerminalReservationStatus(reservation.status))) {
-        notify({
-          title: "Reserva cerrada",
-          description: "La mesa sigue vinculada a una reserva histórica y no se puede cerrar sin afectar el historial.",
-          tone: "warning",
-          icon: "alert",
-          href: "/tables",
-        });
-        return;
-      }
-
-      const snapshot = captureSnapshot();
-      setTables((current) => current.map((item) => (item.id === tableId ? { ...item, status: "Closed", closed: true } : item)));
-      setReservations((current) =>
-        current.map((reservation) =>
-          reservation.tableId === tableId || reservation.resourceId === tableId
-            ? {
-                ...reservation,
-                timeline: [
-                  ...reservation.timeline,
-                  buildReservationTimelineEntry(
-                    reservation.id,
-                    nowIso(),
-                    "Mesa cerrada",
-                    `${table.name} quedó fuera de servicio temporalmente.`,
-                    "danger",
-                    {
-                      actor: currentAccount.displayName,
-                      actorRole: currentAccount.roleName,
-                      context: currentEvent.name,
-                      target: reservation.name,
-                    },
-                  ),
-                ],
-              }
-            : reservation,
-        ),
-      );
-      void repositories.tables.close(tableId).catch(() => restoreSnapshot(snapshot));
-      notify({ title: "Mesa cerrada", description: `${table.name} quedó fuera de servicio temporalmente.`, tone: "danger", icon: "table", href: "/tables", undo: { label: "Deshacer", timeoutMs: 6000, onUndo: () => restoreSnapshot(snapshot) } });
-    },
-    [captureSnapshot, currentEvent, currentEvent.status, currentVenue, notify, repositories.tables, requirePermission, reservations, restoreSnapshot, tables],
-  );
+  const closeTable = useCallback(async (tableId: string) => {
+    requirePermission("resource.manage");
+    const table = tables.find((item) => item.id === tableId);
+    if (!table) return;
+    assertTableInCurrentEventContext(table, currentEvent, currentVenue);
+    if (isTerminalEventStatus(currentEvent.status)) return;
+    await runCloseTable({ persist: () => repositories.tables.closeTableAtomic({ resourceId: tableId }), commit: () => setTables((current) => current.map((item) => item.id === tableId ? { ...item, status: "Closed", closed: true } : item)), report: () => requestReportingAfterSuccess(currentEvent.id) });
+  }, [currentEvent, currentVenue, requestReportingAfterSuccess, repositories.tables, requirePermission, setTables, tables]);
 
   const registerCheckIn = useCallback(
     async ({ query, method, operator = method === "Manual" ? "Recepción" : "Escáner" }: { query: string; method: CheckInMethod; operator?: string; manual?: boolean }) => {
@@ -3944,10 +3688,22 @@ export function WorkspaceServiceProvider({
           reservations: currentEventReservations,
           event: currentEvent,
         });
-        const guest = resolution.status === "found" ? resolution.guest : resolution.status === "ambiguous" ? null : findGuestByQuery(query);
+        let guest = resolution.status === "found" ? resolution.guest : resolution.status === "ambiguous" ? null : findGuestByQuery(query);
+        if (guest && repositories.guests.prepareAuthoritativeAccess) {
+          guest = await repositories.guests.prepareAuthoritativeAccess(guest);
+          setGuests((current) => current.map((candidate) => candidate.id === guest?.id ? guest : candidate));
+        }
         const accessGrantKey = guest?.accessGrantId ?? guest?.id;
+        const authoritativeConsumed = accessGrantKey && repositories.checkIns.isAuthoritativeConsumed
+          ? await repositories.checkIns.isAuthoritativeConsumed(accessGrantKey)
+          : false;
 
-        if (isAccessGrantAlreadyConsumed(accessGrantKey, consumedAccessGrantIdsRef.current)) {
+        if (shouldBlockConsumedAccess({
+          accessGrantKey,
+          consumedAccessGrantIds: consumedAccessGrantIdsRef.current,
+          admissionStatus: guest?.admissionStatus,
+          authoritativeConsumed,
+        })) {
           const duplicateTicket = guest ? buildAccessTicketFromGuest({ ...guest, admissionStatus: "Ingresó", checkInTime: guest.checkInTime ?? timestampIso }, timestampIso) : null;
           const duplicateResult = evaluateAdmission({
             ticket: duplicateTicket,
@@ -4099,15 +3855,27 @@ export function WorkspaceServiceProvider({
         });
 
         try {
-          await persistCompletedCheckInBundle({
-            repositories: {
-              checkIns: repositories.checkIns,
-              guests: repositories.guests,
-              timeline: repositories.timeline,
-            },
-            originalGuest: guest,
-            bundle,
-          });
+          if (repositories.checkIns.persistCompletedAtomic) {
+            await repositories.checkIns.persistCompletedAtomic({
+              guestId: guest.id,
+              accessGrantId: guest.accessGrantId ?? guest.id,
+              operatorProfileId: currentProfileId,
+              source: admissionMethod === "manual" ? "manual_code" : "qr",
+              method,
+              operator: currentAccount.displayName,
+              gate: bundle.checkIn.gate ?? "Principal",
+              checkedInAt: bundle.checkIn.checkedInAt,
+              notes: bundle.checkIn.notes ?? "",
+              auditTrail: bundle.checkIn.auditTrail,
+              timeline: bundle.timelineEntry,
+            });
+          } else {
+            await persistCompletedCheckInBundle({
+              repositories: { checkIns: repositories.checkIns, guests: repositories.guests, timeline: repositories.timeline },
+              originalGuest: guest,
+              bundle,
+            });
+          }
         } catch (exception) {
           if (exception instanceof CheckInAlreadyConsumedError && guest) {
             const duplicateTicket = buildAccessTicketFromGuest(
@@ -4312,6 +4080,7 @@ export function WorkspaceServiceProvider({
       closeTable,
       createEvent,
       updateEvent,
+      prepareEventPhysicalLayout,
       createExtraWristbandSale: createExtraWristbandSaleMutation,
       cancelExtraWristbandSale: cancelExtraWristbandSaleMutation,
       setEventStatus,
@@ -4354,6 +4123,7 @@ export function WorkspaceServiceProvider({
       currentEvent,
       currentEventId,
       updateEvent,
+      prepareEventPhysicalLayout,
       currentProfile,
       currentProfileId,
       currentOrganization,

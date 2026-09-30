@@ -173,6 +173,7 @@ export type EventLayoutResourceRow = SupabaseRowBase & {
   event_layout_id: string;
   event_layout_sector_id: string | null;
   source_venue_layout_resource_id: string | null;
+  source_resource_id: string | null;
   type: ResourceType;
   name: string;
   capacity: number;

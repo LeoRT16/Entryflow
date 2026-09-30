@@ -25,6 +25,7 @@ test("reporting sync worker authority is not exposed to browser roles", () => {
 test("repository exposes only the authenticated request primitive", () => {
   const calls: Array<{ name: string; args: unknown }> = [];
   const client = {
+    from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ is: async () => ({ data: [{ writer_mode: "legacy", sheet_schema_version: 1, enabled: true }], error: null }) }) }) }) }),
     rpc: async (name: string, args: unknown) => {
       calls.push({ name, args });
       return { data: [{ outbox_id: "o1", destination_id: "d1", requested_sequence: 4 }], error: null };

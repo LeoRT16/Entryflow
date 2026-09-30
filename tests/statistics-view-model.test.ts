@@ -62,3 +62,19 @@ test("mixed currencies and missing snapshots render as incomplete instead of fal
   assert.equal(missing.diagnostics.commercialIncomplete, true);
   assert.equal(displayMoney(missing.commercial.total), "Datos incompletos");
 });
+
+test("Statistics follows physical Guest location while preserving commercial ownership", () => {
+  const input = structuredClone(buildEventReportFixtureInput());
+  input.guests.find((guest) => guest.id === "guest-1")!.tableId = "layout-mesa-2";
+  input.guests.find((guest) => guest.id === "guest-8")!.tableId = "layout-mesa-2";
+  const report = buildEventReport(input);
+  const model = buildStatisticsViewModel(report, intelligence());
+  const mesa1 = model.resources.find((resource) => resource.resourceId === "layout-mesa-1")!;
+  const mesa2 = model.resources.find((resource) => resource.resourceId === "layout-mesa-2")!;
+
+  assert.equal(mesa1.capacityAssigned, 4);
+  assert.equal(mesa2.capacityAssigned, 4);
+  assert.equal(model.commercial.total.amount, 1120);
+  assert.equal(report.reservations.find((reservation) => reservation.id === "mesa-active")?.resourceId, "layout-mesa-1");
+  assert.equal(report.reservations.find((reservation) => reservation.id === "presale-individual")?.resourceId, null);
+});

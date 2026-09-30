@@ -167,6 +167,25 @@ test("resourceId-only reservations still count toward occupancy after reload rec
   assert.equal(summary.status, "Partially Occupied");
 });
 
+test("physical guest moves follow guest tableId instead of commercial reservation resource", () => {
+  const source = buildTable({ id: "table-a", name: "Mesa A", capacity: 5 });
+  const destination = buildTable({ id: "table-b", name: "Mesa B", capacity: 5 });
+  const reservation = buildReservation({ tableId: "table-a", resourceId: "table-a", guestIds: ["g1", "g2", "g3"] });
+  const guests = [
+    { id: "g1", reservationId: reservation.id, tableId: "table-b", guestName: "Moved", admissionStatus: "Pendiente" },
+    { id: "g2", reservationId: reservation.id, tableId: "table-a", guestName: "A", admissionStatus: "Pendiente" },
+    { id: "g3", reservationId: reservation.id, tableId: "table-a", guestName: "B", admissionStatus: "Pendiente" },
+  ] as never;
+
+  const sourceSummary = buildTableSummary(source, [reservation], guests, [], "event-current");
+  const destinationSummary = buildTableSummary(destination, [reservation], guests, [], "event-current");
+
+  assert.equal(sourceSummary.metrics.assignedGuests, 2);
+  assert.deepEqual(sourceSummary.guestIds, ["g2", "g3"]);
+  assert.equal(destinationSummary.metrics.assignedGuests, 1);
+  assert.deepEqual(destinationSummary.guestIds, ["g1"]);
+});
+
 test("extra wristband Guests remain linked but do not consume physical table capacity", () => {
   const table = buildTable({ capacity: 5 });
   const reservation = buildReservation({ guestIds: ["base-1", "extra-1", "extra-2"] });

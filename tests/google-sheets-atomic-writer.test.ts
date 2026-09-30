@@ -52,7 +52,7 @@ function initializedFake(extra = true) { return new StatefulSheetsFake([...(extr
 function reqNames(request: sheets_v4.Schema$BatchUpdateSpreadsheetRequest) { return (request.requests ?? []).map((item) => Object.keys(item as object)[0]); }
 
 const reservationHeaders = ["Código", "Tipo", "Estado", "Titular", "Zona", "Mesa/Recurso", "Accesos incluidos/comprados", "Personas registradas", "Ingresados", "Pendientes", "Manillas extra", "Beneficios", "Carnet titular", "WhatsApp titular", "Moneda", "Precio", "Unidad de precio", "Valor base", "Valor extras", "Total"];
-const attendeeHeaders = ["Código de acceso", "Nombre", "Tipo", "Estado de la invitación", "Estado ingreso", "Reserva", "Titular", "Zona", "Mesa/Recurso", "Carnet", "WhatsApp", "Hora ingreso", "Manilla extra"];
+const attendeeHeaders = ["Código de acceso", "Nombre", "Tipo", "Estado de la invitación", "Estado ingreso", "Reserva", "Titular", "Zona", "Mesa/Recurso", "Ubicación física", "Carnet", "WhatsApp", "Hora ingreso", "Manilla extra"];
 test("V2 projection owns exactly Resumen, Reservas, Invitados and human headers", () => {
   const p = projection(); assert.deepEqual(Object.values(p.sheets).map((item) => item.title), [...GOOGLE_SHEETS_TAB_NAMES]);
   assert.deepEqual(p.sheets.reservations.columns.filter((col) => col.visibility !== "hidden").map((col) => col.header), reservationHeaders);
@@ -102,7 +102,7 @@ test("managed technical columns are hidden and headers are frozen with filters a
   const guests = [...fake.sheets.values()].find((item) => item.title === "Invitados")!;
   const summary = [...fake.sheets.values()].find((item) => item.title === "Resumen")!;
   assert.deepEqual([...reservations.hidden].sort((a, b) => a - b), [20, 21, 22]);
-  assert.deepEqual([...guests.hidden].sort((a, b) => a - b), [13, 14]);
+  assert.deepEqual([...guests.hidden].sort((a, b) => a - b), [14, 15]);
   assert.deepEqual([summary.frozenRowCount, reservations.frozenRowCount, guests.frozenRowCount], [1, 1, 1]);
   assert.deepEqual([summary.frozenColumnCount, reservations.frozenColumnCount, guests.frozenColumnCount], [2, 3, 2]);
   assert.equal(summary.filter, undefined); assert.ok(reservations.filter && guests.filter);

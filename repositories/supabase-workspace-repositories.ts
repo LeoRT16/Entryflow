@@ -20,6 +20,8 @@ import { cancelExtraWristbandSale, createExtraWristbandSale, mapExtraWristbandSa
 import type { TableRecord } from "@/features/tables/types";
 import type { TimelineEvent } from "@/features/timeline/types";
 import type { Database } from "@/lib/supabase/types";
+import { getQrToken } from "@/features/access/domain/access-ledger";
+import { logAccessPreparationDiagnostic, toAccessPreparationError } from "@/features/check-in/domain/access-preparation-error";
 import {
   createUuid,
   nowIso,
@@ -88,6 +90,7 @@ import type {
   VenueRow,
   UserRow,
 } from "@/lib/supabase/types";
+import type { GuestMoveAtomicResult } from "@/repositories/workspace-repositories";
 
 type AnyTable = keyof Database["public"]["Tables"];
 
@@ -117,6 +120,16 @@ type VenueLayoutResourceRepository = SupabaseCrudRepository<VenueLayoutResource>
 type EventLayoutRepository = SupabaseCrudRepository<EventLayout> & {
   getByEvent(eventId: string): Promise<EventLayout[]>;
   getByVenue(venueId: string): Promise<EventLayout[]>;
+  materializeEventLayoutAtomic(eventId: string): Promise<EventLayoutMaterializationResult>;
+};
+
+export type EventLayoutMaterializationResult = {
+  changed: boolean;
+  event_id: string;
+  event_layout_id: string;
+  venue_id: string;
+  source_venue_layout_id: string | null;
+  resource_count: number;
 };
 
 type EventLayoutSectorRepository = SupabaseCrudRepository<EventLayoutSector> & {
@@ -181,7 +194,7 @@ function createNoopCrudRepository<TEntity>(): SupabaseCrudRepository<TEntity> {
   };
 }
 
-type SupabaseWorkspaceRepositories = {
+export type SupabaseWorkspaceRepositories = {
   users: SupabaseCrudRepository<AccountUser> & {
     getByEmail(email: string): Promise<AccountUser | undefined>;
   };
@@ -210,15 +223,20 @@ type SupabaseWorkspaceRepositories = {
   events: SupabaseCrudRepository<PlatformEvent> & {
     setActive(eventId: string): Promise<void>;
     setStatus(eventId: string, status: PlatformEvent["status"]): Promise<void>;
+    setVenueAtomic(eventId: string, venueId: string | null): Promise<import('./workspace-repositories').EventVenueAtomicResult>;
   };
   reservations: SupabaseCrudRepository<ReservationRecord> & {
+    createPhysicalAtomic(input: { reservation: ReservationRecord; guests: Guest[] }): Promise<{ reservation: ReservationRecord; guests: Guest[] }>;
     addGuest(reservationId: string, guest: ReservationGuestInput): Promise<void>;
     addGuestAtomic(input: { reservationId: string; guest: Guest; courtesyEvent?: TimelineEvent; accessEvent: TimelineEvent }): Promise<Guest>;
     cancelGuestAtomic(input: { reservationId: string; guestId: string; reason: string }): Promise<{ guest: Guest; timelineEvent: TimelineEvent }>;
     cancelAtomic(reservationId: string): Promise<boolean>;
     updateGuest(params: { reservationId: string; guestId: string; action: ReservationGuestAction }): Promise<void>;
     setStatus(reservationId: string, status: ReservationStatus): Promise<void>;
+    setStatusAtomic(reservationId: string, status: ReservationStatus): Promise<{ reservationId: string; previousStatus: ReservationStatus; status: ReservationStatus; changed: boolean }>;
     assignToTable(reservationId: string, tableId: string): Promise<void>;
+    assignReservationTableAtomic(input: { reservationId: string; resourceId: string }): Promise<import('./workspace-repositories').ReservationTableAtomicResult>;
+    releaseReservationTableAtomic(input: { reservationId: string; expectedResourceId: string }): Promise<import('./workspace-repositories').ReleaseReservationTableAtomicResult>;
   };
   extraWristbandSales: {
     list(): Promise<ExtraWristbandSale[]>;
@@ -227,7 +245,9 @@ type SupabaseWorkspaceRepositories = {
   };
   guests: SupabaseCrudRepository<Guest> & {
     createWithAccessOrdinal(guest: Guest): Promise<Guest>;
+    prepareAuthoritativeAccess(guest: Guest): Promise<Guest>;
     moveToTable(guestId: string, tableId: string): Promise<void>;
+    moveGuestToResourceAtomic(input: { guestId: string; destinationResourceId: string }): Promise<GuestMoveAtomicResult>;
     checkIn(query: string): Promise<CheckInAttempt | null>;
   };
   tables: SupabaseCrudRepository<TableRecord> & {
@@ -235,6 +255,7 @@ type SupabaseWorkspaceRepositories = {
     moveGuest(guestId: string, tableId: string): Promise<void>;
     release(tableId: string): Promise<void>;
     close(tableId: string): Promise<void>;
+    closeTableAtomic(input: { resourceId: string }): Promise<{ table_id: string; status: string; closed: boolean; changed: boolean }>;
   };
   venueLayouts: VenueLayoutRepository;
   venueLayoutSectors: VenueLayoutSectorRepository;
@@ -243,6 +264,8 @@ type SupabaseWorkspaceRepositories = {
   eventLayoutSectors: EventLayoutSectorRepository;
   eventLayoutResources: EventLayoutResourceRepository;
   checkIns: SupabaseCrudRepository<CheckIn> & {
+    isAuthoritativeConsumed(accessGrantId: string): Promise<boolean>;
+    persistCompletedAtomic(input: { guestId: string; accessGrantId: string; operatorProfileId: string; source: string; method: string; operator: string; gate: string; checkedInAt: string; notes: string; auditTrail: unknown; timeline: unknown }): Promise<void>;
     register(query: string, method: "QR" | "Manual", operator?: string): Promise<CheckInAttempt | null>;
   };
   timeline: SupabaseCrudRepository<TimelineEvent>;
@@ -628,6 +651,9 @@ function buildEventLayoutRepository(client: SupabaseClient<Database> | null): Ev
       async getByVenue() {
         return [];
       },
+      async materializeEventLayoutAtomic() {
+        throw new Error("Supabase client is unavailable.");
+      },
     };
   }
 
@@ -655,6 +681,11 @@ function buildEventLayoutRepository(client: SupabaseClient<Database> | null): Ev
     ...base,
     getByEvent: listByEvent,
     getByVenue: listByVenue,
+    async materializeEventLayoutAtomic(eventId: string) {
+      const { data, error } = await client.rpc("materialize_event_layout_atomic" as never, { p_event_id: eventId } as never);
+      if (error) throw error;
+      return data as EventLayoutMaterializationResult;
+    },
   };
 }
 
@@ -757,12 +788,14 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     toRow: mapResourceToRow,
   });
 
-  const events = buildCrudRepository<PlatformEvent, EventRow>({
+  const eventsBase = buildCrudRepository<PlatformEvent, EventRow>({
     client,
     table: "events",
     fromRow: mapEventRowToDomain,
     toRow: mapEventToRow,
   });
+
+  const events = eventsBase;
 
   const reservations = buildCrudRepository<ReservationRecord, ReservationRow>({
     client,
@@ -770,6 +803,17 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     fromRow: mapReservationRowToDomain,
     toRow: mapReservationToRow,
   });
+  (reservations as SupabaseWorkspaceRepositories["reservations"]).createPhysicalAtomic = async ({ reservation, guests: inputGuests }) => {
+    if (!client) throw new Error("Supabase client is unavailable.");
+    const { data, error } = await client.rpc("create_physical_reservation_atomic" as never, {
+      p_reservation: mapReservationToRow(reservation),
+      p_guests: inputGuests.map(mapGuestToRow),
+    } as never);
+    if (error) throw error;
+    const result = data as { reservation?: ReservationRow; guests?: GuestRow[] };
+    if (!result?.reservation || !Array.isArray(result.guests)) throw new Error("Malformed physical reservation RPC response.");
+    return { reservation: mapReservationRowToDomain(result.reservation), guests: result.guests.map(mapGuestRowToDomain) };
+  };
 
   const extraWristbandSales = {
     async list() {
@@ -810,6 +854,23 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
 
     if (error) throw error;
     return mapGuestRowToDomain(data as GuestRow);
+  };
+
+  guests.prepareAuthoritativeAccess = async (guest) => {
+    if (!client) throw new Error("Supabase client is unavailable.");
+    const { data, error } = await client.rpc("prepare_guest_access_atomic" as never, {
+      p_guest_id: guest.id,
+      p_access_code: guest.accessCode ?? guest.invitationCode,
+      p_qr_token: guest.qrToken ?? getQrToken(guest),
+    } as never);
+    if (error) {
+      const diagnostic = toAccessPreparationError(error);
+      logAccessPreparationDiagnostic(diagnostic);
+      throw diagnostic;
+    }
+    const row = (Array.isArray(data) ? data[0] : data) as { access_grant_id?: string } | null;
+    if (!row?.access_grant_id) throw new Error("Malformed authoritative access response.");
+    return { ...guest, accessGrantId: row.access_grant_id };
   };
 
   const tables = buildCrudRepository<TableRecord, TableRow>({
@@ -927,9 +988,26 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
 
         await client.from("events").update({ status, updated_at: nowIso() } as never).eq("id", eventId).select("id");
       },
+      async setVenueAtomic(eventId: string, venueId: string | null) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("set_event_venue_atomic" as never, { p_event_id: eventId, p_venue_id: venueId } as never);
+        if (error) throw error;
+        return data as import('./workspace-repositories').EventVenueAtomicResult;
+      },
     },
     reservations: {
       ...reservations,
+      async createPhysicalAtomic({ reservation, guests: inputGuests }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("create_physical_reservation_atomic" as never, {
+          p_reservation: mapReservationToRow(reservation),
+          p_guests: inputGuests.map(mapGuestToRow),
+        } as never);
+        if (error) throw error;
+        const result = data as { reservation?: ReservationRow; guests?: GuestRow[] };
+        if (!result?.reservation || !Array.isArray(result.guests)) throw new Error("Malformed physical reservation RPC response.");
+        return { reservation: mapReservationRowToDomain(result.reservation), guests: result.guests.map(mapGuestRowToDomain) };
+      },
       async delete(reservationId: string) {
         if (!client) throw new Error("Supabase client is unavailable.");
         return softDeleteReservation(client, reservationId);
@@ -1060,6 +1138,28 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
       async setStatus(reservationId: string, status: ReservationStatus) {
         await reservations.update(reservationId, { status } as never);
       },
+      async setStatusAtomic(reservationId: string, status: ReservationStatus) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("set_reservation_status_atomic" as never, {
+          p_reservation_id: reservationId,
+          p_target_status: status,
+        } as never);
+        if (error) throw error;
+        const result = data as { reservation_id: string; previous_status: ReservationStatus; status: ReservationStatus; changed: boolean };
+        return { reservationId: result.reservation_id, previousStatus: result.previous_status, status: result.status, changed: result.changed };
+      },
+      async assignReservationTableAtomic({ reservationId, resourceId }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("assign_reservation_table_atomic" as never, { p_reservation_id: reservationId, p_destination_table_id: resourceId } as never);
+        if (error) throw error;
+        return data as never;
+      },
+      async releaseReservationTableAtomic({ reservationId, expectedResourceId }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("release_reservation_table_atomic" as never, { p_reservation_id: reservationId, p_expected_table_id: expectedResourceId } as never);
+        if (error) throw error;
+        return data as never;
+      },
       async assignToTable(reservationId: string, tableId: string) {
         const targetTable = await tables.findById(tableId);
         const currentReservation = await reservations.findById(reservationId);
@@ -1093,6 +1193,28 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
           tableId,
           tableName: targetTable.name,
         } as never);
+      },
+      async moveGuestToResourceAtomic({ guestId, destinationResourceId }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("move_guest_to_resource_atomic" as never, {
+          p_guest_id: guestId,
+          p_destination_resource_id: destinationResourceId,
+        } as never);
+        if (error) throw error;
+        const result = data as Partial<GuestMoveAtomicResult> | null;
+        if (!result || typeof result.guest_id !== "string" || typeof result.reservation_id !== "string" || typeof result.destination_resource_id !== "string" || typeof result.destination_resource_name !== "string") {
+          throw new Error("Invalid move_guest_to_resource_atomic response.");
+        }
+        return {
+          changed: result.changed === true,
+          guest_id: result.guest_id,
+          reservation_id: result.reservation_id,
+          source_resource_id: result.source_resource_id ?? null,
+          destination_resource_id: result.destination_resource_id,
+          destination_resource_name: result.destination_resource_name,
+          table_id: result.table_id ?? null,
+          table_name: result.table_name ?? null,
+        };
       },
       async checkIn(query: string) {
         const allGuests = await guests.list();
@@ -1132,6 +1254,12 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
       async close(tableId: string) {
         await tables.update(tableId, { status: "Closed", closed: true } as never);
       },
+      async closeTableAtomic({ resourceId }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("close_table_atomic" as never, { p_table_id: resourceId } as never);
+        if (error) throw error;
+        return data as never;
+      },
     },
     venueLayouts,
     venueLayoutSectors,
@@ -1139,8 +1267,35 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     eventLayouts,
     eventLayoutSectors,
     eventLayoutResources,
-    checkIns: {
+  checkIns: {
       ...checkIns,
+      async isAuthoritativeConsumed(accessGrantId: string) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client
+          .from("accreditation_checkins")
+          .select("id")
+          .eq("access_grant_id", accessGrantId)
+          .limit(1);
+        if (error) throw error;
+        return Array.isArray(data) && data.length > 0;
+      },
+      async persistCompletedAtomic(input: { guestId: string; accessGrantId: string; operatorProfileId: string; source: string; method: string; operator: string; gate: string; checkedInAt: string; notes: string; auditTrail: unknown; timeline: unknown }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { error } = await client.rpc("persist_completed_checkin_atomic" as never, {
+          p_guest_id: input.guestId,
+          p_access_grant_id: input.accessGrantId,
+          p_operator_profile_id: input.operatorProfileId,
+          p_source: input.source,
+          p_method: input.method,
+          p_operator: input.operator,
+          p_gate: input.gate,
+          p_checked_in_at: input.checkedInAt,
+          p_notes: input.notes,
+          p_audit_trail: input.auditTrail,
+          p_timeline: input.timeline,
+        } as never);
+        if (error) throw error;
+      },
       async register(query: string, method: "QR" | "Manual", operator = method === "Manual" ? "Recepción" : "Escáner") {
         const allGuests = await guests.list();
         const found = allGuests.find((guest) =>
@@ -1227,5 +1382,3 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     timeline,
   };
 }
-
-export type { SupabaseWorkspaceRepositories };

@@ -25,7 +25,25 @@ export type AtomicGoogleSheetsTransport = {
 };
 export type AtomicWriterFailureCode = "google_invalid_grant" | "google_auth_failed" | "google_scope_insufficient" | "google_permission_denied" | "google_rate_limited" | "google_temporarily_unavailable" | "spreadsheet_not_found" | "managed_sheet_needs_action" | "google_write_failed";
 export class AtomicWorkbookWriterError extends Error {
-  constructor(public readonly code: AtomicWriterFailureCode, message: string, public readonly recoverable: boolean) { super(message); this.name = "AtomicWorkbookWriterError"; }
+  constructor(public readonly code: AtomicWriterFailureCode, message: string, public readonly recoverable: boolean, public readonly diagnostic?: GoogleSheetsDiagnostic) { super(message); this.name = "AtomicWorkbookWriterError"; }
+}
+
+export type GoogleSheetsDiagnostic = { operation: string; status?: number; reason?: string; message?: string };
+
+export function safeGoogleSheetsDiagnostic(error: unknown, operation: string): GoogleSheetsDiagnostic {
+  const root = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const response = root.response && typeof root.response === "object" ? root.response as Record<string, unknown> : {};
+  const data = response.data && typeof response.data === "object" ? response.data as Record<string, unknown> : {};
+  const provider = data.error && typeof data.error === "object" ? data.error as Record<string, unknown> : {};
+  const errors = Array.isArray(data.errors) ? data.errors : Array.isArray(provider.errors) ? provider.errors : [];
+  const first = errors[0] && typeof errors[0] === "object" ? errors[0] as Record<string, unknown> : {};
+  const statusValue = response.status ?? root.status ?? root.statusCode;
+  const status = typeof statusValue === "number" ? statusValue : undefined;
+  const reason = typeof first.reason === "string" ? first.reason : undefined;
+  const message = [root.message, provider.message, data.error_description]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ") || undefined;
+  return { operation, ...(status === undefined ? {} : { status }), ...(reason ? { reason } : {}), ...(message ? { message } : {}) };
 }
 
 export function classifyAtomicGoogleSheetsError(error: unknown): AtomicWorkbookWriterError {
@@ -40,14 +58,15 @@ export function classifyAtomicGoogleSheetsError(error: unknown): AtomicWorkbookW
   const oauthError = typeof data.error === "string" ? data.error : typeof provider.status === "string" ? provider.status : "";
   const reason = typeof first.reason === "string" ? first.reason : "";
   const message = `${typeof root.message === "string" ? root.message : ""} ${typeof provider.message === "string" ? provider.message : ""} ${typeof data.error_description === "string" ? data.error_description : ""}`.toLowerCase();
-  if (oauthError === "invalid_grant" || message.includes("invalid_grant")) return new AtomicWorkbookWriterError("google_invalid_grant", "Google authorization must be renewed.", false);
-  if (status === 401) return new AtomicWorkbookWriterError("google_auth_failed", "Google authorization was rejected.", false);
-  if (status === 403 && /access_token_scope_insufficient|insufficient_scope|insufficient.*scope|scope.*insufficient|insufficient authentication scopes/i.test(reason + " " + message)) return new AtomicWorkbookWriterError("google_scope_insufficient", "Google Sheets permission scope is insufficient.", false);
-  if (status === 403) return new AtomicWorkbookWriterError("google_permission_denied", "Google denied access to the spreadsheet.", false);
-  if (status === 404) return new AtomicWorkbookWriterError("spreadsheet_not_found", "The spreadsheet is unavailable.", false);
-  if (status === 429) return new AtomicWorkbookWriterError("google_rate_limited", "Google rate limit reached.", true);
-  if (status === null || status >= 500) return new AtomicWorkbookWriterError("google_temporarily_unavailable", "Google Sheets is temporarily unavailable.", true);
-  return new AtomicWorkbookWriterError("google_write_failed", "Google Sheets operation failed.", false);
+  const diagnostic = safeGoogleSheetsDiagnostic(error, "google_sheets");
+  if (oauthError === "invalid_grant" || message.includes("invalid_grant")) return new AtomicWorkbookWriterError("google_invalid_grant", "Google authorization must be renewed.", false, diagnostic);
+  if (status === 401) return new AtomicWorkbookWriterError("google_auth_failed", "Google authorization was rejected.", false, diagnostic);
+  if (status === 403 && /access_token_scope_insufficient|insufficient_scope|insufficient.*scope|scope.*insufficient|insufficient authentication scopes/i.test(reason + " " + message)) return new AtomicWorkbookWriterError("google_scope_insufficient", "Google Sheets permission scope is insufficient.", false, diagnostic);
+  if (status === 403) return new AtomicWorkbookWriterError("google_permission_denied", "Google denied access to the spreadsheet.", false, diagnostic);
+  if (status === 404) return new AtomicWorkbookWriterError("spreadsheet_not_found", "The spreadsheet is unavailable.", false, diagnostic);
+  if (status === 429) return new AtomicWorkbookWriterError("google_rate_limited", "Google rate limit reached.", true, diagnostic);
+  if (status === null || status >= 500) return new AtomicWorkbookWriterError("google_temporarily_unavailable", "Google Sheets is temporarily unavailable.", true, diagnostic);
+  return new AtomicWorkbookWriterError("google_write_failed", "Google Sheets operation failed.", false, diagnostic);
 }
 
 export function createAtomicGoogleSheetsTransportFromAuth(auth: Auth.OAuth2Client, apiFactory: (auth: Auth.OAuth2Client) => sheets_v4.Sheets = (value) => google.sheets({ version: "v4", auth: value })): AtomicGoogleSheetsTransport {

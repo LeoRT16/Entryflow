@@ -81,15 +81,18 @@ function resolveReservationResource(reservation: ReservationRecord, input: Resou
   let layoutSectorId: string | undefined;
 
   if (layoutResource) {
+    const sourceResource = layoutResource.sourceResourceId
+      ? input.resources.find((resource) => resource.id === layoutResource.sourceResourceId)
+      : undefined;
     base = {
-      key: `event-layout-resource:${layoutResource.id}`,
-      id: layoutResource.id,
-      name: layoutResource.name,
-      type: layoutResource.type,
-      capacity: Math.max(0, layoutResource.capacity),
+      key: sourceResource ? `resource:${sourceResource.id}` : `event-layout-resource:${layoutResource.id}`,
+      id: sourceResource?.id ?? layoutResource.id,
+      name: sourceResource?.name ?? layoutResource.name,
+      type: sourceResource?.type ?? layoutResource.type,
+      capacity: Math.max(0, sourceResource?.capacity ?? layoutResource.capacity),
       venueId,
       venueName,
-      activeInventory: layoutResource.status === "active",
+      activeInventory: sourceResource ? sourceResource.status !== "Closed" : layoutResource.status === "active",
     };
     layoutSectorId = layoutResource.eventLayoutSectorId;
   } else if (reservation.resourceId && (reservation.resourceName || reservation.tableName)) {
@@ -142,6 +145,12 @@ function resolveReservationResource(reservation: ReservationRecord, input: Resou
   return { ...base, ...sector };
 }
 
+/** Guest.tableId is the only authoritative source for current physical location. */
+export function resolveGuestPhysicalResource(guest: Pick<Guest, "tableId">, resources: ResolvedResource[]) {
+  if (!guest.tableId) return null;
+  return resources.find((resource) => resource.id === guest.tableId) ?? null;
+}
+
 function resolveLayoutResource(resourceId: string, input: ResourceInputs): ResolvedResource {
   const resource = input.eventLayoutResources.find((item) => item.id === resourceId)!;
   const sector = resource.eventLayoutSectorId
@@ -175,12 +184,12 @@ function seedAvailableResources(input: ResourceInputs) {
   const layoutResources = input.eventLayoutResources.filter(
     (resource) => eventLayoutIds.has(resource.eventLayoutId) && resource.status === "active",
   );
-  if (layoutResources.length) return layoutResources.map((resource) => resolveLayoutResource(resource.id, input));
-
   const venueId = input.event.venueId ?? input.venue?.id;
   const venueResources = input.resources.filter((resource) => !venueId || resource.venueId === venueId);
   const currentResources = venueResources.filter((resource) => resource.status !== "Closed");
-  if (venueResources.length) {
+  const sourceResourceIds = new Set(layoutResources.map((resource) => resource.sourceResourceId).filter((id): id is string => Boolean(id)));
+  const guestsUseCanonicalResources = input.guests.some((guest) => guest.eventId === input.event.id && Boolean(guest.tableId && sourceResourceIds.has(guest.tableId)));
+  if (venueResources.length && (!layoutResources.length || guestsUseCanonicalResources)) {
     return currentResources.map((resource): ResolvedResource => {
       const sector = resource.sectorId ? input.sectors.find((item) => item.id === resource.sectorId) : undefined;
       return {
@@ -205,6 +214,11 @@ function seedAvailableResources(input: ResourceInputs) {
       };
     });
   }
+
+  // EventLayoutResource is provenance/snapshot context. Current physical Guest
+  // locations use the canonical resources.id identity when those resources are
+  // available in the workspace read model.
+  if (layoutResources.length) return layoutResources.map((resource) => resolveLayoutResource(resource.id, input));
 
   return input.tables
     .filter((table) => table.eventId === input.event.id)
@@ -263,10 +277,12 @@ export function buildResourceReports(input: ResourceInputs) {
     if (!existing) identities.set(resolved.key, resolved);
   }
 
+  const availableResources = [...identities.values()];
+
   const resources = [...identities.values()].map((identity): ResourceReport => {
     const reservations = mesaReservations.filter((reservation) => resolvedByReservationId.get(reservation.id)?.key === identity.key);
     const reservationIds = new Set(reservations.map((reservation) => reservation.id));
-    const historicalGuests = input.guests.filter((guest) => reservationIds.has(guest.reservationId));
+    const historicalGuests = input.guests.filter((guest) => resolveGuestPhysicalResource(guest, availableResources)?.key === identity.key);
     const operationalGuests = historicalGuests.filter((guest) => input.operationalGuestIds.has(guest.id));
     const baseGuests = operationalGuests.filter(isPhysicalTableGuest);
     const extraGuests = operationalGuests.filter((guest) => !isPhysicalTableGuest(guest));

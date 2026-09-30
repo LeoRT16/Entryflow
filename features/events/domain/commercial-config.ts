@@ -101,6 +101,10 @@ export function mergeEventCommercialConfig(metadata: Event["metadata"], config: 
   };
 }
 
+export function resolveEventMetadataForSave<T>(original: Event["metadata"], touched: boolean, next: T): Event["metadata"] | T {
+  return touched ? next : original;
+}
+
 export function createReservationCommercialSnapshot(config: EventCommercialConfig): ReservationCommercialSnapshot {
   return {
     version: 1,

@@ -306,6 +306,7 @@ export type EventLayoutResource = {
   eventLayoutId: string;
   eventLayoutSectorId?: string;
   sourceVenueLayoutResourceId?: string;
+  sourceResourceId?: string;
   type: ResourceType;
   name: string;
   capacity: number;

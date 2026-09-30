@@ -21,6 +21,69 @@ test("EventReport reproduces the 17/18/6/11 and BOB 1,120 control fixture", () =
   assert.deepEqual(report.commercial.sold.total, { currency: "BOB", amount: 1120, complete: true, currencies: ["BOB"] });
 });
 
+test("physical Resource metrics follow explicit Guest locations across reservations and access types", () => {
+  const input = structuredClone(buildEventReportFixtureInput());
+  const moved = input.guests.find((item) => item.id === "guest-1")!;
+  moved.tableId = "layout-mesa-2";
+  moved.tableName = "Mesa 2";
+  input.guests.find((item) => item.id === "guest-8")!.tableId = "layout-mesa-2";
+  input.guests.find((item) => item.id === "guest-12")!.tableId = "layout-mesa-2";
+  const report = buildEventReport(input);
+  const mesa1 = report.resources.find((item) => item.resourceId === "layout-mesa-1")!;
+  const mesa2 = report.resources.find((item) => item.resourceId === "layout-mesa-2")!;
+
+  assert.equal(report.reservations.find((item) => item.id === "mesa-active")?.resourceId, "layout-mesa-1");
+  assert.equal(report.commercial.sold.total.amount, 1120);
+  assert.equal(mesa1.capacityAssigned, 4);
+  assert.equal(mesa2.capacityAssigned, 5);
+  assert.equal(mesa2.operationalPeople, 5);
+  assert.equal(report.attendees.find((item) => item.guestId === moved.id)?.reservationId, "mesa-active");
+  assert.equal(report.attendees.find((item) => item.guestId === moved.id)?.physicalResourceId, "layout-mesa-2");
+  assert.equal(report.attendees.find((item) => item.guestId === "guest-8")?.accessType, "presale");
+  assert.equal(report.attendees.find((item) => item.guestId === "guest-12")?.accessType, "courtesy");
+});
+
+test("null and invalid Guest locations never fall back to Reservation Resource", () => {
+  const input = structuredClone(buildEventReportFixtureInput());
+  input.guests.find((item) => item.id === "guest-2")!.tableId = undefined;
+  input.guests.find((item) => item.id === "guest-3")!.tableId = "missing-resource";
+  input.guests.find((item) => item.id === "guest-4")!.tableId = "layout-mesa-1";
+  input.guests.find((item) => item.id === "guest-4")!.tableName = "Stale name";
+  const report = buildEventReport(input);
+  const mesa1 = report.resources.find((item) => item.resourceId === "layout-mesa-1")!;
+
+  assert.equal(mesa1.capacityAssigned, 3);
+  assert.equal(report.attendees.find((item) => item.guestId === "guest-2")?.physicalResourceId, null);
+  assert.equal(report.attendees.find((item) => item.guestId === "guest-3")?.physicalResourceId, null);
+  assert.equal(report.attendees.find((item) => item.guestId === "guest-4")?.physicalResourceName, "Mesa 1");
+  assert.equal(report.diagnostics.some((item) => item.entityId === "guest-3" && item.code === "entity_relation_inconsistent"), true);
+});
+
+test("checked-in physical attribution follows Guest location without changing ownership", () => {
+  const input = structuredClone(buildEventReportFixtureInput());
+  const guest = input.guests.find((item) => item.id === "guest-8")!;
+  guest.tableId = "layout-mesa-2";
+  guest.tableName = "Mesa 2";
+  guest.admissionStatus = "Ingresó";
+  const report = buildEventReport(input);
+  const mesa2 = report.resources.find((item) => item.resourceId === "layout-mesa-2")!;
+  assert.equal(mesa2.checkedInPeople, 1);
+  assert.equal(report.reservations.find((item) => item.id === "presale-individual")?.resourceId, null);
+  assert.equal(report.attendees.find((item) => item.guestId === guest.id)?.physicalResourceId, "layout-mesa-2");
+});
+
+test("terminal physical Guests remain historical and do not consume capacity", () => {
+  const input = structuredClone(buildEventReportFixtureInput());
+  const guest = input.guests.find((item) => item.id === "guest-18")!;
+  guest.tableId = "layout-mesa-2";
+  guest.tableName = "Mesa 2";
+  const report = buildEventReport(input);
+  const mesa2 = report.resources.find((item) => item.resourceId === "layout-mesa-2")!;
+  assert.equal(mesa2.historicalPeople, 3);
+  assert.equal(mesa2.operationalPeople, 2);
+  assert.equal(mesa2.capacityAssigned, 2);
+});
+
 test("cancelled people stay historical without contaminating operations or sold value", () => {
   const report = buildEventReport(buildEventReportFixtureInput());
 
@@ -116,6 +179,24 @@ test("ReservationReport carries holder contacts and historical commercial snapsh
   assert.equal(legacy?.price.complete, false);
   assert.equal(legacy?.pricingUnit, "unknown");
   assert.equal(legacy?.benefits, null);
+});
+
+test("legacy commercial snapshots normalize missing or null benefits without losing commercial data", () => {
+  const input = structuredClone(buildEventReportFixtureInput());
+  const missing = input.reservations.find((item) => item.id === "mesa-active")!;
+  const populated = input.reservations.find((item) => item.id === "presale-group")!;
+  const nulled = input.reservations.find((item) => item.id === "presale-individual")!;
+  delete (missing.commercialSnapshot as Record<string, unknown>).benefits;
+  (populated.commercialSnapshot as Record<string, unknown>).benefits = [{ id: "drink", label: "Bebida", quantity: 2 }];
+  (nulled.commercialSnapshot as Record<string, unknown>).benefits = null;
+
+  const report = buildEventReport(input);
+  assert.deepEqual(report.reservations.find((item) => item.id === "mesa-active")?.benefits, []);
+  assert.deepEqual(report.reservations.find((item) => item.id === "mesa-second")?.benefits, []);
+  assert.deepEqual(report.reservations.find((item) => item.id === "presale-group")?.benefits, [{ id: "drink", label: "Bebida", quantity: 2 }]);
+  assert.deepEqual(report.reservations.find((item) => item.id === "presale-individual")?.benefits, []);
+  assert.equal(report.reservations.find((item) => item.id === "mesa-active")?.price.amount, 400);
+  assert.equal(report.reservations.find((item) => item.id === "presale-group")?.purchasedQuantity, 3);
 });
 
 test("attendees expose historical reservation holder, zone, and resource labels", () => {

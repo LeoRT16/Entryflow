@@ -130,6 +130,8 @@ function guest(index: number, reservationId: string, overrides: Partial<Guest> =
     eventId,
     eventName: reportEvent.name,
     eventStatus: "En curso",
+    tableId: reservation.reservationType === "Mesa" ? reservation.eventLayoutResourceId ?? reservation.resourceId ?? undefined : undefined,
+    tableName: reservation.reservationType === "Mesa" ? reservation.resourceName ?? undefined : undefined,
     invitationSequence: String(index),
     invitationCode: `${reservation.code}-${String(index).padStart(2, "0")}`,
     carnet: String(1000 + index),

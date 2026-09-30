@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import { requestReportingSync, setReportingDestinationEnabled } from "../repositories/reporting-sync-repositories";
 
 function client(destination: Record<string, unknown> | null, calls: string[]) {
@@ -32,4 +33,10 @@ test("activation uses the authenticated server activation RPC", async () => {
   const fake = { rpc: async (name: string, args: Record<string, unknown>) => { calls.push([name, args]); return { data: [{ enabled: true }], error: null }; } } as never;
   await setReportingDestinationEnabled(fake, "event", true);
   assert.deepEqual(calls, [["set_reporting_destination_enabled", { p_event_id: "event", p_enabled: true }]]);
+});
+
+test("reporting worker route dispatches OAuth V2 work to the OAuth worker", async () => {
+  const source = await readFile(new URL("../app/api/reporting/worker/route.ts", import.meta.url), "utf8");
+  assert.match(source, /processOAuthReportingSyncBatch\(createOAuthReportingWorkerDependencies/);
+  assert.match(source, /processReportingSyncBatch\(/);
 });

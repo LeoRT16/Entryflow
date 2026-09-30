@@ -172,6 +172,8 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
     }
   }
 
+  const resourceByPhysicalId = new Map(resourceReport.resources.map((resource) => [resource.resourceId, resource] as const));
+
   for (const guest of eventGuests) {
     if (!reservationById.has(guest.reservationId)) {
       diagnostics.push(createReportDiagnostic({
@@ -181,6 +183,16 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
         entityId: guest.id,
         message: `El invitado ${guest.id} no tiene una reserva del mismo evento disponible.`,
         details: { reservationId: guest.reservationId },
+      }));
+    }
+    if (guest.tableId && !resourceByPhysicalId.has(guest.tableId)) {
+      diagnostics.push(createReportDiagnostic({
+        code: "entity_relation_inconsistent",
+        severity: "warning",
+        entityType: "guest",
+        entityId: guest.id,
+        message: `La ubicación física del invitado ${guest.id} no pertenece al contexto del evento.`,
+        details: { tableId: guest.tableId },
       }));
     }
   }
@@ -224,6 +236,7 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
   const attendees: AttendeeReport[] = eventGuests.map((guest) => {
     const reservation = reservationById.get(guest.reservationId);
     const resource = resourceByReservationId.get(guest.reservationId);
+    const physicalResource = guest.tableId ? resourceByPhysicalId.get(guest.tableId) : undefined;
     const checkIn = checkInByGuestId.get(guest.id);
     const checkedIn = isCheckedIn(guest);
     return {
@@ -237,6 +250,8 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
       reservationHolder: reservation?.holderName ?? null,
       zoneName: resource?.sectorName ?? reservation?.sectorName ?? null,
       resourceName: resource?.resourceName ?? reservation?.resourceName ?? reservation?.tableName ?? null,
+      physicalResourceId: physicalResource?.resourceId ?? null,
+      physicalResourceName: physicalResource?.resourceName ?? null,
       accessType: resolveAccessType(guest, reservation),
       operational: operationalGuestIds.has(guest.id),
       admissionStatus: guest.admissionStatus,
@@ -259,6 +274,10 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
     const soldValue = isCommerciallyRegistered(reservation) ? reservationMoney(reservation) : knownMoney(0, null);
     const extraWristbandValue = combineMoney(reservationSales.map(extraWristbandSaleMoney));
     const snapshot = reservation.commercialSnapshot ?? null;
+    // Historical snapshots may predate the benefits field (or contain it as
+    // null). Absence means no recorded benefits; it must not invalidate the
+    // rest of the commercial snapshot.
+    const benefits = snapshot && Array.isArray(snapshot.benefits) ? snapshot.benefits : [];
     const price = reservation.reservationType === "Cortesía"
       ? knownMoney(0, null)
       : reservation.reservationType === "Preventa"
@@ -296,12 +315,12 @@ export function buildEventReport(input: BuildEventReportInput): EventReport {
       soldValue,
       extraWristbandValue,
       soldTotal: combineMoney([soldValue, extraWristbandValue]),
-      commercialSnapshot: snapshot ? { ...snapshot, benefits: snapshot.benefits.map((benefit) => ({ ...benefit })) } : null,
+      commercialSnapshot: snapshot ? { ...snapshot, benefits: benefits.map((benefit) => ({ ...benefit })) } : null,
       includedAccesses: reservation.reservationType === "Mesa" ? snapshot?.includedAccesses ?? null : null,
       purchasedQuantity: reservation.reservationType === "Preventa" && snapshot?.saleType === "presale" ? snapshot.quantity ?? null : null,
       price,
       pricingUnit,
-      benefits: snapshot ? snapshot.benefits.map((benefit) => ({ ...benefit })) : null,
+      benefits: snapshot ? benefits.map((benefit) => ({ ...benefit })) : null,
       extraWristbandQuantity: reservationSales.reduce((total, sale) => total + sale.quantity, 0),
       diagnostics: [],
     };

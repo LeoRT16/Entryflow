@@ -108,12 +108,17 @@ function getTableGuests(table: TableRecord, reservations: ReservationRecord[], g
   const primaryReservation = getPrimaryTableReservation(table, reservations, currentEventId);
 
   if (!primaryReservation) {
-    return [];
+    // A guest can be physically moved away from its reservation's commercial
+    // resource. In that case table_id is the authoritative location even when
+    // the destination has no reservation of its own.
+    return dedupeGuestsById(guests.filter((guest) => guest.tableId === table.id));
   }
 
   const reservationGuestIds = new Set((primaryReservation.guestIds ?? []).filter(Boolean));
   const reservationGuests = guests.filter(
-    (guest) => guest.reservationId === primaryReservation.id || reservationGuestIds.has(guest.id),
+    (guest) =>
+      (guest.reservationId === primaryReservation.id || reservationGuestIds.has(guest.id)) &&
+      (!guest.tableId || guest.tableId === table.id),
   );
 
   if (reservationGuests.length > 0) {

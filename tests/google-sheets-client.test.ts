@@ -29,7 +29,7 @@ test("serialization preserves text, numeric values and formula safety", () => {
   const serialized = serializeSheet(sheet);
   assert.equal(typeof serialized.values?.[1]?.[4], "string");
   assert.equal(typeof serialized.values?.[1]?.[12], "string");
-  assert.equal(serialized.values?.[1]?.[12], "No");
+  assert.equal(serialized.values?.[1]?.[13], "No");
   const summaryValues = serializeSheet(buildGoogleSheetsProjection(buildEventReport(buildEventReportFixtureInput())).sheets.summary).values ?? [];
   const summaryRows = new Map(summaryValues.slice(1).map((row) => [row?.[1], row?.[2]]));
   assert.equal(summaryRows.get("Mesas"), 800);
