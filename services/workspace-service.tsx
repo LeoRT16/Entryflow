@@ -18,7 +18,7 @@ import {
   buildGuestWhatsAppUpdate,
   validateGuestProfileUpdateInput,
 } from "@/features/customers/domain/customer-directory";
-import { searchGuests } from "@/features/check-in/domain/check-in-domain";
+import { getOperatorSafeCheckInError, searchGuests } from "@/features/check-in/domain/check-in-domain";
 import { requestReportingSyncAfterSuccess } from "@/features/reporting/sync/request-after-success";
 import { runAssignReservationTable, runReleaseReservationTable, runCloseTable } from "@/features/tables/application/atomic-table-operations";
 import { runMoveGuestToResource } from "@/features/tables/application/guest-move-operations";
@@ -3936,7 +3936,7 @@ export function WorkspaceServiceProvider({
           restoreSnapshot(snapshot);
           notify({
             title: "No se pudo registrar el ingreso",
-            description: exception instanceof Error ? exception.message : "Supabase rechazó la persistencia del check-in.",
+            description: getOperatorSafeCheckInError(exception),
             tone: "danger",
             icon: "alert",
             href: "/check-in",
@@ -3944,7 +3944,7 @@ export function WorkspaceServiceProvider({
           return {
             result: "Bloqueado" as const,
             guest,
-            note: exception instanceof Error ? exception.message : "Supabase rechazó la persistencia del check-in.",
+            note: getOperatorSafeCheckInError(exception),
           };
         }
 

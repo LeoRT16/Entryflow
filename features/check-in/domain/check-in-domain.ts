@@ -1,4 +1,4 @@
-import type { Event as LegacyEvent, Guest, CheckInMethod, EntryStatus } from "@/features/check-in/types";
+import type { Event as LegacyEvent, Guest, CheckIn, CheckInMethod, EntryStatus } from "@/features/check-in/types";
 import type { Event as PlatformEvent } from "@/features/domain/types";
 import type { ReservationRecord } from "@/features/reservations/types";
 import { resolveAccessGrantByQuery } from "@/features/access/domain/access-ledger";
@@ -75,6 +75,37 @@ export function resolveGuestCheckInEligibility(
   };
 }
 
+export type OperatorAccessState = "ready" | "entered" | "blocked" | "invalid";
+
+export type OperatorAccessPresentation = {
+  state: OperatorAccessState;
+  label: string;
+  description: string;
+  tone: "success" | "warning" | "danger" | "info";
+  canAdmit: boolean;
+};
+
+/** Maps the existing authoritative eligibility result into one operator decision. */
+export function mapOperatorAccessPresentation(
+  eligibility: ReturnType<typeof resolveGuestCheckInEligibility> | null,
+  params: { found?: boolean; technical?: boolean } = {},
+): OperatorAccessPresentation {
+  if (params.technical) return { state: "invalid", label: "No pudimos registrar el ingreso", description: "Intenta nuevamente.", tone: "danger", canAdmit: false };
+  if (params.found === false) return { state: "invalid", label: "Acceso no válido", description: "No encontramos este acceso.", tone: "danger", canAdmit: false };
+  if (!eligibility) return { state: "invalid", label: "Acceso no válido", description: "No encontramos este acceso.", tone: "danger", canAdmit: false };
+  if (eligibility.canEnter) return { state: "ready", label: "Listo para ingresar", description: eligibility.detail, tone: "success", canAdmit: true };
+  if (eligibility.label === "Ya ingresó" || eligibility.label === "Ya fue usado") return { state: "entered", label: "Ingreso ya registrado", description: "Este acceso ya fue utilizado.", tone: "warning", canAdmit: false };
+  return { state: "blocked", label: "Acceso bloqueado", description: eligibility.detail, tone: "danger", canAdmit: false };
+}
+
+export function getOperatorSafeCheckInError(error: unknown) {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (code === "access_guest_out_of_scope" || code === "access_grant_revoked") return "El acceso está bloqueado o anulado.";
+  }
+  return "No pudimos registrar el ingreso. Intenta nuevamente.";
+}
+
 export function searchGuests(guests: Guest[], query: string) {
   const normalizedQuery = normalizeCheckInText(query);
 
@@ -98,29 +129,36 @@ type GuestQuickReadSource = {
   accessCode?: string;
   invitationCode: string;
   qrStatus?: string;
+  gate?: string;
+  checkInOperator?: string;
+  operatorActivity: Array<{ action: string; operator: string }>;
+  historicalCheckIn?: Pick<CheckIn, "checkedInAt" | "gate" | "operator" | "status">;
 };
 
-export function buildGuestQuickReadSummary(guest: GuestQuickReadSource) {
-  const space = guest.tableName ?? guest.seat ?? "Sin mesa";
-  const visibleCode = guest.accessCode ?? guest.invitationCode;
+export function buildGuestQuickReadSummary(guest: GuestQuickReadSource, historicalCheckIn?: Pick<CheckIn, "checkedInAt" | "gate" | "operator" | "status">) {
+  const source = { ...guest, historicalCheckIn };
+  const space = source.tableName ?? source.seat ?? "Sin mesa";
+  const visibleCode = source.accessCode ?? source.invitationCode;
 
   return {
-    name: guest.guestName,
-    carnet: guest.carnet,
-    reservation: `${guest.reservationCode} · ${guest.reservationName}`,
+    name: source.guestName,
+    carnet: source.carnet,
+    reservation: `${source.reservationCode} · ${source.reservationName}`,
     space,
-    entryStatus: guest.admissionStatus,
+    entryStatus: source.admissionStatus,
     accessStatus:
-      guest.qrStatus ??
-      (guest.admissionStatus === "Ingresó"
+      source.qrStatus ??
+      (source.admissionStatus === "Ingresó"
         ? "Usado"
-        : guest.admissionStatus === "Bloqueada"
+        : source.admissionStatus === "Bloqueada"
           ? "Bloqueado"
-          : guest.admissionStatus === "Anulada"
+          : source.admissionStatus === "Anulada"
             ? "Anulado"
             : "Válido"),
-    deliveryStatus: guest.deliveryStatus,
-    checkInTime: guest.checkInTime,
+    deliveryStatus: source.deliveryStatus,
+    checkInTime: source.historicalCheckIn?.checkedInAt || source.checkInTime,
+    gate: source.historicalCheckIn?.gate || source.gate,
+    checkInOperator: source.historicalCheckIn?.operator || undefined,
     visibleCode,
   };
 }

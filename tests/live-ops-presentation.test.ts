@@ -70,11 +70,13 @@ test("check-in flow prioritizes scanner usage before manual lookup", () => {
     ? flowSource.slice(handleDetectedStart, handleSelectGuestStart)
     : "";
 
-  assert.match(flowSource, /QrCameraScanner eventName={currentEvent\.name} onDetected={handleDetected} \/>/);
+  assert.match(flowSource, /QrCameraScanner(?: key=\{scannerCycle\})? eventName={currentEvent\.name} onDetected={handleDetected} \/>/);
   assert.match(flowSource, /Búsqueda manual/);
   assert.match(handleDetectedBlock, /shouldAutoSubmitDetectedCheckIn/);
   assert.doesNotMatch(handleDetectedBlock, /setAttemptState\(\{ kind: "idle" \}\);/);
-  assert.match(flowSource, /onClick=\{resetAttempt\}/);
+  assert.match(flowSource, /onClick=\{startNextAdmission\}/);
+  assert.match(flowSource, /searchResults\.length === 1/);
+  assert.match(flowSource, /No encontramos este acceso/);
   assert.match(scannerSource, /Activar cámara/);
   assert.match(scannerSource, /Detener cámara/);
   assert.match(scannerSource, /grid gap-2 sm:grid-cols-\[minmax\(0,1fr\)_auto\]/);
@@ -83,6 +85,24 @@ test("check-in flow prioritizes scanner usage before manual lookup", () => {
   assert.match(scannerSource, /if \(rawValue && detectionGateRef\.current\.shouldAccept\(rawValue\)\)/);
   assert.doesNotMatch(timelineSource, /event\.actor \? <StatusBadge variant="info">\{event\.actor\}<\/StatusBadge> : null;/);
   assert.doesNotMatch(timelineSource, /event\.reservationCode \? <StatusBadge variant="info">\{event\.reservationCode\}<\/StatusBadge> : null;/);
+});
+
+test("duplicate guest card renders the calculated historical context conditionally", () => {
+  const source = readFileSync(new URL("../features/check-in/components/check-in-flow.tsx", import.meta.url), "utf8");
+  const selectedBranchStart = source.indexOf(") : selectedGuest ? (");
+  const selectedBranchEnd = source.indexOf(") : (", selectedBranchStart);
+  const selectedBranch = selectedBranchStart >= 0 && selectedBranchEnd > selectedBranchStart
+    ? source.slice(selectedBranchStart, selectedBranchEnd)
+    : "";
+
+  assert.match(source, /const selectedHistoricalContext = selectedGuestQuickRead/);
+  assert.match(selectedBranch, /selectedHistoricalContext\?\.time/);
+  assert.match(selectedBranch, /selectedHistoricalContext\?\.gate/);
+  assert.match(selectedBranch, /selectedHistoricalContext\?\.operator/);
+  assert.match(selectedBranch, /label="Hora"/);
+  assert.match(selectedBranch, /label="Puerta"/);
+  assert.match(selectedBranch, /label="Operador"/);
+  assert.doesNotMatch(selectedBranch, /operatorActivity/);
 });
 
 test("timeline feed keeps the audit-trail hierarchy compact", () => {
@@ -94,4 +114,13 @@ test("timeline feed keeps the audit-trail hierarchy compact", () => {
   assert.match(source, /Informativo/);
   assert.match(source, /Sistema/);
   assert.match(source, /p-3\.5/);
+});
+
+test("atomic check-in migration casts the text guest reservation id at the uuid check-in boundary", () => {
+  const source = readFileSync(new URL("../supabase/migrations/20261004000000_fix_checkin_reservation_id_cast.sql", import.meta.url), "utf8");
+
+  assert.match(source, /g\.reservation_id::uuid/);
+  assert.match(source, /insert into public\.checkins/);
+  assert.match(source, /create or replace function public\.persist_completed_checkin_atomic/);
+  assert.doesNotMatch(source, /TEMP 2D\.5/);
 });

@@ -20,7 +20,18 @@ type QrCameraScannerProps = {
   onDetected: (value: string) => void;
 };
 
-type ScannerStatus = "idle" | "starting" | "scanning" | "unsupported" | "error";
+type ScannerStatus = "idle" | "starting" | "scanning" | "detected" | "permission_denied" | "camera_unavailable" | "unsupported" | "error";
+
+function getSafeCameraFailure(error: unknown): { status: ScannerStatus; message: string } {
+  const name = error && typeof error === "object" && "name" in error ? String((error as { name?: unknown }).name) : "";
+  if (name === "NotAllowedError" || name === "SecurityError") {
+    return { status: "permission_denied", message: "No pudimos acceder a la cámara. Revisa el permiso del navegador o continúa con búsqueda manual." };
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return { status: "camera_unavailable", message: "No encontramos una cámara disponible. Puedes continuar con búsqueda manual." };
+  }
+  return { status: "error", message: "No pudimos iniciar el lector QR. Puedes continuar con búsqueda manual." };
+}
 
 type ScannerControlsProps = {
   status: ScannerStatus;
@@ -120,13 +131,13 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus("unsupported");
-      setMessage("Tu navegador no soporta cámara. Usá el campo de búsqueda o ingresá el código manualmente.");
+      setMessage("La cámara no está disponible en este navegador. Puedes continuar con búsqueda manual.");
       return;
     }
 
     if (!window.BarcodeDetector) {
       setStatus("unsupported");
-      setMessage("Tu navegador no soporta detección de QR nativa. Usá el campo de búsqueda o ingresá el código manualmente.");
+      setMessage("El lector QR no está disponible en este navegador. Puedes continuar con búsqueda manual.");
       return;
     }
 
@@ -175,15 +186,15 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
           const rawValue = result[0]?.rawValue?.trim();
 
           if (rawValue && detectionGateRef.current.shouldAccept(rawValue)) {
-            setMessage(`Código detectado: ${rawValue}`);
+            setMessage("Código detectado. Validando acceso...");
             onDetected(rawValue);
-            stopScanner({ nextMessage: `Código detectado: ${rawValue}` });
+            stopScanner({ nextStatus: "detected", nextMessage: "Código detectado. Validando acceso..." });
             return;
           }
         } catch (error) {
           if (scannerSessionRef.current === sessionId && runningRef.current) {
-            const errorMessage = error instanceof Error ? error.message : "No se pudo leer el código desde la cámara.";
-            stopScanner({ nextStatus: "error", nextMessage: errorMessage });
+            const failure = getSafeCameraFailure(error);
+            stopScanner({ nextStatus: failure.status, nextMessage: failure.message });
             return;
           }
         }
@@ -200,8 +211,8 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
       });
     } catch (error) {
       if (scannerSessionRef.current === sessionId) {
-        const errorMessage = error instanceof Error ? error.message : "No se pudo activar la cámara.";
-        stopScanner({ nextStatus: "error", nextMessage: errorMessage });
+        const failure = getSafeCameraFailure(error);
+        stopScanner({ nextStatus: failure.status, nextMessage: failure.message });
       }
     }
   }, [eventName, onDetected, stopScanner]);
@@ -221,8 +232,8 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
             Leer QR o código de acceso
           </h2>
         </div>
-        <StatusBadge variant={status === "scanning" ? "success" : status === "unsupported" || status === "error" ? "warning" : "info"}>
-          {status === "scanning" ? "Activo" : status === "starting" ? "Encendiendo" : status === "unsupported" ? "Fallback" : status === "error" ? "Error" : "Listo"}
+        <StatusBadge variant={status === "scanning" ? "success" : status === "unsupported" || status === "error" || status === "permission_denied" || status === "camera_unavailable" ? "warning" : "info"}>
+          {status === "scanning" ? "Activo" : status === "starting" ? "Activando" : status === "detected" ? "Detectado" : status === "unsupported" ? "No disponible" : status === "permission_denied" ? "Permiso requerido" : status === "camera_unavailable" ? "Sin cámara" : status === "error" ? "Error" : "Listo"}
         </StatusBadge>
       </div>
 

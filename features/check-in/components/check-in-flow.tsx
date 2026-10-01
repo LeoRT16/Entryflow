@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import StatusBadge from "@/components/status-badge";
 import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
@@ -10,6 +10,8 @@ import {
   formatGuestCarnetLabel,
   getCheckInActionLabel,
   getEntryTone,
+  getOperatorSafeCheckInError,
+  mapOperatorAccessPresentation,
   resolveGuestCheckInEligibility,
   resolveCheckInGuestByQuery,
   shouldAutoSubmitDetectedCheckIn,
@@ -76,6 +78,7 @@ function CheckInWorkspace() {
     currentVenue,
     reservations,
     guests,
+    checkIns,
     registerCheckIn,
     searchGuests: searchGuestList,
   } = useCheckInStore();
@@ -91,6 +94,8 @@ function CheckInWorkspace() {
   const [validationMethod, setValidationMethod] = useState<CheckInMethod>("Manual");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptState, setAttemptState] = useState<CheckInAttemptState>({ kind: "idle" });
+  const [scannerCycle, setScannerCycle] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = deferredQuery.trim();
@@ -112,9 +117,27 @@ function CheckInWorkspace() {
     [currentEvent, eventGuests, eventReservations, query],
   );
   const selectedGuest = eventGuests.find((guest) => guest.id === selectedGuestId) ?? resolvedGuest ?? (searchResults.length === 1 ? searchResults[0] : null);
-  const selectedGuestQuickRead = selectedGuest ? buildGuestQuickReadSummary(selectedGuest) : null;
+  const findHistoricalCheckIn = (guest: Guest | null) => guest
+    ? checkIns.find((checkIn) => checkIn.guestId === guest.id && checkIn.eventId === guest.eventId && checkIn.status === "Checked In")
+    : undefined;
+  const selectedGuestQuickRead = selectedGuest ? buildGuestQuickReadSummary(selectedGuest, findHistoricalCheckIn(selectedGuest)) : null;
   const attemptGuest = attemptState.kind === "idle" ? null : attemptState.guest ?? null;
-  const attemptGuestQuickRead = attemptGuest ? buildGuestQuickReadSummary(attemptGuest) : null;
+  const attemptGuestQuickRead = attemptGuest ? buildGuestQuickReadSummary(attemptGuest, findHistoricalCheckIn(attemptGuest)) : null;
+  const historicalContext = attemptGuestQuickRead && attemptState.kind === "warning"
+    ? {
+        time: attemptGuestQuickRead.checkInTime,
+        gate: attemptGuestQuickRead.gate,
+        operator: attemptGuestQuickRead.checkInOperator,
+      }
+    : null;
+  const selectedHistoricalContext = selectedGuestQuickRead && selectedGuestQuickRead.entryStatus === "Ingresó"
+    ? {
+        time: selectedGuestQuickRead.checkInTime,
+        gate: selectedGuestQuickRead.gate,
+        operator: selectedGuestQuickRead.checkInOperator,
+      }
+    : null;
+
   const selectedGuestReservation = selectedGuest
     ? eventReservations.find((reservation) => reservation.id === selectedGuest.reservationId) ?? null
     : null;
@@ -122,11 +145,18 @@ function CheckInWorkspace() {
   const eligibility = selectedGuest
     ? resolveGuestCheckInEligibility(selectedGuest, selectedGuestReservation)
     : null;
-  const canRegister = Boolean(selectedGuest && !isTerminalEvent);
+  const operatorPresentation = mapOperatorAccessPresentation(eligibility);
+  const canRegister = Boolean(selectedGuest && !isTerminalEvent && operatorPresentation.canAdmit);
   const primaryActionLabel = getCheckInActionLabel({
     canEnter: Boolean(eligibility?.canEnter),
     isTerminalEvent,
   });
+
+  useEffect(() => {
+    if (validationMethod === "Manual" && attemptState.kind === "idle" && !isSubmitting) {
+      searchInputRef.current?.focus();
+    }
+  }, [attemptState.kind, isSubmitting, validationMethod]);
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
@@ -175,6 +205,16 @@ function CheckInWorkspace() {
     await submitCheckIn(selectedGuest, buildGuestSearchIndex(selectedGuest), validationMethod);
   };
 
+  const startNextAdmission = () => {
+    if (isSubmitting) return;
+    const nextMethod = validationMethod;
+    setQuery("");
+    setSelectedGuestId(null);
+    setValidationMethod(nextMethod);
+    setAttemptState({ kind: "idle" });
+    setScannerCycle((cycle) => cycle + 1);
+  };
+
   const submitCheckIn = async (guest: Guest, queryValue: string, method: CheckInMethod) => {
     if (isSubmitting || isTerminalEvent) {
       return;
@@ -194,15 +234,8 @@ function CheckInWorkspace() {
 
       setAttemptState({
         kind: tone,
-        title:
-          result.result === "Encontrado"
-            ? "Ingreso registrado"
-            : result.result === "Usado"
-              ? "Ingreso ya consumido"
-              : result.result === "Anulado"
-                ? "Ingreso anulado"
-                : "Ingreso bloqueado",
-        note: result.note,
+        title: result.result === "Encontrado" ? "Ingreso registrado" : result.result === "Usado" ? "Ingreso ya registrado" : "Acceso bloqueado",
+        note: result.result === "Usado" ? "Este acceso ya fue utilizado." : result.note,
         guest: result.guest ?? guest,
       });
 
@@ -214,7 +247,7 @@ function CheckInWorkspace() {
       setAttemptState({
         kind: "danger",
         title: "No se pudo registrar el ingreso",
-        note: error instanceof Error ? error.message : "No se pudo completar la validación actual.",
+        note: getOperatorSafeCheckInError(error),
         guest,
       });
     } finally {
@@ -223,10 +256,7 @@ function CheckInWorkspace() {
   };
 
   const resetAttempt = () => {
-    setQuery("");
-    setSelectedGuestId(null);
-    setValidationMethod("Manual");
-    setAttemptState({ kind: "idle" });
+    startNextAdmission();
   };
 
   return (
@@ -295,7 +325,7 @@ function CheckInWorkspace() {
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-6">
-            <QrCameraScanner eventName={currentEvent.name} onDetected={handleDetected} />
+            <QrCameraScanner key={scannerCycle} eventName={currentEvent.name} onDetected={handleDetected} />
 
             <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -315,8 +345,18 @@ function CheckInWorkspace() {
               <label className="mt-4 block">
                 <span className="sr-only">Buscar invitado</span>
                 <input
+                  ref={searchInputRef}
                   value={query}
                   onChange={(event) => handleQueryChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      setSelectedGuestId(null);
+                      setAttemptState({ kind: "idle" });
+                    } else if (event.key === "Enter" && selectedGuestId && canRegister) {
+                      event.preventDefault();
+                      void handleRegister();
+                    }
+                  }}
                   placeholder="Nombre, carnet, código de invitación o reserva"
                   className="mt-1 w-full rounded-[1.25rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/20"
                 />
@@ -370,9 +410,13 @@ function CheckInWorkspace() {
                       })}
                     </div>
                   </div>
-                ) : (
+                ) : searchResults.length === 1 ? (
                   <div className="mt-4 rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3 text-sm text-slate-300">
                     Una coincidencia encontrada. La validación se muestra en el panel lateral.
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3 text-sm text-slate-300">
+                    No encontramos este acceso. Revisa el dato o continúa con otra búsqueda.
                   </div>
                 )
               ) : null}
@@ -436,15 +480,18 @@ function CheckInWorkspace() {
                       <QuickReadField label="Ingreso" value={attemptGuestQuickRead.entryStatus} />
                       <QuickReadField label="Acceso" value={attemptGuestQuickRead.accessStatus} />
                       <QuickReadField label="Código visible" value={attemptGuestQuickRead.visibleCode} />
+                      {historicalContext?.time ? <QuickReadField label="Hora" value={historicalContext.time} /> : null}
+                      {historicalContext?.gate ? <QuickReadField label="Puerta" value={historicalContext.gate} /> : null}
+                      {historicalContext?.operator ? <QuickReadField label="Operador" value={historicalContext.operator} /> : null}
                     </div>
                   ) : null}
 
                   <button
                     type="button"
-                    onClick={resetAttempt}
+                    onClick={startNextAdmission}
                     className="mt-4 inline-flex h-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
                   >
-                    Nueva lectura
+                    Siguiente ingreso
                   </button>
                 </div>
               ) : selectedGuest ? (
@@ -458,7 +505,7 @@ function CheckInWorkspace() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <StatusBadge variant={eligibility?.tone ?? "info"}>{eligibility?.label ?? "Listo"}</StatusBadge>
+                        <StatusBadge variant={operatorPresentation.tone}>{operatorPresentation.label}</StatusBadge>
                         <StatusBadge variant={getEntryTone(selectedGuest.admissionStatus)}>{selectedGuest.admissionStatus}</StatusBadge>
                         <StatusBadge variant={getEntryTone(selectedGuest.qrStatus)}>{selectedGuest.qrStatus}</StatusBadge>
                       </div>
@@ -469,12 +516,15 @@ function CheckInWorkspace() {
                       <QuickReadField label="Mesa / espacio" value={selectedGuestQuickRead?.space ?? "Sin mesa"} />
                       <QuickReadField label="Ingreso" value={selectedGuestQuickRead?.entryStatus ?? "Sin estado"} />
                       <QuickReadField label="Acceso" value={selectedGuestQuickRead?.accessStatus ?? "Sin estado"} />
-                      <QuickReadField label="Puede entrar" value={eligibility?.canEnter ? "Sí" : "No"} />
+                      <QuickReadField label="Puede entrar" value={operatorPresentation.canAdmit ? "Sí" : "No"} />
                       <QuickReadField label="Qué hacer" value={primaryActionLabel} />
+                      {selectedHistoricalContext?.time ? <QuickReadField label="Hora" value={selectedHistoricalContext.time} /> : null}
+                      {selectedHistoricalContext?.gate ? <QuickReadField label="Puerta" value={selectedHistoricalContext.gate} /> : null}
+                      {selectedHistoricalContext?.operator ? <QuickReadField label="Operador" value={selectedHistoricalContext.operator} /> : null}
                     </div>
 
                     <div className="mt-4 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-300">
-                      {eligibility?.detail ?? "La validación está lista para confirmar el acceso."}
+                      {operatorPresentation.description}
                     </div>
                   </div>
 
