@@ -2914,6 +2914,7 @@ export function WorkspaceServiceProvider({
             ),
           ],
           updatedAt: timestamp,
+          commercialSnapshot: input.reservationType === "Cortesía" ? undefined : reservation.commercialSnapshot,
         };
 
         setReservations((current) => current.map((item) => (item.id === reservation.id ? nextReservation : item)));

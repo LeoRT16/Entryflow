@@ -121,6 +121,13 @@ test("reservation wizard fail closed when the venue cannot be proven", () => {
   assert.doesNotMatch(source, /sectors\.filter\(\(sector\) => !venue \|\| sector\.venueId === venue\.id\)/);
 });
 
+test("reservation editing preserves historical commercial snapshots and clears them for courtesy", () => {
+  const source = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
+  const updateBlock = extractBlock(source, "const updateReservation = useCallback(", "  const appendReservationGuests = useCallback(");
+
+  assert.match(updateBlock, /commercialSnapshot:\s*input\.reservationType === "Cortesía" \? undefined : reservation\.commercialSnapshot/);
+});
+
 test("reservation persistence resolves the selected resource through the current event table context", () => {
   const source = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
   const createReservationBlock = extractBlock(source, "const createReservation = useCallback(", "  const updateGuestWhatsApp = useCallback(");
