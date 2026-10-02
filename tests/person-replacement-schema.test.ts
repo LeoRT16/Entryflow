@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+const repository = readFileSync("repositories/supabase-workspace-repositories.ts", "utf8");
+
 const sql = readFileSync("supabase/migrations/20261009000000_phase5d_atomic_guest_replacement.sql", "utf8");
 const correctiveSql = readFileSync("supabase/migrations/20261012000000_phase5d_atomic_guest_replacement_pgcrypto_fix.sql", "utf8");
 
@@ -10,6 +12,15 @@ test("replacement corrective migration qualifies pgcrypto without broadening sea
   assert.match(correctiveSql, /extensions\.gen_random_bytes\(24\)/);
   assert.match(correctiveSql, /search_path=public,pg_temp/);
   assert.doesNotMatch(correctiveSql, /search_path\s*=\s*public\s*,\s*extensions/);
+});
+
+test("repository serializes replacement payload to the RPC snake_case contract", () => {
+  assert.match(repository, /guest_name:\s*replacement\.guestName/);
+  assert.match(repository, /carnet:\s*replacement\.carnet/);
+  assert.match(repository, /whatsapp:\s*replacement\.whatsapp/);
+  assert.match(repository, /p_replacement:\s*replacementPayload/);
+  assert.doesNotMatch(repository, /p_replacement:\s*replacement\s*[,}]/);
+  assert.doesNotMatch(repository, /p_replacement:.*access_code|p_replacement:.*qr_token|p_replacement:.*reservation_id/i);
 });
 
 test("person replacement has a durable slot and one atomic boundary", () => {

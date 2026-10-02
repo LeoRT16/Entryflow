@@ -860,8 +860,13 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
 
   guests.replaceReservationGuest = async ({ reservationId, guestId, replacement, reason }) => {
     if (!client) throw new Error("Supabase client is unavailable.");
+    const replacementPayload = {
+      guest_name: replacement.guestName,
+      carnet: replacement.carnet,
+      whatsapp: replacement.whatsapp,
+    };
     const { data, error } = await client.rpc("replace_reservation_guest_atomic" as never, {
-      p_reservation_id: reservationId, p_guest_id: guestId, p_replacement: replacement, p_reason: reason ?? null,
+      p_reservation_id: reservationId, p_guest_id: guestId, p_replacement: replacementPayload, p_reason: reason ?? null,
     } as never);
     if (error) throw error;
     const result = data as { guest?: GuestRow; accessGrantId?: string; accessCode?: string; qrToken?: string; sourceGuestId?: string } | null;
