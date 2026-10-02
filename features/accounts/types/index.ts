@@ -89,6 +89,7 @@ export type AccountUser = {
 };
 
 export type OrganizationAccount = {
+  isPlatformRoot?: boolean;
   id: string;
   organizationId: string;
   userId: string;

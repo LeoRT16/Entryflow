@@ -240,7 +240,7 @@ test("fresh organization member mutations resolve the target organization instea
       area: "Recepción B",
       status: "inactive",
       roleSlug: "administrator",
-      permissions: ["accounts.manage"],
+      permissions: [],
     }),
     { params: Promise.resolve({ profileId: "profile-member-b" }) },
     dependencies as never,
@@ -316,11 +316,11 @@ test("permission changes require permissions.manage while role updates stay allo
         id: "profile-owner",
         userId: "user-owner",
         organizationId: "org-a",
-        roleId: "role-admin",
+        roleId: "role-owner",
         displayName: "Owner",
         status: "active",
         metadata: {
-          permissions: ["accounts.manage"],
+          permissions: ["accounts.manage", "permissions.manage"],
           attributes: {
             area: "Dirección",
             status: "active",
@@ -329,14 +329,14 @@ test("permission changes require permissions.manage while role updates stay allo
         attributes: {
           area: "Dirección",
           status: "active",
-          permissions: ["accounts.manage"],
+          permissions: ["accounts.manage", "permissions.manage"],
         },
       }),
       buildMembership({ id: "profile-member", userId: "user-member", organizationId: "org-a", roleId: "role-reception", displayName: "Member", status: "active" }),
     ],
     roles: [
       buildRole({ id: "role-owner", slug: "owner", name: "Owner", permissions: ["accounts.manage", "permissions.manage"] }),
-      buildRole({ id: "role-admin", slug: "administrator", name: "Administrador", permissions: ["accounts.manage"] }),
+      buildRole({ id: "role-admin", slug: "administrator", name: "Administrador", permissions: [] }),
       buildRole({ id: "role-reception", slug: "reception", name: "Recepción", permissions: ["accounts.view"] }),
     ],
   });
@@ -353,7 +353,7 @@ test("permission changes require permissions.manage while role updates stay allo
   assert.equal(forbiddenResponse.status, 403);
   const forbiddenPayload = await forbiddenResponse.json();
   assert.equal(forbiddenPayload.ok, false);
-  assert.match(forbiddenPayload.error.message, /modificar los permisos/i);
+  assert.match(forbiddenPayload.error.message, /capacidades estructurales|modificar los permisos/i);
 
   const allowedResponse = await handleAccountMutation(
     jsonRequest("PATCH", {

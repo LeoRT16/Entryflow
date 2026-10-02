@@ -129,7 +129,7 @@ export const ACCOUNT_ROLE_PRESETS: AccountRolePreset[] = [
     permissions: ACCOUNT_PERMISSION_GROUPS.flatMap((group) =>
       group.permissions
         .map((permission) => permission.key)
-        .filter((permission) => permission !== "permissions.manage"),
+        .filter((permission) => !["permissions.manage", "accounts.view", "accounts.manage"].includes(permission)),
     ),
   },
   {
@@ -139,7 +139,6 @@ export const ACCOUNT_ROLE_PRESETS: AccountRolePreset[] = [
     description: "Operación de recepción, reservas e ingreso.",
     permissions: [
       "reservation.view",
-      "reservation.create",
       "reservation.edit",
       "guest.view",
       "guest.create",
@@ -171,6 +170,28 @@ export const ACCOUNT_ROLE_PRESETS: AccountRolePreset[] = [
 ];
 
 export const BUILTIN_ACCOUNT_ROLE_SLUGS = new Set<AccountRoleSlug>(ACCOUNT_ROLE_PRESETS.map((role) => role.slug));
+
+export const STRUCTURAL_ACCOUNT_PERMISSIONS = new Set<AccountPermissionKey>([
+  "accounts.manage",
+  "accounts.view",
+  "permissions.manage",
+]);
+
+export function canGrantAccountPermission({
+  actor,
+  targetRoleSlug,
+  permission,
+}: {
+  actor: Pick<OrganizationAccount, "isOwner" | "roleSlug">;
+  targetRoleSlug: AccountRoleSlug;
+  permission: AccountPermissionKey;
+}) {
+  if (permission === "reservation.create" && targetRoleSlug === "reception") {
+    return actor.isOwner || actor.roleSlug === "owner";
+  }
+
+  return !STRUCTURAL_ACCOUNT_PERMISSIONS.has(permission);
+}
 
 export function getPermissionLabel(permission: AccountPermissionKey) {
   for (const group of ACCOUNT_PERMISSION_GROUPS) {
@@ -275,11 +296,13 @@ export function isBuiltinAccountRoleSlug(slug: string | undefined | null): slug 
 export function resolveAccountPermissions({
   permissions,
   rolePermissions,
+  roleSlug,
   roleMetadata,
   accountMetadata,
 }: {
   permissions: unknown;
   rolePermissions: AccountPermissionKey[];
+  roleSlug?: AccountRoleSlug;
   roleMetadata?: Record<string, unknown> | null;
   accountMetadata?: Record<string, unknown> | null;
 }) {
@@ -287,27 +310,35 @@ export function resolveAccountPermissions({
   const explicitSource = typeof accountMetadata?.permissionsSource === "string" ? accountMetadata.permissionsSource : null;
   const legacyPermissions = normalizeAccountPermissions(roleMetadata?.legacyPermissions, rolePermissions);
 
+  const finalize = (values: AccountPermissionKey[]) => {
+    const expanded = expandDerivedPermissions(values);
+    if (roleSlug && roleSlug !== "owner" && roleSlug !== "root") {
+      return expanded.filter((permission) => !STRUCTURAL_ACCOUNT_PERMISSIONS.has(permission));
+    }
+    return expanded;
+  };
+
   if (explicitSource === "custom") {
-    return expandDerivedPermissions(normalizedPermissions);
+    return finalize(normalizedPermissions);
   }
 
   if (!normalizedPermissions.length) {
-    return expandDerivedPermissions([...rolePermissions]);
+    return finalize([...rolePermissions]);
   }
 
   if (explicitSource === "preset") {
-    return expandDerivedPermissions([...rolePermissions]);
+    return finalize([...rolePermissions]);
   }
 
   if (legacyPermissions.length && hasSameAccountPermissionSet(normalizedPermissions, legacyPermissions) && !hasSameAccountPermissionSet(normalizedPermissions, rolePermissions)) {
-    return expandDerivedPermissions([...rolePermissions]);
+    return finalize([...rolePermissions]);
   }
 
   if (hasSameAccountPermissionSet(normalizedPermissions, rolePermissions)) {
-    return expandDerivedPermissions([...rolePermissions]);
+    return finalize([...rolePermissions]);
   }
 
-  return expandDerivedPermissions(normalizedPermissions);
+  return finalize(normalizedPermissions);
 }
 
 export function getEffectivePermissions(account: Pick<OrganizationAccount, "permissions" | "rolePermissions">) {
@@ -321,6 +352,10 @@ export function hasPermission(account: Pick<OrganizationAccount, "permissions" |
 
 export function isOwnerAccount(account: Pick<OrganizationAccount, "roleSlug" | "metadata" | "rolePermissions">) {
   return account.roleSlug === "owner" || Boolean(account.metadata?.bootstrap) || account.rolePermissions.length === getAllAccountPermissionKeys().length;
+}
+
+export function getGlobalSessionRoleLabel(account: Pick<OrganizationAccount, "roleName" | "isPlatformRoot">) {
+  return account.isPlatformRoot ? "Root" : account.roleName;
 }
 
 export function getCriticalSelfMutationBlockReason({

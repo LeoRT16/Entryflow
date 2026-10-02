@@ -402,12 +402,16 @@ function getOrganizationSelection(organizations: Organization[], currentOrganiza
     };
 }
 
-export function getEventSelection(events: PlatformEvent[], organizationId: string, currentEventId: string) {
+export function getEventSelection(events: PlatformEvent[], organizationId: string, currentEventId: string, roleSlug = "") {
   // Preserve the hydrated selection first so the first post-refresh render does
   // not re-key the workspace while the router is trying to navigate.
-  const current = events.find((event) => event.id === currentEventId && (!organizationId || event.organizationId === organizationId))
-    ?? events.find((event) => event.organizationId === organizationId && event.status === "live")
-    ?? events.find((event) => event.organizationId === organizationId);
+  const requested = events.some((event) => event.id === currentEventId && (!organizationId || event.organizationId === organizationId))
+    ? currentEventId
+    : "";
+  const operationalEventId = roleSlug === "reception" || roleSlug === "door"
+    ? resolveOperationalEventId(events, organizationId, roleSlug, requested)
+    : requested || events.find((event) => event.organizationId === organizationId && event.status === "live")?.id || events.find((event) => event.organizationId === organizationId)?.id || "";
+  const current = events.find((event) => event.id === operationalEventId && (!organizationId || event.organizationId === organizationId));
 
   return current ?? {
     id: "",
@@ -424,6 +428,14 @@ export function getEventSelection(events: PlatformEvent[], organizationId: strin
     admissionMethods: [],
     resourceTypes: [],
   };
+}
+
+export function resolveOperationalEventId(events: PlatformEvent[], organizationId: string, roleSlug: string, requestedEventId = "") {
+  const scoped = events.filter((event) => event.organizationId === organizationId && event.status !== "cancelled" && event.status !== "finished");
+  if (roleSlug === "reception" || roleSlug === "door") {
+    return scoped.find((event) => event.status === "live")?.id ?? "";
+  }
+  return scoped.find((event) => event.id === requestedEventId)?.id ?? scoped.find((event) => event.status === "live")?.id ?? scoped[0]?.id ?? "";
 }
 
 function readWorkspacePreference(key: string) {
@@ -555,10 +567,12 @@ export function resolveInitialCurrentProfileId(
 
 export function resolveWorkspacePreferenceSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "") {
   const currentOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
+  const profile = initialWorkspace?.profiles.find((item) => item.id === initialWorkspace.currentProfileId && item.userId === currentUserId);
+  const roleSlug = initialWorkspace?.roles.find((role) => role.id === profile?.roleId)?.slug ?? "";
 
   return {
     currentOrganizationId,
-    currentEventId: resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId),
+    currentEventId: resolveOperationalEventId(initialWorkspace?.events ?? [], currentOrganizationId, roleSlug, resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId)),
     currentProfileId: resolveInitialCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
   };
 }
@@ -570,6 +584,7 @@ export function resolveOrganizationSwitchState({
   currentEventId,
   currentProfileId,
   currentUserId,
+  roleSlug = "",
 }: {
   organizationId: string;
   events: PlatformEvent[];
@@ -577,8 +592,11 @@ export function resolveOrganizationSwitchState({
   currentEventId: string;
   currentProfileId: string;
   currentUserId: string;
+  roleSlug?: string;
 }) {
-  const nextEventCandidate = pickCurrentEventCandidate(
+  const nextEventId = roleSlug === "reception" || roleSlug === "door"
+    ? resolveOperationalEventId(events, organizationId, roleSlug, currentEventId)
+    : pickCurrentEventCandidate(
     events.map((event) =>
       buildEventSelectionCandidate({
         id: event.id,
@@ -589,8 +607,7 @@ export function resolveOrganizationSwitchState({
     ),
     organizationId,
     currentEventId,
-  );
-  const nextEventId = nextEventCandidate?.id ?? "";
+  )?.id ?? "";
   const organizationProfiles = profiles.filter((profile) => profile.organizationId === organizationId && profile.userId === currentUserId && !profile.deletedAt);
   const nextProfileId = organizationProfiles.find((profile) => profile.id === currentProfileId)?.id ?? organizationProfiles[0]?.id ?? "";
 
@@ -627,6 +644,7 @@ function getAccountSelection({
   currentProfileId,
   currentUserId,
   allowBootstrapFallback = false,
+  allowPlatformRoot = false,
 }: {
   users: AccountUser[];
   profiles: OrganizationMembership[];
@@ -635,6 +653,7 @@ function getAccountSelection({
   currentProfileId: string;
   currentUserId: string;
   allowBootstrapFallback?: boolean;
+  allowPlatformRoot?: boolean;
 }) {
   const activeProfiles = profiles.filter((profile) => profile.organizationId === currentOrganizationId && !profile.deletedAt);
   const currentUserProfiles = profiles.filter((profile) => profile.userId === currentUserId && !profile.deletedAt);
@@ -662,16 +681,16 @@ function getAccountSelection({
 
     return {
       account: {
-        id: "bootstrap-account",
+        id: allowPlatformRoot ? "platform-root-account" : "bootstrap-account",
         organizationId: currentOrganizationId,
         userId: "",
         userEmail: "",
         userDisplayName: "Cuenta principal",
         displayName: "Cuenta principal",
         mustChangePassword: false,
-        roleId: role.id,
-        roleSlug: role.slug,
-        roleName: role.name,
+        roleId: allowPlatformRoot ? "platform-root" : role.id,
+        roleSlug: allowPlatformRoot ? "root" : role.slug,
+        roleName: allowPlatformRoot ? "Root" : role.name,
         rolePermissions: role.permissions,
         permissions,
         attributes: {
@@ -683,7 +702,7 @@ function getAccountSelection({
         isOwner: true,
         createdAt: "",
         updatedAt: "",
-        metadata: { bootstrap: true },
+        metadata: { bootstrap: true, platformRoot: allowPlatformRoot },
       } satisfies OrganizationAccount,
       user: null,
       profile: null,
@@ -693,6 +712,7 @@ function getAccountSelection({
   const profilePermissions = resolveAccountPermissions({
     permissions: selectedProfile.metadata?.permissions,
     rolePermissions: role.permissions,
+    roleSlug: role.slug,
     roleMetadata: role.metadata,
     accountMetadata: selectedProfile.metadata,
   });
@@ -1462,15 +1482,6 @@ export function WorkspaceServiceProvider({
     () => getOrganizationSelection(organizations, currentOrganizationId),
     [currentOrganizationId, organizations],
   );
-  const currentEvent = useMemo(
-    () => getEventSelection(events, currentOrganization.id, currentEventId),
-    [currentEventId, currentOrganization.id, events],
-  );
-  const currentVenue = useMemo(
-    () => resolveCanonicalCurrentVenue({ currentEventVenueId: currentEvent.venueId, venues }),
-    [currentEvent.venueId, venues],
-  );
-  const currentVenueId = currentVenue?.id ?? "";
   const accountSelection = useMemo(
     () =>
       getAccountSelection({
@@ -1480,13 +1491,25 @@ export function WorkspaceServiceProvider({
         currentOrganizationId: currentOrganization.id,
         currentProfileId,
         currentUserId: initialCurrentUserId,
-        allowBootstrapFallback: false,
+        allowBootstrapFallback: Boolean(initialWorkspace?.isPlatformRoot),
+        allowPlatformRoot: Boolean(initialWorkspace?.isPlatformRoot),
       }),
     [currentOrganization.id, currentProfileId, initialCurrentUserId, profiles, roles, users],
   );
-  const currentAccount = accountSelection.account;
+  const currentAccount = initialWorkspace?.isPlatformRoot
+    ? { ...accountSelection.account, isPlatformRoot: true }
+    : accountSelection.account;
   const currentUser = accountSelection.user;
   const currentProfile = accountSelection.profile;
+  const currentEvent = useMemo(
+    () => getEventSelection(events, currentOrganization.id, currentEventId, currentAccount.roleSlug),
+    [currentAccount.roleSlug, currentEventId, currentOrganization.id, events],
+  );
+  const currentVenue = useMemo(
+    () => resolveCanonicalCurrentVenue({ currentEventVenueId: currentEvent.venueId, venues }),
+    [currentEvent.venueId, venues],
+  );
+  const currentVenueId = currentVenue?.id ?? "";
   const effectivePermissions = useMemo(() => getEffectivePermissions(currentAccount), [currentAccount]);
   const hasPermission = useCallback(
     (permission: AccountPermissionKey) => effectivePermissions.includes(permission),
@@ -1498,6 +1521,7 @@ export function WorkspaceServiceProvider({
       const permissions = resolveAccountPermissions({
         permissions: membership.metadata?.permissions,
         rolePermissions: role.permissions,
+        roleSlug: role.slug,
         roleMetadata: role.metadata,
         accountMetadata: membership.metadata,
       });
@@ -1831,22 +1855,26 @@ export function WorkspaceServiceProvider({
         currentEventId,
         currentProfileId,
         currentUserId: currentUser?.id ?? initialCurrentUserId,
+        roleSlug: currentAccount.roleSlug,
       });
 
       setCurrentOrganizationIdState(nextSelection.currentOrganizationId);
       setCurrentProfileIdState(nextSelection.currentProfileId);
       setCurrentEventIdState(nextSelection.currentEventId);
     },
-    [currentEventId, currentProfileId, currentUser?.id, events, initialCurrentUserId, profiles],
+    [currentAccount.roleSlug, currentEventId, currentProfileId, currentUser?.id, events, initialCurrentUserId, profiles],
   );
 
   const setCurrentEventId = useCallback((eventId: string) => {
+    if (currentAccount.roleSlug === "reception" || currentAccount.roleSlug === "door") {
+      return;
+    }
     const nextEvent = events.find((event) => event.id === eventId && event.organizationId === currentOrganizationId);
 
     if (nextEvent) {
       setCurrentEventIdState(nextEvent.id);
     }
-  }, [currentOrganizationId, events]);
+  }, [currentAccount.roleSlug, currentOrganizationId, events]);
 
   const setCurrentProfileId = useCallback(
     (profileId: string) => {
@@ -1942,13 +1970,15 @@ export function WorkspaceServiceProvider({
 
       setUsers(nextUsers);
       setProfiles(nextProfiles);
-      if (!currentProfile || currentAccount.id === "bootstrap-account") {
+      if (currentAccount.id === "bootstrap-account") {
         setCurrentProfileIdState(payload.profile.id);
       }
 
+      await reloadWorkspace();
+
       return payload.account;
     },
-    [currentAccount.id, currentProfile, profiles, requirePermission, roles, users],
+    [currentAccount.id, currentProfile, profiles, reloadWorkspace, requirePermission, roles, users],
   );
 
   const updateAccount = useCallback(

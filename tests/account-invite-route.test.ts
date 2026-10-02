@@ -370,3 +370,22 @@ test("invite route accepts the active organization and persists the member there
   assert.equal(calls.linkPublicUserToAuthIdentity, 0);
   assert.equal(calls.createOrUpdateTemporaryPasswordAuthIdentity, 0);
 });
+
+test("Root can invite Reception into a target organization without a membership there", async () => {
+  const workspace = buildWorkspace({
+    isPlatformRoot: true,
+    currentOrganizationId: "org-b",
+    currentProfileId: "",
+    profiles: [],
+  });
+  const { dependencies, calls } = buildInviteDependencies(workspace);
+
+  const response = await handleInvite(buildInviteRequest("org-b", "root-reception@example.com"), dependencies);
+  const payload = (await response.json()) as { ok?: boolean; account?: { organizationId?: string; roleSlug?: string } };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.account?.organizationId, "org-b");
+  assert.equal(payload.account?.roleSlug, "reception");
+  assert.equal(calls.createMembership, 1);
+});

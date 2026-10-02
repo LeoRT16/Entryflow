@@ -5,6 +5,21 @@ import { buildWorkspacePrioritySnapshot, getWorkspaceActionableAlertCount } from
 import type { WorkspaceIntelligence } from "../domain/workspace-intelligence";
 import { buildTimelineSummary } from "../features/timeline/domain/timeline-domain";
 import type { TimelineEvent } from "../features/timeline/types";
+import { resolveOperationalEventId } from "../services/workspace-service";
+import type { Event as PlatformEvent } from "../features/domain/types";
+
+test("Reception and Door resolve only the live event while admin can select published events", () => {
+  const events = [
+    { id: "future", organizationId: "org-1", status: "published" },
+    { id: "live", organizationId: "org-1", status: "live" },
+    { id: "other-org", organizationId: "org-2", status: "live" },
+  ] as PlatformEvent[];
+  assert.equal(resolveOperationalEventId(events, "org-1", "reception", "future"), "live");
+  assert.equal(resolveOperationalEventId(events, "org-1", "door", "future"), "live");
+  assert.equal(resolveOperationalEventId(events, "org-1", "administrator", "future"), "future");
+  assert.equal(resolveOperationalEventId(events, "org-1", "reception", "future"), "live");
+  assert.equal(resolveOperationalEventId(events, "org-1", "door", "future"), "live");
+});
 
 function buildTimelineEvent(overrides: Partial<TimelineEvent> = {}): TimelineEvent {
   return {

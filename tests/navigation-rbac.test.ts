@@ -7,6 +7,7 @@ import {
   getRolePresetBySlug,
   hasSameAccountPermissionSet,
   resolveAccountPermissions,
+  getGlobalSessionRoleLabel,
 } from "../features/accounts/domain/accounts-domain";
 import type { Event as PlatformEvent } from "../features/domain/types";
 import type { AccountPermissionKey } from "../features/accounts/types";
@@ -37,6 +38,24 @@ function buildCan(permissions: readonly AccountPermissionKey[]) {
 test("door preset excludes reservations and resources from navigation", () => {
   assert.equal(doorPermissions.has("reservation.view"), false);
   assert.equal(doorPermissions.has("resource.view"), false);
+});
+
+test("global session label shows Root without changing the organization role", () => {
+  assert.equal(getGlobalSessionRoleLabel({ roleName: "Owner", isPlatformRoot: true }), "Root");
+  assert.equal(getGlobalSessionRoleLabel({ roleName: "Owner", isPlatformRoot: false }), "Owner");
+});
+
+test("legacy Administrator structural metadata cannot reopen Team", () => {
+  const permissions = resolveAccountPermissions({
+    permissions: ["accounts.view", "accounts.manage", "permissions.manage"],
+    rolePermissions: getRolePresetBySlug("administrator").permissions,
+    roleSlug: "administrator",
+    accountMetadata: { permissionsSource: "custom" },
+  });
+  assert.equal(permissions.includes("accounts.view"), false);
+  assert.equal(permissions.includes("accounts.manage"), false);
+  assert.equal(permissions.includes("permissions.manage"), false);
+  assert.equal(getNavigationGroups(buildCan(permissions), eventContext).some((group) => group.links.some((item) => item.label === "Equipo")), false);
 });
 
 test("legacy door snapshots resolve to the current preset unless they were explicitly customized", () => {

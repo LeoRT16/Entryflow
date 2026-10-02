@@ -19,6 +19,7 @@ import {
 } from "@/features/accounts/domain/accounts-domain";
 import { resolveWorkspaceRole } from "@/app/api/accounts/invite/helpers";
 import type { OrganizationMembership, AccountUser } from "@/features/accounts/types";
+import { resolveAccountManagementAuthority } from "@/features/accounts/server/account-authority";
 
 type InviteTeamMemberBody = {
   email?: string;
@@ -91,8 +92,9 @@ export async function handleInvite(request: Request, dependencies = createInvite
   }
 
   const currentProfile = workspace.profiles.find((profile) => profile.id === workspace.currentProfileId && !profile.deletedAt) ?? null;
+  const authority = resolveAccountManagementAuthority(workspace, getRequestString(workspace.currentOrganizationId));
 
-  if (!currentProfile) {
+  if (!currentProfile && !authority.isPlatformRoot) {
     return NextResponse.json(
       {
         ok: false,
@@ -105,15 +107,15 @@ export async function handleInvite(request: Request, dependencies = createInvite
     );
   }
 
-  const currentRole = workspace.roles.find((role) => role.id === currentProfile.roleId) ?? getRolePresetBySlug("administrator");
+  const currentRole = currentProfile ? workspace.roles.find((role) => role.id === currentProfile.roleId) ?? getRolePresetBySlug("administrator") : getRolePresetBySlug("owner");
   const effectivePermissions = resolveAccountPermissions({
-    permissions: currentProfile.metadata?.permissions,
+    permissions: currentProfile?.metadata?.permissions,
     rolePermissions: currentRole.permissions,
     roleMetadata: currentRole.metadata,
-    accountMetadata: currentProfile.metadata,
+    accountMetadata: currentProfile?.metadata,
   });
 
-  if (!effectivePermissions.includes("accounts.manage")) {
+  if (!authority.canManageAccounts) {
     return NextResponse.json(
       {
         ok: false,
@@ -163,7 +165,8 @@ export async function handleInvite(request: Request, dependencies = createInvite
     );
   }
 
-  if (organizationId !== currentOrganizationId) {
+  const targetAuthority = resolveAccountManagementAuthority(workspace, organizationId);
+  if (!targetAuthority.canManageAccounts) {
     return NextResponse.json(
       {
         ok: false,
@@ -176,7 +179,7 @@ export async function handleInvite(request: Request, dependencies = createInvite
     );
   }
 
-  if (roleSlug === "owner" && currentRole.slug !== "owner") {
+  if (roleSlug === "owner" && !targetAuthority.isPlatformRoot && currentRole.slug !== "owner") {
     return NextResponse.json(
       {
         ok: false,
@@ -291,10 +294,10 @@ export async function handleInvite(request: Request, dependencies = createInvite
     }
     persistedUser = nextUser;
 
-    const existingMembership = await repositories.profiles.getByOrganizationAndUser(currentOrganizationId, persistedUser.id);
+    const existingMembership = await repositories.profiles.getByOrganizationAndUser(organizationId, persistedUser.id);
     const membershipPayload = {
       id: existingMembership?.id ?? createUuid(),
-      organizationId: currentOrganizationId,
+      organizationId,
       userId: persistedUser.id,
       roleId: targetRole.id,
       displayName,

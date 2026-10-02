@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { canonicalizeAccountPermissionsForPersistence, getCriticalSelfMutationBlockReason, getRolePresetBySlug, hasSameAccountPermissionSet, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
+import { canonicalizeAccountPermissionsForPersistence, canGrantAccountPermission, getCriticalSelfMutationBlockReason, getRolePresetBySlug, hasSameAccountPermissionSet, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import { resolveWorkspaceRole } from "@/app/api/accounts/invite/helpers";
 import type { AccountPermissionKey, AccountRolePreset, AccountUser, OrganizationAccount, OrganizationMembership } from "@/features/accounts/types";
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
@@ -56,6 +56,7 @@ function buildOrganizationAccount(
   const permissions = resolveAccountPermissions({
     permissions: profile.metadata?.permissions,
     rolePermissions: role.permissions,
+    roleSlug: role.slug,
     roleMetadata: role.metadata,
     accountMetadata: profile.metadata,
   });
@@ -109,6 +110,18 @@ function normalizeMutationBody(body: AccountMutationBody) {
 }
 
 async function loadActorContext(workspace: WorkspaceBootstrap, organizationId: string) {
+  if (workspace.isPlatformRoot) {
+    const currentRole = getRolePresetBySlug("owner");
+    const currentUser = workspace.users.find((user) => user.id === workspace.currentUserId) ?? null;
+    if (!currentUser) return null;
+    return {
+      currentProfile: null,
+      currentUser,
+      currentRole,
+      currentAccount: buildCurrentAccount({ id: "platform-root-account", organizationId, userId: currentUser.id, roleId: currentRole.id, displayName: currentUser.displayName, attributes: { status: "active", bootstrap: true }, status: "active", createdAt: "", updatedAt: "", metadata: { platformRoot: true } }, currentUser, currentRole),
+      currentPermissions: currentRole.permissions,
+    };
+  }
   const currentProfile =
     workspace.profiles.find((profile) => profile.id === workspace.currentProfileId && profile.organizationId === organizationId && !profile.deletedAt)
     ?? workspace.profiles.find((profile) => profile.userId === workspace.currentUserId && profile.organizationId === organizationId && !profile.deletedAt)
@@ -126,6 +139,7 @@ async function loadActorContext(workspace: WorkspaceBootstrap, organizationId: s
   const currentPermissions = resolveAccountPermissions({
     permissions: currentProfile.metadata?.permissions,
     rolePermissions: currentRole.permissions,
+    roleSlug: currentRole.slug,
     roleMetadata: currentRole.metadata,
     accountMetadata: currentProfile.metadata,
   });
@@ -230,6 +244,7 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
   const existingPermissions = resolveAccountPermissions({
     permissions: targetProfile.metadata?.permissions,
     rolePermissions: existingRole.permissions,
+    roleSlug: existingRole.slug,
     roleMetadata: existingRole.metadata,
     accountMetadata: targetProfile.metadata,
   });
@@ -257,6 +272,26 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
   const desiredPermissions =
     requestedPermissions ??
     (requestedRoleSlug !== existingRole.slug ? targetRole.permissions : existingPermissions);
+
+  const desiredHasReservationCreate = desiredPermissions.includes("reservation.create");
+  const targetHadReservationCreate = existingPermissions.includes("reservation.create");
+  if (desiredHasReservationCreate !== targetHadReservationCreate && !canGrantAccountPermission({
+    actor: actorContext.currentAccount,
+    targetRoleSlug: targetRole.slug,
+    permission: "reservation.create",
+  })) {
+    return NextResponse.json(
+      { ok: false, error: { code: "forbidden", message: "Solo un Owner puede habilitar la creación de reservas para Recepción." } },
+      { status: 403 },
+    );
+  }
+
+  if (desiredPermissions.some((permission) => ["accounts.manage", "accounts.view", "permissions.manage"].includes(permission)) && targetRole.slug !== "owner") {
+    return NextResponse.json(
+      { ok: false, error: { code: "forbidden", message: "Las capacidades estructurales quedan reservadas al rol Owner." } },
+      { status: 403 },
+    );
+  }
 
   const requestedStatus: "active" | "inactive" =
     normalized.status === "inactive" || normalized.status === "active"

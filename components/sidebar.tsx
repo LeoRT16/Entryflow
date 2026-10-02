@@ -11,6 +11,7 @@ import { formatShellEventStatus, getShellEventStatusTone } from "@/components/sh
 import { getEventTypeLabel, isTerminalEventStatus } from "@/features/events/domain";
 import { getNavigationGroups } from "@/features/navigation/navigation";
 import { useCheckInStore } from "@/services/workspace-service";
+import { getGlobalSessionRoleLabel } from "@/features/accounts/domain/accounts-domain";
 
 function isActivePath(pathname: string, href: string) {
   if (href === "/") {
@@ -165,7 +166,7 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const { currentEvent, currentAccount, can } = useCheckInStore();
-  const canSwitchEventContext = can("event.view");
+  const canSwitchEventContext = can("event.view") && currentAccount.roleSlug !== "reception" && currentAccount.roleSlug !== "door";
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
   const navigationGroups = getNavigationGroups(can, currentEvent);
 
@@ -243,7 +244,7 @@ export default function Sidebar({
             <div className="surface-elevated p-4">
               <p className="kicker">Sesión</p>
               <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
-              <p className="mt-1 text-xs text-slate-500">{currentAccount.roleName}</p>
+              <p className="mt-1 text-xs text-slate-500">{getGlobalSessionRoleLabel(currentAccount)}</p>
               <div className="mt-3">
                 <LogoutButton />
               </div>
@@ -303,7 +304,7 @@ export default function Sidebar({
             <div className="surface-elevated p-4">
               <p className="kicker">Sesión</p>
               <p className="mt-2 text-sm font-medium text-white">{currentAccount.displayName}</p>
-              <p className="mt-1 text-xs text-slate-500">{currentAccount.roleName}</p>
+              <p className="mt-1 text-xs text-slate-500">{getGlobalSessionRoleLabel(currentAccount)}</p>
               <div className="mt-3">
                 <LogoutButton />
               </div>

@@ -33,6 +33,7 @@ import { createEmptyWorkspaceLayouts, loadWorkspaceLayouts, type WorkspaceLayout
 import { buildEventSelectionCandidate, pickCurrentEventId as pickCurrentEventSelectionId } from "@/features/events/domain";
 
 export type WorkspaceBootstrap = {
+  isPlatformRoot?: boolean;
   authState: WorkspaceAuthState;
   currentUserId: string;
   users: AccountUser[];
@@ -410,6 +411,8 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
 
   const repositories = createSupabaseWorkspaceRepositories(client);
   const authIdentityEmails = await loadAuthIdentityEmailSet(client);
+  const platformPrincipals = await fetchSupabaseTable<{ auth_user_id: string; role: string; status: string; deleted_at: string | null }>("platform_principals", { optional: true });
+  const isPlatformRoot = platformPrincipals.some((principal) => principal.auth_user_id === authUser.id && principal.role === "root" && principal.status === "active" && principal.deleted_at === null);
 
   const [
     userRows,
@@ -500,7 +503,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
   const activeProfilesForUser = profileRows.filter((profile) => profile.user_id === linkedUserRow.id && profile.deleted_at === null);
   const allProfilesForUser = profileRows.filter((profile) => profile.user_id === linkedUserRow.id);
 
-  if (!activeProfilesForUser.length) {
+  if (!activeProfilesForUser.length && !isPlatformRoot) {
     return {
       ...createEmptyWorkspaceBootstrap(),
       authState: {
@@ -514,15 +517,14 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
   }
 
   const allowedOrganizationIds = new Set(
-    activeProfilesForUser
-      .map((profile) => profile.organization_id)
+    (isPlatformRoot ? organizationRows.map((organization) => organization.id) : activeProfilesForUser.map((profile) => profile.organization_id))
       .filter((organizationId) => {
         const organization = organizationRows.find((row) => row.id === organizationId);
         return Boolean(organization && organization.deleted_at === null && organization.status === "active");
       }),
   );
 
-  if (!allowedOrganizationIds.size) {
+  if (!allowedOrganizationIds.size && !isPlatformRoot) {
     return {
       ...createEmptyWorkspaceBootstrap(),
       authState: {
@@ -632,6 +634,7 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     .sort(compareTimelineEventsDescending);
 
   return {
+    isPlatformRoot,
     authState: {
       status: "ready",
       authUserId: authUser.id,
