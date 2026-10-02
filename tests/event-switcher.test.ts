@@ -15,6 +15,7 @@ import {
   resolveInitialCurrentEventId,
   resolveInitialCurrentOrganizationId,
   resolveInitialCurrentProfileId,
+  resolveReloadCurrentEventId,
   resolveWorkspacePreferenceSelection,
   resolveWorkspaceBootstrapSelection,
 } from "../services/workspace-service";
@@ -321,6 +322,19 @@ test("bootstrap selection stays deterministic while persisted selection can be r
       assert.equal(resolveInitialCurrentProfileId(workspace, "org-2", "user-1"), "profile-2");
     },
   );
+});
+
+test("reload preserves explicit event across reconstructed collections and transient empty snapshots", () => {
+  const events = [
+    { id: "event-a", organizationId: "org-1", name: "A", eventType: "custom", status: "live", startAt: "2026-08-14 20:00" },
+    { id: "event-b", organizationId: "org-1", name: "B", eventType: "custom", status: "published", startAt: "2026-08-15 20:00" },
+    { id: "event-c", organizationId: "org-1", name: "C", eventType: "custom", status: "draft", startAt: "2026-08-16 20:00" },
+  ] as Event[];
+
+  assert.equal(resolveReloadCurrentEventId([...events].reverse(), "org-1", "event-b", "event-a"), "event-b");
+  assert.equal(resolveReloadCurrentEventId([], "org-1", "event-b", "event-a", events), "event-b");
+  assert.equal(resolveReloadCurrentEventId(events.filter((event) => event.id !== "event-b"), "org-1", "event-b", "event-a"), "event-a");
+  assert.equal(resolveReloadCurrentEventId(events, "org-1", "event-c", "event-a"), "event-c");
 });
 
 test("event selection never falls back to another organization", () => {

@@ -579,6 +579,26 @@ export function resolveWorkspacePreferenceSelection(initialWorkspace: WorkspaceB
   };
 }
 
+export function resolveReloadCurrentEventId(
+  events: PlatformEvent[],
+  organizationId: string,
+  currentEventId: string,
+  bootstrapEventId = "",
+  previousEvents: PlatformEvent[] = [],
+) {
+  // Keep an explicit selection through transient empty/loading snapshots only
+  // while it still belongs to the active organization.
+  if (currentEventId && events.length === 0 && previousEvents.some((event) => event.id === currentEventId && (!organizationId || event.organizationId === organizationId))) {
+    return currentEventId;
+  }
+
+  return events.find((event) => event.id === currentEventId && (!organizationId || event.organizationId === organizationId))?.id
+    ?? events.find((event) => event.id === bootstrapEventId && (!organizationId || event.organizationId === organizationId))?.id
+    ?? events.find((event) => event.organizationId === organizationId && event.status === "live")?.id
+    ?? events.find((event) => event.organizationId === organizationId)?.id
+    ?? "";
+}
+
 export function resolveOrganizationSwitchState({
   organizationId,
   events,
@@ -1329,12 +1349,14 @@ export function WorkspaceServiceProvider({
         ?? snapshot.organizations.find((organization) => organization.id === snapshot.currentOrganizationId)?.id
         ?? snapshot.organizations.find((organization) => organization.status === "active")?.id
         ?? "";
-      const nextCurrentEventId =
-        snapshot.events.find((event) => event.id === currentEventId && (!nextCurrentOrganizationId || event.organizationId === nextCurrentOrganizationId))?.id
-        ?? snapshot.events.find((event) => event.id === snapshot.currentEventId && (!nextCurrentOrganizationId || event.organizationId === nextCurrentOrganizationId))?.id
-        ?? snapshot.events.find((event) => event.organizationId === nextCurrentOrganizationId && event.status === "live")?.id
-        ?? snapshot.events.find((event) => event.organizationId === nextCurrentOrganizationId)?.id
-        ?? "";
+      const nextCurrentEventId = resolveReloadCurrentEventId(
+        snapshot.events,
+        nextCurrentOrganizationId,
+        currentEventId,
+        snapshot.currentEventId,
+        events,
+      );
+      const nextEvents = snapshot.events.length === 0 && events.length > 0 ? events : snapshot.events;
       const nextCurrentProfileId = initialCurrentUserId
         ? accessibleProfiles.find((profile) => profile.id === currentProfileId && (!nextCurrentOrganizationId || profile.organizationId === nextCurrentOrganizationId))?.id
           ?? accessibleProfiles.find((profile) => profile.organizationId === nextCurrentOrganizationId)?.id
@@ -1358,7 +1380,7 @@ export function WorkspaceServiceProvider({
       setEventLayouts(snapshot.eventLayouts);
       setEventLayoutSectors(snapshot.eventLayoutSectors);
       setEventLayoutResources(snapshot.eventLayoutResources);
-      setEvents(snapshot.events);
+      setEvents(nextEvents);
       setGuests(snapshot.guests);
       setReservations(snapshot.reservations);
       setExtraWristbandSales(snapshot.extraWristbandSales ?? []);
