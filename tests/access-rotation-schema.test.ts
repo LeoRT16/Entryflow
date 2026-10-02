@@ -35,6 +35,8 @@ test("credential rotation is wired through the repository, service permission, a
   const repository = readFileSync("repositories/supabase-workspace-repositories.ts", "utf8");
   const service = readFileSync("services/workspace-service.tsx", "utf8");
   const ui = readFileSync("features/customers/components/guest-directory.tsx", "utf8");
+  const modal = readFileSync("features/customers/components/guest-edit-modal.tsx", "utf8");
+  const reservations = readFileSync("features/reservations/components/reservation-flow.tsx", "utf8");
   assert.match(repository, /rotate_guest_access_credential_atomic/);
   assert.match(service, /requirePermission\("access\.regenerate"\)/);
   assert.match(ui, /Regenerar QR/);
@@ -42,4 +44,9 @@ test("credential rotation is wired through the repository, service permission, a
   assert.match(ui, /admissionStatus !== "Ingresó"/);
   assert.match(ui, /reservationStatus !== "Cancelled"/);
   assert.doesNotMatch(ui, /rotate_guest_access_credential_atomic/);
+  assert.match(modal, /onRegenerate/);
+  assert.match(modal, /Regenerar QR/);
+  assert.match(reservations, /rotateGuestAccessCredential/);
+  assert.match(reservations, /access\.regenerate/);
+  assert.doesNotMatch(modal, /getSupabaseBrowserClient|\.rpc\(/);
 });

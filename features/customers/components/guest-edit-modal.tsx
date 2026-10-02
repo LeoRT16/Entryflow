@@ -14,17 +14,25 @@ type GuestEditModalProps = {
   guest: GuestRecord | null;
   onClose: () => void;
   onSave: (input: GuestProfileUpdateInput & { guestId: string }) => Promise<GuestRecord | undefined>;
+  canRegenerate?: boolean;
+  onRegenerate?: (guestId: string) => Promise<GuestRecord>;
 };
 
-export default function GuestEditModal({ open, guest, onClose, onSave }: GuestEditModalProps) {
-  const { showToast } = useFeedback();
+export default function GuestEditModal({ open, guest, onClose, onSave, canRegenerate = false, onRegenerate }: GuestEditModalProps) {
+  const { showToast, confirm } = useFeedback();
   const [guestName, setGuestName] = useState(() => guest?.guestName ?? "");
   const [carnet, setCarnet] = useState(() => guest?.carnet ?? "");
   const [whatsapp, setWhatsapp] = useState(() => guest?.whatsapp ?? "");
   const [fieldErrors, setFieldErrors] = useState<{ guestName?: string; whatsapp?: string }>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const title = guest?.guestName ?? "Editar invitado";
+  const canRegenerateGuest = Boolean(onRegenerate && canRegenerate && guest && guest.admissionStatus !== "Ingresó" && guest.admissionStatus !== "Anulada" && guest.reservationStatus !== "Cancelled");
+  const handleRegenerate = () => {
+    if (!guest || !onRegenerate || !canRegenerateGuest || isRegenerating) return;
+    confirm({ title: "Regenerar QR", description: "El QR actual dejará de funcionar y se generará uno nuevo. El invitado y su reserva no cambiarán.", confirmLabel: "Regenerar QR", cancelLabel: "Cancelar", tone: "warning", onConfirm: () => { void (async () => { setIsRegenerating(true); try { await onRegenerate(guest.id); showToast({ title: "QR regenerado", description: "La nueva credencial quedó disponible para la invitación.", tone: "success" }); } catch (error) { showToast({ title: "No se pudo regenerar el QR", description: error instanceof Error ? error.message : "La credencial no pudo actualizarse.", tone: "error" }); } finally { setIsRegenerating(false); } })(); } });
+  };
 
   useEffect(() => {
     if (!open) {
@@ -177,6 +185,7 @@ export default function GuestEditModal({ open, guest, onClose, onSave }: GuestEd
             </section>
 
             <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-white/10 pt-4">
+              {canRegenerateGuest ? <button type="button" onClick={() => void handleRegenerate()} disabled={isRegenerating || isSaving} className="inline-flex h-11 items-center justify-center rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60">{isRegenerating ? "Regenerando…" : "Regenerar QR"}</button> : null}
               <button
                 type="button"
                 onClick={onClose}
