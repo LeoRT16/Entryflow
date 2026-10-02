@@ -109,6 +109,40 @@ test("mesa still requires a resource and presale rejects incomplete people", () 
   assert.throws(() => createReservationBundle({ ...input, reservationType: "Preventa", selectedResource: undefined }), /complete access/);
 });
 
+test("mesa creation copies the holder only to Guest 1 and keeps later guests empty", () => {
+  const bundle = createReservationBundle({
+    eventId: "event-1",
+    eventName: "Evento de prueba",
+    date: "2026-09-02",
+    time: "21:00",
+    reservationType: "Mesa",
+    holderName: "Leo",
+    holderLastName: "Rojas",
+    documentValue: "CI-1",
+    whatsapp: "70000001",
+    email: "leo@example.com",
+    preferences: "",
+    vip: false,
+    frequent: false,
+    notes: "",
+    guests: [createGuestDraft(0), createGuestDraft(1), createGuestDraft(2)],
+    selectedResource: { id: "table-1", name: "Mesa 1", capacity: 4, sectorId: "sector-1", location: "Sala", venueId: "venue-1", status: "Available", tone: "success" },
+    amount: "400",
+    advance: "0",
+    paymentMethod: "Efectivo",
+    paymentStatus: "Pendiente",
+    observations: "",
+  });
+
+  assert.deepEqual(
+    bundle.guests.slice(0, 2).map((guest) => ({ name: guest.guestName, carnet: guest.carnet, whatsapp: guest.whatsapp })),
+    [
+      { name: "Leo Rojas", carnet: "CI-1", whatsapp: "70000001" },
+      { name: "", carnet: "", whatsapp: "" },
+    ],
+  );
+});
+
 test("courtesy creates an operational group with individual accesses and no commercial state", () => {
   const guests = ["Ana", "Luis"].map((name, index) => ({
     ...createGuestDraft(index),

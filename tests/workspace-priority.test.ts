@@ -5,7 +5,7 @@ import { buildWorkspacePrioritySnapshot, getWorkspaceActionableAlertCount } from
 import type { WorkspaceIntelligence } from "../domain/workspace-intelligence";
 import { buildTimelineSummary } from "../features/timeline/domain/timeline-domain";
 import type { TimelineEvent } from "../features/timeline/types";
-import { resolveOperationalEventId } from "../services/workspace-service";
+import { resolveOperationalEventId, resolveWorkspacePreferenceSelection } from "../services/workspace-service";
 import type { Event as PlatformEvent } from "../features/domain/types";
 
 test("Reception and Door resolve only the live event while admin can select published events", () => {
@@ -19,6 +19,26 @@ test("Reception and Door resolve only the live event while admin can select publ
   assert.equal(resolveOperationalEventId(events, "org-1", "administrator", "future"), "future");
   assert.equal(resolveOperationalEventId(events, "org-1", "reception", "future"), "live");
   assert.equal(resolveOperationalEventId(events, "org-1", "door", "future"), "live");
+});
+
+test("partial bootstrap without roles resolves safely and does not widen event authority", () => {
+  const selection = resolveWorkspacePreferenceSelection({
+    currentUserId: "user-1",
+    currentOrganizationId: "org-1",
+    currentEventId: "future",
+    currentProfileId: "profile-1",
+    organizations: [{ id: "org-1", name: "Org", slug: "org", status: "active", timezone: "UTC", branding: {}, settings: {} }],
+    events: [
+      { id: "future", organizationId: "org-1", status: "published" },
+      { id: "live", organizationId: "org-1", status: "live" },
+    ] as PlatformEvent[],
+    profiles: undefined,
+    roles: undefined,
+  } as never, "user-1");
+
+  assert.equal(selection.currentOrganizationId, "org-1");
+  assert.equal(selection.currentEventId, "live");
+  assert.equal(selection.currentProfileId, "");
 });
 
 function buildTimelineEvent(overrides: Partial<TimelineEvent> = {}): TimelineEvent {

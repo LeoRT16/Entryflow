@@ -110,3 +110,14 @@ test("migration hardens every lifecycle RPC and preserves cancellation history",
   assert.match(sql, /insert into public\.timeline_events/);
   assert.match(sql, /reservation_has_active_extras/);
 });
+
+test("Phase 5A reservation boundaries authorize Root and lock physical capacity", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20261006000000_phase5a_reservation_boundaries.sql", import.meta.url), "utf8");
+  assert.match(sql, /if not public\.is_platform_root\(\) and not exists/);
+  assert.match(sql, /select \* into v_resource[\s\S]*for update/);
+  assert.match(sql, /physical_capacity_exceeded/);
+  assert.match(sql, /occupied\.deleted_at is null/);
+  assert.match(sql, /occupied\.table_id = v_resource\.id::text/);
+  assert.doesNotMatch(sql, /v_reservation\.reservation_type = 'Preventa'[\s\S]*physical_capacity_exceeded/);
+  assert.match(sql, /revoke all on function public\.create_physical_reservation_atomic/);
+});

@@ -432,7 +432,7 @@ export function getEventSelection(events: PlatformEvent[], organizationId: strin
 
 export function resolveOperationalEventId(events: PlatformEvent[], organizationId: string, roleSlug: string, requestedEventId = "") {
   const scoped = events.filter((event) => event.organizationId === organizationId && event.status !== "cancelled" && event.status !== "finished");
-  if (roleSlug === "reception" || roleSlug === "door") {
+  if (roleSlug === "reception" || roleSlug === "door" || roleSlug === "") {
     return scoped.find((event) => event.status === "live")?.id ?? "";
   }
   return scoped.find((event) => event.id === requestedEventId)?.id ?? scoped.find((event) => event.status === "live")?.id ?? scoped[0]?.id ?? "";
@@ -452,7 +452,7 @@ function hasAccessibleOrganization(initialWorkspace: WorkspaceBootstrap | null |
   }
 
   return initialWorkspace.organizations.some((organization) => organization.id === organizationId)
-    && initialWorkspace.profiles.some((profile) => profile.organizationId === organizationId && !profile.deletedAt);
+    && (initialWorkspace.profiles ?? []).some((profile) => profile.organizationId === organizationId && !profile.deletedAt);
 }
 
 function hasAccessibleEvent(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string, eventId: string) {
@@ -473,7 +473,7 @@ function hasAccessibleProfile(
     return false;
   }
 
-  return initialWorkspace.profiles.some(
+  return (initialWorkspace.profiles ?? []).some(
     (profile) =>
       profile.id === profileId &&
       profile.organizationId === organizationId &&
@@ -567,8 +567,8 @@ export function resolveInitialCurrentProfileId(
 
 export function resolveWorkspacePreferenceSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "") {
   const currentOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
-  const profile = initialWorkspace?.profiles.find((item) => item.id === initialWorkspace.currentProfileId && item.userId === currentUserId);
-  const roleSlug = initialWorkspace?.roles.find((role) => role.id === profile?.roleId)?.slug ?? "";
+  const profile = (initialWorkspace?.profiles ?? []).find((item) => item.id === initialWorkspace?.currentProfileId && item.userId === currentUserId);
+  const roleSlug = (initialWorkspace?.roles ?? []).find((role) => role.id === profile?.roleId)?.slug ?? "";
 
   return {
     currentOrganizationId,

@@ -530,9 +530,16 @@ export function buildReservationSummaries(
 
 function buildGuestDraftIdentity(index: number, input: ReservationCreationInput) {
   const guestDraft = input.guests[index];
-  const name = guestDraft.name.trim() || `Invitado ${index + 1}`;
+  const holderOwnsFirstGuest = index === 0 && input.reservationType !== "Preventa" && input.reservationType !== "Cortesía";
+  const name = holderOwnsFirstGuest
+    ? `${input.holderName} ${input.holderLastName}`.trim()
+    : guestDraft.name.trim();
+  const document = holderOwnsFirstGuest ? input.documentValue.trim() : guestDraft.document.trim();
+  const whatsapp = holderOwnsFirstGuest ? input.whatsapp.trim() : guestDraft.whatsapp.trim();
   return {
     name,
+    document,
+    whatsapp,
     guestDraft,
   };
 }
@@ -678,9 +685,9 @@ export function createReservationBundle(input: ReservationCreationInput) {
         eventStatus: "Próximo" as const,
         invitationSequence: `${index + 1} de ${input.guests.length}`,
         invitationCode,
-        carnet: guestDraft.document || `Pendiente ${index + 1}`,
-        whatsapp: guestDraft.whatsapp || input.whatsapp,
-        deliveryStatus: "Enviada" as const,
+        carnet: identity.document,
+        whatsapp: identity.whatsapp,
+        deliveryStatus: isCompleteGuestDraft(guestDraft) ? "Enviada" as const : "Pendiente de envío" as const,
         admissionStatus: "Pendiente" as const,
         reservationStatus: status,
         deliveryHistory: [
