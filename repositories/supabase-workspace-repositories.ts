@@ -246,6 +246,7 @@ export type SupabaseWorkspaceRepositories = {
   guests: SupabaseCrudRepository<Guest> & {
     createWithAccessOrdinal(guest: Guest): Promise<Guest>;
     prepareAuthoritativeAccess(guest: Guest): Promise<Guest>;
+    replaceReservationGuest(input: { reservationId: string; guestId: string; replacement: Pick<Guest, "guestName" | "carnet" | "whatsapp">; reason?: string }): Promise<{ guest: Guest; accessGrantId: string; accessCode: string; qrToken: string; sourceGuestId: string }>;
     moveToTable(guestId: string, tableId: string): Promise<void>;
     moveGuestToResourceAtomic(input: { guestId: string; destinationResourceId: string }): Promise<GuestMoveAtomicResult>;
     checkIn(query: string): Promise<CheckInAttempt | null>;
@@ -265,7 +266,7 @@ export type SupabaseWorkspaceRepositories = {
   eventLayoutResources: EventLayoutResourceRepository;
   checkIns: SupabaseCrudRepository<CheckIn> & {
     isAuthoritativeConsumed(accessGrantId: string): Promise<boolean>;
-    persistCompletedAtomic(input: { guestId: string; accessGrantId: string; operatorProfileId: string; source: string; method: string; operator: string; gate: string; checkedInAt: string; notes: string; auditTrail: unknown; timeline: unknown }): Promise<void>;
+    persistCompletedAtomic(input: { guestId: string; accessGrantId: string; operatorProfileId: string; source: string; method: string; operator: string; gate: string; checkedInAt: string; notes: string; auditTrail: unknown; timeline: unknown; presentedCredential: string; credentialKind: "qr_token" | "access_code" | "manual" | "invalid" }): Promise<void>;
     register(query: string, method: "QR" | "Manual", operator?: string): Promise<CheckInAttempt | null>;
   };
   timeline: SupabaseCrudRepository<TimelineEvent>;
@@ -856,6 +857,17 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     return mapGuestRowToDomain(data as GuestRow);
   };
 
+  guests.replaceReservationGuest = async ({ reservationId, guestId, replacement, reason }) => {
+    if (!client) throw new Error("Supabase client is unavailable.");
+    const { data, error } = await client.rpc("replace_reservation_guest_atomic" as never, {
+      p_reservation_id: reservationId, p_guest_id: guestId, p_replacement: replacement, p_reason: reason ?? null,
+    } as never);
+    if (error) throw error;
+    const result = data as { guest?: GuestRow; accessGrantId?: string; accessCode?: string; qrToken?: string; sourceGuestId?: string } | null;
+    if (!result?.guest || !result.accessGrantId || !result.accessCode || !result.qrToken || !result.sourceGuestId) throw new Error("Malformed guest replacement response.");
+    return { guest: mapGuestRowToDomain(result.guest), accessGrantId: result.accessGrantId, accessCode: result.accessCode, qrToken: result.qrToken, sourceGuestId: result.sourceGuestId };
+  };
+
   guests.prepareAuthoritativeAccess = async (guest) => {
     if (!client) throw new Error("Supabase client is unavailable.");
     const { data, error } = await client.rpc("prepare_guest_access_atomic" as never, {
@@ -868,9 +880,9 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
       logAccessPreparationDiagnostic(diagnostic);
       throw diagnostic;
     }
-    const row = (Array.isArray(data) ? data[0] : data) as { access_grant_id?: string } | null;
+    const row = (Array.isArray(data) ? data[0] : data) as { access_grant_id?: string; access_code?: string; qr_token?: string } | null;
     if (!row?.access_grant_id) throw new Error("Malformed authoritative access response.");
-    return { ...guest, accessGrantId: row.access_grant_id };
+    return { ...guest, accessGrantId: row.access_grant_id, accessCode: row.access_code ?? guest.accessCode, qrToken: row.qr_token ?? guest.qrToken };
   };
 
   const tables = buildCrudRepository<TableRecord, TableRow>({
@@ -1279,7 +1291,7 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
         if (error) throw error;
         return Array.isArray(data) && data.length > 0;
       },
-      async persistCompletedAtomic(input: { guestId: string; accessGrantId: string; operatorProfileId: string; source: string; method: string; operator: string; gate: string; checkedInAt: string; notes: string; auditTrail: unknown; timeline: unknown }) {
+      async persistCompletedAtomic(input: { guestId: string; accessGrantId: string; operatorProfileId: string; source: string; method: string; operator: string; gate: string; checkedInAt: string; notes: string; auditTrail: unknown; timeline: unknown; presentedCredential: string; credentialKind: "qr_token" | "access_code" | "manual" | "invalid" }) {
         if (!client) throw new Error("Supabase client is unavailable.");
         const { error } = await client.rpc("persist_completed_checkin_atomic" as never, {
           p_guest_id: input.guestId,
@@ -1293,90 +1305,13 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
           p_notes: input.notes,
           p_audit_trail: input.auditTrail,
           p_timeline: input.timeline,
+          p_presented_credential: input.presentedCredential,
+          p_credential_kind: input.credentialKind,
         } as never);
         if (error) throw error;
       },
-      async register(query: string, method: "QR" | "Manual", operator = method === "Manual" ? "Recepción" : "Escáner") {
-        const allGuests = await guests.list();
-        const found = allGuests.find((guest) =>
-          [guest.guestName, guest.reservationName, guest.reservationCode, guest.invitationCode, guest.accessCode ?? "", guest.qrToken ?? "", guest.carnet, guest.whatsapp]
-            .join(" ")
-            .toLowerCase()
-            .includes(query.toLowerCase()),
-        );
-
-        if (!found) {
-          const attempt: CheckInAttempt = {
-            id: createUuid(),
-            eventId: "",
-            query,
-            method,
-            timestamp: nowIso().slice(11, 16),
-            result: "No encontrado",
-            note: "Código inválido.",
-          };
-          return attempt;
-        }
-
-        const checkIn: CheckIn = {
-          id: createUuid(),
-          accessType: found.manualAdmission ? "manual" : "invitation",
-          guestId: found.id,
-          reservationId: found.reservationId,
-          eventId: found.eventId,
-          accessGrantId: found.accessGrantId ?? found.id,
-          method,
-          checkedInAt: nowIso().slice(11, 16),
-          checkedOutAt: undefined,
-          operator,
-          gate: method === "Manual" ? "Recepción" : found.gate ?? "Principal",
-          notes: method === "Manual" ? "Ingreso manual registrado." : "QR validado correctamente.",
-          auditTrail: [
-            {
-              id: createUuid(),
-              timestamp: nowIso().slice(11, 16),
-              kind: "access.checked_in",
-              title: method === "Manual" ? "Check-in manual" : "Check-in exitoso",
-              description: method === "Manual" ? "Ingreso manual registrado." : "QR validado correctamente.",
-              tone: "success",
-              operator,
-              gate: method === "Manual" ? "Recepción" : found.gate ?? "Principal",
-              metadata: { method, query },
-            },
-          ],
-          reentryAllowed: true,
-          maxEntries: 1,
-          reentryWindowMinutes: undefined,
-          attemptCount: 1,
-          lastAttemptAt: nowIso().slice(11, 16),
-          status: "Checked In",
-          source: method === "Manual" ? "manual" : "qr",
-        };
-
-        await checkIns.create(checkIn as never);
-        await guests.update(found.id, {
-          admissionStatus: "Ingresó",
-          reservationStatus: "Checked In",
-          qrStatus: "Usado",
-          checkInTime: checkIn.checkedInAt,
-          checkInMethod: method,
-          gate: method === "Manual" ? "Recepción" : found.gate ?? "Principal",
-          manualAdmission: method === "Manual",
-        } as never);
-
-        const attempt: CheckInAttempt = {
-          id: createUuid(),
-          eventId: found.eventId,
-          query,
-          method,
-          timestamp: checkIn.checkedInAt,
-          result: "Encontrado",
-          guestId: found.id,
-          guestName: found.guestName,
-          note: method === "Manual" ? "Ingreso manual registrado." : "QR validado correctamente.",
-        };
-
-        return attempt;
+      async register(_query: string, _method: "QR" | "Manual", _operator?: string) {
+        throw new Error("Direct legacy admission is disabled; use the authoritative atomic check-in flow.");
       },
     },
     timeline,

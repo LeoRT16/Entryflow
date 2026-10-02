@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+test("atomic access rotation preserves entitlement identity and blocks consumed or cancelled access", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20261008000000_phase5d_atomic_access_rotation.sql", import.meta.url), "utf8");
+  assert.match(sql, /rotate_guest_access_credential_atomic/);
+  assert.match(sql, /for update/);
+  assert.match(sql, /g\.admission_status = 'Ingresó'/);
+  assert.match(sql, /g\.reservation_status = 'Cancelled'/);
+  assert.match(sql, /g\.admission_status = 'Anulada'/);
+  assert.match(sql, /accreditation_checkins where access_grant_id=a\.id/);
+  assert.match(sql, /set access_code=v_code, qr_token=v_token/);
+  assert.match(sql, /a\.id,v_code,v_token/);
+  assert.match(sql, /accessGrantId',a\.id/);
+  assert.doesNotMatch(sql, /old.*qr_token|previous.*qr_token/i);
+});
+
+test("rotation rejects valid legacy check-in consumption", () => {
+  const sql = readFileSync("supabase/migrations/20261008000000_phase5d_atomic_access_rotation.sql", "utf8");
+  assert.match(sql, /from public\.checkins as ci/);
+  assert.match(sql, /ci\.guest_id = g\.id/);
+  assert.match(sql, /ci\.access_grant_id = a\.id/);
+  assert.match(sql, /ci\.deleted_at is null/);
+  assert.match(sql, /ci\.status in \('Checked In', 'Checked Out', 'Completed'\)/);
+});
+
+test("Supabase legacy register cannot create an independent successful admission", () => {
+  const source = readFileSync("repositories/supabase-workspace-repositories.ts", "utf8");
+  assert.match(source, /Direct legacy admission is disabled; use the authoritative atomic check-in flow/);
+  assert.match(source, /persistCompletedAtomic/);
+});

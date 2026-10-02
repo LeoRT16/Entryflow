@@ -3885,6 +3885,15 @@ export function WorkspaceServiceProvider({
           target: guest.guestName,
         });
 
+        const normalizedPresentedCredential = query.trim().toLowerCase();
+        const credentialKind: "qr_token" | "access_code" | "manual" | "invalid" = method === "Manual"
+          ? "manual"
+          : guest?.qrToken?.trim().toLowerCase() === normalizedPresentedCredential
+            ? "qr_token"
+            : guest?.accessCode?.trim().toLowerCase() === normalizedPresentedCredential
+              ? "access_code"
+              : "invalid";
+
         try {
           if (repositories.checkIns.persistCompletedAtomic) {
             await repositories.checkIns.persistCompletedAtomic({
@@ -3899,6 +3908,8 @@ export function WorkspaceServiceProvider({
               notes: bundle.checkIn.notes ?? "",
               auditTrail: bundle.checkIn.auditTrail,
               timeline: bundle.timelineEntry,
+              presentedCredential: query,
+              credentialKind,
             });
           } else {
             await persistCompletedCheckInBundle({

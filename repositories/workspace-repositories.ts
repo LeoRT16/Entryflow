@@ -54,6 +54,7 @@ export type ReleaseReservationTableAtomicResult = { reservation_id: string; rele
 export type GuestRepository = CrudRepository<Guest> & {
   createWithAccessOrdinal(guest: Guest): Promise<Guest>;
   prepareAuthoritativeAccess(guest: Guest): Promise<Guest>;
+  replaceReservationGuest(input: { reservationId: string; guestId: string; replacement: Pick<Guest, "guestName" | "carnet" | "whatsapp">; reason?: string }): Promise<{ guest: Guest; accessGrantId: string; accessCode: string; qrToken: string; sourceGuestId: string }>;
   moveToTable(guestId: string, tableId: string): void;
   moveGuestToResourceAtomic(input: { guestId: string; destinationResourceId: string }): Promise<GuestMoveAtomicResult>;
   checkIn(query: string): Promise<CheckInAttempt | null>;
@@ -81,7 +82,7 @@ export type TableRepository = CrudRepository<TableRecord> & {
 export type CheckInRepository = CrudRepository<CheckIn> & {
   register(query: string, method: "QR" | "Manual", operator?: string): Promise<CheckInAttempt | null>;
   isAuthoritativeConsumed?(accessGrantId: string): Promise<boolean>;
-  persistCompletedAtomic?(input: { guestId: string; accessGrantId: string; operatorProfileId: string; source: string; method: string; operator: string; gate: string; checkedInAt: string; notes: string; auditTrail: unknown; timeline: unknown }): Promise<void>;
+  persistCompletedAtomic?(input: { guestId: string; accessGrantId: string; operatorProfileId: string; source: string; method: string; operator: string; gate: string; checkedInAt: string; notes: string; auditTrail: unknown; timeline: unknown; presentedCredential: string; credentialKind: "qr_token" | "access_code" | "manual" | "invalid" }): Promise<void>;
 };
 
 export type TimelineRepository = {
@@ -400,6 +401,7 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       delete: notImplemented,
       createWithAccessOrdinal: notImplemented,
       prepareAuthoritativeAccess: async (guest) => guest,
+      replaceReservationGuest: async () => { throw new Error("Guest replacement is not supported by the memory repository."); },
       moveToTable: notImplemented,
       moveGuestToResourceAtomic: notImplemented,
       checkIn: notImplemented,
