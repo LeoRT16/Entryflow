@@ -65,6 +65,7 @@ export default function EventLibrary() {
     checkIns,
     createEvent,
     updateEvent,
+    prepareEventPhysicalLayout,
     setCurrentEventId,
     setEventStatus,
     venues,
@@ -220,6 +221,7 @@ export default function EventLibrary() {
           onClose={() => setEditorEventId(null)}
           onSave={createEvent}
           onPatchEvent={updateEvent}
+          onPrepareEventPhysicalLayout={prepareEventPhysicalLayout}
         />
       ) : null}
     </div>

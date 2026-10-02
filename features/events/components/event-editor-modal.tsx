@@ -42,6 +42,7 @@ type EventEditorModalProps = {
   onClose: () => void;
   onSave: (event: Event) => Promise<Event | undefined>;
   onPatchEvent?: (event: Event) => Promise<Event | undefined>;
+  onPrepareEventPhysicalLayout?: (eventId: string) => Promise<unknown>;
 };
 
 function readImageDimensions(file: File) {
@@ -161,9 +162,11 @@ export default function EventEditorModal({
   onClose,
   onSave,
   onPatchEvent,
+  onPrepareEventPhysicalLayout,
 }: EventEditorModalProps) {
   const { showToast, confirm } = useFeedback();
   const [isSaving, setIsSaving] = useState(false);
+  const [isPreparingLayout, setIsPreparingLayout] = useState(false);
   const [isArtworkBusy, setIsArtworkBusy] = useState(false);
   const [eventArtwork, setEventArtwork] = useState<EventInvitationArtwork | null>(() => getEventInvitationArtwork(event));
   const [eventOverlayLayout, setEventOverlayLayout] = useState<InvitationOverlayLayout | null>(() => getEventInvitationOverlayLayout(event));
@@ -225,6 +228,18 @@ export default function EventEditorModal({
   }
 
   const persistEvent = onPatchEvent ?? onSave;
+  const preparePhysicalLayout = async () => {
+    if (!onPrepareEventPhysicalLayout || isPreparingLayout || !canEditEvent) return;
+    setIsPreparingLayout(true);
+    try {
+      await onPrepareEventPhysicalLayout(event.id);
+      showToast({ title: "Layout físico preparado", description: "El evento ya puede usar sus recursos físicos para reservas.", tone: "success" });
+    } catch (error) {
+      showToast({ title: "No pudimos preparar el layout", description: error instanceof Error ? error.message : "Revisá la configuración física del evento.", tone: "error" });
+    } finally {
+      setIsPreparingLayout(false);
+    }
+  };
   const selectedVenue = resolveManagedVenueById({
     venueId: eventVenueId,
     venues: venueOptions,
@@ -755,6 +770,11 @@ export default function EventEditorModal({
                 {selectedVenue?.name ?? event.venue} · {event.capacity} personas
               </p>
               <p className="mt-1 text-xs text-slate-500">La edición del evento ya no vive en Ajustes.</p>
+              {onPrepareEventPhysicalLayout && canEditEvent ? (
+                <button type="button" onClick={() => void preparePhysicalLayout()} disabled={isPreparingLayout || isSaving} className="mt-3 inline-flex h-9 items-center rounded-xl border border-cyan-400/30 px-3 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60">
+                  {isPreparingLayout ? "Preparando layout…" : "Preparar layout físico"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
