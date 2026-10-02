@@ -524,12 +524,12 @@ function resolveBootstrapCurrentProfileId(
 }
 
 export function resolveWorkspaceBootstrapSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "") {
-  const currentOrganizationId = resolveBootstrapCurrentOrganizationId(initialWorkspace);
+  const currentOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
 
   return {
     currentOrganizationId,
-    currentEventId: resolveBootstrapCurrentEventId(initialWorkspace, currentOrganizationId),
-    currentProfileId: resolveBootstrapCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
+    currentEventId: resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId),
+    currentProfileId: resolveInitialCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
   };
 }
 

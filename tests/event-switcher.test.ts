@@ -314,9 +314,9 @@ test("bootstrap selection stays deterministic while persisted selection can be r
     () => {
       const bootstrapSelection = resolveWorkspaceBootstrapSelection(workspace, "user-1");
 
-      assert.equal(bootstrapSelection.currentOrganizationId, "org-1");
-      assert.equal(bootstrapSelection.currentEventId, "event-1");
-      assert.equal(bootstrapSelection.currentProfileId, "profile-1");
+      assert.equal(bootstrapSelection.currentOrganizationId, "org-2");
+      assert.equal(bootstrapSelection.currentEventId, "event-2");
+      assert.equal(bootstrapSelection.currentProfileId, "profile-2");
       assert.equal(resolveInitialCurrentOrganizationId(workspace), "org-2");
       assert.equal(resolveInitialCurrentEventId(workspace, "org-2"), "event-2");
       assert.equal(resolveInitialCurrentProfileId(workspace, "org-2", "user-1"), "profile-2");
@@ -354,6 +354,32 @@ test("preference restoration keeps an empty event collection from overwriting st
   }, () => {
     const selection = resolveWorkspacePreferenceSelection(workspace, "user-1");
     assert.equal(selection.currentEventId, "");
+  });
+});
+
+test("cold bootstrap prefers persisted B over loader live default A", () => {
+  const workspace = buildWorkspace({
+    organizations: [{ id: "org-1", name: "Org", slug: "org", status: "active", timezone: "America/La_Paz", branding: {}, settings: {} }],
+    profiles: [{ id: "profile-1", organizationId: "org-1", userId: "user-1", roleId: "role-1", displayName: "Owner", attributes: {}, status: "active", createdAt: "2026-08-14T10:00:00.000Z", updatedAt: "2026-08-14T10:00:00.000Z" }],
+    events: [
+      { id: "event-a", organizationId: "org-1", name: "A", eventType: "custom", status: "live", startAt: "2026-08-14 20:00", timezone: "America/La_Paz", venue: "Venue", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] },
+      { id: "event-b", organizationId: "org-1", name: "B", eventType: "custom", status: "published", startAt: "2026-08-15 20:00", timezone: "America/La_Paz", venue: "Venue", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] },
+      { id: "event-c", organizationId: "org-1", name: "C", eventType: "custom", status: "draft", startAt: "2026-08-16 20:00", timezone: "America/La_Paz", venue: "Venue", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] },
+    ],
+    currentOrganizationId: "org-1",
+    currentEventId: "event-a",
+    currentProfileId: "profile-1",
+  });
+
+  withLocalStorage({
+    "entryflow.currentOrganizationId": "org-1",
+    "entryflow.currentEventId": "event-b",
+    "entryflow.currentProfileId": "profile-1",
+  }, () => {
+    const selection = resolveWorkspaceBootstrapSelection(workspace, "user-1");
+    assert.equal(selection.currentOrganizationId, "org-1");
+    assert.equal(selection.currentEventId, "event-b");
+    assert.equal(selection.currentProfileId, "profile-1");
   });
 });
 
