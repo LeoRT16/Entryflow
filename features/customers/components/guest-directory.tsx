@@ -39,7 +39,7 @@ const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 20;
 
 export default function GuestDirectory() {
-  const { activeEvent, can, customers, updateGuestProfile } = useCheckInStore();
+  const { activeEvent, can, customers, updateGuestProfile, rotateGuestAccessCredential } = useCheckInStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [editingGuestId, setEditingGuestId] = useState<string | null>(null);
@@ -250,6 +250,8 @@ export default function GuestDirectory() {
           guest={selectedGuest}
           onClose={closeDrawer}
           onEdit={canEditGuest ? openEditGuest : undefined}
+          canRegenerate={can("access.regenerate")}
+          onRegenerate={rotateGuestAccessCredential}
           drawerRef={drawerRef}
         />
       ) : null}
@@ -315,23 +317,50 @@ function GuestDrawer({
   guest,
   onClose,
   onEdit,
+  canRegenerate,
+  onRegenerate,
   drawerRef,
 }: {
   guest: GuestRecord;
   onClose: () => void;
   onEdit?: (guest: GuestRecord) => void;
+  canRegenerate: boolean;
+  onRegenerate: (guestId: string) => Promise<GuestRecord>;
   drawerRef: RefObject<HTMLDivElement | null>;
 }) {
-  const { showToast } = useFeedback();
+  const { showToast, confirm } = useFeedback();
   const { currentEvent, currentVenue, reservations, setGuestsState } = useCheckInStore();
   const [isVisible, setIsVisible] = useState(false);
   const [isInvitationPreviewOpen, setIsInvitationPreviewOpen] = useState(false);
   const [isExportingInvitation, setIsExportingInvitation] = useState(false);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const exportInvitationRef = useRef<HTMLDivElement | null>(null);
 
   const visibleInvitationCode = guest.accessCode ?? guest.invitationCode;
   const isWhatsAppReady = Boolean(normalizeWhatsAppPhoneNumber(guest.whatsapp));
+  const canRegenerateGuest = canRegenerate && guest.admissionStatus !== "Ingresó" && guest.admissionStatus !== "Anulada" && guest.reservationStatus !== "Cancelled";
+  const handleRegenerate = () => {
+    if (!canRegenerateGuest || isRegenerating) return;
+    confirm({
+      title: "Regenerar QR",
+      description: "El QR actual dejará de funcionar y se generará uno nuevo. El invitado y su reserva no cambiarán.",
+      confirmLabel: "Regenerar QR",
+      cancelLabel: "Cancelar",
+      tone: "warning",
+      onConfirm: () => {
+        void (async () => {
+          setIsRegenerating(true);
+          try {
+            await onRegenerate(guest.id);
+            showToast({ title: "QR regenerado", description: "La nueva credencial quedó disponible para la invitación.", tone: "success" });
+          } catch (error) {
+            showToast({ title: "No se pudo regenerar el QR", description: error instanceof Error ? error.message : "La credencial no pudo actualizarse.", tone: "error" });
+          } finally { setIsRegenerating(false); }
+        })();
+      },
+    });
+  };
   const reservationHolderName = useMemo(
     () =>
       reservations.find((reservation) => reservation.code === guest.reservationCode || reservation.id === guest.reservationCode)?.holderName ??
@@ -631,6 +660,11 @@ function GuestDrawer({
                 className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
               >
                 Editar
+              </button>
+            ) : null}
+            {canRegenerateGuest ? (
+              <button type="button" onClick={handleRegenerate} disabled={isRegenerating} className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60">
+                {isRegenerating ? "Regenerando…" : "Regenerar QR"}
               </button>
             ) : null}
           </div>

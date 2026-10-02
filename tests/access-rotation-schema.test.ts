@@ -30,3 +30,16 @@ test("Supabase legacy register cannot create an independent successful admission
   assert.match(source, /Direct legacy admission is disabled; use the authoritative atomic check-in flow/);
   assert.match(source, /persistCompletedAtomic/);
 });
+
+test("credential rotation is wired through the repository, service permission, and Guest UI", () => {
+  const repository = readFileSync("repositories/supabase-workspace-repositories.ts", "utf8");
+  const service = readFileSync("services/workspace-service.tsx", "utf8");
+  const ui = readFileSync("features/customers/components/guest-directory.tsx", "utf8");
+  assert.match(repository, /rotate_guest_access_credential_atomic/);
+  assert.match(service, /requirePermission\("access\.regenerate"\)/);
+  assert.match(ui, /Regenerar QR/);
+  assert.match(ui, /El QR actual dejará de funcionar/);
+  assert.match(ui, /admissionStatus !== "Ingresó"/);
+  assert.match(ui, /reservationStatus !== "Cancelled"/);
+  assert.doesNotMatch(ui, /rotate_guest_access_credential_atomic/);
+});

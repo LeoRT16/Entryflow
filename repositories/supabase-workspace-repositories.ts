@@ -246,6 +246,7 @@ export type SupabaseWorkspaceRepositories = {
   guests: SupabaseCrudRepository<Guest> & {
     createWithAccessOrdinal(guest: Guest): Promise<Guest>;
     prepareAuthoritativeAccess(guest: Guest): Promise<Guest>;
+    rotateGuestAccessCredential(guestId: string): Promise<{ guestId: string; accessGrantId: string; accessCode: string; qrToken: string }>;
     replaceReservationGuest(input: { reservationId: string; guestId: string; replacement: Pick<Guest, "guestName" | "carnet" | "whatsapp">; reason?: string }): Promise<{ guest: Guest; accessGrantId: string; accessCode: string; qrToken: string; sourceGuestId: string }>;
     moveToTable(guestId: string, tableId: string): Promise<void>;
     moveGuestToResourceAtomic(input: { guestId: string; destinationResourceId: string }): Promise<GuestMoveAtomicResult>;
@@ -883,6 +884,15 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     const row = (Array.isArray(data) ? data[0] : data) as { access_grant_id?: string; access_code?: string; qr_token?: string } | null;
     if (!row?.access_grant_id) throw new Error("Malformed authoritative access response.");
     return { ...guest, accessGrantId: row.access_grant_id, accessCode: row.access_code ?? guest.accessCode, qrToken: row.qr_token ?? guest.qrToken };
+  };
+
+  guests.rotateGuestAccessCredential = async (guestId) => {
+    if (!client) throw new Error("Supabase client is unavailable.");
+    const { data, error } = await client.rpc("rotate_guest_access_credential_atomic" as never, { p_guest_id: guestId } as never);
+    if (error) throw error;
+    const row = (Array.isArray(data) ? data[0] : data) as { guest_id?: string; access_grant_id?: string; access_code?: string; qr_token?: string } | null;
+    if (!row?.guest_id || !row.access_grant_id || !row.access_code || !row.qr_token) throw new Error("Malformed credential rotation response.");
+    return { guestId: row.guest_id, accessGrantId: row.access_grant_id, accessCode: row.access_code, qrToken: row.qr_token };
   };
 
   const tables = buildCrudRepository<TableRecord, TableRow>({

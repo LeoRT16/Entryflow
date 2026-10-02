@@ -357,6 +357,7 @@ type WorkspaceServiceValue = {
     whatsapp: string;
   }) => Promise<Guest>;
   updateGuestWhatsApp: (guestId: string, whatsapp: string) => Promise<Guest>;
+  rotateGuestAccessCredential: (guestId: string) => Promise<Guest>;
   releaseTable: (tableId: string) => void;
   closeTable: (tableId: string) => void;
   createEvent: (event: PlatformEvent) => Promise<PlatformEvent | undefined>;
@@ -2589,6 +2590,19 @@ export function WorkspaceServiceProvider({
     [captureSnapshot, currentAccount.displayName, currentEvent, guests, notify, repositories.guests, requirePermission, reservations, restoreSnapshot],
   );
 
+  const rotateGuestAccessCredential = useCallback(async (guestId: string) => {
+    requirePermission("access.regenerate");
+    const guest = guests.find((item) => item.id === guestId);
+    if (!guest || guest.eventId !== currentEvent.id) throw new Error("Guest not found.");
+    if (guest.admissionStatus === "Ingresó" || guest.admissionStatus === "Anulada" || guest.reservationStatus === "Cancelled") {
+      throw new Error("No se puede regenerar la credencial de este invitado.");
+    }
+    const result = await repositories.guests.rotateGuestAccessCredential(guestId);
+    const nextGuest = { ...guest, accessGrantId: result.accessGrantId, accessCode: result.accessCode, qrToken: result.qrToken };
+    setGuests((current) => current.map((item) => item.id === guestId ? nextGuest : item));
+    return nextGuest;
+  }, [currentEvent.id, guests, repositories.guests, requirePermission]);
+
   const updateGuestProfile = useCallback(
     async ({ guestId, guestName, carnet, whatsapp }: { guestId: string; guestName: string; carnet: string; whatsapp: string }) => {
       requirePermission("guest.edit");
@@ -4118,6 +4132,7 @@ export function WorkspaceServiceProvider({
       moveGuestToTable,
       updateGuestProfile,
       updateGuestWhatsApp,
+      rotateGuestAccessCredential,
       releaseTable,
       closeTable,
       createEvent,

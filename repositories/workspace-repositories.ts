@@ -54,6 +54,7 @@ export type ReleaseReservationTableAtomicResult = { reservation_id: string; rele
 export type GuestRepository = CrudRepository<Guest> & {
   createWithAccessOrdinal(guest: Guest): Promise<Guest>;
   prepareAuthoritativeAccess(guest: Guest): Promise<Guest>;
+  rotateGuestAccessCredential(guestId: string): Promise<{ guestId: string; accessGrantId: string; accessCode: string; qrToken: string }>;
   replaceReservationGuest(input: { reservationId: string; guestId: string; replacement: Pick<Guest, "guestName" | "carnet" | "whatsapp">; reason?: string }): Promise<{ guest: Guest; accessGrantId: string; accessCode: string; qrToken: string; sourceGuestId: string }>;
   moveToTable(guestId: string, tableId: string): void;
   moveGuestToResourceAtomic(input: { guestId: string; destinationResourceId: string }): Promise<GuestMoveAtomicResult>;
@@ -401,6 +402,7 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       delete: notImplemented,
       createWithAccessOrdinal: notImplemented,
       prepareAuthoritativeAccess: async (guest) => guest,
+      rotateGuestAccessCredential: async () => { throw new Error("Credential rotation is not supported by the memory repository."); },
       replaceReservationGuest: async () => { throw new Error("Guest replacement is not supported by the memory repository."); },
       moveToTable: notImplemented,
       moveGuestToResourceAtomic: notImplemented,
