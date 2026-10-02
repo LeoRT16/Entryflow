@@ -358,6 +358,7 @@ type WorkspaceServiceValue = {
   }) => Promise<Guest>;
   updateGuestWhatsApp: (guestId: string, whatsapp: string) => Promise<Guest>;
   rotateGuestAccessCredential: (guestId: string) => Promise<Guest>;
+  replaceReservationGuest: (input: { reservationId: string; guestId: string; guestName: string; carnet: string; whatsapp: string; reason?: string }) => Promise<Guest>;
   releaseTable: (tableId: string) => void;
   closeTable: (tableId: string) => void;
   createEvent: (event: PlatformEvent) => Promise<PlatformEvent | undefined>;
@@ -2603,6 +2604,19 @@ export function WorkspaceServiceProvider({
     return nextGuest;
   }, [currentEvent.id, guests, repositories.guests, requirePermission]);
 
+  const replaceReservationGuest = useCallback(async ({ reservationId, guestId, guestName, carnet, whatsapp, reason }: { reservationId: string; guestId: string; guestName: string; carnet: string; whatsapp: string; reason?: string }) => {
+    requirePermission("reservation.edit");
+    const reservation = reservations.find((item) => item.id === reservationId && item.eventId === currentEvent.id);
+    const source = guests.find((item) => item.id === guestId && item.reservationId === reservationId && item.eventId === currentEvent.id);
+    if (!reservation || !source) throw new Error("El invitado no pertenece a la reserva activa.");
+    if (source.admissionStatus === "Ingresó" || source.admissionStatus === "Anulada" || source.reservationStatus === "Cancelled" || source.replacedByGuestId) throw new Error("No se puede reemplazar este invitado.");
+    const result = await repositories.guests.replaceReservationGuest({ reservationId, guestId, replacement: { guestName, carnet, whatsapp }, reason });
+    const replacement = { ...result.guest, accessGrantId: result.accessGrantId, accessCode: result.accessCode, qrToken: result.qrToken, replacementOfGuestId: guestId };
+    setGuests((current) => [...current.map((item) => item.id === guestId ? { ...item, admissionStatus: "Anulada" as const, reservationStatus: "Cancelled" as const, qrStatus: "Anulado" as const, tableId: undefined, tableName: undefined, replacedByGuestId: replacement.id } : item), replacement]);
+    setReservations((current) => current.map((item) => item.id === reservationId ? { ...item, guestIds: [...new Set([...(item.guestIds ?? []), replacement.id])] } : item));
+    return replacement;
+  }, [currentEvent.id, guests, repositories.guests, requirePermission, reservations]);
+
   const updateGuestProfile = useCallback(
     async ({ guestId, guestName, carnet, whatsapp }: { guestId: string; guestName: string; carnet: string; whatsapp: string }) => {
       requirePermission("guest.edit");
@@ -4133,6 +4147,7 @@ export function WorkspaceServiceProvider({
       updateGuestProfile,
       updateGuestWhatsApp,
       rotateGuestAccessCredential,
+      replaceReservationGuest,
       releaseTable,
       closeTable,
       createEvent,

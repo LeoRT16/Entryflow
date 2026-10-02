@@ -87,6 +87,7 @@ type ReservationFlowWorkspaceProps = Pick<
   | "updateReservationGuest"
   | "updateGuestProfile"
   | "rotateGuestAccessCredential"
+  | "replaceReservationGuest"
   | "setGuestsState"
   | "setReservationStatus"
   | "registerCheckIn"
@@ -154,6 +155,7 @@ export default function ReservationFlow() {
       updateReservationGuest={store.updateReservationGuest}
       updateGuestProfile={store.updateGuestProfile}
       rotateGuestAccessCredential={store.rotateGuestAccessCredential}
+      replaceReservationGuest={store.replaceReservationGuest}
       setGuestsState={store.setGuestsState}
       setReservationStatus={store.setReservationStatus}
       registerCheckIn={store.registerCheckIn}
@@ -189,6 +191,7 @@ function ReservationFlowWorkspace({
   updateReservationGuest,
   updateGuestProfile,
   rotateGuestAccessCredential,
+  replaceReservationGuest,
   setGuestsState,
   setReservationStatus,
   registerCheckIn,
@@ -1350,6 +1353,8 @@ function ReservationFlowWorkspace({
         onSave={handleSaveGuestProfile}
         canRegenerate={can("access.regenerate")}
         onRegenerate={rotateGuestAccessCredential}
+        canReplace={can("reservation.edit")}
+        onReplace={replaceReservationGuest}
       />
     </div>
   );

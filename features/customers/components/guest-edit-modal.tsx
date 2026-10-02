@@ -16,9 +16,11 @@ type GuestEditModalProps = {
   onSave: (input: GuestProfileUpdateInput & { guestId: string }) => Promise<GuestRecord | undefined>;
   canRegenerate?: boolean;
   onRegenerate?: (guestId: string) => Promise<GuestRecord>;
+  canReplace?: boolean;
+  onReplace?: (input: { reservationId: string; guestId: string; guestName: string; carnet: string; whatsapp: string; reason?: string }) => Promise<GuestRecord>;
 };
 
-export default function GuestEditModal({ open, guest, onClose, onSave, canRegenerate = false, onRegenerate }: GuestEditModalProps) {
+export default function GuestEditModal({ open, guest, onClose, onSave, canRegenerate = false, onRegenerate, canReplace = false, onReplace }: GuestEditModalProps) {
   const { showToast, confirm } = useFeedback();
   const [guestName, setGuestName] = useState(() => guest?.guestName ?? "");
   const [carnet, setCarnet] = useState(() => guest?.carnet ?? "");
@@ -26,9 +28,19 @@ export default function GuestEditModal({ open, guest, onClose, onSave, canRegene
   const [fieldErrors, setFieldErrors] = useState<{ guestName?: string; whatsapp?: string }>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isReplacing, setIsReplacing] = useState(false);
+  const [replacementOpen, setReplacementOpen] = useState(false);
+  const [replacementName, setReplacementName] = useState("");
+  const [replacementReason, setReplacementReason] = useState("");
 
   const title = guest?.guestName ?? "Editar invitado";
   const canRegenerateGuest = Boolean(onRegenerate && canRegenerate && guest && guest.admissionStatus !== "Ingresó" && guest.admissionStatus !== "Anulada" && guest.reservationStatus !== "Cancelled");
+  const canReplaceGuest = Boolean(onReplace && canReplace && guest && guest.admissionStatus !== "Ingresó" && guest.admissionStatus !== "Anulada" && guest.reservationStatus !== "Cancelled" && !guest.replacedByGuestId);
+  const handleReplace = () => {
+    if (!guest || !guest.reservationId || !onReplace || !canReplaceGuest || isReplacing || !replacementName.trim()) return;
+    const reservationId = guest.reservationId;
+    confirm({ title: "Reemplazar invitado", description: "Este invitado quedará en el historial, pero su acceso actual será anulado. El nuevo invitado ocupará el mismo acceso y lugar. El QR anterior dejará de funcionar y esto no agrega un acceso adicional.", confirmLabel: "Reemplazar invitado", cancelLabel: "Cancelar", tone: "warning", onConfirm: () => { void (async () => { setIsReplacing(true); try { await onReplace({ reservationId, guestId: guest.id, guestName: replacementName.trim(), carnet, whatsapp, reason: replacementReason.trim() || undefined }); showToast({ title: "Invitado reemplazado", description: "El nuevo invitado quedó disponible para la invitación.", tone: "success" }); setReplacementOpen(false); setReplacementName(""); setReplacementReason(""); onClose(); } catch (error) { showToast({ title: "No se pudo reemplazar el invitado", description: error && typeof error === "object" && "message" in error ? String(error.message) : "La operación no pudo completarse.", tone: "error" }); } finally { setIsReplacing(false); } })(); } });
+  };
   const handleRegenerate = () => {
     if (!guest || !onRegenerate || !canRegenerateGuest || isRegenerating) return;
     confirm({ title: "Regenerar QR", description: "El QR actual dejará de funcionar y se generará uno nuevo. El invitado y su reserva no cambiarán.", confirmLabel: "Regenerar QR", cancelLabel: "Cancelar", tone: "warning", onConfirm: () => { void (async () => { setIsRegenerating(true); try { await onRegenerate(guest.id); showToast({ title: "QR regenerado", description: "La nueva credencial quedó disponible para la invitación.", tone: "success" }); } catch (error) { showToast({ title: "No se pudo regenerar el QR", description: error instanceof Error ? error.message : "La credencial no pudo actualizarse.", tone: "error" }); } finally { setIsRegenerating(false); } })(); } });
@@ -185,6 +197,7 @@ export default function GuestEditModal({ open, guest, onClose, onSave, canRegene
             </section>
 
             <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-white/10 pt-4">
+              {canReplaceGuest ? <button type="button" onClick={() => setReplacementOpen((value) => !value)} disabled={isReplacing || isSaving} className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 text-sm font-medium text-rose-50 disabled:opacity-60">Reemplazar invitado</button> : null}
               {canRegenerateGuest ? <button type="button" onClick={() => void handleRegenerate()} disabled={isRegenerating || isSaving} className="inline-flex h-11 items-center justify-center rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60">{isRegenerating ? "Regenerando…" : "Regenerar QR"}</button> : null}
               <button
                 type="button"
@@ -202,6 +215,7 @@ export default function GuestEditModal({ open, guest, onClose, onSave, canRegene
                 {isSaving ? "Guardando..." : "Guardar cambios"}
               </button>
             </div>
+            {replacementOpen && canReplaceGuest ? <section className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/[0.04] p-4"><p className="text-sm font-medium text-rose-50">Nuevo invitado</p><input value={replacementName} onChange={(event) => setReplacementName(event.target.value)} placeholder="Nombre del nuevo invitado *" className="mt-3 h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white" /><input value={carnet} onChange={(event) => setCarnet(event.target.value)} placeholder="Carnet (opcional)" className="mt-3 h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white" /><input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} placeholder="WhatsApp (opcional)" className="mt-3 h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white" /><textarea value={replacementReason} onChange={(event) => setReplacementReason(event.target.value)} placeholder="Motivo (opcional)" className="mt-3 min-h-20 w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-white" /><button type="button" onClick={handleReplace} disabled={!replacementName.trim() || isReplacing} className="mt-3 inline-flex h-10 items-center rounded-xl bg-rose-400/20 px-4 text-sm text-rose-50 disabled:opacity-50">{isReplacing ? "Reemplazando…" : "Continuar"}</button></section> : null}
 
             <p className="mt-3 text-xs leading-5 text-slate-500">
               El QR, el código de acceso, el historial de entregas y el estado de ingreso no cambian con esta edición.

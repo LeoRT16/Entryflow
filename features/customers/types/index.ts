@@ -57,6 +57,7 @@ export type OperatorActivityItem = {
 
 export type GuestRecord = {
   id: string;
+  reservationId?: string;
   guestName: string;
   reservationName: string;
   reservationCode: string;
@@ -64,6 +65,9 @@ export type GuestRecord = {
   accessGrantId?: string;
   accessCode?: string;
   qrToken?: string;
+  accessSlotId?: string;
+  replacementOfGuestId?: string;
+  replacedByGuestId?: string;
   tableId?: string;
   tableName?: string;
   eventStatus: EventOption["status"];

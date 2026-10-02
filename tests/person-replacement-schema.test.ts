@@ -3,6 +3,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const sql = readFileSync("supabase/migrations/20261009000000_phase5d_atomic_guest_replacement.sql", "utf8");
+const correctiveSql = readFileSync("supabase/migrations/20261012000000_phase5d_atomic_guest_replacement_pgcrypto_fix.sql", "utf8");
+
+test("replacement corrective migration qualifies pgcrypto without broadening search_path", () => {
+  assert.match(correctiveSql, /extensions\.gen_random_bytes\(6\)/);
+  assert.match(correctiveSql, /extensions\.gen_random_bytes\(24\)/);
+  assert.match(correctiveSql, /search_path=public,pg_temp/);
+  assert.doesNotMatch(correctiveSql, /search_path\s*=\s*public\s*,\s*extensions/);
+});
 
 test("person replacement has a durable slot and one atomic boundary", () => {
   assert.match(sql, /create table if not exists public\.reservation_access_slots/);

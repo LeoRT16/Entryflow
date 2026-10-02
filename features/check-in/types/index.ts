@@ -106,6 +106,9 @@ export type Guest = {
   accessCode?: string;
   /** Token opaco que debe codificar el QR escaneable. */
   qrToken?: string;
+  accessSlotId?: string;
+  replacementOfGuestId?: string;
+  replacedByGuestId?: string;
   tableId?: string;
   tableName?: string;
   eventStatus: "En curso" | "Próximo";
