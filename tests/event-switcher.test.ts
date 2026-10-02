@@ -337,6 +337,26 @@ test("reload preserves explicit event across reconstructed collections and trans
   assert.equal(resolveReloadCurrentEventId(events, "org-1", "event-c", "event-a"), "event-c");
 });
 
+test("preference restoration keeps an empty event collection from overwriting storage while loading", () => {
+  const workspace = buildWorkspace({
+    organizations: [{ id: "org-1", name: "Org", slug: "org", status: "active", timezone: "America/La_Paz", branding: {}, settings: {} }],
+    profiles: [{ id: "profile-1", organizationId: "org-1", userId: "user-1", roleId: "role-1", displayName: "Owner", attributes: {}, status: "active", createdAt: "2026-08-14T10:00:00.000Z", updatedAt: "2026-08-14T10:00:00.000Z" }],
+    events: [],
+    currentOrganizationId: "org-1",
+    currentEventId: "",
+    currentProfileId: "profile-1",
+  });
+
+  withLocalStorage({
+    "entryflow.currentOrganizationId": "org-1",
+    "entryflow.currentEventId": "event-b",
+    "entryflow.currentProfileId": "profile-1",
+  }, () => {
+    const selection = resolveWorkspacePreferenceSelection(workspace, "user-1");
+    assert.equal(selection.currentEventId, "");
+  });
+});
+
 test("event selection never falls back to another organization", () => {
   const events: Event[] = [
     { id: "event-a", organizationId: "org-a", name: "A", eventType: "custom", status: "live", startAt: "2026-08-14 20:00", timezone: "America/La_Paz", venue: "Venue A", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] } as Event,

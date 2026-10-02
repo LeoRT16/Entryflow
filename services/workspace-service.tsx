@@ -1207,7 +1207,7 @@ export function WorkspaceServiceProvider({
   }, [currentEventId, currentOrganizationId, currentProfileId]);
 
   useEffect(() => {
-    if (restoredWorkspacePreferenceRef.current || !browserAuthReady || !organizations.length) {
+    if (restoredWorkspacePreferenceRef.current || !browserAuthReady || status === "loading" || !organizations.length) {
       return;
     }
 
@@ -1230,7 +1230,7 @@ export function WorkspaceServiceProvider({
       setCurrentProfileIdState(restoredSelection.currentProfileId);
     });
     persistWorkspaceSelection(restoredSelection);
-  }, [browserAuthReady, currentEventId, currentOrganizationId, currentProfileId, events, initialCurrentUserId, organizations, profiles]);
+  }, [browserAuthReady, currentEventId, currentOrganizationId, currentProfileId, events, initialCurrentUserId, organizations, profiles, status]);
 
   useEffect(() => {
     consumedAccessGrantIdsRef.current = new Set(
