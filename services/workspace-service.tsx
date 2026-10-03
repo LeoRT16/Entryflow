@@ -723,6 +723,20 @@ export function shouldPersistWorkspaceSelection({
   return preferenceHydrated && (Boolean(currentEventId) || !persistedEventId);
 }
 
+export function shouldReconcileBootstrapRuntimeEvent({
+  reconciled,
+  authoritative,
+  currentEventId,
+  initialSelectionEventId,
+}: {
+  reconciled: boolean;
+  authoritative: boolean;
+  currentEventId: string;
+  initialSelectionEventId: string;
+}) {
+  return !reconciled && authoritative && !currentEventId && Boolean(initialSelectionEventId);
+}
+
 function getAccountSelection({
   users,
   profiles,
@@ -1269,9 +1283,27 @@ export function WorkspaceServiceProvider({
   const [browserAuthReady, setBrowserAuthReady] = useState(() => !hasSupabaseConfig());
   const hydratedRef = useRef(hasWorkspaceData(initialWorkspace) || !hasSupabaseConfig());
   const restoredWorkspacePreferenceRef = useRef(false);
+  const bootstrapRuntimeReconciledRef = useRef(false);
   const reloadWorkspaceRef = useRef<() => Promise<void>>(async () => {});
   const reloadGenerationRef = useRef(0);
   const checkInSubmissionInFlightRef = useRef(false);
+
+  useEffect(() => {
+    const authoritativeBootstrap = Boolean(initialWorkspace?.organizations.length && initialWorkspace?.events.length);
+    if (shouldReconcileBootstrapRuntimeEvent({
+      reconciled: bootstrapRuntimeReconciledRef.current,
+      authoritative: authoritativeBootstrap,
+      currentEventId,
+      initialSelectionEventId: initialSelection.currentEventId,
+    })) {
+      bootstrapRuntimeReconciledRef.current = true;
+      setCurrentEventIdWithTrace(initialSelection.currentEventId, "bootstrap-runtime-reconciliation");
+      return;
+    }
+    if (authoritativeBootstrap) {
+      bootstrapRuntimeReconciledRef.current = true;
+    }
+  }, [currentEventId, initialSelection.currentEventId, initialWorkspace, setCurrentEventIdWithTrace]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !restoredWorkspacePreferenceRef.current) {

@@ -20,6 +20,7 @@ import {
   resolveWorkspaceBootstrapSelection,
   canRestoreWorkspacePreference,
   shouldPersistWorkspaceSelection,
+  shouldReconcileBootstrapRuntimeEvent,
 } from "../services/workspace-service";
 import type { WorkspaceBootstrap } from "../services/workspace-loader";
 import type { Event } from "../features/domain/types";
@@ -366,6 +367,21 @@ test("hydration does not let an empty runtime event overwrite persisted B", () =
   assert.equal(shouldPersistWorkspaceSelection({ preferenceHydrated: true, currentEventId: "event-b", persistedEventId: "event-b" }), true);
   assert.equal(shouldPersistWorkspaceSelection({ preferenceHydrated: true, currentEventId: "", persistedEventId: "" }), true);
   assert.equal(shouldPersistWorkspaceSelection({ preferenceHydrated: false, currentEventId: "event-b", persistedEventId: "event-b" }), false);
+});
+
+test("bootstrap reconciliation hydrates B once and preserves an explicit C", () => {
+  const reconcile = (state: { reconciled: boolean; currentEventId: string }, authoritative: boolean, initialSelectionEventId: string) => {
+    if (shouldReconcileBootstrapRuntimeEvent({ ...state, authoritative, initialSelectionEventId })) {
+      return { reconciled: true, currentEventId: initialSelectionEventId };
+    }
+    return { ...state, reconciled: state.reconciled || authoritative };
+  };
+
+  let state = reconcile({ reconciled: false, currentEventId: "" }, true, "event-b");
+  assert.equal(state.currentEventId, "event-b");
+  state = { ...state, currentEventId: "event-c" };
+  state = reconcile(state, true, "event-b");
+  assert.equal(state.currentEventId, "event-c");
 });
 
 test("cold bootstrap prefers persisted B over loader live default A", () => {
