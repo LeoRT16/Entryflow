@@ -19,6 +19,7 @@ import {
   resolveWorkspacePreferenceSelection,
   resolveWorkspaceBootstrapSelection,
   canRestoreWorkspacePreference,
+  shouldPersistWorkspaceSelection,
 } from "../services/workspace-service";
 import type { WorkspaceBootstrap } from "../services/workspace-loader";
 import type { Event } from "../features/domain/types";
@@ -358,6 +359,13 @@ test("preference restoration keeps an empty event collection from overwriting st
     const selection = resolveWorkspacePreferenceSelection(workspace, "user-1");
     assert.equal(selection.currentEventId, "");
   });
+});
+
+test("hydration does not let an empty runtime event overwrite persisted B", () => {
+  assert.equal(shouldPersistWorkspaceSelection({ preferenceHydrated: true, currentEventId: "", persistedEventId: "event-b" }), false);
+  assert.equal(shouldPersistWorkspaceSelection({ preferenceHydrated: true, currentEventId: "event-b", persistedEventId: "event-b" }), true);
+  assert.equal(shouldPersistWorkspaceSelection({ preferenceHydrated: true, currentEventId: "", persistedEventId: "" }), true);
+  assert.equal(shouldPersistWorkspaceSelection({ preferenceHydrated: false, currentEventId: "event-b", persistedEventId: "event-b" }), false);
 });
 
 test("cold bootstrap prefers persisted B over loader live default A", () => {

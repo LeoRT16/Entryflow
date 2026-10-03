@@ -657,10 +657,12 @@ export function resolveOrganizationSwitchState({
 }
 
 function persistWorkspaceSelection({
+  source = "workspace-selection-persist",
   currentOrganizationId,
   currentEventId,
   currentProfileId,
 }: {
+  source?: string;
   currentOrganizationId: string;
   currentEventId: string;
   currentProfileId: string;
@@ -669,7 +671,7 @@ function persistWorkspaceSelection({
     return;
   }
 
-  traceEventBoot({ source: "persistWorkspaceSelection", phase: "before", runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId });
+  traceEventBoot({ source, phase: "before", runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId });
 
   window.localStorage.setItem("entryflow.currentOrganizationId", currentOrganizationId);
   window.localStorage.setItem("entryflow.currentEventId", currentEventId);
@@ -692,6 +694,18 @@ export function canRestoreWorkspacePreference({
   const allowed = browserAuthReady && status !== "loading" && organizationCount > 0 && !(persistedEventId && eventCount === 0);
   traceEventBoot({ source: "canRestoreWorkspacePreference", phase: "resolved", nextEventId: allowed ? persistedEventId : "", status, eventIds: [] });
   return allowed;
+}
+
+export function shouldPersistWorkspaceSelection({
+  preferenceHydrated,
+  currentEventId,
+  persistedEventId,
+}: {
+  preferenceHydrated: boolean;
+  currentEventId: string;
+  persistedEventId: string;
+}) {
+  return preferenceHydrated && (Boolean(currentEventId) || !persistedEventId);
 }
 
 function getAccountSelection({
@@ -1236,8 +1250,15 @@ export function WorkspaceServiceProvider({
       return;
     }
 
+    const persistedEventId = readWorkspacePreference("entryflow.currentEventId");
+    if (!shouldPersistWorkspaceSelection({ preferenceHydrated: restoredWorkspacePreferenceRef.current, currentEventId, persistedEventId })) {
+      traceEventBoot({ source: "state-persistence-effect", phase: "skip-unhydrated-empty", runtimeEventId: currentEventId, nextEventId: persistedEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
+      return;
+    }
+
     traceEventBoot({ source: "state-persistence-effect", phase: "before", runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
     persistWorkspaceSelection({
+      source: "state-persistence-effect",
       currentOrganizationId,
       currentEventId,
       currentProfileId,
@@ -1276,7 +1297,7 @@ export function WorkspaceServiceProvider({
       setCurrentEventIdState(restoredSelection.currentEventId);
       setCurrentProfileIdState(restoredSelection.currentProfileId);
     });
-    persistWorkspaceSelection(restoredSelection);
+    persistWorkspaceSelection({ ...restoredSelection, source: "preference-restoration" });
   }, [browserAuthReady, currentEventId, currentOrganizationId, currentProfileId, events, initialCurrentUserId, organizations, profiles, status]);
 
   useEffect(() => {
