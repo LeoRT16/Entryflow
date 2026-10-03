@@ -602,10 +602,16 @@ export function resolveWorkspacePreferenceSelection(initialWorkspace: WorkspaceB
     ?? (initialWorkspace?.profiles ?? []).find((item) => item.organizationId === currentOrganizationId && item.userId === currentUserId && !item.deletedAt)
     ?? (initialWorkspace?.profiles ?? []).find((item) => item.organizationId === currentOrganizationId && !item.deletedAt);
   const roleSlug = (initialWorkspace?.roles ?? []).find((role) => role.id === profile?.roleId)?.slug ?? "";
+  const requestedEventId = resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId);
+  const unresolvedRoleKeepsAccessibleEvent = roleSlug === ""
+    && Boolean(profile)
+    && hasAccessibleEvent(initialWorkspace, currentOrganizationId, requestedEventId);
 
   return {
     currentOrganizationId,
-    currentEventId: resolveOperationalEventId(initialWorkspace?.events ?? [], currentOrganizationId, roleSlug, resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId)),
+    currentEventId: unresolvedRoleKeepsAccessibleEvent
+      ? requestedEventId
+      : resolveOperationalEventId(initialWorkspace?.events ?? [], currentOrganizationId, roleSlug, requestedEventId),
     currentProfileId: resolveInitialCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
   };
 }

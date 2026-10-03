@@ -429,6 +429,22 @@ test("cold preference hydration restores published B when bootstrap profile id i
   });
 });
 
+test("preference restoration preserves valid B while the profile role is unresolved", () => {
+  const workspace = buildWorkspace({
+    organizations: [{ id: "org-1", name: "Org", slug: "org", status: "active", timezone: "America/La_Paz", branding: {}, settings: {} }],
+    profiles: [{ id: "profile-1", organizationId: "org-1", userId: "user-1", roleId: "role-owner", displayName: "Owner", attributes: {}, status: "active", createdAt: "2026-08-14T10:00:00.000Z", updatedAt: "2026-08-14T10:00:00.000Z" }],
+    roles: [],
+    events: [{ id: "event-b", organizationId: "org-1", name: "B", eventType: "custom", status: "published", startAt: "2026-08-15 20:00", timezone: "America/La_Paz", venue: "Venue", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] } as Event],
+    currentOrganizationId: "org-1",
+    currentEventId: "event-b",
+    currentProfileId: "profile-1",
+  });
+
+  withLocalStorage({ "entryflow.currentOrganizationId": "org-1", "entryflow.currentEventId": "event-b" }, () => {
+    assert.equal(resolveWorkspacePreferenceSelection(workspace, "user-1").currentEventId, "event-b");
+  });
+});
+
 test("event selection never falls back to another organization", () => {
   const events: Event[] = [
     { id: "event-a", organizationId: "org-a", name: "A", eventType: "custom", status: "live", startAt: "2026-08-14 20:00", timezone: "America/La_Paz", venue: "Venue A", capacity: 100, enabledModules: [], operationalModel: "mixed", admissionMethods: [], resourceTypes: [] } as Event,
