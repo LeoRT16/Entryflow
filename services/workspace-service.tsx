@@ -585,7 +585,9 @@ export function resolveInitialCurrentProfileId(
 
 export function resolveWorkspacePreferenceSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "") {
   const currentOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
-  const profile = (initialWorkspace?.profiles ?? []).find((item) => item.id === initialWorkspace?.currentProfileId && item.userId === currentUserId);
+  const profile = (initialWorkspace?.profiles ?? []).find((item) => item.id === initialWorkspace?.currentProfileId && item.organizationId === currentOrganizationId && item.userId === currentUserId)
+    ?? (initialWorkspace?.profiles ?? []).find((item) => item.organizationId === currentOrganizationId && item.userId === currentUserId && !item.deletedAt)
+    ?? (initialWorkspace?.profiles ?? []).find((item) => item.organizationId === currentOrganizationId && !item.deletedAt);
   const roleSlug = (initialWorkspace?.roles ?? []).find((role) => role.id === profile?.roleId)?.slug ?? "";
 
   return {
