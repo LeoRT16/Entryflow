@@ -445,7 +445,20 @@ function readWorkspacePreference(key: string) {
     return "";
   }
 
-  return window.localStorage.getItem(key)?.trim() ?? "";
+  const value = window.localStorage.getItem(key)?.trim() ?? "";
+  traceEventBoot({ source: "initial-localStorage-read", phase: key, nextEventId: key === "entryflow.currentEventId" ? value : "", organizationId: key === "entryflow.currentOrganizationId" ? value : "" });
+  return value;
+}
+
+function traceEventBoot({ source, phase, runtimeEventId, previousEventId, nextEventId, organizationId, status, eventIds }: {
+  source: string; phase: string; runtimeEventId?: string; previousEventId?: string; nextEventId?: string; organizationId?: string; status?: string; eventIds?: string[];
+}) {
+  if (typeof window === "undefined") return;
+  console.info("[EF_EVENT_BOOT_TRACE]", {
+    source, phase, runtimeEventId: runtimeEventId ?? "", persistedEventId: window.localStorage.getItem("entryflow.currentEventId") ?? "",
+    previousEventId: previousEventId ?? "", nextEventId: nextEventId ?? "", organizationId: organizationId ?? "",
+    persistedOrganizationId: window.localStorage.getItem("entryflow.currentOrganizationId") ?? "", status: status ?? "", eventIds: eventIds ?? [],
+  });
 }
 
 function hasAccessibleOrganization(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string) {
@@ -526,11 +539,13 @@ function resolveBootstrapCurrentProfileId(
 export function resolveWorkspaceBootstrapSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "") {
   const currentOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
 
-  return {
+  const selection = {
     currentOrganizationId,
     currentEventId: resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId),
     currentProfileId: resolveInitialCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
   };
+  traceEventBoot({ source: "resolveWorkspaceBootstrapSelection", phase: "after", runtimeEventId: initialWorkspace?.currentEventId, nextEventId: selection.currentEventId, organizationId: selection.currentOrganizationId, eventIds: initialWorkspace?.events.map((event) => event.id) });
+  return selection;
 }
 
 export function resolveInitialCurrentOrganizationId(initialWorkspace: WorkspaceBootstrap | null | undefined) {
@@ -545,6 +560,7 @@ export function resolveInitialCurrentOrganizationId(initialWorkspace: WorkspaceB
 
 export function resolveInitialCurrentEventId(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string) {
   const storedEventId = readWorkspacePreference("entryflow.currentEventId");
+  traceEventBoot({ source: "resolveInitialCurrentEventId", phase: "before", runtimeEventId: initialWorkspace?.currentEventId, nextEventId: storedEventId, organizationId, eventIds: initialWorkspace?.events.map((event) => event.id) });
 
   if (hasAccessibleEvent(initialWorkspace, organizationId, storedEventId)) {
     return storedEventId;
@@ -653,6 +669,8 @@ function persistWorkspaceSelection({
     return;
   }
 
+  traceEventBoot({ source: "persistWorkspaceSelection", phase: "before", runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId });
+
   window.localStorage.setItem("entryflow.currentOrganizationId", currentOrganizationId);
   window.localStorage.setItem("entryflow.currentEventId", currentEventId);
   window.localStorage.setItem("entryflow.currentProfileId", currentProfileId);
@@ -671,7 +689,9 @@ export function canRestoreWorkspacePreference({
   eventCount: number;
   persistedEventId: string;
 }) {
-  return browserAuthReady && status !== "loading" && organizationCount > 0 && !(persistedEventId && eventCount === 0);
+  const allowed = browserAuthReady && status !== "loading" && organizationCount > 0 && !(persistedEventId && eventCount === 0);
+  traceEventBoot({ source: "canRestoreWorkspacePreference", phase: "resolved", nextEventId: allowed ? persistedEventId : "", status, eventIds: [] });
+  return allowed;
 }
 
 function getAccountSelection({
@@ -1176,6 +1196,7 @@ export function WorkspaceServiceProvider({
   const [profiles, setProfiles] = useState<OrganizationMembership[]>(initialWorkspace?.profiles ?? []);
   const [roles, setRoles] = useState<AccountRolePreset[]>(initialWorkspace?.roles ?? []);
   const [events, setEvents] = useState<PlatformEvent[]>(initialWorkspace?.events ?? []);
+  traceEventBoot({ source: "workspace-initialization", phase: "before-bootstrap-selection", runtimeEventId: initialWorkspace?.currentEventId, organizationId: initialWorkspace?.currentOrganizationId, status: "initializing", eventIds: initialWorkspace?.events.map((event) => event.id) });
   const requestReportingForVenue = useCallback(async (venueId: string | undefined) => {
     if (!venueId) return;
     await Promise.all(events.filter((event) => event.venueId === venueId).map((event) => requestReportingAfterSuccess(event.id)));
@@ -1215,6 +1236,7 @@ export function WorkspaceServiceProvider({
       return;
     }
 
+    traceEventBoot({ source: "state-persistence-effect", phase: "before", runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
     persistWorkspaceSelection({
       currentOrganizationId,
       currentEventId,
@@ -1245,6 +1267,8 @@ export function WorkspaceServiceProvider({
       } as WorkspaceBootstrap,
       initialCurrentUserId,
     );
+
+    traceEventBoot({ source: "preference-restoration", phase: "resolved", runtimeEventId: currentEventId, nextEventId: restoredSelection.currentEventId, organizationId: restoredSelection.currentOrganizationId, status, eventIds: events.map((event) => event.id) });
 
     restoredWorkspacePreferenceRef.current = true;
     startTransition(() => {
@@ -1319,6 +1343,7 @@ export function WorkspaceServiceProvider({
   );
 
   const restoreSnapshot = useCallback((snapshot: ReturnType<typeof captureSnapshot>) => {
+    traceEventBoot({ source: "restoreSnapshot", phase: "before", runtimeEventId: currentEventId, nextEventId: snapshot.currentEventId, organizationId: snapshot.currentOrganizationId, status, eventIds: snapshot.events.map((event) => event.id) });
     setUsers(snapshot.users);
     setRoles(snapshot.roles);
     setProfiles(snapshot.profiles);
@@ -1356,6 +1381,7 @@ export function WorkspaceServiceProvider({
   }, []);
 
   const reloadWorkspace = useCallback(async () => {
+    traceEventBoot({ source: "reloadWorkspace", phase: "before", runtimeEventId: currentEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
     const generation = ++reloadGenerationRef.current;
     try {
       if (getWorkspaceReloadStatus(status) === "loading") {
@@ -1379,6 +1405,7 @@ export function WorkspaceServiceProvider({
         snapshot.currentEventId,
         events,
       );
+      traceEventBoot({ source: "reloadWorkspace", phase: "resolved", runtimeEventId: currentEventId, nextEventId: nextCurrentEventId, organizationId: nextCurrentOrganizationId, status, eventIds: snapshot.events.map((event) => event.id) });
       const nextEvents = snapshot.events.length === 0 && events.length > 0 ? events : snapshot.events;
       const nextCurrentProfileId = initialCurrentUserId
         ? accessibleProfiles.find((profile) => profile.id === currentProfileId && (!nextCurrentOrganizationId || profile.organizationId === nextCurrentOrganizationId))?.id
@@ -1919,6 +1946,7 @@ export function WorkspaceServiceProvider({
     const nextEvent = events.find((event) => event.id === eventId && event.organizationId === currentOrganizationId);
 
     if (nextEvent) {
+      traceEventBoot({ source: "explicit-setCurrentEventId", phase: "before", runtimeEventId: currentEventId, nextEventId: nextEvent.id, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
       setCurrentEventIdState(nextEvent.id);
     }
   }, [currentAccount.roleSlug, currentOrganizationId, events]);
