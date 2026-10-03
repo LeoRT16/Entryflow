@@ -452,13 +452,13 @@ function readWorkspacePreference(key: string) {
 
 let eventBootSequence = 0;
 
-function traceEventBoot({ source, phase, providerInstanceId, runtimeEventId, previousEventId, nextEventId, organizationId, status, eventIds, details }: {
-  source: string; phase: string; providerInstanceId?: string; runtimeEventId?: string; previousEventId?: string; nextEventId?: string; organizationId?: string; status?: string; eventIds?: string[]; details?: Record<string, unknown>;
+function traceEventBoot({ source, phase, providerInstanceId, providerMountId, runtimeEventId, previousEventId, nextEventId, organizationId, status, eventIds, details }: {
+  source: string; phase: string; providerInstanceId?: string; providerMountId?: string; runtimeEventId?: string; previousEventId?: string; nextEventId?: string; organizationId?: string; status?: string; eventIds?: string[]; details?: Record<string, unknown>;
 }) {
   if (typeof window === "undefined") return;
   eventBootSequence += 1;
   console.info("[EF_EVENT_BOOT_TRACE]", {
-    sequence: eventBootSequence, providerInstanceId: providerInstanceId ?? "", source, phase, runtimeEventId: runtimeEventId ?? "", persistedEventId: window.localStorage.getItem("entryflow.currentEventId") ?? "",
+    sequence: eventBootSequence, providerInstanceId: providerInstanceId ?? "", providerMountId: providerMountId ?? "", source, phase, runtimeEventId: runtimeEventId ?? "", persistedEventId: window.localStorage.getItem("entryflow.currentEventId") ?? "",
     previousEventId: previousEventId ?? "", nextEventId: nextEventId ?? "", organizationId: organizationId ?? "",
     persistedOrganizationId: window.localStorage.getItem("entryflow.currentOrganizationId") ?? "", status: status ?? "", eventIds: eventIds ?? [], ...details,
   });
@@ -1210,6 +1210,13 @@ export function WorkspaceServiceProvider({
 }) {
   const { notify } = useFeedback();
   const providerInstanceId = useId();
+  const [providerMountId] = useState(() => createUuid());
+  useEffect(() => {
+    traceEventBoot({ source: "provider-lifecycle", phase: "mount", providerInstanceId, providerMountId });
+    return () => {
+      traceEventBoot({ source: "provider-lifecycle", phase: "unmount", providerInstanceId, providerMountId });
+    };
+  }, [providerInstanceId, providerMountId]);
   const repositories = useMemo(() => createSupabaseWorkspaceRepositories(getSupabaseBrowserClient()), []);
   const requestReportingAfterSuccess = useCallback(async (eventId: string) => {
     try {
@@ -1240,7 +1247,7 @@ export function WorkspaceServiceProvider({
   const [profiles, setProfiles] = useState<OrganizationMembership[]>(initialWorkspace?.profiles ?? []);
   const [roles, setRoles] = useState<AccountRolePreset[]>(initialWorkspace?.roles ?? []);
   const [events, setEvents] = useState<PlatformEvent[]>(initialWorkspace?.events ?? []);
-  traceEventBoot({ source: "workspace-initialization", phase: "before-bootstrap-selection", providerInstanceId, runtimeEventId: initialWorkspace?.currentEventId, organizationId: initialWorkspace?.currentOrganizationId, status: "initializing", eventIds: initialWorkspace?.events.map((event) => event.id) });
+  traceEventBoot({ source: "workspace-initialization", phase: "before-bootstrap-selection", providerInstanceId, providerMountId, runtimeEventId: initialWorkspace?.currentEventId, organizationId: initialWorkspace?.currentOrganizationId, status: "initializing", eventIds: initialWorkspace?.events.map((event) => event.id) });
   const requestReportingForVenue = useCallback(async (venueId: string | undefined) => {
     if (!venueId) return;
     await Promise.all(events.filter((event) => event.venueId === venueId).map((event) => requestReportingAfterSuccess(event.id)));
@@ -1255,7 +1262,7 @@ export function WorkspaceServiceProvider({
   const consumedAccessGrantIdsRef = useRef<Set<string>>(new Set());
   const initialCurrentUserId = initialWorkspace?.currentUserId ?? "";
   const initialSelection = resolveWorkspaceBootstrapSelection(initialWorkspace, initialCurrentUserId, providerInstanceId);
-  traceEventBoot({ source: "workspace-initial-selection", phase: "before-react-state", providerInstanceId, runtimeEventId: initialSelection.currentEventId, nextEventId: initialSelection.currentEventId, organizationId: initialSelection.currentOrganizationId, eventIds: initialWorkspace?.events.map((event) => event.id), details: {
+  traceEventBoot({ source: "workspace-initial-selection", phase: "before-react-state", providerInstanceId, providerMountId, runtimeEventId: initialSelection.currentEventId, nextEventId: initialSelection.currentEventId, organizationId: initialSelection.currentOrganizationId, eventIds: initialWorkspace?.events.map((event) => event.id), details: {
     loaderOrganizationId: initialWorkspace?.currentOrganizationId ?? "", loaderEventId: initialWorkspace?.currentEventId ?? "", loaderProfileId: initialWorkspace?.currentProfileId ?? "",
     resolvedProfileId: initialSelection.currentProfileId, persistedOrganizationId: typeof window === "undefined" ? "" : window.localStorage.getItem("entryflow.currentOrganizationId") ?? "", persistedEventId: typeof window === "undefined" ? "" : window.localStorage.getItem("entryflow.currentEventId") ?? "", persistedProfileId: typeof window === "undefined" ? "" : window.localStorage.getItem("entryflow.currentProfileId") ?? "", profileIds: initialWorkspace?.profiles.map((profile) => profile.id) ?? [],
   } });
@@ -1263,19 +1270,29 @@ export function WorkspaceServiceProvider({
     return initialSelection.currentOrganizationId;
   });
   const [currentEventId, setCurrentEventIdState] = useState(() => {
+    traceEventBoot({
+      source: "currentEventId-useState-initializer",
+      phase: "lazy-initializer",
+      providerInstanceId,
+      providerMountId,
+      runtimeEventId: initialSelection.currentEventId,
+      nextEventId: initialSelection.currentEventId,
+      organizationId: initialSelection.currentOrganizationId,
+      eventIds: events.map((event) => event.id),
+    });
     return initialSelection.currentEventId;
   });
   const setCurrentEventIdWithTrace = useCallback((nextEventId: string, source: string) => {
-    traceEventBoot({ source, phase: "before-state-set", providerInstanceId, previousEventId: currentEventId, nextEventId, runtimeEventId: currentEventId, organizationId: currentOrganizationId, eventIds: events.map((event) => event.id) });
+    traceEventBoot({ source, phase: "before-state-set", providerInstanceId, providerMountId, previousEventId: currentEventId, nextEventId, runtimeEventId: currentEventId, organizationId: currentOrganizationId, eventIds: events.map((event) => event.id) });
     setCurrentEventIdState(nextEventId);
-  }, [currentEventId, currentOrganizationId, events, providerInstanceId]);
+  }, [currentEventId, currentOrganizationId, events, providerInstanceId, providerMountId]);
   useEffect(() => {
-    traceEventBoot({ source: "runtime-currentEventId-committed", phase: "after-state-commit", providerInstanceId, runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, eventIds: events.map((event) => event.id) });
-  }, [currentEventId, currentOrganizationId, events, providerInstanceId]);
+    traceEventBoot({ source: "runtime-currentEventId-committed", phase: "after-state-commit", providerInstanceId, providerMountId, runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, eventIds: events.map((event) => event.id) });
+  }, [currentEventId, currentOrganizationId, events, providerInstanceId, providerMountId]);
   const [currentProfileId, setCurrentProfileIdState] = useState(() => {
     return initialSelection.currentProfileId;
   });
-  traceEventBoot({ source: "workspace-react-state-initialized", phase: "after-useState", providerInstanceId, runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, eventIds: events.map((event) => event.id), details: { initialSelectionEventId: initialSelection.currentEventId, initialSelectionOrganizationId: initialSelection.currentOrganizationId, initialSelectionProfileId: initialSelection.currentProfileId } });
+  traceEventBoot({ source: "workspace-react-state-initialized", phase: "after-useState", providerInstanceId, providerMountId, runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, eventIds: events.map((event) => event.id), details: { initialSelectionEventId: initialSelection.currentEventId, initialSelectionOrganizationId: initialSelection.currentOrganizationId, initialSelectionProfileId: initialSelection.currentProfileId } });
   const [status, setStatus] = useState<WorkspaceServiceStatus>(
     hasWorkspaceData(initialWorkspace) ? "ready" : hasSupabaseConfig() ? "loading" : "empty",
   );
@@ -1312,11 +1329,11 @@ export function WorkspaceServiceProvider({
 
     const persistedEventId = readWorkspacePreference("entryflow.currentEventId");
     if (!shouldPersistWorkspaceSelection({ preferenceHydrated: restoredWorkspacePreferenceRef.current, currentEventId, persistedEventId })) {
-      traceEventBoot({ source: "state-persistence-effect", phase: "skip-unhydrated-empty", runtimeEventId: currentEventId, nextEventId: persistedEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
+      traceEventBoot({ providerMountId, source: "state-persistence-effect", phase: "skip-unhydrated-empty", runtimeEventId: currentEventId, nextEventId: persistedEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
       return;
     }
 
-    traceEventBoot({ source: "state-persistence-effect", phase: "before", runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
+    traceEventBoot({ providerMountId, source: "state-persistence-effect", phase: "before", runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
     persistWorkspaceSelection({
       source: "state-persistence-effect",
       currentOrganizationId,
@@ -1349,7 +1366,7 @@ export function WorkspaceServiceProvider({
       initialCurrentUserId,
     );
 
-    traceEventBoot({ source: "preference-restoration", phase: "resolved", runtimeEventId: currentEventId, nextEventId: restoredSelection.currentEventId, organizationId: restoredSelection.currentOrganizationId, status, eventIds: events.map((event) => event.id) });
+    traceEventBoot({ providerMountId, source: "preference-restoration", phase: "resolved", runtimeEventId: currentEventId, nextEventId: restoredSelection.currentEventId, organizationId: restoredSelection.currentOrganizationId, status, eventIds: events.map((event) => event.id) });
 
     restoredWorkspacePreferenceRef.current = true;
     startTransition(() => {
@@ -1424,7 +1441,7 @@ export function WorkspaceServiceProvider({
   );
 
   const restoreSnapshot = useCallback((snapshot: ReturnType<typeof captureSnapshot>) => {
-    traceEventBoot({ source: "restoreSnapshot", phase: "before", runtimeEventId: currentEventId, nextEventId: snapshot.currentEventId, organizationId: snapshot.currentOrganizationId, status, eventIds: snapshot.events.map((event) => event.id) });
+    traceEventBoot({ providerMountId, source: "restoreSnapshot", phase: "before", runtimeEventId: currentEventId, nextEventId: snapshot.currentEventId, organizationId: snapshot.currentOrganizationId, status, eventIds: snapshot.events.map((event) => event.id) });
     setUsers(snapshot.users);
     setRoles(snapshot.roles);
     setProfiles(snapshot.profiles);
@@ -1462,7 +1479,7 @@ export function WorkspaceServiceProvider({
   }, []);
 
   const reloadWorkspace = useCallback(async () => {
-    traceEventBoot({ source: "reloadWorkspace", phase: "before", runtimeEventId: currentEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
+    traceEventBoot({ providerMountId, source: "reloadWorkspace", phase: "before", runtimeEventId: currentEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
     const generation = ++reloadGenerationRef.current;
     try {
       if (getWorkspaceReloadStatus(status) === "loading") {
@@ -1486,7 +1503,7 @@ export function WorkspaceServiceProvider({
         snapshot.currentEventId,
         events,
       );
-      traceEventBoot({ source: "reloadWorkspace", phase: "resolved", runtimeEventId: currentEventId, nextEventId: nextCurrentEventId, organizationId: nextCurrentOrganizationId, status, eventIds: snapshot.events.map((event) => event.id) });
+      traceEventBoot({ providerMountId, source: "reloadWorkspace", phase: "resolved", runtimeEventId: currentEventId, nextEventId: nextCurrentEventId, organizationId: nextCurrentOrganizationId, status, eventIds: snapshot.events.map((event) => event.id) });
       const nextEvents = snapshot.events.length === 0 && events.length > 0 ? events : snapshot.events;
       const nextCurrentProfileId = initialCurrentUserId
         ? accessibleProfiles.find((profile) => profile.id === currentProfileId && (!nextCurrentOrganizationId || profile.organizationId === nextCurrentOrganizationId))?.id
@@ -2027,7 +2044,7 @@ export function WorkspaceServiceProvider({
     const nextEvent = events.find((event) => event.id === eventId && event.organizationId === currentOrganizationId);
 
     if (nextEvent) {
-      traceEventBoot({ source: "explicit-setCurrentEventId", phase: "before", runtimeEventId: currentEventId, nextEventId: nextEvent.id, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
+      traceEventBoot({ providerMountId, source: "explicit-setCurrentEventId", phase: "before", runtimeEventId: currentEventId, nextEventId: nextEvent.id, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
       setCurrentEventIdWithTrace(nextEvent.id, "explicit-selection");
     }
   }, [currentAccount.roleSlug, currentOrganizationId, events]);
