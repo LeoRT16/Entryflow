@@ -18,6 +18,7 @@ import {
   resolveReloadCurrentEventId,
   resolveWorkspacePreferenceSelection,
   resolveWorkspaceBootstrapSelection,
+  canRestoreWorkspacePreference,
 } from "../services/workspace-service";
 import type { WorkspaceBootstrap } from "../services/workspace-loader";
 import type { Event } from "../features/domain/types";
@@ -352,6 +353,8 @@ test("preference restoration keeps an empty event collection from overwriting st
     "entryflow.currentEventId": "event-b",
     "entryflow.currentProfileId": "profile-1",
   }, () => {
+    assert.equal(canRestoreWorkspacePreference({ browserAuthReady: true, status: "ready", organizationCount: 1, eventCount: 0, persistedEventId: "event-b" }), false);
+    assert.equal(canRestoreWorkspacePreference({ browserAuthReady: true, status: "ready", organizationCount: 1, eventCount: 3, persistedEventId: "event-b" }), true);
     const selection = resolveWorkspacePreferenceSelection(workspace, "user-1");
     assert.equal(selection.currentEventId, "");
   });

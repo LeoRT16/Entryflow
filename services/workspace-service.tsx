@@ -640,40 +640,11 @@ export function resolveOrganizationSwitchState({
   };
 }
 
-function logEventSelectionDiagnostic({
-  source,
-  previousEventId,
-  nextEventId,
-  organizationId,
-  status,
-  events,
-}: {
-  source: string;
-  previousEventId?: string;
-  nextEventId: string;
-  organizationId: string;
-  status?: string;
-  events: PlatformEvent[];
-}) {
-  if (typeof window === "undefined") return;
-  console.info("[EF_EVENT_SELECTION]", {
-    source,
-    previousEventId: previousEventId ?? "",
-    nextEventId,
-    persistedEventId: window.localStorage.getItem("entryflow.currentEventId") ?? "",
-    organizationId,
-    status: status ?? "",
-    eventIds: events.map((event) => event.id),
-  });
-}
-
 function persistWorkspaceSelection({
-  source = "workspace-selection-persist",
   currentOrganizationId,
   currentEventId,
   currentProfileId,
 }: {
-  source?: string;
   currentOrganizationId: string;
   currentEventId: string;
   currentProfileId: string;
@@ -682,10 +653,25 @@ function persistWorkspaceSelection({
     return;
   }
 
-  console.info("[EF_EVENT_SELECTION_PERSIST]", { source, runtimeEventId: currentEventId, value: currentEventId, previousPersistedEventId: window.localStorage.getItem("entryflow.currentEventId") ?? "", organizationId: currentOrganizationId });
   window.localStorage.setItem("entryflow.currentOrganizationId", currentOrganizationId);
   window.localStorage.setItem("entryflow.currentEventId", currentEventId);
   window.localStorage.setItem("entryflow.currentProfileId", currentProfileId);
+}
+
+export function canRestoreWorkspacePreference({
+  browserAuthReady,
+  status,
+  organizationCount,
+  eventCount,
+  persistedEventId,
+}: {
+  browserAuthReady: boolean;
+  status: WorkspaceServiceStatus;
+  organizationCount: number;
+  eventCount: number;
+  persistedEventId: string;
+}) {
+  return browserAuthReady && status !== "loading" && organizationCount > 0 && !(persistedEventId && eventCount === 0);
 }
 
 function getAccountSelection({
@@ -1230,7 +1216,6 @@ export function WorkspaceServiceProvider({
     }
 
     persistWorkspaceSelection({
-      source: "state-persistence-effect",
       currentOrganizationId,
       currentEventId,
       currentProfileId,
@@ -1238,7 +1223,14 @@ export function WorkspaceServiceProvider({
   }, [currentEventId, currentOrganizationId, currentProfileId]);
 
   useEffect(() => {
-    if (restoredWorkspacePreferenceRef.current || !browserAuthReady || status === "loading" || !organizations.length) {
+    const persistedEventId = readWorkspacePreference("entryflow.currentEventId");
+    if (restoredWorkspacePreferenceRef.current || !canRestoreWorkspacePreference({
+      browserAuthReady,
+      status,
+      organizationCount: organizations.length,
+      eventCount: events.length,
+      persistedEventId,
+    })) {
       return;
     }
 
@@ -1260,7 +1252,7 @@ export function WorkspaceServiceProvider({
       setCurrentEventIdState(restoredSelection.currentEventId);
       setCurrentProfileIdState(restoredSelection.currentProfileId);
     });
-    persistWorkspaceSelection({ ...restoredSelection, source: "preference-restoration" });
+    persistWorkspaceSelection(restoredSelection);
   }, [browserAuthReady, currentEventId, currentOrganizationId, currentProfileId, events, initialCurrentUserId, organizations, profiles, status]);
 
   useEffect(() => {
@@ -1349,7 +1341,6 @@ export function WorkspaceServiceProvider({
     setAttempts(snapshot.attempts);
     setPersistedTimelineEvents(snapshot.timelineEvents);
     setCurrentOrganizationIdState(snapshot.currentOrganizationId);
-    logEventSelectionDiagnostic({ source: "restore-snapshot", previousEventId: currentEventId, nextEventId: snapshot.currentEventId, organizationId: snapshot.currentOrganizationId, events: snapshot.events });
     setCurrentEventIdState(snapshot.currentEventId);
     setCurrentProfileIdState(snapshot.currentProfileId);
   }, []);
@@ -1421,7 +1412,6 @@ export function WorkspaceServiceProvider({
       setAttempts(snapshot.attempts);
       setPersistedTimelineEvents(snapshot.timelineEvents);
       setCurrentOrganizationIdState(nextCurrentOrganizationId);
-      logEventSelectionDiagnostic({ source: "reload-workspace", previousEventId: currentEventId, nextEventId: nextCurrentEventId, organizationId: nextCurrentOrganizationId, status, events: snapshot.events });
       setCurrentEventIdState(nextCurrentEventId);
       setCurrentProfileIdState(nextCurrentProfileId);
       const nextStatus =
@@ -1917,7 +1907,6 @@ export function WorkspaceServiceProvider({
 
       setCurrentOrganizationIdState(nextSelection.currentOrganizationId);
       setCurrentProfileIdState(nextSelection.currentProfileId);
-      logEventSelectionDiagnostic({ source: "organization-switch", previousEventId: currentEventId, nextEventId: nextSelection.currentEventId, organizationId: nextSelection.currentOrganizationId, events });
       setCurrentEventIdState(nextSelection.currentEventId);
     },
     [currentAccount.roleSlug, currentEventId, currentProfileId, currentUser?.id, events, initialCurrentUserId, profiles],
@@ -1930,10 +1919,9 @@ export function WorkspaceServiceProvider({
     const nextEvent = events.find((event) => event.id === eventId && event.organizationId === currentOrganizationId);
 
     if (nextEvent) {
-      logEventSelectionDiagnostic({ source: "explicit-selection", previousEventId: currentEventId, nextEventId: nextEvent.id, organizationId: currentOrganizationId, events });
       setCurrentEventIdState(nextEvent.id);
     }
-  }, [currentAccount.roleSlug, currentEventId, currentOrganizationId, events]);
+  }, [currentAccount.roleSlug, currentOrganizationId, events]);
 
   const setCurrentProfileId = useCallback(
     (profileId: string) => {
@@ -2163,7 +2151,6 @@ export function WorkspaceServiceProvider({
         await persist("event", event);
         await requestReportingAfterSuccess(event.id);
         setCurrentOrganizationIdState(event.organizationId);
-        logEventSelectionDiagnostic({ source: "event-created", previousEventId: currentEventId, nextEventId: event.id, organizationId: event.organizationId, events });
         setCurrentEventIdState(event.id);
         return event;
       } catch (exception) {
@@ -2286,7 +2273,6 @@ export function WorkspaceServiceProvider({
 
         setCurrentOrganizationIdState(nextSelection.currentOrganizationId);
         setCurrentProfileIdState(nextSelection.currentProfileId || nextProfile?.id || "");
-        logEventSelectionDiagnostic({ source: "organization-created", previousEventId: currentEventId, nextEventId: nextSelection.currentEventId, organizationId: nextSelection.currentOrganizationId, events });
         setCurrentEventIdState(nextSelection.currentEventId);
         return persistedOrganization.organization;
       } catch (exception) {

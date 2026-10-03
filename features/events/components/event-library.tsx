@@ -75,7 +75,6 @@ export default function EventLibrary() {
   const [editorEventId, setEditorEventId] = useState<string | null>(null);
   const organizationEvents = useMemo(() => getEventsForOrganization(currentOrganization.id, events), [currentOrganization.id, events]);
 
-  console.info("[EF_EVENT_LIBRARY_RENDER]", { currentEventId, organizationId: currentOrganization.id, visibleEventIds: organizationEvents.map((event) => event.id) });
   const organizationVenues = useMemo(() => getVenuesForOrganization(currentOrganization.id, venues), [currentOrganization.id, venues]);
 
   const groupedEvents = useMemo(() => {
