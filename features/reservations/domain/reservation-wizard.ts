@@ -9,6 +9,7 @@ export type ReservationWizardDefaults = {
   date: string;
   time: string;
   guestCount: number;
+  accessQuantity: number;
   reservationType: ReservationType;
   observations: string;
   holderName: string;
@@ -77,6 +78,7 @@ export function createReservationWizardDefaults(currentEvent: Pick<{ name: strin
     date: eventDate ?? currentEvent.startAt,
     time: eventTime ?? "",
     guestCount: 5,
+    accessQuantity: 1,
     reservationType: "Mesa",
     observations: "",
     holderName: "",

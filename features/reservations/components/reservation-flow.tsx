@@ -9,7 +9,7 @@ import ReservationWizardModal, {
 } from "@/features/reservations/components/reservation-wizard-modal";
 import ReservationOperationsBoard from "@/features/reservations/components/reservation-operations-board";
 import GuestEditModal from "@/features/customers/components/guest-edit-modal";
-import { buildGuestDraftsFromGuests, createGuestDraft, isCompleteGuestDraft, syncGuestDraftsWithHolder, syncPresaleFirstGuestDraftWithHolder } from "@/features/reservations/domain/reservation-draft";
+import { buildGuestDraftsFromGuests, createGuestDraft, isCompleteGuestDraft, isPartiallyCompleteGuestDraft, syncGuestDraftsWithHolder, syncPresaleFirstGuestDraftWithHolder } from "@/features/reservations/domain/reservation-draft";
 import {
   deriveFrequentCustomerFromHistory,
   describeReservationSubmissionError,
@@ -210,6 +210,7 @@ function ReservationFlowWorkspace({
   const [date, setDate] = useState(wizardDefaults.date);
   const [time, setTime] = useState(wizardDefaults.time);
   const [guestCount, setGuestCount] = useState(wizardDefaults.guestCount);
+  const [accessQuantity, setAccessQuantity] = useState(wizardDefaults.accessQuantity);
   const [reservationType, setReservationType] = useState<ReservationType>(wizardDefaults.reservationType);
   const [reference, setReference] = useState("");
   const [observations, setObservations] = useState(wizardDefaults.observations);
@@ -267,7 +268,7 @@ function ReservationFlowWorkspace({
     : isPresale
       ? wizardMode === "edit" && editingReservation?.commercialSnapshot?.saleType === "presale"
         ? String(editingReservation.commercialSnapshot.totalPrice ?? 0)
-        : String(commercialConfig.presale.pricePerAccess * guestCount)
+        : String(commercialConfig.presale.pricePerAccess * accessQuantity)
       : amount;
   const eventOptions = useMemo(
     () =>
@@ -326,18 +327,20 @@ function ReservationFlowWorkspace({
           setReference("");
         } else if (next === "Preventa" && current !== "Preventa") {
           setGuestCount(0);
+          setAccessQuantity(1);
           presalePreloadedHolderRef.current = null;
           setGuestDrafts([]);
           setSelectedResourceId("");
         } else if (next !== "Preventa" && current === "Preventa") {
           presalePreloadedHolderRef.current = null;
           setGuestCount(wizardDefaults.guestCount);
+          setAccessQuantity(wizardDefaults.accessQuantity);
           setGuestDrafts([...wizardDefaults.guestDrafts]);
         }
         return next;
       });
     },
-    [presalePreloadedHolderRef, setReference, setReservationType, wizardDefaults.guestCount, wizardDefaults.guestDrafts],
+    [presalePreloadedHolderRef, setReference, setReservationType, wizardDefaults.accessQuantity, wizardDefaults.guestCount, wizardDefaults.guestDrafts],
   );
 
   const setHolderNameForWizard = useCallback<Dispatch<SetStateAction<string>>>(
@@ -571,6 +574,7 @@ function ReservationFlowWorkspace({
       setDate(editingReservation.date);
       setTime(editingReservation.time);
       setGuestCount(Math.max(editingReservationGuests.length, 1));
+      setAccessQuantity(editingReservation?.commercialSnapshot?.quantity ?? Math.max(editingReservationGuests.length, 1));
       setReservationType(editingReservation.reservationType);
       setObservations(editingReservation.notes);
       setHolderName(editingReservation.holderName.split(" ")[0] ?? editingReservation.holderName);
@@ -639,6 +643,7 @@ function ReservationFlowWorkspace({
     setDate(wizardDefaults.date);
     setTime(wizardDefaults.time);
     setGuestCount(wizardDefaults.guestCount);
+    setAccessQuantity(wizardDefaults.accessQuantity);
     setReservationType(wizardDefaults.reservationType);
     setReference("");
     setObservations(wizardDefaults.observations);
@@ -715,7 +720,7 @@ function ReservationFlowWorkspace({
 
   const registeredGuests = useMemo(() => countDraftRegisteredGuests(guestDrafts), [guestDrafts]);
 
-  const pendingGuests = countDraftPendingGuests(guestCount, registeredGuests);
+  const pendingGuests = countDraftPendingGuests(isPresale ? accessQuantity : guestCount, registeredGuests);
 
   const amountForWizard = currentPaymentAmount;
   const paymentDraft = useMemo(
@@ -829,11 +834,8 @@ function ReservationFlowWorkspace({
   }, [closeWizard, isTerminalEvent, isWizardOpen]);
 
   const updateGuestCount = (nextCount: number) => {
-    const sanitizedCount = isPresale ? Math.max(0, Math.min(presaleMaximum, Math.floor(nextCount))) : clampGuestCount(nextCount);
+    const sanitizedCount = clampGuestCount(nextCount);
     setGuestCount(sanitizedCount);
-    if (isPresale && paymentStatus === "Pagado") {
-      setAdvance(String(commercialConfig.presale.pricePerAccess * sanitizedCount));
-    }
     setGuestDrafts((currentGuests) => {
       if (sanitizedCount === currentGuests.length) {
         return currentGuests;
@@ -852,6 +854,13 @@ function ReservationFlowWorkspace({
     });
   };
 
+  const updateAccessQuantity = (nextQuantity: number) => {
+    const sanitizedQuantity = Math.max(1, Math.min(presaleMaximum, Math.floor(nextQuantity)));
+    if (sanitizedQuantity < guestDrafts.length) return;
+    setAccessQuantity(sanitizedQuantity);
+    if (paymentStatus === "Pagado") setAdvance(String(commercialConfig.presale.pricePerAccess * sanitizedQuantity));
+  };
+
   const updateGuest = (
     index: number,
     field: keyof GuestDraft,
@@ -865,14 +874,13 @@ function ReservationFlowWorkspace({
   };
 
   const addGuest = () => {
-    if (isPresale ? guestCount >= presaleMaximum : guestCount >= 10) {
+    if (isPresale ? guestDrafts.length >= accessQuantity : guestCount >= 10) {
       return;
     }
 
     const nextCount = guestCount + 1;
-    setGuestCount(nextCount);
     if (isPresale && paymentStatus === "Pagado") {
-      setAdvance(String(commercialConfig.presale.pricePerAccess * nextCount));
+      setAdvance(String(commercialConfig.presale.pricePerAccess * accessQuantity));
     }
     setGuestDrafts((currentGuests) => [
       ...currentGuests,
@@ -890,11 +898,7 @@ function ReservationFlowWorkspace({
     }
 
     setGuestDrafts((currentGuests) => currentGuests.filter((_, guestIndex) => guestIndex !== index));
-    const nextCount = isPresale ? Math.max(0, guestCount - 1) : clampGuestCount(guestCount - 1);
-    if (isPresale && paymentStatus === "Pagado") {
-      setAdvance(String(commercialConfig.presale.pricePerAccess * nextCount));
-    }
-    setGuestCount(nextCount);
+    if (!isPresale) setGuestCount(clampGuestCount(guestCount - 1));
   };
 
   const goNext = () => {
@@ -913,17 +917,16 @@ function ReservationFlowWorkspace({
         const nextDrafts = syncPresaleFirstGuestDraftWithHolder(currentDrafts, holder, presalePreloadedHolderRef.current);
         presalePreloadedHolderRef.current = holder;
         setGuestDrafts(nextDrafts);
-        setGuestCount(nextDrafts.length);
       } else {
         setGuestDrafts([]);
-        setGuestCount(0);
         presalePreloadedHolderRef.current = null;
       }
     }
 
     if (isPresale && (step === 3 || step === 5)) {
-      const hasCompleteAccesses = guestDrafts.length > 0 && guestDrafts.every(isCompleteGuestDraft);
-      if (!hasCompleteAccesses) {
+      const hasCompleteAccesses = guestDrafts.some(isCompleteGuestDraft);
+      const hasPartialAccess = guestDrafts.some(isPartiallyCompleteGuestDraft);
+      if (!hasCompleteAccesses || hasPartialAccess) {
         setSubmissionError("Agrega al menos un acceso completo con nombre, carnet y WhatsApp.");
         return;
       }
@@ -966,9 +969,9 @@ function ReservationFlowWorkspace({
           eventId: currentEvent.id,
           eventName: currentEvent.name,
           amount: isCourtesy ? "0" : isPresale ? amountForWizard : input.amount,
-          accessQuantity: isPresale ? guestCount : undefined,
+          accessQuantity: isPresale ? accessQuantity : undefined,
           commercialSnapshot: isPresale
-            ? createPresaleCommercialSnapshot(commercialConfig, guestCount)
+            ? createPresaleCommercialSnapshot(commercialConfig, accessQuantity)
             : isCourtesy ? undefined : createReservationCommercialSnapshot(commercialConfig),
           reference: isCourtesy ? reference : undefined,
         };
@@ -978,7 +981,7 @@ function ReservationFlowWorkspace({
           return;
         }
 
-        if (isPresale && (!commercialConfig.presale.enabled || guestCount <= 0 || input.guests.filter(isCompleteGuestDraft).length > guestCount)) {
+        if (isPresale && (!commercialConfig.presale.enabled || accessQuantity <= 0 || input.guests.filter(isCompleteGuestDraft).length > accessQuantity)) {
           setSubmissionError("La Preventa requiere una cantidad positiva y no puede superar sus accesos comprados.");
           return;
         }
@@ -1288,6 +1291,8 @@ function ReservationFlowWorkspace({
           setTime={setTime}
           guestCount={guestCount}
           updateGuestCount={updateGuestCount}
+          accessQuantity={accessQuantity}
+          updateAccessQuantity={updateAccessQuantity}
           reservationType={reservationType}
           setReservationType={setReservationTypeForWizard}
           reference={reference}

@@ -16,6 +16,8 @@ import {
   buildGuestList,
   createGuestDraft,
   syncPresaleFirstGuestDraftWithHolder,
+  isCompleteGuestDraft,
+  isPartiallyCompleteGuestDraft,
   syncGuestDraftsWithHolder,
 } from "../features/reservations/domain/reservation-draft";
 import { createReservationBundle, resolveReservationPaymentDraft } from "../features/reservations/domain/reservation-domain";
@@ -79,6 +81,40 @@ test("presale creates one purchase with one independent access per complete pers
   assert.equal(new Set(reservation.guests.map((guest) => guest.invitationCode)).size, 5);
   assert.equal(reservation.guests.every((guest) => guest.tableId === undefined && guest.tableName === undefined), true);
   assert.equal(reservation.guests.some((guest) => guest.guestName === "Leo Rodríguez"), false);
+});
+
+test("presale keeps purchased quantity separate from materialized guests", () => {
+  const guests = [
+    { ...createGuestDraft(0), name: "Ana", document: "CI-1", whatsapp: "70000001" },
+    { ...createGuestDraft(1), name: "Luis", document: "CI-2", whatsapp: "70000002" },
+  ];
+  const bundle = createReservationBundle({
+    eventId: "event-1", eventName: "Evento", date: "2026-09-02", time: "21:00", reservationType: "Preventa",
+    holderName: "Leo", holderLastName: "R", documentValue: "CI-H", whatsapp: "70000000", email: "",
+    preferences: "", vip: false, frequent: false, notes: "", guests, accessQuantity: 8,
+    amount: "560", advance: "0", paymentMethod: "Efectivo", paymentStatus: "Pendiente", observations: "",
+    commercialSnapshot: createPresaleCommercialSnapshot({ ...defaultEventCommercialConfig, presale: { enabled: true, pricePerAccess: 70 } }, 8),
+  });
+  assert.equal(bundle.reservation.commercialSnapshot?.quantity, 8);
+  assert.equal(bundle.guests.length, 2);
+  assert.equal(countDraftPendingGuests(8, 2), 6);
+  assert.equal(isCompleteGuestDraft(guests[0]), true);
+  assert.equal(isPartiallyCompleteGuestDraft(createGuestDraft(2)), false);
+  assert.equal(isPartiallyCompleteGuestDraft({ ...createGuestDraft(2), name: "Incomplete" }), true);
+});
+
+test("large presale quantities do not require materialized guest drafts", () => {
+  const quantity = 500;
+  const guests = [{ ...createGuestDraft(0), name: "Ana", document: "CI-1", whatsapp: "70000001" }];
+  const bundle = createReservationBundle({
+    eventId: "event-1", eventName: "Evento", date: "2026-09-02", time: "21:00", reservationType: "Preventa",
+    holderName: "Leo", holderLastName: "R", documentValue: "CI-H", whatsapp: "70000000", email: "",
+    preferences: "", vip: false, frequent: false, notes: "", guests, accessQuantity: quantity,
+    amount: "35000", advance: "0", paymentMethod: "Efectivo", paymentStatus: "Pendiente", observations: "",
+    commercialSnapshot: createPresaleCommercialSnapshot({ ...defaultEventCommercialConfig, presale: { enabled: true, pricePerAccess: 70 } }, quantity),
+  });
+  assert.equal(bundle.reservation.commercialSnapshot?.quantity, quantity);
+  assert.equal(bundle.guests.length, 1);
 });
 
 test("mesa still requires a resource while presale allows unassigned purchased accesses", () => {

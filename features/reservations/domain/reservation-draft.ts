@@ -39,6 +39,11 @@ export function isCompleteGuestDraft(guest: GuestDraft) {
   return Boolean(guest.name.trim() && guest.document.trim() && guest.whatsapp.trim());
 }
 
+export function isPartiallyCompleteGuestDraft(guest: GuestDraft) {
+  const fields = [guest.name, guest.document, guest.whatsapp].map((value) => value.trim());
+  return fields.some(Boolean) && !fields.every(Boolean);
+}
+
 export function syncGuestDraftsWithHolder(
   guestDrafts: GuestDraft[],
   holder: {

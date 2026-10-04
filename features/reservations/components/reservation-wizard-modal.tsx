@@ -73,6 +73,8 @@ export default function ReservationWizardModal({
   setTime,
   guestCount,
   updateGuestCount,
+  accessQuantity,
+  updateAccessQuantity,
   reservationType,
   setReservationType,
   reference,
@@ -142,6 +144,8 @@ export default function ReservationWizardModal({
   setTime: Dispatch<SetStateAction<string>>;
   guestCount: number;
   updateGuestCount: (nextCount: number) => void;
+  accessQuantity: number;
+  updateAccessQuantity: (nextQuantity: number) => void;
   reservationType: ReservationType;
   setReservationType: Dispatch<SetStateAction<ReservationType>>;
   reference: string;
@@ -211,7 +215,7 @@ export default function ReservationWizardModal({
 
   const liveSummary = [
     { label: "Código", value: "RES-0108-DB" },
-    { label: isCourtesy ? "Personas" : "Invitados", value: `${guestCount}` },
+    { label: isPresale ? "Accesos comprados" : isCourtesy ? "Personas" : "Invitados", value: `${isPresale ? accessQuantity : guestCount}` },
     ...(!isNonPhysical ? [{ label: "Recurso", value: visibleResource?.name ?? "Sin recurso" }] : []),
     ...(!isCourtesy ? [{ label: "Monto", value: formatCurrency(amount) }, { label: "Pago", value: paymentStatus }] : []),
   ];
@@ -279,7 +283,9 @@ export default function ReservationWizardModal({
                         time={time}
                         setTime={setTime}
                         guestCount={guestCount}
+                        accessQuantity={accessQuantity}
                         updateGuestCount={updateGuestCount}
+                        updateAccessQuantity={updateAccessQuantity}
                         reservationType={reservationType}
                         isCourtesy={isCourtesy}
                         setReservationType={setReservationType}
@@ -322,6 +328,7 @@ export default function ReservationWizardModal({
                         isPresale={isPresale}
                         isCourtesy={isCourtesy}
                         guestCount={guestCount}
+                        accessQuantity={accessQuantity}
                         registeredGuests={registeredGuests}
                         pendingGuests={pendingGuests}
                         addGuest={addGuest}
@@ -360,6 +367,7 @@ export default function ReservationWizardModal({
                         date={date}
                         time={time}
                         guestCount={guestCount}
+                        accessQuantity={accessQuantity}
                         reservationType={reservationType}
                         observations={observations}
                         holderName={holderName}
@@ -497,7 +505,7 @@ export default function ReservationWizardModal({
                       {isPresale ? (
                         <div className="mt-3 space-y-2 text-sm text-slate-300">
                           <p>Preventa: <span className="font-medium text-white">{commercialConfig.currency} {commercialConfig.presale.pricePerAccess} por acceso</span></p>
-                          <p>Accesos: <span className="font-medium text-white">{guestCount}</span></p>
+                          <p>Accesos: <span className="font-medium text-white">{accessQuantity}</span></p>
                           <p>Total: <span className="font-medium text-white">{commercialConfig.currency} {amount}</span></p>
                         </div>
                       ) : (
@@ -545,7 +553,7 @@ export default function ReservationWizardModal({
                       {!isCourtesy ? <LiveSummaryRow label="Recurso" value={visibleResource?.name ?? "Sin recurso"} /> : null}
                       <LiveSummaryRow
                         label={isCourtesy ? "Personas" : "Invitados"}
-                        value={`${registeredGuests} / ${guestCount}`}
+                        value={`${registeredGuests} / ${isPresale ? accessQuantity : guestCount}`}
                       />
                     </div>
                   </div>
@@ -704,6 +712,8 @@ function GeneralStep({
   setTime,
   guestCount,
   updateGuestCount,
+  accessQuantity,
+  updateAccessQuantity,
   reservationType,
   isCourtesy,
   setReservationType,
@@ -722,6 +732,8 @@ function GeneralStep({
   setTime: Dispatch<SetStateAction<string>>;
   guestCount: number;
   updateGuestCount: (nextCount: number) => void;
+  accessQuantity: number;
+  updateAccessQuantity: (nextQuantity: number) => void;
   reservationType: ReservationType;
   isCourtesy: boolean;
   setReservationType: Dispatch<SetStateAction<ReservationType>>;
@@ -782,7 +794,10 @@ function GeneralStep({
           </Field>
         ) : (
           <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.04] p-4 text-sm text-slate-300">
-            Agrega las personas que compraron acceso en el paso Invitados. La cantidad y el total se calculan automáticamente.
+            <label className="grid gap-2 text-sm text-slate-200">Accesos comprados
+              <input type="number" min={1} max={100} value={accessQuantity} onChange={(event) => updateAccessQuantity(Number(event.target.value))} className={inputClassName} />
+            </label>
+            <p className="mt-2">Luego agrega sólo las personas identificadas en el paso Invitados. Los accesos pendientes no crean formularios vacíos.</p>
           </div>
         )}
       </div>
@@ -976,6 +991,7 @@ function GuestsStep({
   isCourtesy,
   guests,
   guestCount,
+  accessQuantity,
   registeredGuests,
   pendingGuests,
   addGuest,
@@ -987,6 +1003,7 @@ function GuestsStep({
   isCourtesy: boolean;
   guests: GuestDraft[];
   guestCount: number;
+  accessQuantity: number;
   registeredGuests: number;
   pendingGuests: number;
   addGuest: () => void;
@@ -1011,11 +1028,12 @@ function GuestsStep({
 
         <div className="flex items-center gap-3">
           <StatusBadge variant="info">
-            {registeredGuests} {isPresale ? "accesos completos" : isCourtesy ? `de ${guestCount} personas registradas` : `de ${guestCount} invitados registrados`}
+              {isPresale ? `${registeredGuests} asignados · ${pendingGuests} pendientes` : `${registeredGuests} ${isCourtesy ? `de ${guestCount} personas registradas` : `de ${guestCount} invitados registrados`}`}
           </StatusBadge>
           <button
             type="button"
             onClick={addGuest}
+            disabled={isPresale && guests.length >= accessQuantity}
             className="inline-flex h-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
           >
             {isPresale || isCourtesy ? "Agregar persona" : "Agregar invitado"}
@@ -1392,6 +1410,7 @@ function SummaryStep({
   date,
   time,
   guestCount,
+  accessQuantity,
   reservationType,
   observations,
   holderName,
@@ -1422,6 +1441,7 @@ function SummaryStep({
   date: string;
   time: string;
   guestCount: number;
+  accessQuantity: number;
   reservationType: ReservationType;
   observations: string;
   holderName: string;
@@ -1449,7 +1469,7 @@ function SummaryStep({
 }) {
   const showDecorativeSignals = wizardMode !== "create";
   const invitationRows: Array<[string, string]> = [
-    ["Cantidad", `${guestCount}`],
+    ["Cantidad", `${isPresale ? accessQuantity : guestCount}`],
     ["Registrados", `${guests.filter((guest) => guest.name.trim()).length}`],
   ];
 
