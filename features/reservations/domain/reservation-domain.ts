@@ -603,8 +603,12 @@ export function createReservationBundle(input: ReservationCreationInput) {
     throw new Error("A reservation resource is required.");
   }
 
-  if (isPresale && (!input.guests.length || input.guests.some((guest) => !isCompleteGuestDraft(guest)))) {
-    throw new Error("Preventa requires at least one complete access.");
+  const presaleQuantity = Math.floor(input.accessQuantity ?? input.commercialSnapshot?.quantity ?? input.guests.length);
+  if (isPresale && (!Number.isInteger(presaleQuantity) || presaleQuantity <= 0)) {
+    throw new Error("Preventa requires a positive access quantity.");
+  }
+  if (isPresale && input.guests.filter(isCompleteGuestDraft).length > presaleQuantity) {
+    throw new Error("Preventa cannot contain more guests than purchased accesses.");
   }
 
   if (isCourtesy && (!input.guests.length || input.guests.some((guest) => !isCompleteGuestDraft(guest)))) {
@@ -650,7 +654,7 @@ export function createReservationBundle(input: ReservationCreationInput) {
     status,
     timeline: [
       buildTimelineEntry("Reserva creada", `${name} quedó en borrador operativo.`, "info", createdAt),
-      buildTimelineEntry("Invitados registrados", `${input.guests.length} invitaciones preparadas.`, "warning", createdAt),
+      buildTimelineEntry("Invitados registrados", `${input.guests.filter(isCompleteGuestDraft).length} de ${isPresale ? presaleQuantity : input.guests.length} accesos preparados.`, "warning", createdAt),
       buildTimelineEntry(
         isCourtesy ? "Cortesía emitida" : "Pago simulado",
         isCourtesy
@@ -669,6 +673,7 @@ export function createReservationBundle(input: ReservationCreationInput) {
   };
 
   const guests: Guest[] = input.guests
+    .filter((guest) => !isPresale || isCompleteGuestDraft(guest))
     .map((guestDraft, index) => {
       const identity = buildGuestDraftIdentity(index, input);
       const invitationCode = `${code}-${String(index + 1).padStart(2, "0")}`;

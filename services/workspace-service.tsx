@@ -2641,13 +2641,19 @@ export function WorkspaceServiceProvider({
         const persistedPhysical = !isPresale && !isCourtesy
           ? await repositories.reservations.createPhysicalAtomic({ reservation, guests: reservationGuestsWithAccess })
           : null;
-        const persistedReservation = persistedPhysical?.reservation ?? reservation;
-        if (!persistedPhysical) await repositories.reservations.upsert(reservation);
-        for (const guest of (persistedPhysical?.guests ?? reservationGuestsWithAccess)) {
-          const persistedGuest = persistedPhysical ? hydrateGuestAccessGrant(guest) : await repositories.guests.createWithAccessOrdinal(guest);
-          const authoritativeGuest = repositories.guests.prepareAuthoritativeAccess
-            ? await repositories.guests.prepareAuthoritativeAccess(persistedGuest)
-            : persistedGuest;
+        const persistedPresale = isPresale
+          ? await repositories.reservations.createPresaleAtomic({ reservation, guests: reservationGuestsWithAccess })
+          : null;
+        const persistedAtomic = persistedPhysical ?? persistedPresale;
+        const persistedReservation = persistedAtomic?.reservation ?? reservation;
+        if (!persistedAtomic) await repositories.reservations.upsert(reservation);
+        for (const guest of (persistedAtomic?.guests ?? reservationGuestsWithAccess)) {
+          const persistedGuest = persistedAtomic ? hydrateGuestAccessGrant(guest) : await repositories.guests.createWithAccessOrdinal(guest);
+          const authoritativeGuest = persistedAtomic
+            ? persistedGuest
+            : repositories.guests.prepareAuthoritativeAccess
+              ? await repositories.guests.prepareAuthoritativeAccess(persistedGuest)
+              : persistedGuest;
           const guestWithAuthoritativeAccess = hydrateGuestAccessGrant(authoritativeGuest);
           persistedReservationGuests.push(guestWithAuthoritativeAccess);
           const timelineEntry = withAuditContext(
@@ -2866,8 +2872,9 @@ export function WorkspaceServiceProvider({
           .sort((a, b) => a.id.localeCompare(b.id));
         const expectedGuestCount = reservation.commercialSnapshot?.quantity ?? existingGuests.length;
 
-        if (input.guests.length !== expectedGuestCount || input.guests.some((guest) => !isCompleteGuestDraft(guest))) {
-          throw new Error(`Preventa requires exactly ${expectedGuestCount} complete accesses.`);
+        const completeGuestDrafts = input.guests.filter(isCompleteGuestDraft);
+        if (completeGuestDrafts.length > expectedGuestCount) {
+          throw new Error(`Preventa cannot exceed ${expectedGuestCount} purchased accesses.`);
         }
 
         const timestamp = nowIso();
@@ -2880,7 +2887,7 @@ export function WorkspaceServiceProvider({
               ? "Confirmed"
               : "Pending";
         const nextName = `Preventa · ${input.holderName} ${input.holderLastName}`.trim();
-        const nextGuests = input.guests.map((guestDraft, index) => ({
+        const nextGuests = completeGuestDrafts.map((guestDraft, index) => ({
           ...existingGuests[index],
           guestName: guestDraft.name.trim(),
           reservationName: nextName,
@@ -3254,14 +3261,11 @@ export function WorkspaceServiceProvider({
       }
 
       if (reservation.reservationType === "Preventa") {
-        notify({
-          title: "Preventa cerrada para nuevos accesos",
-          description: "La cantidad comercial de una Preventa no se puede alterar después de confirmarla.",
-          tone: "warning",
-          icon: "alert",
-          href: "/reservations",
-        });
-        return;
+        const quantity = reservation.commercialSnapshot?.quantity ?? 0;
+        const assigned = guests.filter((item) => item.reservationId === reservation.id && item.admissionStatus !== "Anulada" && item.reservationStatus !== "Cancelled").length;
+        if (assigned >= quantity) {
+          throw new Error("La Preventa ya tiene todos sus accesos asignados.");
+        }
       }
 
       if (reservation.reservationType === "Cortesía" && guestInputs.some((guest) => !guest.guestName.trim() || !guest.carnet.trim() || !guest.whatsapp.trim())) {
@@ -3473,12 +3477,9 @@ export function WorkspaceServiceProvider({
           reference: reservation.reference,
         },
       );
-      const persistedGuest = await repositories.reservations.addGuestAtomic({
-        reservationId,
-        guest: nextGuestWithAccess,
-        courtesyEvent,
-        accessEvent: timelineEntry,
-      });
+      const persistedGuest = (reservation.reservationType as string) === "Preventa"
+        ? await repositories.reservations.addPresaleGuestAtomic({ reservationId, guest: nextGuestWithAccess, accessEvent: timelineEntry })
+        : await repositories.reservations.addGuestAtomic({ reservationId, guest: nextGuestWithAccess, courtesyEvent, accessEvent: timelineEntry });
       await requestReportingAfterSuccess(currentEvent.id);
 
       setGuests((current) => [persistedGuest, ...current]);

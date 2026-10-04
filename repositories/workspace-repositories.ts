@@ -53,8 +53,10 @@ export type EventVenueAtomicResult = {
 
 export type ReservationRepository = CrudRepository<ReservationRecord, ReservationCreationInput> & {
   createPhysicalAtomic(input: { reservation: ReservationRecord; guests: Guest[] }): Promise<{ reservation: ReservationRecord; guests: Guest[] }>;
+  createPresaleAtomic(input: { reservation: ReservationRecord; guests: Guest[] }): Promise<{ reservation: ReservationRecord; guests: Guest[] }>;
   addGuest(reservationId: string, guest: ReservationGuestInput): void;
   addGuestAtomic(input: { reservationId: string; guest: Guest; courtesyEvent?: TimelineEvent; accessEvent: TimelineEvent }): Promise<Guest>;
+  addPresaleGuestAtomic(input: { reservationId: string; guest: Guest; accessEvent: TimelineEvent }): Promise<Guest>;
   cancelGuestAtomic(input: { reservationId: string; guestId: string; reason: string }): Promise<{ guest: Guest; timelineEvent: TimelineEvent }>;
   updateGuest(params: { reservationId: string; guestId: string; action: ReservationGuestAction }): void;
   setStatus(reservationId: string, status: ReservationStatus): void;
@@ -319,6 +321,13 @@ export function createMemoryWorkspaceRepositories(adapter: WorkspaceMemoryAdapte
   reservations.createPhysicalAtomic = async ({ reservation, guests: inputGuests }) => {
     return { reservation, guests: inputGuests };
   };
+  reservations.createPresaleAtomic = async ({ reservation, guests: inputGuests }) => {
+    return { reservation, guests: inputGuests };
+  };
+  reservations.addPresaleGuestAtomic = async ({ guest }) => {
+    adapter.addReservationGuest(guest.reservationId, guest as never);
+    return guest;
+  };
   reservations.releaseReservationTableAtomic = async ({ reservationId, expectedResourceId }) => {
     adapter.releaseTable(expectedResourceId);
     return { reservation_id: reservationId, released_table_id: expectedResourceId, guest_ids: [], changed: true };
@@ -405,6 +414,8 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       update: notImplemented,
       delete: notImplemented,
       createPhysicalAtomic: notImplemented,
+      createPresaleAtomic: notImplemented,
+      addPresaleGuestAtomic: notImplemented,
       addGuest: notImplemented,
       addGuestAtomic: notImplemented,
       cancelGuestAtomic: notImplemented,

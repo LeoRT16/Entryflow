@@ -81,6 +81,8 @@ export type ReservationCreationInput = {
   paymentStatus: PaymentStatus;
   observations: string;
   commercialSnapshot?: ReservationCommercialSnapshot;
+  /** Total purchased accesses for a Preventa; assigned guests may be fewer. */
+  accessQuantity?: number;
   reference?: string;
 };
 

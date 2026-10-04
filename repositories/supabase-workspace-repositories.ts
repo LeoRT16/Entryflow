@@ -228,6 +228,8 @@ export type SupabaseWorkspaceRepositories = {
   };
   reservations: SupabaseCrudRepository<ReservationRecord> & {
     createPhysicalAtomic(input: { reservation: ReservationRecord; guests: Guest[] }): Promise<{ reservation: ReservationRecord; guests: Guest[] }>;
+    createPresaleAtomic(input: { reservation: ReservationRecord; guests: Guest[] }): Promise<{ reservation: ReservationRecord; guests: Guest[] }>;
+    addPresaleGuestAtomic(input: { reservationId: string; guest: Guest; accessEvent: TimelineEvent }): Promise<Guest>;
     addGuest(reservationId: string, guest: ReservationGuestInput): Promise<void>;
     addGuestAtomic(input: { reservationId: string; guest: Guest; courtesyEvent?: TimelineEvent; accessEvent: TimelineEvent }): Promise<Guest>;
     cancelGuestAtomic(input: { reservationId: string; guestId: string; reason: string }): Promise<{ guest: Guest; timelineEvent: TimelineEvent }>;
@@ -817,6 +819,17 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     if (!result?.reservation || !Array.isArray(result.guests)) throw new Error("Malformed physical reservation RPC response.");
     return { reservation: mapReservationRowToDomain(result.reservation), guests: result.guests.map(mapGuestRowToDomain) };
   };
+  (reservations as SupabaseWorkspaceRepositories["reservations"]).createPresaleAtomic = async ({ reservation, guests: inputGuests }) => {
+    if (!client) throw new Error("Supabase client is unavailable.");
+    const { data, error } = await client.rpc("create_presale_reservation_atomic" as never, {
+      p_reservation: mapReservationToRow(reservation),
+      p_guests: inputGuests.map(mapGuestToRow),
+    } as never);
+    if (error) throw error;
+    const result = data as { reservation?: ReservationRow; guests?: GuestRow[] };
+    if (!result?.reservation || !Array.isArray(result.guests)) throw new Error("Malformed presale reservation RPC response.");
+    return { reservation: mapReservationRowToDomain(result.reservation), guests: result.guests.map(mapGuestRowToDomain) };
+  };
 
   const extraWristbandSales = {
     async list() {
@@ -1041,6 +1054,27 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
         const result = data as { reservation?: ReservationRow; guests?: GuestRow[] };
         if (!result?.reservation || !Array.isArray(result.guests)) throw new Error("Malformed physical reservation RPC response.");
         return { reservation: mapReservationRowToDomain(result.reservation), guests: result.guests.map(mapGuestRowToDomain) };
+      },
+      async createPresaleAtomic({ reservation, guests: inputGuests }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("create_presale_reservation_atomic" as never, {
+          p_reservation: mapReservationToRow(reservation),
+          p_guests: inputGuests.map(mapGuestToRow),
+        } as never);
+        if (error) throw error;
+        const result = data as { reservation?: ReservationRow; guests?: GuestRow[] };
+        if (!result?.reservation || !Array.isArray(result.guests)) throw new Error("Malformed presale reservation RPC response.");
+        return { reservation: mapReservationRowToDomain(result.reservation), guests: result.guests.map(mapGuestRowToDomain) };
+      },
+      async addPresaleGuestAtomic({ reservationId, guest, accessEvent }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("add_presale_guest_atomic" as never, {
+          p_reservation_id: reservationId,
+          p_guest: mapGuestToRow(guest),
+          p_access_event: accessEvent,
+        } as never);
+        if (error) throw error;
+        return mapGuestRowToDomain(data as GuestRow);
       },
       async delete(reservationId: string) {
         if (!client) throw new Error("Supabase client is unavailable.");

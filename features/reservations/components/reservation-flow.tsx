@@ -267,7 +267,7 @@ function ReservationFlowWorkspace({
     : isPresale
       ? wizardMode === "edit" && editingReservation?.commercialSnapshot?.saleType === "presale"
         ? String(editingReservation.commercialSnapshot.totalPrice ?? 0)
-        : String(commercialConfig.presale.pricePerAccess * guestDrafts.length)
+        : String(commercialConfig.presale.pricePerAccess * guestCount)
       : amount;
   const eventOptions = useMemo(
     () =>
@@ -966,8 +966,9 @@ function ReservationFlowWorkspace({
           eventId: currentEvent.id,
           eventName: currentEvent.name,
           amount: isCourtesy ? "0" : isPresale ? amountForWizard : input.amount,
+          accessQuantity: isPresale ? guestCount : undefined,
           commercialSnapshot: isPresale
-            ? createPresaleCommercialSnapshot(commercialConfig, input.guests.length)
+            ? createPresaleCommercialSnapshot(commercialConfig, guestCount)
             : isCourtesy ? undefined : createReservationCommercialSnapshot(commercialConfig),
           reference: isCourtesy ? reference : undefined,
         };
@@ -977,15 +978,15 @@ function ReservationFlowWorkspace({
           return;
         }
 
-        if (isPresale && (!commercialConfig.presale.enabled || input.guests.length < 1 || input.guests.some((guest) => !isCompleteGuestDraft(guest)))) {
-          setSubmissionError("Cada acceso de Preventa requiere nombre, carnet y WhatsApp.");
+        if (isPresale && (!commercialConfig.presale.enabled || guestCount <= 0 || input.guests.filter(isCompleteGuestDraft).length > guestCount)) {
+          setSubmissionError("La Preventa requiere una cantidad positiva y no puede superar sus accesos comprados.");
           return;
         }
 
         const selectedResource = isNonPhysical ? undefined : payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
         const capacityViolation = resolveReservationCapacityViolation({
           resourceCapacity: isNonPhysical ? undefined : selectedResource?.capacity,
-          guestCount: payload.guests.length,
+          guestCount: isPresale ? payload.guests.filter(isCompleteGuestDraft).length : payload.guests.length,
           resourceName: selectedResource?.name,
         });
 

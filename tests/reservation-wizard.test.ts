@@ -81,7 +81,7 @@ test("presale creates one purchase with one independent access per complete pers
   assert.equal(reservation.guests.some((guest) => guest.guestName === "Leo Rodríguez"), false);
 });
 
-test("mesa still requires a resource and presale rejects incomplete people", () => {
+test("mesa still requires a resource while presale allows unassigned purchased accesses", () => {
   const input = {
     eventId: "event-1",
     eventName: "Evento de prueba",
@@ -106,7 +106,23 @@ test("mesa still requires a resource and presale rejects incomplete people", () 
   };
 
   assert.throws(() => createReservationBundle(input), /resource is required/);
-  assert.throws(() => createReservationBundle({ ...input, reservationType: "Preventa", selectedResource: undefined }), /complete access/);
+  const presale = createReservationBundle({
+    ...input,
+    reservationType: "Preventa",
+    selectedResource: undefined,
+    accessQuantity: 8,
+    guests: [
+      { ...createGuestDraft(0), name: "Ana", document: "CI-1", whatsapp: "70000001" },
+      ...buildGuestList(8).slice(1),
+    ],
+    commercialSnapshot: createPresaleCommercialSnapshot({
+      ...defaultEventCommercialConfig,
+      presale: { enabled: true, pricePerAccess: 70 },
+    }, 8),
+  });
+  assert.equal(presale.reservation.commercialSnapshot?.quantity, 8);
+  assert.equal(presale.reservation.commercialSnapshot?.totalPrice, 560);
+  assert.equal(presale.guests.length, 1);
 });
 
 test("mesa creation copies the holder only to Guest 1 and keeps later guests empty", () => {
