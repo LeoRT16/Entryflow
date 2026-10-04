@@ -223,6 +223,7 @@ export type SupabaseWorkspaceRepositories = {
   events: SupabaseCrudRepository<PlatformEvent> & {
     setActive(eventId: string): Promise<void>;
     setStatus(eventId: string, status: PlatformEvent["status"]): Promise<void>;
+    activate(eventId: string): Promise<import('./workspace-repositories').EventActivationResult>;
     setVenueAtomic(eventId: string, venueId: string | null): Promise<import('./workspace-repositories').EventVenueAtomicResult>;
   };
   reservations: SupabaseCrudRepository<ReservationRecord> & {
@@ -1014,6 +1015,12 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
         }
 
         await client.from("events").update({ status, updated_at: nowIso() } as never).eq("id", eventId).select("id");
+      },
+      async activate(eventId: string) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("activate_event" as never, { p_event_id: eventId } as never);
+        if (error) throw error;
+        return data as import("./workspace-repositories").EventActivationResult;
       },
       async setVenueAtomic(eventId: string, venueId: string | null) {
         if (!client) throw new Error("Supabase client is unavailable.");

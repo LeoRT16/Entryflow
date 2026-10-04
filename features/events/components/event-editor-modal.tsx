@@ -750,14 +750,13 @@ export default function EventEditorModal({
                 onChange={(changeEvent) => setEventStatus(changeEvent.target.value as Event["status"])}
                 className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
               >
-                {[
+                {(eventStatus === "live" ? [["live", "En curso"]] : []).concat([
                   ["draft", "Borrador"],
                   ["published", "Publicado"],
-                  ["live", "En curso"],
                   ["finished", "Finalizado"],
                   ["cancelled", "Cancelado"],
-                ].map(([value, label]) => (
-                  <option key={value} value={value}>
+                ]).map(([value, label]) => (
+                  <option key={value} value={value} disabled={value === "live"}>
                     {label}
                   </option>
                 ))}

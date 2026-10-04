@@ -37,7 +37,7 @@ test("partial bootstrap without roles resolves safely and does not widen event a
   } as never, "user-1");
 
   assert.equal(selection.currentOrganizationId, "org-1");
-  assert.equal(selection.currentEventId, "live");
+  assert.equal(selection.currentEventId, "future");
   assert.equal(selection.currentProfileId, "");
 });
 

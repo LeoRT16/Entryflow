@@ -9,6 +9,7 @@ import { getEventTypeLabel, getOperationalModelLabel, isTerminalEventStatus } fr
 import EventEditorModal from "@/features/events/components/event-editor-modal";
 import EventCreationWizard from "@/features/events/components/event-creation-wizard";
 import { useCheckInStore } from "@/services/workspace-service";
+import { useFeedback } from "@/components/premium-feedback";
 
 type EventStatusGroup = "live" | "upcoming" | "finished";
 
@@ -68,11 +69,15 @@ export default function EventLibrary() {
     prepareEventPhysicalLayout,
     setCurrentEventId,
     setEventStatus,
+    activateEvent,
+    can,
     venues,
   } = useCheckInStore();
+  const { confirm, notify } = useFeedback();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardOrganizationId, setWizardOrganizationId] = useState(currentOrganization.id);
   const [editorEventId, setEditorEventId] = useState<string | null>(null);
+  const [activatingEventId, setActivatingEventId] = useState<string | null>(null);
   const organizationEvents = useMemo(() => getEventsForOrganization(currentOrganization.id, events), [currentOrganization.id, events]);
 
 
@@ -150,11 +155,28 @@ export default function EventLibrary() {
             tone: "info",
             onClick: () => setEventStatus(currentEvent.id, "published"),
           }
-        : {
+        : currentEvent.status === "live" ? {
             label: "Cerrar evento",
             tone: "warning",
             onClick: () => setEventStatus(currentEvent.id, "finished"),
-          };
+          } : null;
+
+  const requestActivation = (event: Event) => {
+    const liveEvent = organizationEvents.find((candidate) => candidate.status === "live" && candidate.id !== event.id);
+    confirm({
+      title: "¿Activar este evento?",
+      description: liveEvent
+        ? `“${liveEvent.name}” está actualmente en vivo. Al continuar, ese evento se cerrará y “${event.name}” pasará a ser el evento operativo.`
+        : `“${event.name}” será el evento operativo de la organización. Recepción y Puerta trabajarán sobre este evento.`,
+      confirmLabel: "Activar evento",
+      cancelLabel: "Cancelar",
+      tone: "success",
+      onConfirm: () => {
+        setActivatingEventId(event.id);
+        void activateEvent(event.id).catch((error) => notify({ title: "No se pudo activar el evento", description: error instanceof Error ? error.message : "La operación no pudo completarse.", tone: "danger", icon: "alert" })).finally(() => setActivatingEventId(null));
+      },
+    });
+  };
 
   return (
     <div className="mx-auto w-full max-w-[1140px] space-y-5 px-4 sm:px-6 lg:px-0">
@@ -190,6 +212,9 @@ export default function EventLibrary() {
               currentEventAction={currentEventAction}
               onSelectEvent={setCurrentEventId}
               onEditEvent={openEventEditor}
+              onActivateEvent={requestActivation}
+              canActivate={can("event.edit")}
+              activatingEventId={activatingEventId}
             />
           ))
         ) : (
@@ -238,6 +263,9 @@ function LibrarySection({
   currentEventAction,
   onSelectEvent,
   onEditEvent,
+  onActivateEvent,
+  activatingEventId,
+  canActivate,
 }: {
   title: string;
   events: Event[];
@@ -246,6 +274,9 @@ function LibrarySection({
   currentEventAction: EventAction | null;
   onSelectEvent: (eventId: string) => void;
   onEditEvent: (event: Event) => void;
+  onActivateEvent: (event: Event) => void;
+  activatingEventId: string | null;
+  canActivate: boolean;
 }) {
   return (
     <section className="surface-panel p-4 sm:p-5">
@@ -265,6 +296,9 @@ function LibrarySection({
             currentEventAction={event.id === currentEventId ? currentEventAction : null}
             onSelect={() => onSelectEvent(event.id)}
             onEditEvent={() => onEditEvent(event)}
+            onActivateEvent={() => onActivateEvent(event)}
+            activating={activatingEventId === event.id}
+            canActivate={canActivate}
           />
         ))}
       </div>
@@ -278,12 +312,18 @@ function EventCard({
   currentEventAction,
   onSelect,
   onEditEvent,
+  onActivateEvent,
+  activating,
+  canActivate,
 }: {
   event: Event;
   current: boolean;
   currentEventAction: EventAction | null;
   onSelect: () => void;
   onEditEvent: () => void;
+  onActivateEvent: () => void;
+  activating: boolean;
+  canActivate: boolean;
 }) {
   const resourceLabel = event.resourceTypes.length ? formatResourceTypes(event.resourceTypes.slice(0, 3)) : "";
 
@@ -347,6 +387,16 @@ function EventCard({
           >
             Editar evento
           </button>
+          {event.status === "published" && canActivate ? (
+            <button
+              type="button"
+              disabled={activating}
+              onClick={onActivateEvent}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-3 text-sm font-medium text-emerald-50 transition hover:bg-emerald-400/15 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+            >
+              {activating ? "Activando…" : "Activar evento"}
+            </button>
+          ) : null}
           {current && currentEventAction ? (
             <button
               type="button"

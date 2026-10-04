@@ -22,8 +22,24 @@ export type OrganizationRepository = CrudRepository<Organization> & {
 export type EventRepository = CrudRepository<PlatformEvent> & {
   setActive(eventId: string): void;
   setStatus(eventId: string, status: PlatformEvent["status"]): void;
+  activate(eventId: string): Promise<{ activatedEventId: string; previousLiveEventId: string | null }>;
   setVenueAtomic(eventId: string, venueId: string | null): Promise<EventVenueAtomicResult>;
 };
+
+export type EventActivationResult = { activatedEventId: string; previousLiveEventId: string | null };
+
+export function applyEventActivation(events: PlatformEvent[], eventId: string): { events: PlatformEvent[]; result: EventActivationResult } {
+  const target = events.find((event) => event.id === eventId);
+  if (!target) throw new Error("Evento no encontrado.");
+  if (target.status !== "published") throw new Error("Solo se puede activar un evento publicado.");
+  const previous = events.find((event) => event.organizationId === target.organizationId && event.status === "live" && event.id !== eventId);
+  return {
+    events: events.map((event) => event.organizationId === target.organizationId
+      ? event.id === eventId ? { ...event, status: "live" } : event.status === "live" ? { ...event, status: "finished" } : event
+      : event),
+    result: { activatedEventId: eventId, previousLiveEventId: previous?.id ?? null },
+  };
+}
 
 export type EventVenueAtomicResult = {
   changed: boolean;
@@ -161,6 +177,11 @@ export function createMemoryWorkspaceRepositories(adapter: WorkspaceMemoryAdapte
     () => adapter.events,
     adapter.setEventsState,
   ) as EventRepository;
+  events.activate = async (eventId) => {
+    const next = applyEventActivation(adapter.events, eventId);
+    adapter.setEventsState(next.events);
+    return next.result;
+  };
   events.setVenueAtomic = async (eventId, venueId) => {
     const event = adapter.events.find((item) => item.id === eventId);
     if (!event) throw new Error("Event not found.");
@@ -373,6 +394,7 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       delete: notImplemented,
       setActive: notImplemented,
       setStatus: notImplemented,
+      activate: notImplemented,
       setVenueAtomic: notImplemented,
     },
     reservations: {

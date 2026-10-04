@@ -367,6 +367,7 @@ type WorkspaceServiceValue = {
   createExtraWristbandSale: (input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[] }) => Promise<void>;
   cancelExtraWristbandSale: (input: { saleId: string; reason: string }) => Promise<void>;
   setEventStatus: (eventId: string, status: PlatformEvent["status"]) => void;
+  activateEvent: (eventId: string) => Promise<void>;
   setOrganizationsState: Dispatch<SetStateAction<Organization[]>>;
   setVenuesState: Dispatch<SetStateAction<Venue[]>>;
   setSectorsState: Dispatch<SetStateAction<Sector[]>>;
@@ -434,7 +435,7 @@ export function getEventSelection(events: PlatformEvent[], organizationId: strin
 
 export function resolveOperationalEventId(events: PlatformEvent[], organizationId: string, roleSlug: string, requestedEventId = "") {
   const scoped = events.filter((event) => event.organizationId === organizationId && event.status !== "cancelled" && event.status !== "finished");
-  if (roleSlug === "reception" || roleSlug === "door" || roleSlug === "") {
+  if (roleSlug === "reception" || roleSlug === "door") {
     return scoped.find((event) => event.status === "live")?.id ?? "";
   }
   return scoped.find((event) => event.id === requestedEventId)?.id ?? scoped.find((event) => event.status === "live")?.id ?? scoped[0]?.id ?? "";
@@ -594,7 +595,11 @@ export function resolveReloadCurrentEventId(
   currentEventId: string,
   bootstrapEventId = "",
   previousEvents: PlatformEvent[] = [],
+  roleSlug = "",
 ) {
+  if (roleSlug === "reception" || roleSlug === "door") {
+    return resolveOperationalEventId(events, organizationId, roleSlug, currentEventId);
+  }
   // Keep an explicit selection through transient empty/loading snapshots only
   // while it still belongs to the active organization.
   if (currentEventId && events.length === 0 && previousEvents.some((event) => event.id === currentEventId && (!organizationId || event.organizationId === organizationId))) {
@@ -1433,12 +1438,16 @@ export function WorkspaceServiceProvider({
         ?? snapshot.organizations.find((organization) => organization.id === snapshot.currentOrganizationId)?.id
         ?? snapshot.organizations.find((organization) => organization.status === "active")?.id
         ?? "";
+      const reloadProfile = snapshot.profiles.find((profile) => profile.id === currentProfileId && profile.organizationId === nextCurrentOrganizationId && !profile.deletedAt)
+        ?? snapshot.profiles.find((profile) => profile.userId === initialCurrentUserId && profile.organizationId === nextCurrentOrganizationId && !profile.deletedAt);
+      const reloadRoleSlug = snapshot.roles.find((role) => role.id === reloadProfile?.roleId)?.slug ?? "";
       const nextCurrentEventId = resolveReloadCurrentEventId(
         snapshot.events,
         nextCurrentOrganizationId,
         currentEventId,
         snapshot.currentEventId,
         events,
+        reloadRoleSlug,
       );
       const nextEvents = snapshot.events.length === 0 && events.length > 0 ? events : snapshot.events;
       const nextCurrentProfileId = initialCurrentUserId
@@ -2243,6 +2252,9 @@ export function WorkspaceServiceProvider({
         });
         return undefined;
       }
+      if (event.status === "live" && existingEvent.status !== "live") {
+        throw new Error("La activación debe realizarse mediante activateEvent.");
+      }
 
       const snapshot = captureSnapshot();
       try {
@@ -2487,6 +2499,9 @@ export function WorkspaceServiceProvider({
   const setEventStatus = useCallback(
     async (eventId: string, status: PlatformEvent["status"]) => {
       requirePermission("event.edit");
+      if (status === "live") {
+        throw new Error("La activación debe realizarse mediante activateEvent.");
+      }
       const targetEvent = events.find((event) => event.id === eventId);
       if (!targetEvent) return;
 
@@ -2499,6 +2514,9 @@ export function WorkspaceServiceProvider({
           href: "/events",
         });
         return;
+      }
+      if (status === "finished" && targetEvent.status !== "live") {
+        throw new Error("Sólo se puede cerrar un evento que está en vivo.");
       }
 
       const snapshot = captureSnapshot();
@@ -2525,6 +2543,26 @@ export function WorkspaceServiceProvider({
     },
     [captureSnapshot, events, notify, repositories.events, requestReportingAfterSuccess, requirePermission, restoreSnapshot],
   );
+
+  const activateEvent = useCallback(async (eventId: string) => {
+    requirePermission("event.edit");
+    const target = events.find((event) => event.id === eventId);
+    if (!target || target.organizationId !== currentOrganizationId) throw new Error("Evento no disponible en esta organización.");
+    if (target.status !== "published") throw new Error("Solo se puede activar un evento publicado.");
+    const previous = events.find((event) => event.organizationId === currentOrganizationId && event.status === "live" && event.id !== eventId);
+    const snapshot = captureSnapshot();
+    setEvents((current) => current.map((event) => event.organizationId === currentOrganizationId
+      ? event.id === eventId ? { ...event, status: "live" } : event.status === "live" ? { ...event, status: "finished" } : event
+      : event));
+    try {
+      await repositories.events.activate(eventId);
+      await requestReportingAfterSuccess(eventId);
+      notify({ title: "Evento activado", description: previous ? `${target.name} está en vivo; ${previous.name} quedó finalizado.` : `${target.name} es ahora el evento operativo.`, tone: "success", icon: "check", href: "/events" });
+    } catch (error) {
+      restoreSnapshot(snapshot);
+      throw error;
+    }
+  }, [captureSnapshot, currentOrganizationId, events, notify, repositories.events, requestReportingAfterSuccess, requirePermission, restoreSnapshot]);
 
   const createReservation = useCallback(
     async (input: ReservationCreationInput) => {
@@ -4262,6 +4300,7 @@ export function WorkspaceServiceProvider({
       createExtraWristbandSale: createExtraWristbandSaleMutation,
       cancelExtraWristbandSale: cancelExtraWristbandSaleMutation,
       setEventStatus,
+      activateEvent,
       setOrganizationsState: setOrganizations,
       setVenuesState: setVenues,
       setSectorsState: setSectors,
@@ -4363,6 +4402,7 @@ export function WorkspaceServiceProvider({
       repositories,
       searchGuestList,
       setEventStatus,
+      activateEvent,
       setCurrentEventId,
       setCurrentOrganizationId,
       setActiveEventId,
