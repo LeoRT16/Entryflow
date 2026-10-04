@@ -75,7 +75,6 @@ export default function EventLibrary() {
   const [editorEventId, setEditorEventId] = useState<string | null>(null);
   const organizationEvents = useMemo(() => getEventsForOrganization(currentOrganization.id, events), [currentOrganization.id, events]);
 
-  console.info("[EF_EVENT_BOOT_TRACE]", { source: "EventLibrary", phase: "render", runtimeEventId: currentEventId, persistedEventId: typeof window === "undefined" ? "" : window.localStorage.getItem("entryflow.currentEventId") ?? "", organizationId: currentOrganization.id, persistedOrganizationId: typeof window === "undefined" ? "" : window.localStorage.getItem("entryflow.currentOrganizationId") ?? "", eventIds: organizationEvents.map((event) => event.id) });
 
   const organizationVenues = useMemo(() => getVenuesForOrganization(currentOrganization.id, venues), [currentOrganization.id, venues]);
 

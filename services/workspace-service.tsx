@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, startTransition, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 
 import { useFeedback } from "@/components/premium-feedback";
 import {
@@ -446,22 +446,7 @@ function readWorkspacePreference(key: string) {
   }
 
   const value = window.localStorage.getItem(key)?.trim() ?? "";
-  traceEventBoot({ source: "initial-localStorage-read", phase: key, nextEventId: key === "entryflow.currentEventId" ? value : "", organizationId: key === "entryflow.currentOrganizationId" ? value : "" });
   return value;
-}
-
-let eventBootSequence = 0;
-
-function traceEventBoot({ source, phase, providerInstanceId, providerMountId, runtimeEventId, previousEventId, nextEventId, organizationId, status, eventIds, details }: {
-  source: string; phase: string; providerInstanceId?: string; providerMountId?: string; runtimeEventId?: string; previousEventId?: string; nextEventId?: string; organizationId?: string; status?: string; eventIds?: string[]; details?: Record<string, unknown>;
-}) {
-  if (typeof window === "undefined") return;
-  eventBootSequence += 1;
-  console.info("[EF_EVENT_BOOT_TRACE]", {
-    sequence: eventBootSequence, providerInstanceId: providerInstanceId ?? "", providerMountId: providerMountId ?? "", source, phase, runtimeEventId: runtimeEventId ?? "", persistedEventId: window.localStorage.getItem("entryflow.currentEventId") ?? "",
-    previousEventId: previousEventId ?? "", nextEventId: nextEventId ?? "", organizationId: organizationId ?? "",
-    persistedOrganizationId: window.localStorage.getItem("entryflow.currentOrganizationId") ?? "", status: status ?? "", eventIds: eventIds ?? [], ...details,
-  });
 }
 
 function hasAccessibleOrganization(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string) {
@@ -539,21 +524,19 @@ function resolveBootstrapCurrentProfileId(
     ?? "";
 }
 
-export function resolveWorkspaceBootstrapSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "", providerInstanceId = "") {
-  const currentOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace, providerInstanceId);
+export function resolveWorkspaceBootstrapSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "") {
+  const currentOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
 
   const selection = {
     currentOrganizationId,
-    currentEventId: resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId, providerInstanceId),
-    currentProfileId: resolveInitialCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId, providerInstanceId),
+    currentEventId: resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId),
+    currentProfileId: resolveInitialCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
   };
-  traceEventBoot({ source: "resolveWorkspaceBootstrapSelection", phase: "after", providerInstanceId, runtimeEventId: initialWorkspace?.currentEventId, nextEventId: selection.currentEventId, organizationId: selection.currentOrganizationId, eventIds: initialWorkspace?.events.map((event) => event.id) });
   return selection;
 }
 
-export function resolveInitialCurrentOrganizationId(initialWorkspace: WorkspaceBootstrap | null | undefined, providerInstanceId = "") {
+export function resolveInitialCurrentOrganizationId(initialWorkspace: WorkspaceBootstrap | null | undefined) {
   const storedOrganizationId = readWorkspacePreference("entryflow.currentOrganizationId");
-  traceEventBoot({ source: "resolveInitialCurrentOrganizationId", phase: "decision", providerInstanceId, organizationId: storedOrganizationId, details: { loaderOrganizationId: initialWorkspace?.currentOrganizationId ?? "" } });
 
   if (hasAccessibleOrganization(initialWorkspace, storedOrganizationId)) {
     return storedOrganizationId;
@@ -562,17 +545,8 @@ export function resolveInitialCurrentOrganizationId(initialWorkspace: WorkspaceB
   return resolveBootstrapCurrentOrganizationId(initialWorkspace);
 }
 
-export function resolveInitialCurrentEventId(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string, providerInstanceId = "") {
+export function resolveInitialCurrentEventId(initialWorkspace: WorkspaceBootstrap | null | undefined, organizationId: string) {
   const storedEventId = readWorkspacePreference("entryflow.currentEventId");
-  const events = initialWorkspace?.events ?? [];
-  const requestedEvent = events.find((event) => event.id === storedEventId);
-  const fallbackEvent = events.find((event) => event.organizationId === organizationId && event.status === "live")
-    ?? events.find((event) => event.organizationId === organizationId);
-  const reason = requestedEvent
-    ? requestedEvent.organizationId === organizationId ? "persisted-valid" : "persisted-wrong-organization"
-    : fallbackEvent ? "persisted-not-found/fallback-valid" : "no-valid-event";
-  traceEventBoot({ source: "resolveInitialCurrentEventId", phase: "decision", providerInstanceId, runtimeEventId: initialWorkspace?.currentEventId, nextEventId: storedEventId, organizationId, eventIds: events.map((event) => event.id), details: { loaderEventId: initialWorkspace?.currentEventId ?? "", requestedEventExists: Boolean(requestedEvent), requestedEventOrganizationMatches: requestedEvent?.organizationId === organizationId, fallbackEventId: fallbackEvent?.id ?? "", reason } });
-
   if (hasAccessibleEvent(initialWorkspace, organizationId, storedEventId)) {
     return storedEventId;
   }
@@ -584,10 +558,8 @@ export function resolveInitialCurrentProfileId(
   initialWorkspace: WorkspaceBootstrap | null | undefined,
   organizationId: string,
   currentUserId = "",
-  providerInstanceId = "",
 ) {
   const storedProfileId = readWorkspacePreference("entryflow.currentProfileId");
-  traceEventBoot({ source: "resolveInitialCurrentProfileId", phase: "decision", providerInstanceId, details: { requestedProfileId: storedProfileId, loaderProfileId: initialWorkspace?.currentProfileId ?? "", organizationId } });
 
   if (hasAccessibleProfile(initialWorkspace, organizationId, storedProfileId, currentUserId)) {
     return storedProfileId;
@@ -678,12 +650,10 @@ export function resolveOrganizationSwitchState({
 }
 
 function persistWorkspaceSelection({
-  source = "workspace-selection-persist",
   currentOrganizationId,
   currentEventId,
   currentProfileId,
 }: {
-  source?: string;
   currentOrganizationId: string;
   currentEventId: string;
   currentProfileId: string;
@@ -691,8 +661,6 @@ function persistWorkspaceSelection({
   if (typeof window === "undefined") {
     return;
   }
-
-  traceEventBoot({ source, phase: "before", runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId });
 
   window.localStorage.setItem("entryflow.currentOrganizationId", currentOrganizationId);
   window.localStorage.setItem("entryflow.currentEventId", currentEventId);
@@ -713,7 +681,6 @@ export function canRestoreWorkspacePreference({
   persistedEventId: string;
 }) {
   const allowed = browserAuthReady && status !== "loading" && organizationCount > 0 && !(persistedEventId && eventCount === 0);
-  traceEventBoot({ source: "canRestoreWorkspacePreference", phase: "resolved", nextEventId: allowed ? persistedEventId : "", status, eventIds: [] });
   return allowed;
 }
 
@@ -1215,14 +1182,6 @@ export function WorkspaceServiceProvider({
   initialWorkspace?: WorkspaceBootstrap | null;
 }) {
   const { notify } = useFeedback();
-  const providerInstanceId = useId();
-  const [providerMountId] = useState(() => createUuid());
-  useEffect(() => {
-    traceEventBoot({ source: "provider-lifecycle", phase: "mount", providerInstanceId, providerMountId });
-    return () => {
-      traceEventBoot({ source: "provider-lifecycle", phase: "unmount", providerInstanceId, providerMountId });
-    };
-  }, [providerInstanceId, providerMountId]);
   const repositories = useMemo(() => createSupabaseWorkspaceRepositories(getSupabaseBrowserClient()), []);
   const requestReportingAfterSuccess = useCallback(async (eventId: string) => {
     try {
@@ -1253,7 +1212,6 @@ export function WorkspaceServiceProvider({
   const [profiles, setProfiles] = useState<OrganizationMembership[]>(initialWorkspace?.profiles ?? []);
   const [roles, setRoles] = useState<AccountRolePreset[]>(initialWorkspace?.roles ?? []);
   const [events, setEvents] = useState<PlatformEvent[]>(initialWorkspace?.events ?? []);
-  traceEventBoot({ source: "workspace-initialization", phase: "before-bootstrap-selection", providerInstanceId, providerMountId, runtimeEventId: initialWorkspace?.currentEventId, organizationId: initialWorkspace?.currentOrganizationId, status: "initializing", eventIds: initialWorkspace?.events.map((event) => event.id) });
   const requestReportingForVenue = useCallback(async (venueId: string | undefined) => {
     if (!venueId) return;
     await Promise.all(events.filter((event) => event.venueId === venueId).map((event) => requestReportingAfterSuccess(event.id)));
@@ -1267,38 +1225,17 @@ export function WorkspaceServiceProvider({
   const [persistedTimelineEvents, setPersistedTimelineEvents] = useState<TimelineEvent[]>(initialWorkspace?.timelineEvents ?? []);
   const consumedAccessGrantIdsRef = useRef<Set<string>>(new Set());
   const initialCurrentUserId = initialWorkspace?.currentUserId ?? "";
-  const initialSelection = resolveWorkspaceBootstrapSelection(initialWorkspace, initialCurrentUserId, providerInstanceId);
-  traceEventBoot({ source: "workspace-initial-selection", phase: "before-react-state", providerInstanceId, providerMountId, runtimeEventId: initialSelection.currentEventId, nextEventId: initialSelection.currentEventId, organizationId: initialSelection.currentOrganizationId, eventIds: initialWorkspace?.events.map((event) => event.id), details: {
-    loaderOrganizationId: initialWorkspace?.currentOrganizationId ?? "", loaderEventId: initialWorkspace?.currentEventId ?? "", loaderProfileId: initialWorkspace?.currentProfileId ?? "",
-    resolvedProfileId: initialSelection.currentProfileId, persistedOrganizationId: typeof window === "undefined" ? "" : window.localStorage.getItem("entryflow.currentOrganizationId") ?? "", persistedEventId: typeof window === "undefined" ? "" : window.localStorage.getItem("entryflow.currentEventId") ?? "", persistedProfileId: typeof window === "undefined" ? "" : window.localStorage.getItem("entryflow.currentProfileId") ?? "", profileIds: initialWorkspace?.profiles.map((profile) => profile.id) ?? [],
-  } });
+  const initialSelection = resolveWorkspaceBootstrapSelection(initialWorkspace, initialCurrentUserId);
   const [currentOrganizationId, setCurrentOrganizationIdState] = useState(() => {
     return initialSelection.currentOrganizationId;
   });
-  const [currentEventId, setCurrentEventIdState] = useState(() => {
-    traceEventBoot({
-      source: "currentEventId-useState-initializer",
-      phase: "lazy-initializer",
-      providerInstanceId,
-      providerMountId,
-      runtimeEventId: initialSelection.currentEventId,
-      nextEventId: initialSelection.currentEventId,
-      organizationId: initialSelection.currentOrganizationId,
-      eventIds: events.map((event) => event.id),
-    });
-    return initialSelection.currentEventId;
-  });
-  const setCurrentEventIdWithTrace = useCallback((nextEventId: string, source: string) => {
-    traceEventBoot({ source, phase: "before-state-set", providerInstanceId, providerMountId, previousEventId: currentEventId, nextEventId, runtimeEventId: currentEventId, organizationId: currentOrganizationId, eventIds: events.map((event) => event.id) });
+  const [currentEventId, setCurrentEventIdState] = useState(() => initialSelection.currentEventId);
+  const setCurrentEventIdWithTrace = useCallback((nextEventId: string, _source?: string) => {
     setCurrentEventIdState(nextEventId);
-  }, [currentEventId, currentOrganizationId, events, providerInstanceId, providerMountId]);
-  useEffect(() => {
-    traceEventBoot({ source: "runtime-currentEventId-committed", phase: "after-state-commit", providerInstanceId, providerMountId, runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, eventIds: events.map((event) => event.id) });
-  }, [currentEventId, currentOrganizationId, events, providerInstanceId, providerMountId]);
+  }, []);
   const [currentProfileId, setCurrentProfileIdState] = useState(() => {
     return initialSelection.currentProfileId;
   });
-  traceEventBoot({ source: "workspace-react-state-initialized", phase: "after-useState", providerInstanceId, providerMountId, runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, eventIds: events.map((event) => event.id), details: { initialSelectionEventId: initialSelection.currentEventId, initialSelectionOrganizationId: initialSelection.currentOrganizationId, initialSelectionProfileId: initialSelection.currentProfileId } });
   const [status, setStatus] = useState<WorkspaceServiceStatus>(
     hasWorkspaceData(initialWorkspace) ? "ready" : hasSupabaseConfig() ? "loading" : "empty",
   );
@@ -1335,13 +1272,10 @@ export function WorkspaceServiceProvider({
 
     const persistedEventId = readWorkspacePreference("entryflow.currentEventId");
     if (!shouldPersistWorkspaceSelection({ preferenceHydrated: restoredWorkspacePreferenceRef.current, currentEventId, persistedEventId })) {
-      traceEventBoot({ providerMountId, source: "state-persistence-effect", phase: "skip-unhydrated-empty", runtimeEventId: currentEventId, nextEventId: persistedEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
       return;
     }
 
-    traceEventBoot({ providerMountId, source: "state-persistence-effect", phase: "before", runtimeEventId: currentEventId, nextEventId: currentEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
     persistWorkspaceSelection({
-      source: "state-persistence-effect",
       currentOrganizationId,
       currentEventId,
       currentProfileId,
@@ -1372,7 +1306,6 @@ export function WorkspaceServiceProvider({
       initialCurrentUserId,
     );
 
-    traceEventBoot({ providerMountId, source: "preference-restoration", phase: "resolved", runtimeEventId: currentEventId, nextEventId: restoredSelection.currentEventId, organizationId: restoredSelection.currentOrganizationId, status, eventIds: events.map((event) => event.id) });
 
     restoredWorkspacePreferenceRef.current = true;
     startTransition(() => {
@@ -1380,7 +1313,7 @@ export function WorkspaceServiceProvider({
       setCurrentEventIdWithTrace(restoredSelection.currentEventId, "preference-restoration");
       setCurrentProfileIdState(restoredSelection.currentProfileId);
     });
-    persistWorkspaceSelection({ ...restoredSelection, source: "preference-restoration" });
+    persistWorkspaceSelection(restoredSelection);
   }, [browserAuthReady, currentEventId, currentOrganizationId, currentProfileId, events, initialCurrentUserId, organizations, profiles, status]);
 
   useEffect(() => {
@@ -1447,7 +1380,6 @@ export function WorkspaceServiceProvider({
   );
 
   const restoreSnapshot = useCallback((snapshot: ReturnType<typeof captureSnapshot>) => {
-    traceEventBoot({ providerMountId, source: "restoreSnapshot", phase: "before", runtimeEventId: currentEventId, nextEventId: snapshot.currentEventId, organizationId: snapshot.currentOrganizationId, status, eventIds: snapshot.events.map((event) => event.id) });
     setUsers(snapshot.users);
     setRoles(snapshot.roles);
     setProfiles(snapshot.profiles);
@@ -1485,7 +1417,6 @@ export function WorkspaceServiceProvider({
   }, []);
 
   const reloadWorkspace = useCallback(async () => {
-    traceEventBoot({ providerMountId, source: "reloadWorkspace", phase: "before", runtimeEventId: currentEventId, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
     const generation = ++reloadGenerationRef.current;
     try {
       if (getWorkspaceReloadStatus(status) === "loading") {
@@ -1509,7 +1440,6 @@ export function WorkspaceServiceProvider({
         snapshot.currentEventId,
         events,
       );
-      traceEventBoot({ providerMountId, source: "reloadWorkspace", phase: "resolved", runtimeEventId: currentEventId, nextEventId: nextCurrentEventId, organizationId: nextCurrentOrganizationId, status, eventIds: snapshot.events.map((event) => event.id) });
       const nextEvents = snapshot.events.length === 0 && events.length > 0 ? events : snapshot.events;
       const nextCurrentProfileId = initialCurrentUserId
         ? accessibleProfiles.find((profile) => profile.id === currentProfileId && (!nextCurrentOrganizationId || profile.organizationId === nextCurrentOrganizationId))?.id
@@ -2050,7 +1980,6 @@ export function WorkspaceServiceProvider({
     const nextEvent = events.find((event) => event.id === eventId && event.organizationId === currentOrganizationId);
 
     if (nextEvent) {
-      traceEventBoot({ providerMountId, source: "explicit-setCurrentEventId", phase: "before", runtimeEventId: currentEventId, nextEventId: nextEvent.id, organizationId: currentOrganizationId, status, eventIds: events.map((event) => event.id) });
       setCurrentEventIdWithTrace(nextEvent.id, "explicit-selection");
     }
   }, [currentAccount.roleSlug, currentOrganizationId, events]);
