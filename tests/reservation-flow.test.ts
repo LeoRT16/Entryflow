@@ -153,6 +153,13 @@ test("reservation edit keeps the canonical reservation when the selected resourc
   assert.doesNotMatch(editBlock, /selectedActiveReservation\.reservationType === "Cortesía"/);
 });
 
+test("presale edit submits the hydrated reservation identity", () => {
+  const source = readFileSync(new URL("../features/reservations/components/reservation-flow.tsx", import.meta.url), "utf8");
+  assert.match(source, /selectedActiveReservation=\{wizardMode === "edit" \? wizardReservation/);
+  const modalSource = readFileSync(new URL("../features/reservations/components/reservation-wizard-modal.tsx", import.meta.url), "utf8");
+  assert.match(modalSource, /reservationId: selectedActiveReservation\?\.id \?\? ""/);
+});
+
 test("reservation persistence only writes a table id when a matching persisted table exists", () => {
   assert.equal(resolvePersistedReservationTableId([], "mesa-1"), undefined);
   assert.equal(resolvePersistedReservationTableId([{ id: "mesa-1" }], "mesa-1"), "mesa-1");

@@ -1326,7 +1326,7 @@ function ReservationFlowWorkspace({
           updateGuest={updateGuest}
           selectedResource={selectedResource}
           selectedResourceSummary={selectedResourceSummary}
-          selectedActiveReservation={isNonPhysical ? null : wizardReservation}
+          selectedActiveReservation={wizardMode === "edit" ? wizardReservation : isNonPhysical ? null : wizardReservation}
           selectedReservationConflictCount={selectedReservationConflictCount}
           wizardMode={wizardMode}
           selectedResourceId={selectedResourceId}
