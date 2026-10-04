@@ -703,7 +703,7 @@ export default function ReservationOperationsBoard({
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300">
                   <span className="max-w-full break-words rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 normal-case tracking-normal">
                     {reservation.reservationType === "Preventa"
-                      ? `${reservation.metrics.guestCount} preventas`
+                      ? `${reservation.metrics.purchasedAccesses} accesos`
                       : reservation.reservationType === "Cortesía"
                         ? `${reservation.metrics.guestCount} cortesías${reservation.reference ? ` · ${reservation.reference}` : ""}`
                         : `Mesa ${reservation.tableName}`}
@@ -714,7 +714,7 @@ export default function ReservationOperationsBoard({
                     </span>
                   ) : null}
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
-                    {reservation.reservationType === "Cortesía" ? "Cortesías" : "Invitados"} {reservation.metrics.guestCount}
+                    {reservation.reservationType === "Preventa" ? "Asignados" : reservation.reservationType === "Cortesía" ? "Cortesías" : "Invitados"} {reservation.metrics.assignedAccesses}
                   </span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
                     Ingresados {reservation.metrics.checkedInGuests}
@@ -861,10 +861,10 @@ export default function ReservationOperationsBoard({
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ReservationInfoRow label={activeReservation.reservationType === "Cortesía" ? "Cortesías" : "Invitados"} value={`${activeReservation.metrics.guestCount}`} />
+          <ReservationInfoRow label={activeReservation.reservationType === "Preventa" ? "Accesos comprados" : activeReservation.reservationType === "Cortesía" ? "Cortesías" : "Invitados"} value={`${activeReservation.reservationType === "Preventa" ? activeReservation.metrics.purchasedAccesses : activeReservation.metrics.guestCount}`} />
           <ReservationInfoRow label="Ingresados" value={`${activeReservation.metrics.checkedInGuests}`} />
           <ReservationInfoRow label="Pendientes" value={`${activeReservation.metrics.pendingGuests}`} />
-          {activeReservation.reservationType !== "Cortesía" ? <ReservationInfoRow label="Capacidad restante" value={`${activeReservation.metrics.capacityRemaining}`} /> : null}
+          {activeReservation.reservationType === "Preventa" ? <ReservationInfoRow label="Por asignar" value={`${activeReservation.metrics.unassignedAccesses}`} /> : activeReservation.reservationType !== "Cortesía" ? <ReservationInfoRow label="Capacidad restante" value={`${activeReservation.metrics.capacityRemaining}`} /> : null}
         </div>
 
         {activeReservation.reservationType === "Cortesía" ? (

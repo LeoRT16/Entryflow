@@ -389,14 +389,18 @@ export function buildReservationMetrics(
   const reservationGuests = guests.filter((guest) => guest.reservationId === reservation.id);
   const operationalGuests = reservationGuests.filter(isOperationalReservationGuest);
   const isCourtesy = reservation.reservationType === "Cortesía";
+  const isPresale = reservation.reservationType === "Preventa";
   const guestCount = operationalGuests.length;
+  const purchasedAccesses = isPresale ? Math.max(0, Math.floor(reservation.commercialSnapshot?.quantity ?? guestCount)) : guestCount;
+  const assignedAccesses = isPresale ? guestCount : guestCount;
+  const unassignedAccesses = isPresale ? Math.max(purchasedAccesses - assignedAccesses, 0) : 0;
   const confirmedGuests = operationalGuests.filter((guest) => normalizeReservationStatus(guest.reservationStatus) === "Confirmed" || guest.admissionStatus === "Ingresó").length;
   const pendingGuests = operationalGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
   const checkedInGuests = operationalGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
   const cancelledGuests = reservationGuests.filter((guest) => normalizeReservationStatus(guest.reservationStatus) === "Cancelled" || guest.admissionStatus === "Anulada").length;
   const attendancePercent = Math.round((checkedInGuests / Math.max(guestCount, 1)) * 100);
-  const occupancyPercent = isCourtesy ? 0 : Math.round((guestCount / Math.max(reservation.tableCapacity, 1)) * 100);
-  const capacityRemaining = isCourtesy ? 0 : Math.max(reservation.tableCapacity - guestCount, 0);
+  const occupancyPercent = isCourtesy || isPresale ? 0 : Math.round((guestCount / Math.max(reservation.tableCapacity, 1)) * 100);
+  const capacityRemaining = isCourtesy ? 0 : isPresale ? unassignedAccesses : Math.max(reservation.tableCapacity - guestCount, 0);
   const latestAccess = [...checkIns]
     .filter(
       (checkIn) =>
@@ -412,6 +416,9 @@ export function buildReservationMetrics(
 
   return {
     guestCount,
+    purchasedAccesses,
+    assignedAccesses,
+    unassignedAccesses,
     confirmedGuests,
     pendingGuests,
     checkedInGuests,

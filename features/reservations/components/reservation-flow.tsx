@@ -1119,6 +1119,10 @@ function ReservationFlowWorkspace({
       }
 
       setActiveReservationId(reservationId);
+      setEditingReservationId(reservationId);
+      setWizardMode("edit");
+      setIsWizardOpen(true);
+      setStep(1);
       const nextParams = new URLSearchParams(searchParams.toString());
       nextParams.set("editReservationId", reservationId);
       nextParams.set("action", "edit");

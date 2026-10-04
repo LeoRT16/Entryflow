@@ -151,6 +151,9 @@ export type ReservationGuestSummary = {
 
 export type ReservationMetrics = {
   guestCount: number;
+  purchasedAccesses: number;
+  assignedAccesses: number;
+  unassignedAccesses: number;
   confirmedGuests: number;
   pendingGuests: number;
   checkedInGuests: number;
