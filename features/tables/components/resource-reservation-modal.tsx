@@ -10,6 +10,7 @@ import { formatReservationStatus, getReservationStatusTone, isTerminalReservatio
 import type { Guest } from "@/features/check-in/types";
 import type { ReservationRecord } from "@/features/reservations/types";
 import type { TableSummary } from "@/features/tables/types";
+import { isPhysicalTableGuest } from "@/features/tables/domain/table-domain";
 
 type MoveGuestAction = (guestId: string, resourceId: string) => Promise<void>;
 type ChangeTableAction = (input: { reservationId: string; destinationResourceId: string; idempotencyKey: string }) => Promise<{ kind: "change" | "swap" }>;
@@ -67,12 +68,20 @@ export default function ResourceReservationModal({
   }
 
   const guestCount = summary?.metrics.assignedGuests ?? guests.length;
+  const physicalGuests = guests.filter((guest) => guest.tableId === resource.id && isPhysicalTableGuest(guest));
   const overCapacity = summary?.metrics.overCapacity ?? Math.max(guestCount - resource.capacity, 0);
   const reservationTone = getReservationStatusTone(reservation.status);
   const moveTargets = availableResources.filter((item) => item.id !== resource.id);
   const changeTargets = moveTargets.filter((item) => item.status !== "Closed" && item.status !== "Blocked");
+  const selectedTarget = changeTargetId ? changeTargets.find((item) => item.id === changeTargetId) ?? null : null;
+  const targetSummary = selectedTarget ? resourceSummaries.get(selectedTarget.id) ?? null : null;
+  const destinationOccupied = Boolean(targetSummary?.reservations.length);
+  const destinationGuestCount = targetSummary?.metrics.assignedGuests ?? 0;
+  const sourceResultCount = destinationOccupied ? destinationGuestCount : physicalGuests.length;
+  const destinationResultCount = destinationOccupied ? physicalGuests.length : guestCount;
+  const projectionValid = Boolean(selectedTarget) && sourceResultCount <= (selectedTarget?.capacity ?? 0) && (!destinationOccupied || destinationResultCount <= resource.capacity);
   const submitChange = async () => {
-    if (!changeTargetId || isChangeSubmitting) return;
+    if (!changeTargetId || !projectionValid || isChangeSubmitting) return;
     setIsChangeSubmitting(true); setChangeError(null);
     try {
       const result = await onChangeTable({ reservationId: reservation.id, destinationResourceId: changeTargetId, idempotencyKey: `${reservation.id}:${resource.id}:${changeTargetId}` });
@@ -118,8 +127,9 @@ export default function ResourceReservationModal({
         className="absolute inset-0"
       />
 
-      <div className="relative mx-auto flex h-full w-full max-w-4xl items-center p-4">
-        <section className="relative w-full rounded-[2rem] border border-white/10 bg-[#0b0f14] p-5 shadow-[0_32px_120px_rgba(0,0,0,0.45)]">
+      <div className="relative mx-auto flex h-full w-full max-w-4xl items-center overflow-y-auto p-4">
+        <section className="relative my-auto flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#0b0f14] shadow-[0_32px_120px_rgba(0,0,0,0.45)]">
+          <div className="min-h-0 overflow-y-auto p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
@@ -177,7 +187,7 @@ export default function ResourceReservationModal({
                 {overCapacity > 0 ? <StatusBadge variant="danger">+{overCapacity}</StatusBadge> : null}
               </div>
 
-              <div className="mt-4 space-y-2">
+              <div className="mt-4 max-h-[min(28rem,45dvh)] space-y-2 overflow-y-auto pr-1">
                 {guests.length ? (
                   guests.map((guest) => (
                     <div key={guest.id} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
@@ -227,16 +237,18 @@ export default function ResourceReservationModal({
             <section className="mt-5 rounded-[1.25rem] border border-cyan-400/20 bg-cyan-400/[0.05] p-4">
               {!isChangeOpen ? <button type="button" onClick={() => setIsChangeOpen(true)} className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-50">Cambiar mesa</button> : (
                 <div className="space-y-3">
-                  <p className="text-sm font-semibold text-white">{changeTargetId && availableResources.find((item) => item.id === changeTargetId)?.id ? "Confirmar cambio o intercambio" : "Selecciona una mesa destino"}</p>
+                  <p className="text-sm font-semibold text-white">{selectedTarget ? (destinationOccupied ? "INTERCAMBIAR MESAS" : "CAMBIAR MESA") : "Selecciona una mesa destino"}</p>
                   <select aria-label="Mesa destino" value={changeTargetId} onChange={(event) => setChangeTargetId(event.target.value)} className="h-10 w-full rounded-xl border border-white/15 bg-slate-900 px-3 text-sm text-white"><option value="">Selecciona una mesa</option>{changeTargets.map((target) => <option key={target.id} value={target.id}>{target.name} · {resourceSummaries.get(target.id)?.metrics.assignedGuests ?? 0}/{target.capacity}</option>)}</select>
+                  {selectedTarget ? <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300"><p>{resource.name} → {selectedTarget.name}: {physicalGuests.length} invitados físicos</p>{destinationOccupied ? <p className="mt-1">{selectedTarget.name} → {resource.name}: {destinationGuestCount} invitados físicos</p> : null}<p className="mt-1">{selectedTarget.name} quedará en {sourceResultCount}/{selectedTarget.capacity}{destinationOccupied ? ` · ${resource.name} quedará en ${destinationResultCount}/${resource.capacity}` : ""}</p><p className={projectionValid ? "mt-1 text-emerald-200" : "mt-1 text-rose-200"}>{projectionValid ? "Capacidad válida" : "Capacidad excedida"}</p></div> : null}
                   {changeError ? <p role="alert" className="text-sm text-rose-200">{changeError}</p> : null}
-                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setIsChangeOpen(false); setChangeError(null); }} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-white">Cancelar</button><button type="button" onClick={() => void submitChange()} disabled={!changeTargetId || isChangeSubmitting} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">{isChangeSubmitting ? "Cambiando…" : "Confirmar"}</button></div>
+                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setIsChangeOpen(false); setChangeError(null); }} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-white">Cancelar</button><button type="button" onClick={() => void submitChange()} disabled={!projectionValid || isChangeSubmitting} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">{isChangeSubmitting ? "Cambiando…" : destinationOccupied ? "Confirmar intercambio" : "Confirmar cambio"}</button></div>
                 </div>
               )}
             </section>
           ) : null}
 
-          <div className="mt-5 flex flex-wrap justify-end gap-2">
+          </div>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-white/10 bg-[#0b0f14] p-5">
             <button
               type="button"
               onClick={onClose}

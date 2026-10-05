@@ -226,6 +226,21 @@ test("tables flow exposes the venue context bar and the create-venue empty state
   assert.doesNotMatch(source, /inline-flex h-11 items-center rounded-2xl border border-white\/10 bg-white\/\[0\.04\] px-4 text-sm font-medium text-white/);
 });
 
+test("resource reassignment preview is explicit, capacity-aware, and permission-gated", () => {
+  const source = readFileSync(new URL("../features/tables/components/resource-reservation-modal.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /isPhysicalTableGuest/);
+  assert.match(source, /INTERCAMBIAR MESAS/);
+  assert.match(source, /CAMBIAR MESA/);
+  assert.match(source, /Confirmar intercambio/);
+  assert.match(source, /Confirmar cambio/);
+  assert.match(source, /physicalGuests\.length/);
+  assert.match(source, /projectionValid/);
+  assert.match(source, /disabled={!projectionValid \|\| isChangeSubmitting}/);
+  assert.match(source, /max-h-\[calc\(100dvh-2rem\)\]/);
+  assert.match(source, /overflow-y-auto/);
+});
+
 test("venue management section reuses the old editable venue fields and keeps map support absent", () => {
   const source = readFileSync(new URL("../features/tables/components/venue-management-section.tsx", import.meta.url), "utf8");
 
