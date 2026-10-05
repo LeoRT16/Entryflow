@@ -63,6 +63,7 @@ export type TableRecord = Resource & {
 
 export type TableMetrics = {
   assignedGuests: number;
+  extraGuestCount: number;
   checkedInGuests: number;
   pendingGuests: number;
   capacityRemaining: number;

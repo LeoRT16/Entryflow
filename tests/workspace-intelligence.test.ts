@@ -237,6 +237,7 @@ test("workspace intelligence keeps ingresados canonical while the timeline stays
     status: "Available",
     metrics: {
       assignedGuests: 0,
+      extraGuestCount: 0,
       capacityRemaining: 13,
       occupancyPercent: 0,
     },
@@ -284,6 +285,7 @@ test("workspace capacity uses linked physical table resources and keeps blocker 
     statusTone: "warning",
     metrics: {
       assignedGuests,
+      extraGuestCount: 0,
       checkedInGuests: 0,
       pendingGuests: assignedGuests,
       capacityRemaining: Math.max(capacity - assignedGuests, 0),

@@ -199,5 +199,29 @@ test("extra wristband Guests remain linked but do not consume physical table cap
 
   assert.equal(summary.guests.length, 3);
   assert.equal(summary.metrics.assignedGuests, 1);
+  assert.equal(summary.metrics.extraGuestCount, 2);
   assert.equal(summary.metrics.capacityRemaining, 4);
+});
+
+test("extra wristbands never affect full or over-capacity semantics", () => {
+  const table = buildTable({ capacity: 5 });
+  const reservation = buildReservation({ guestIds: ["g1", "g2", "g3", "g4", "g5", "x1", "x2"] });
+  const guests = [
+    ...Array.from({ length: 5 }, (_, index) => ({ id: `g${index + 1}`, reservationId: reservation.id, guestName: `Guest ${index + 1}`, admissionStatus: "Pendiente" })),
+    { id: "x1", reservationId: reservation.id, extraWristbandSaleId: "sale-1", guestName: "Extra 1", admissionStatus: "Pendiente" },
+    { id: "x2", reservationId: reservation.id, extraWristbandSaleId: "sale-1", guestName: "Extra 2", admissionStatus: "Pendiente" },
+  ] as never;
+  const full = buildTableSummary(table, [reservation], guests, [], "event-current");
+  assert.equal(full.metrics.assignedGuests, 5);
+  assert.equal(full.metrics.extraGuestCount, 2);
+  assert.equal(full.metrics.overCapacity, 0);
+  assert.equal(full.status, "Full");
+
+  const overCapacity = buildTableSummary(table, [reservation], [
+    ...guests,
+    { id: "g6", reservationId: reservation.id, guestName: "Guest 6", admissionStatus: "Pendiente" },
+  ] as never, [], "event-current");
+  assert.equal(overCapacity.metrics.assignedGuests, 6);
+  assert.equal(overCapacity.metrics.extraGuestCount, 2);
+  assert.equal(overCapacity.metrics.overCapacity, 1);
 });

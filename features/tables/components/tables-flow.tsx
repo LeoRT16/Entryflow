@@ -1230,6 +1230,11 @@ function TablesFlowWorkspace() {
                         <span className="text-base font-semibold text-white">
                           {occupancy}
                         </span>
+                        {summary?.metrics.extraGuestCount ? (
+                          <span className="context-chip" data-tone="warning">
+                            +{summary.metrics.extraGuestCount} {summary.metrics.extraGuestCount === 1 ? "extra" : "extras"}
+                          </span>
+                        ) : null}
                         {summary?.metrics.overCapacity ? (
                           <span className="context-chip" data-tone="warning">
                             Sobrecapacidad +{summary.metrics.overCapacity}

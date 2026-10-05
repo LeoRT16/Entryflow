@@ -185,7 +185,9 @@ export function buildTableMetrics(
   currentEventId?: string,
 ): TableMetrics {
   const tableReservations = getActiveTableReservations(table, reservations, currentEventId);
-  const tableGuests = getPhysicalTableGuests(table, reservations, guests, currentEventId);
+  const allTableGuests = getTableGuests(table, reservations, guests, currentEventId);
+  const tableGuests = allTableGuests.filter(isPhysicalTableGuest);
+  const extraGuestCount = allTableGuests.filter((guest) => !isPhysicalTableGuest(guest)).length;
   const assignedGuests = tableGuests.length;
   const checkedInGuests = tableGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
   const pendingGuests = tableGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
@@ -198,6 +200,7 @@ export function buildTableMetrics(
 
   return {
     assignedGuests,
+    extraGuestCount,
     checkedInGuests,
     pendingGuests,
     capacityRemaining,
