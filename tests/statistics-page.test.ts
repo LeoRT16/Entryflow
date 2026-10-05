@@ -16,7 +16,12 @@ test("statistics page uses EventReport facts while retaining operational intelli
   assert.doesNotMatch(statisticsPageSource, /slice\(0, 4\)/);
   assert.doesNotMatch(statisticsPageSource, /Última reserva:/);
   assert.match(statisticsPageSource, /formatRate/);
+  assert.match(statisticsPageSource, /Promedio de ingresos registrados/);
   assert.match(statisticsPageSource, /buildStatisticsAttention/);
+  assert.doesNotMatch(statisticsPageSource, /Workspace/);
+  assert.doesNotMatch(statisticsPageSource, /Operations/);
+  const intelligence = readFileSync(new URL("../domain/workspace-intelligence.ts", import.meta.url), "utf8");
+  assert.match(intelligence, /Math\.round\(\(sorted\.length \/ /);
   assert.doesNotMatch(statisticsPageSource, /tableSummaries/);
   assert.doesNotMatch(statisticsPageSource, /Resumen operativo vivo/);
   assert.doesNotMatch(statisticsPageSource, /GuidedActionPanel/);

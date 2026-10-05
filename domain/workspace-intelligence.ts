@@ -266,7 +266,7 @@ function buildTimelineRates(checkIns: CheckIn[]) {
 
   const values = Array.from(perMinute.values());
   const checkInsPerMinute = sorted.length > 1
-    ? Math.round(sorted.length / Math.max(timeToMinutes(sorted[0].checkedInAt) - timeToMinutes(sorted.at(-1)?.checkedInAt ?? sorted[0].checkedInAt) + 1, 1))
+    ? Math.round((sorted.length / Math.max(timeToMinutes(sorted[0].checkedInAt) - timeToMinutes(sorted.at(-1)?.checkedInAt ?? sorted[0].checkedInAt) + 1, 1)) * 1000) / 1000
     : sorted.length;
 
   let totalIntervals = 0;
