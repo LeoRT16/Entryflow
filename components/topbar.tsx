@@ -14,7 +14,7 @@ export default function Topbar({
   secondaryAction,
   compact = false,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description?: string;
   primaryAction?: {
@@ -34,7 +34,7 @@ export default function Topbar({
     <header className={`surface-panel flex flex-col ${compact ? "gap-3 p-4 sm:p-4" : "gap-4 p-5 sm:p-6"}`}>
       <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className={`min-w-0 ${compact ? "space-y-2" : "space-y-3"}`}>
-          <p className="kicker">{eyebrow}</p>
+          {eyebrow ? <p className="kicker">{eyebrow}</p> : null}
           <h1 className={`font-semibold tracking-tight text-white ${compact ? "text-2xl sm:text-[2.2rem]" : "text-3xl sm:text-[2.6rem]"}`}>{title}</h1>
           {description ? <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-[0.95rem]">{description}</p> : null}
         </div>

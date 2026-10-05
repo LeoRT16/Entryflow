@@ -27,7 +27,6 @@ export default function TimelinePage() {
       <ModuleGuard module="activity">
         <div className="space-y-4">
           <Topbar
-            eyebrow="Actividad"
             title="Actividad"
             description="Cronología en tiempo real de los cambios operativos del evento activo."
             compact

@@ -371,10 +371,7 @@ export default function TimelineFeed({ events, timeZone = "UTC" }: { events: Tim
     <section className="surface-panel p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div>
-            <p className="kicker">
-              Actividad reciente
-            </p>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Cronología operativa</h2>
+            <h2 className="text-xl font-semibold tracking-tight text-white">Cronología operativa</h2>
           </div>
           <StatusBadge variant="info">0</StatusBadge>
         </div>
@@ -390,10 +387,7 @@ export default function TimelineFeed({ events, timeZone = "UTC" }: { events: Tim
     <section className="surface-panel p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
         <div>
-          <p className="kicker">
-            Actividad reciente
-          </p>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Cronología operativa</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-white">Cronología operativa</h2>
         </div>
         <StatusBadge variant="info">{events.length}</StatusBadge>
       </div>

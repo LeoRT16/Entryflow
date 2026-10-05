@@ -270,6 +270,18 @@ test("activity cards keep non-guest events free of guest placeholders", () => {
   assert.match(source, /shrink-0 whitespace-nowrap/);
 });
 
+test("activity page keeps the header hierarchy without redundant eyebrows", () => {
+  const page = readFileSync(new URL("../app/timeline/page.tsx", import.meta.url), "utf8");
+  const topbar = readFileSync(new URL("../components/topbar.tsx", import.meta.url), "utf8");
+  const feed = readFileSync(new URL("../features/timeline/components/timeline-feed.tsx", import.meta.url), "utf8");
+  assert.match(page, /title="Actividad"/);
+  assert.doesNotMatch(page, /eyebrow="Actividad"/);
+  assert.match(page, /compact/);
+  assert.match(topbar, /eyebrow\?: string/);
+  assert.match(feed, /Cronología operativa/);
+  assert.doesNotMatch(feed, /Actividad reciente/);
+});
+
 test("legacy guest table identity follows swaps without moving overrides or extras", () => {
   const service = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
   const migration = readFileSync(new URL("../supabase/migrations/20261022000000_resource_reservation_swap_atomic_legacy_guest_compat.sql", import.meta.url), "utf8");
