@@ -248,6 +248,17 @@ test("resource reassignment preview is explicit, capacity-aware, and permission-
   assert.match(summaryRow, /flex-1 break-words text-right/);
 });
 
+test("spaces creation uses automatic sibling ordering and compact dialogs", () => {
+  const source = readFileSync(new URL("../features/tables/components/tables-flow.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /Math\.max\(0, \.\.\.venueSectors\.map\(\(item\) => item\.order \?\? 0\)\) \+ 1/);
+  assert.match(source, /Math\.max\(0, \.\.\.venueResources\.map\(\(item\) => item\.order \?\? 0\)\) \+ 1/);
+  assert.match(source, /fixed inset-0 z-50/);
+  assert.match(source, /max-h-\[calc\(100dvh-2rem\)\]/);
+  assert.match(source, /Cancelar/);
+  assert.doesNotMatch(source, /<Field label="Orden">/);
+});
+
 test("legacy guest table identity follows swaps without moving overrides or extras", () => {
   const service = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
   const migration = readFileSync(new URL("../supabase/migrations/20261022000000_resource_reservation_swap_atomic_legacy_guest_compat.sql", import.meta.url), "utf8");

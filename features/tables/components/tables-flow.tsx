@@ -57,7 +57,6 @@ type SectorFormState = {
   name: string;
   description: string;
   capacity: string;
-  order: string;
   status: Sector["status"];
 };
 
@@ -66,7 +65,6 @@ type ResourceFormState = {
   type: ResourceType;
   capacity: string;
   sectorId: string;
-  order: string;
   status: Resource["status"];
   notes: string;
 };
@@ -75,7 +73,6 @@ const emptySectorForm: SectorFormState = {
   name: "",
   description: "",
   capacity: "",
-  order: "1",
   status: "active",
 };
 
@@ -84,7 +81,6 @@ const emptyResourceForm: ResourceFormState = {
   type: "table",
   capacity: "6",
   sectorId: "",
-  order: "1",
   status: "Available",
   notes: "",
 };
@@ -421,7 +417,6 @@ function TablesFlowWorkspace() {
       name: sector.name,
       description: sector.description ?? "",
       capacity: sector.capacity ? String(sector.capacity) : "",
-      order: String(sector.order ?? 1),
       status: sector.status,
     });
   };
@@ -467,7 +462,6 @@ function TablesFlowWorkspace() {
       type: resource.type,
       capacity: String(resource.capacity),
       sectorId: resource.sectorId ?? "",
-      order: String(resource.order ?? 1),
       status: resource.status,
       notes: resource.notes ?? "",
     });
@@ -496,7 +490,9 @@ function TablesFlowWorkspace() {
       capacity: sectorForm.capacity.trim()
         ? Number(sectorForm.capacity)
         : undefined,
-      order: Number(sectorForm.order || 1),
+      order: editingSectorId
+        ? (sectors.find((item) => item.id === editingSectorId)?.order ?? 1)
+        : Math.max(0, ...venueSectors.map((item) => item.order ?? 0)) + 1,
       status: sectorForm.status,
       createdAt: editingSectorId
         ? (sectors.find((item) => item.id === editingSectorId)?.createdAt ??
@@ -553,7 +549,9 @@ function TablesFlowWorkspace() {
       name: resourceName,
       capacity: Math.max(Number(resourceForm.capacity || 0), 0),
       status: resourceForm.status,
-      order: Number(resourceForm.order || 1),
+      order: editingResourceId
+        ? (resources.find((item) => item.id === editingResourceId)?.order ?? 1)
+        : Math.max(0, ...venueResources.map((item) => item.order ?? 0)) + 1,
       notes: resourceForm.notes.trim() || undefined,
       metadata: {},
       createdAt: editingResourceId
@@ -868,8 +866,9 @@ function TablesFlowWorkspace() {
 
       <section className="space-y-6">
         {isResourceFormOpen || isSectorFormOpen ? (
-          <div className="min-w-0 space-y-6">
-            <section className="surface-panel p-5">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/70 p-4">
+            <div className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-[1.5rem] border border-white/10 bg-[#0b0f14] p-5 shadow-[0_32px_120px_rgba(0,0,0,0.45)]">
+            <section className={isResourceFormOpen ? "surface-panel p-5" : "hidden"}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="kicker">Crear espacio</p>
@@ -927,20 +926,6 @@ function TablesFlowWorkspace() {
                     }
                     className={inputClassName}
                     placeholder="6"
-                    type="number"
-                  />
-                </Field>
-                <Field label="Orden">
-                  <input
-                    value={resourceForm.order}
-                    onChange={(event) =>
-                      setResourceForm((current) => ({
-                        ...current,
-                        order: event.target.value,
-                      }))
-                    }
-                    className={inputClassName}
-                    placeholder="1"
                     type="number"
                   />
                 </Field>
@@ -1014,19 +999,19 @@ function TablesFlowWorkspace() {
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    startCreateResource(
-                      resourceForm.sectorId || venueSectors[0]?.id || "",
-                    )
-                  }
+                  onClick={() => {
+                    setIsResourceFormOpen(false);
+                    setEditingResourceId(null);
+                    setResourceForm(emptyResourceForm);
+                  }}
                   className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
                 >
-                  Limpiar
+                  Cancelar
                 </button>
               </div>
             </section>
 
-            <section className="surface-panel p-5">
+            <section className={isSectorFormOpen ? "surface-panel p-5" : "hidden"}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="kicker">Configurar zona</p>
@@ -1051,20 +1036,6 @@ function TablesFlowWorkspace() {
                     }
                     className={inputClassName}
                     placeholder="Planta Baja"
-                  />
-                </Field>
-                <Field label="Orden">
-                  <input
-                    value={sectorForm.order}
-                    onChange={(event) =>
-                      setSectorForm((current) => ({
-                        ...current,
-                        order: event.target.value,
-                      }))
-                    }
-                    className={inputClassName}
-                    placeholder="1"
-                    type="number"
                   />
                 </Field>
                 <Field label="Capacidad opcional">
@@ -1124,13 +1095,18 @@ function TablesFlowWorkspace() {
                 </button>
                 <button
                   type="button"
-                  onClick={startCreateSector}
+                  onClick={() => {
+                    setIsSectorFormOpen(false);
+                    setEditingSectorId(null);
+                    setSectorForm(emptySectorForm);
+                  }}
                   className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
                 >
-                  Limpiar
+                  Cancelar
                 </button>
               </div>
             </section>
+            </div>
           </div>
         ) : null}
 
