@@ -219,6 +219,9 @@ export type GuestRow = SupabaseRowBase & {
   operator_activity: Guest["operatorActivity"];
   internal_notes: string | null;
   qr_status: QrStatus;
+  access_grant_id?: string | null;
+  access_code?: string | null;
+  qr_token?: string | null;
 };
 
 export type ReservationRow = SupabaseRowBase & {

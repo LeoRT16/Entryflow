@@ -582,6 +582,9 @@ export function mapGuestRowToDomain(row: GuestRow): Guest {
     operatorActivity: row.operator_activity,
     internalNotes: row.internal_notes ?? undefined,
     qrStatus: row.qr_status,
+    accessGrantId: row.access_grant_id ?? undefined,
+    accessCode: row.access_code ?? undefined,
+    qrToken: row.qr_token ?? undefined,
   };
   const accessGrant = buildAccessGrantFromGuest(guestBase);
 
