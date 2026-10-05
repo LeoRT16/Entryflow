@@ -3871,9 +3871,35 @@ export function WorkspaceServiceProvider({
       if (followsOtherReservation) return { ...guest, tableId: source, tableName: sourceResource?.name };
       return guest;
     }));
+    if (!persistedTimelineEvents.some((event) => event.metadata?.idempotencyKey === idempotencyKey)) {
+      const sourceResource = resources.find((item) => item.id === source);
+      const timelineEntry: TimelineEvent = {
+        id: createUuid(),
+        eventId: currentEvent.id,
+        timestamp: nowIso(),
+        kind: "table.changed",
+        icon: "table",
+        tone: "info",
+        title: other ? "Mesas intercambiadas" : "Mesa cambiada",
+        description: other
+          ? `${reservation.code} ↔ ${other.code}: ${sourceResource?.name ?? source} ↔ ${destination.name}.`
+          : `${reservation.code}: ${sourceResource?.name ?? source} → ${destination.name}.`,
+        actor: currentAccount.displayName,
+        actorRole: currentAccount.roleName,
+        context: currentEvent.name,
+        reservationId: reservation.id,
+        reservationCode: reservation.code,
+        reservationName: reservation.name,
+        tableId: destinationResourceId,
+        tableName: destination.name,
+        metadata: { idempotencyKey, sourceResourceId: source, destinationResourceId, swappedReservationId: other?.id },
+      };
+      upsertPersistedTimelineEvent(timelineEntry);
+      await repositories.timeline.upsert(timelineEntry);
+    }
     requestReportingAfterSuccess(currentEvent.id);
     return { kind: (other ? "swap" : "change") as "change" | "swap", destinationResourceId, reservationId: reservation.id, swappedReservationId: other?.id };
-  }, [currentEvent.id, repositories.reservations, reservations, resources, requirePermission, requestReportingAfterSuccess, setGuests, setReservations]);
+  }, [currentAccount.displayName, currentAccount.roleName, currentEvent.id, currentEvent.name, persistedTimelineEvents, repositories.reservations, repositories.timeline, reservations, resources, requirePermission, requestReportingAfterSuccess, setGuests, setReservations, upsertPersistedTimelineEvent]);
 
   const moveGuestToTable = useCallback(
     async (guestId: string, tableId: string) => {

@@ -259,6 +259,15 @@ test("spaces creation uses automatic sibling ordering and compact dialogs", () =
   assert.doesNotMatch(source, /<Field label="Orden">/);
 });
 
+test("activity cards keep non-guest events free of guest placeholders", () => {
+  const source = readFileSync(new URL("../features/timeline/components/timeline-feed.tsx", import.meta.url), "utf8");
+  assert.match(source, /quickRead\.guestLine \? /);
+  assert.match(source, /eventHasGuestContext/);
+  assert.doesNotMatch(source, /Sin invitado/);
+  assert.match(source, /Ver detalles/);
+  assert.match(source, /renderTimelineCard\(event, true\)/);
+});
+
 test("legacy guest table identity follows swaps without moving overrides or extras", () => {
   const service = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
   const migration = readFileSync(new URL("../supabase/migrations/20261022000000_resource_reservation_swap_atomic_legacy_guest_compat.sql", import.meta.url), "utf8");

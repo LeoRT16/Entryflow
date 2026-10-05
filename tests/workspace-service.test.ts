@@ -48,3 +48,15 @@ test("individual guest cancellation uses the atomic repository operation and per
   assert.match(cancellationBlock, /await reloadWorkspace\(\);/);
   assert.doesNotMatch(cancellationBlock, /repositories\.guests\.upsert\(nextGuest\)/);
 });
+
+test("reservation table changes persist one idempotent Activity event", () => {
+  const source = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("const changeReservationTable = useCallback(");
+  const end = source.indexOf("const moveGuestToTable = useCallback(", start);
+  const block = source.slice(start, end);
+
+  assert.match(block, /kind: "table\.changed"/);
+  assert.match(block, /metadata: \{ idempotencyKey/);
+  assert.match(block, /persistedTimelineEvents\.some/);
+  assert.match(block, /await repositories\.timeline\.upsert\(timelineEntry\)/);
+});

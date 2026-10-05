@@ -93,6 +93,11 @@ function TimelineField({
   );
 }
 
+function eventHasGuestContext(event: TimelineEvent) {
+  const kind = event.kind.toLowerCase();
+  return Boolean(event.guestId || event.guestName || kind.startsWith("guest.") || kind.startsWith("checkin."));
+}
+
 export default function TimelineFeed({ events, timeZone = "UTC" }: { events: TimelineEvent[]; timeZone?: string }) {
   const router = useRouter();
   const groupedEvents = useMemo(() => {
@@ -195,22 +200,24 @@ export default function TimelineFeed({ events, timeZone = "UTC" }: { events: Tim
                   <p className="text-sm font-semibold text-white">{quickRead.action}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">{quickRead.description}</p>
                 </div>
+                <StatusBadge variant="info">{formatTimelineDisplayTime(getTimelineDisplayTimestamp(event), timeZone)}</StatusBadge>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <TimelineField label="Invitado" value={quickRead.guestLine || "Sin invitado"} compact />
-                <TimelineField
-                  label="Contexto"
-                  value={quickRead.reservationLine || quickRead.context || "Sin contexto"}
-                  compact
-                />
-                <TimelineField
-                  label="Operador"
-                  value={quickRead.operatorLine || quickRead.actorLine || "Sin operador"}
-                  compact
-                />
-                {quickRead.reason ? <TimelineField label="Motivo" value={quickRead.reason} compact /> : null}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+                {quickRead.guestLine ? <span>{quickRead.guestLine.replace("\n", " · ")}</span> : null}
+                <span>{quickRead.reservationLine || quickRead.context || "Sin contexto"}</span>
+                <span>{quickRead.operatorLine || quickRead.actorLine || "Sin operador"}</span>
               </div>
+
+              <details className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
+                <summary className="cursor-pointer text-xs font-medium text-slate-300">Ver detalles</summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {quickRead.guestLine ? <TimelineField label="Invitado" value={quickRead.guestLine} compact /> : null}
+                  <TimelineField label="Contexto" value={quickRead.reservationLine || quickRead.context || "Sin contexto"} compact />
+                  <TimelineField label="Operador" value={quickRead.operatorLine || quickRead.actorLine || "Sin operador"} compact />
+                  {quickRead.reason ? <TimelineField label="Motivo" value={quickRead.reason} compact /> : null}
+                </div>
+              </details>
 
             </article>
           </ContextualCard>
@@ -247,7 +254,9 @@ export default function TimelineFeed({ events, timeZone = "UTC" }: { events: Tim
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
-                <TimelineField label="Invitado" value={quickRead.guestLine || "Sin invitado"} />
+                {eventHasGuestContext(event) ? (
+                  <TimelineField label="Invitado" value={quickRead.guestLine || "Identidad de invitado no disponible"} />
+                ) : null}
                 <TimelineField
                   label="Contexto"
                   value={quickRead.reservationLine || quickRead.context || "Sin contexto"}
@@ -400,7 +409,7 @@ export default function TimelineFeed({ events, timeZone = "UTC" }: { events: Tim
 
             {groupedEvents.Operational.length ? (
               <div className="space-y-3">
-                {groupedEvents.Operational.slice(0, 4).map((event) => renderTimelineCard(event, false))}
+                {groupedEvents.Operational.slice(0, 4).map((event) => renderTimelineCard(event, true))}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/10 p-3">
