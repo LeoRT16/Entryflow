@@ -34,6 +34,15 @@ test("courtesy atomic fix keeps reservation insert expressions aligned with its 
   assert.match(sql, /prepare_guest_access_atomic\(gid,access_code,qr_token\)/);
 });
 
+test("courtesy append timeline metadata is sourced from the persisted grant", () => {
+  const sql = readFileSync("supabase/migrations/20261019000000_courtesy_append_timeline_metadata_fix.sql", "utf8");
+  assert.match(sql, /select ag\.id,ag\.access_code,ag\.qr_token,guest_row\.invitation_code into grant_id,access_code,canonical_qr,canonical_code/);
+  assert.match(sql, /'accessGrantId',grant_id/);
+  assert.match(sql, /'code',canonical_code/);
+  assert.match(sql, /'qrToken',canonical_qr/);
+  assert.doesNotMatch(sql, /'accessGrantId',g\.id/);
+});
+
 test("courtesy wizard does not expose presale quantity or pending-capacity language", () => {
   const source = readFileSync("features/reservations/components/reservation-wizard-modal.tsx", "utf8");
   assert.match(source, /\) : isPresale \?/);
