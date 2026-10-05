@@ -39,6 +39,23 @@ test("presale guest boundary is separate from physical capacity and rejects inco
   assert.match(sql, /where id=p_reservation_id and deleted_at is null for update/);
 });
 
+test("presale edit routes genuinely new drafts through the atomic append boundary", () => {
+  const source = readFileSync("services/workspace-service.tsx", "utf8");
+  const start = source.indexOf('if (reservation.reservationType === "Preventa") {', source.indexOf("const updateReservation = useCallback"));
+  const end = source.indexOf('const selectedResource = input.selectedResource ?? input.selectedTable;', start);
+  const block = source.slice(start, end);
+  assert.match(block, /existingById = new Map/);
+  assert.match(block, /newDrafts = completeGuestDrafts\.filter/);
+  assert.match(block, /repositories\.reservations\.addPresaleGuestAtomic/);
+  assert.doesNotMatch(block, /persistReservationThenGuests/);
+  assert.match(block, /guestIds: existingGuests\.map\(\(guest\) => guest\.id\)/);
+});
+
+test("malformed historical guest ids do not hydrate a null placeholder", () => {
+  const source = readFileSync("lib/supabase/mappers.ts", "utf8");
+  assert.match(source, /guestIds: \(row\.guest_ids \?\? \[\]\)\.filter\(\(id\): id is string => Boolean\(id\)\)/);
+});
+
 test("presale money uses exact numeric arithmetic for repeating decimal prices", () => {
   const snapshot = createPresaleCommercialSnapshot({
     ...defaultEventCommercialConfig,

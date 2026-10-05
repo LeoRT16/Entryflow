@@ -597,7 +597,7 @@ export function mapGuestRowToDomain(row: GuestRow): Guest {
 
 export function mapGuestToRow(guest: Guest): Omit<GuestRow, "created_at" | "updated_at" | "deleted_at"> {
   return {
-    id: guest.id,
+    id: (guest.id || undefined) as unknown as string,
     event_id: guest.eventId,
     guest_name: guest.guestName,
     reservation_name: guest.reservationName,
@@ -666,7 +666,7 @@ export function mapReservationRowToDomain(row: ReservationRow): ReservationRecor
     advance: row.advance,
     commercialSnapshot: mapCommercialSnapshotToDomain(row.commercial_snapshot),
     notes: row.notes,
-    guestIds: row.guest_ids,
+    guestIds: (row.guest_ids ?? []).filter((id): id is string => Boolean(id)),
     status: row.status,
     timeline: row.timeline,
     createdAt: row.created_at,

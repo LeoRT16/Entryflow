@@ -2868,10 +2868,10 @@ export function WorkspaceServiceProvider({
         }
 
         const existingGuests = guests
-          .filter((guest) => guest.reservationId === reservation.id)
+          .filter((guest) => guest.reservationId === reservation.id && guest.admissionStatus !== "Anulada" && guest.reservationStatus !== "Cancelled")
           .sort((a, b) => a.id.localeCompare(b.id));
+        const existingById = new Map(existingGuests.map((guest) => [guest.id, guest]));
         const expectedGuestCount = reservation.commercialSnapshot?.quantity ?? existingGuests.length;
-
         const completeGuestDrafts = input.guests.filter(isCompleteGuestDraft);
         if (completeGuestDrafts.length > expectedGuestCount) {
           throw new Error(`Preventa cannot exceed ${expectedGuestCount} purchased accesses.`);
@@ -2883,24 +2883,27 @@ export function WorkspaceServiceProvider({
         const nextStatus: ReservationStatus =
           currentStatus === "Cancelled" || currentStatus === "No Show" || currentStatus === "Completed" || currentStatus === "Checked In"
             ? currentStatus
-            : input.paymentStatus === "Pagado"
-              ? "Confirmed"
-              : "Pending";
+            : input.paymentStatus === "Pagado" ? "Confirmed" : "Pending";
         const nextName = `Preventa · ${input.holderName} ${input.holderLastName}`.trim();
-        const nextGuests = completeGuestDrafts.map((guestDraft, index) => ({
-          ...existingGuests[index],
-          guestName: guestDraft.name.trim(),
-          reservationName: nextName,
-          eventId: currentEvent.id,
-          eventName: currentEvent.name,
-          tableId: undefined,
-          tableName: undefined,
-          invitationSequence: `${index + 1} de ${expectedGuestCount}`,
-          carnet: guestDraft.document.trim(),
-          whatsapp: guestDraft.whatsapp.trim(),
-          reservationStatus: nextStatus,
-          recentChange: true,
-        }));
+        const existingDrafts = completeGuestDrafts.filter((draft) => existingById.has(draft.id));
+        const newDrafts = completeGuestDrafts.filter((draft) => !existingById.has(draft.id));
+        const nextGuests = existingDrafts.map((guestDraft) => {
+          const currentGuest = existingById.get(guestDraft.id)!;
+          return {
+            ...currentGuest,
+            guestName: guestDraft.name.trim(),
+            reservationName: nextName,
+            eventId: currentEvent.id,
+            eventName: currentEvent.name,
+            tableId: undefined,
+            tableName: undefined,
+            invitationSequence: currentGuest.invitationSequence,
+            carnet: guestDraft.document.trim(),
+            whatsapp: guestDraft.whatsapp.trim(),
+            reservationStatus: nextStatus,
+            recentChange: true,
+          };
+        });
         const nextReservation: ReservationRecord = {
           ...reservation,
           eventId: currentEvent.id,
@@ -2923,37 +2926,42 @@ export function WorkspaceServiceProvider({
           amount: reservation.amount,
           advance: paymentDraft.advance,
           notes: [input.observations, input.preferences, input.notes].filter(Boolean).join(" · "),
-          guestIds: nextGuests.map((guest) => guest.id),
+          guestIds: existingGuests.map((guest) => guest.id),
           status: nextStatus,
-          timeline: [
-            ...reservation.timeline,
-            buildReservationTimelineEntry(
-              reservation.id,
-              timestamp,
-              "Preventa actualizada",
-              `${expectedGuestCount} accesos siguen vinculados a la compra.`,
-              "info",
-              { actor: currentAccount.displayName, actorRole: currentAccount.roleName, context: currentEvent.name, target: nextName },
-            ),
-          ],
+          timeline: [...reservation.timeline, buildReservationTimelineEntry(reservation.id, timestamp, "Preventa actualizada", `${expectedGuestCount} accesos siguen vinculados a la compra.`, "info", { actor: currentAccount.displayName, actorRole: currentAccount.roleName, context: currentEvent.name, target: nextName })],
           updatedAt: timestamp,
         };
 
-        setReservations((current) => current.map((item) => (item.id === reservation.id ? nextReservation : item)));
-        setGuests((current) => [
-          ...current.filter((guest) => guest.reservationId !== reservation.id),
-          ...nextGuests,
-        ]);
-        await persistReservationThenGuests({ persistReservation: () => repositories.reservations.upsert(nextReservation), guests: nextGuests, persistGuest: (guest) => repositories.guests.upsert(guest), report: () => requestReportingAfterSuccess(currentEvent.id) });
-
-        notify({
-          title: "Preventa actualizada",
-          description: `${nextReservation.name} quedó sincronizada en Supabase.`,
-          tone: "success",
-          icon: "reservation",
-          href: "/reservations",
-        });
-
+        await repositories.reservations.upsert(nextReservation);
+        for (const guest of nextGuests) await repositories.guests.upsert(guest);
+        for (const draft of newDrafts) {
+          const guest = {
+            id: undefined as unknown as string,
+            guestName: draft.name.trim(),
+            reservationName: nextName,
+            reservationCode: reservation.code,
+            reservationId: reservation.id,
+            eventId: currentEvent.id,
+            eventName: currentEvent.name,
+            eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
+            invitationSequence: "",
+            invitationCode: reservation.code,
+            carnet: draft.document.trim(),
+            whatsapp: draft.whatsapp.trim(),
+            deliveryStatus: "Enviada" as const,
+            admissionStatus: "Pendiente" as const,
+            reservationStatus: nextStatus,
+            deliveryHistory: [],
+            operatorActivity: [],
+            qrStatus: "Válido" as const,
+            manualAdmission: false,
+          } as Guest;
+          const persistedGuest = await repositories.reservations.addPresaleGuestAtomic({ reservationId: reservation.id, guest, accessEvent: null as never });
+          await repositories.timeline.upsert(buildAccessGrantTimelineEvent(persistedGuest, nextReservation, nowIso()));
+        }
+        await requestReportingAfterSuccess(currentEvent.id);
+        await reloadWorkspace();
+        notify({ title: "Preventa actualizada", description: `${nextReservation.name} quedó sincronizada en Supabase.`, tone: "success", icon: "reservation", href: "/reservations" });
         return nextReservation;
       }
 
@@ -3141,7 +3149,7 @@ export function WorkspaceServiceProvider({
         throw exception;
       }
     },
-    [captureSnapshot, currentEvent, currentEvent.status, currentEventLayout, currentEventTables, currentVenue, eventLayoutResources, guests, notify, repositories.guests, repositories.reservations, repositories.timeline, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent, venueLayoutResources],
+    [captureSnapshot, currentEvent, currentEvent.status, currentEventLayout, currentEventTables, currentVenue, eventLayoutResources, guests, notify, reloadWorkspace, repositories.guests, repositories.reservations, repositories.timeline, requestReportingAfterSuccess, requirePermission, reservations, restoreSnapshot, upsertPersistedTimelineEvent, venueLayoutResources],
   );
 
   const deleteReservation = useCallback(
