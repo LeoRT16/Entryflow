@@ -11,7 +11,6 @@ import ReservationOperationsBoard from "@/features/reservations/components/reser
 import GuestEditModal from "@/features/customers/components/guest-edit-modal";
 import { buildGuestDraftsFromGuests, createGuestDraft, isCompleteGuestDraft, isPartiallyCompleteGuestDraft, syncGuestDraftsWithHolder, syncPresaleFirstGuestDraftWithHolder } from "@/features/reservations/domain/reservation-draft";
 import {
-  deriveFrequentCustomerFromHistory,
   describeReservationSubmissionError,
   normalizeReservationStatus,
   resolveReservationPaymentDraft,
@@ -220,7 +219,6 @@ function ReservationFlowWorkspace({
   const [whatsapp, setWhatsapp] = useState(wizardDefaults.whatsapp);
   const [email, setEmail] = useState(wizardDefaults.email);
   const [preferences, setPreferences] = useState(wizardDefaults.preferences);
-  const [vip, setVip] = useState(wizardDefaults.vip);
   const [notes, setNotes] = useState(wizardDefaults.notes);
   const [guestDrafts, setGuestDrafts] = useState<GuestDraft[]>(() => wizardDefaults.guestDrafts);
   const [selectedResourceId, setSelectedResourceId] = useState(wizardDefaults.selectedResourceId);
@@ -248,6 +246,7 @@ function ReservationFlowWorkspace({
   );
   const [wizardMode, setWizardMode] = useState<"create" | "edit" | "append">("create");
   const [editingReservationId, setEditingReservationId] = useState<string | null>(null);
+  const [isEditHydrated, setIsEditHydrated] = useState(false);
   const editHydratedRef = useRef<string | null>(null);
   const suppressEditHydrationRef = useRef(false);
   const reservationSubmissionGateRef = useRef(createReservationSubmissionGate());
@@ -278,16 +277,6 @@ function ReservationFlowWorkspace({
     [currentOrganization.id, events],
   );
 
-  const frequentCustomer = useMemo(
-    () =>
-      deriveFrequentCustomerFromHistory(reservations, {
-        holderName: `${holderName} ${holderLastName}`.trim(),
-        holderDocument: documentValue,
-        holderWhatsapp: whatsapp,
-        eventId: currentEvent.id,
-      }),
-    [currentEvent.id, documentValue, holderLastName, holderName, reservations, whatsapp],
-  );
 
   const syncCreateHolderDrafts = useCallback(
     (nextHolder: {
@@ -584,7 +573,6 @@ function ReservationFlowWorkspace({
       setReference(editingReservation.reference ?? "");
       setEmail(editingReservation.holderEmail);
       setPreferences("");
-      setVip(false);
       setNotes(editingReservation.notes);
       setGuestDrafts(buildGuestDraftsFromGuests(editingReservationGuests));
       setSelectedResourceId(
@@ -601,6 +589,7 @@ function ReservationFlowWorkspace({
       setIsWizardOpen(true);
       setStep(editAction === "append" ? 3 : 1);
       editHydratedRef.current = editingReservationId;
+      setIsEditHydrated(true);
     });
 
     return () => {
@@ -638,6 +627,7 @@ function ReservationFlowWorkspace({
   const resetWizardState = useCallback(() => {
     setEditingReservationId(null);
     editHydratedRef.current = null;
+    setIsEditHydrated(false);
     setWizardMode("create");
     setEventName(wizardDefaults.eventName);
     setDate(wizardDefaults.date);
@@ -653,7 +643,6 @@ function ReservationFlowWorkspace({
     setWhatsapp(wizardDefaults.whatsapp);
     setEmail(wizardDefaults.email);
     setPreferences(wizardDefaults.preferences);
-    setVip(wizardDefaults.vip);
     setNotes(wizardDefaults.notes);
     setGuestDrafts([...wizardDefaults.guestDrafts]);
     setSelectedResourceId(wizardDefaults.selectedResourceId);
@@ -1119,6 +1108,7 @@ function ReservationFlowWorkspace({
       }
 
       editHydratedRef.current = null;
+      setIsEditHydrated(false);
       suppressEditHydrationRef.current = false;
       setActiveReservationId(reservationId);
       setEditingReservationId(reservationId);
@@ -1282,7 +1272,11 @@ function ReservationFlowWorkspace({
         />
       </section>
 
-      {isWizardOpen && !isTerminalEvent ? (
+      {isWizardOpen && !isTerminalEvent ? (wizardMode === "edit" && (!isEditHydrated || !editingReservation) ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" role="status" aria-live="polite">
+          <div className="surface-panel px-8 py-6 text-sm font-medium text-slate-200">Cargando reserva…</div>
+        </div>
+      ) : (
         <ReservationWizardModal
           step={step}
           setStep={setStep}
@@ -1317,9 +1311,6 @@ function ReservationFlowWorkspace({
           setEmail={setEmail}
           preferences={preferences}
           setPreferences={setPreferences}
-          vip={vip}
-          setVip={setVip}
-          frequent={frequentCustomer.frequent}
           notes={notes}
           setNotes={setNotes}
           guests={guestDrafts}
@@ -1355,7 +1346,7 @@ function ReservationFlowWorkspace({
           commercialConfig={commercialConfig}
           submissionError={submissionError}
         />
-      ) : null}
+      )) : null}
 
       <GuestEditModal
         key={editingGuest ? `${editingGuest.id}-${editingGuestId ? "open" : "closed"}` : "closed"}

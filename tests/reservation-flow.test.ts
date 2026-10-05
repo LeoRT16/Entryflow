@@ -156,7 +156,7 @@ test("reservation edit keeps the canonical reservation when the selected resourc
 test("presale edit submits the hydrated reservation identity", () => {
   const source = readFileSync(new URL("../features/reservations/components/reservation-flow.tsx", import.meta.url), "utf8");
   assert.match(source, /selectedActiveReservation=\{wizardMode === "edit" \? wizardReservation/);
-  assert.match(source, /editHydratedRef\.current = null;\s*suppressEditHydrationRef\.current = false;\s*setActiveReservationId\(reservationId\)/);
+  assert.match(source, /editHydratedRef\.current = null;\s*setIsEditHydrated\(false\);\s*suppressEditHydrationRef\.current = false;\s*setActiveReservationId\(reservationId\)/);
   const modalSource = readFileSync(new URL("../features/reservations/components/reservation-wizard-modal.tsx", import.meta.url), "utf8");
   assert.match(modalSource, /reservationId: selectedActiveReservation\?\.id \?\? ""/);
   assert.match(modalSource, /wizardMode === "edit" \? selectedActiveReservation\?\.code/);
@@ -166,11 +166,21 @@ test("reopening the same reservation starts a fresh hydration session without du
   const source = readFileSync(new URL("../features/reservations/components/reservation-flow.tsx", import.meta.url), "utf8");
   const hydrationGuard = /if \(!editingReservation \|\| editHydratedRef\.current === editingReservationId\)/;
   const resetSession = /setEditingReservationId\(null\);\s*editHydratedRef\.current = null;/;
-  const openSession = /editHydratedRef\.current = null;\s*suppressEditHydrationRef\.current = false;\s*setActiveReservationId\(reservationId\);\s*setEditingReservationId\(reservationId\)/;
+  const openSession = /editHydratedRef\.current = null;\s*setIsEditHydrated\(false\);\s*suppressEditHydrationRef\.current = false;\s*setActiveReservationId\(reservationId\);\s*setEditingReservationId\(reservationId\)/;
 
   assert.match(source, hydrationGuard);
   assert.match(source, resetSession);
   assert.match(source, openSession);
+});
+
+test("edit hydration renders a neutral pending state and removes wizard VIP/frequent controls", () => {
+  const flowSource = readFileSync(new URL("../features/reservations/components/reservation-flow.tsx", import.meta.url), "utf8");
+  const modalSource = readFileSync(new URL("../features/reservations/components/reservation-wizard-modal.tsx", import.meta.url), "utf8");
+
+  assert.match(flowSource, /!isEditHydrated \|\| !editingReservation/);
+  assert.match(flowSource, /Cargando reserva/);
+  assert.doesNotMatch(modalSource, /Marca VIP|Cliente frecuente/);
+  assert.match(modalSource, /vip: false,\s*frequent: false/);
 });
 
 test("reservation persistence only writes a table id when a matching persisted table exists", () => {

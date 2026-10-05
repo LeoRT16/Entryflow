@@ -93,9 +93,6 @@ export default function ReservationWizardModal({
   setEmail,
   preferences,
   setPreferences,
-  vip,
-  setVip,
-  frequent,
   notes,
   setNotes,
   guests,
@@ -164,9 +161,6 @@ export default function ReservationWizardModal({
   setEmail: Dispatch<SetStateAction<string>>;
   preferences: string;
   setPreferences: Dispatch<SetStateAction<string>>;
-  vip: boolean;
-  setVip: Dispatch<SetStateAction<boolean>>;
-  frequent: boolean;
   notes: string;
   setNotes: Dispatch<SetStateAction<string>>;
   guests: GuestDraft[];
@@ -300,7 +294,6 @@ export default function ReservationWizardModal({
                       <CourtesyReferenceStep reference={reference} setReference={setReference} />
                     ) : step === 2 ? (
                       <HolderStep
-                        wizardMode={wizardMode}
                         holderName={holderName}
                         setHolderName={setHolderName}
                         holderLastName={holderLastName}
@@ -313,9 +306,6 @@ export default function ReservationWizardModal({
                         setEmail={setEmail}
                         preferences={preferences}
                         setPreferences={setPreferences}
-                        vip={vip}
-                        setVip={setVip}
-                        frequent={frequent}
                         notes={notes}
                         setNotes={setNotes}
                       />
@@ -376,8 +366,6 @@ export default function ReservationWizardModal({
                         whatsapp={whatsapp}
                         email={email}
                         preferences={preferences}
-                        vip={vip}
-                        frequent={frequent}
                         notes={notes}
                         guests={guests}
                         reference={reference}
@@ -438,8 +426,8 @@ export default function ReservationWizardModal({
                               whatsapp,
                               email,
                               preferences,
-                              vip,
-                              frequent,
+                              vip: false,
+                              frequent: false,
                               notes,
                               guests,
                               selectedResource: isNonPhysical ? undefined : selectedResource ?? undefined,
@@ -822,7 +810,6 @@ function GeneralStep({
 }
 
 function HolderStep({
-  wizardMode,
   holderName,
   setHolderName,
   holderLastName,
@@ -835,13 +822,9 @@ function HolderStep({
   setEmail,
   preferences,
   setPreferences,
-  vip,
-  setVip,
-  frequent,
   notes,
   setNotes,
 }: {
-  wizardMode: "create" | "edit" | "append";
   holderName: string;
   setHolderName: Dispatch<SetStateAction<string>>;
   holderLastName: string;
@@ -854,13 +837,9 @@ function HolderStep({
   setEmail: Dispatch<SetStateAction<string>>;
   preferences: string;
   setPreferences: Dispatch<SetStateAction<string>>;
-  vip: boolean;
-  setVip: Dispatch<SetStateAction<boolean>>;
-  frequent: boolean;
   notes: string;
   setNotes: Dispatch<SetStateAction<string>>;
 }) {
-  const showDecorativeSignals = wizardMode !== "create";
 
   return (
     <section className="surface-panel p-4 sm:p-5">
@@ -919,30 +898,6 @@ function HolderStep({
           />
         </Field>
       </div>
-
-      {showDecorativeSignals ? (
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          <ToggleField
-            label="Marca VIP"
-            active={vip}
-            onToggle={() => setVip((current) => !current)}
-          />
-          <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-              Cliente frecuente
-            </p>
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-white">
-                {frequent ? "Sí, por historial" : "No detectado en historial"}
-              </p>
-              <StatusBadge variant={frequent ? "success" : "info"}>{frequent ? "Derivado" : "Nuevo"}</StatusBadge>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-slate-400">
-              Calculado automáticamente desde reservas y asistencias previas; no se edita manualmente.
-            </p>
-          </div>
-        </div>
-      ) : null}
 
       <Field label="Notas" className="mt-5">
         <textarea
@@ -1062,9 +1017,6 @@ function GuestsStep({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge variant={guest.vip ? "success" : "info"}>
-                  {guest.vip ? "VIP" : "General"}
-                </StatusBadge>
                 <StatusBadge variant="info">{guest.transferBadge}</StatusBadge>
                 {wizardMode === "create" && index === 0 ? null : (
                   <button
@@ -1419,8 +1371,6 @@ function SummaryStep({
   whatsapp,
   email,
   preferences,
-  vip,
-  frequent,
   notes,
   guests,
   reference,
@@ -1450,8 +1400,6 @@ function SummaryStep({
   whatsapp: string;
   email: string;
   preferences: string;
-  vip: boolean;
-  frequent: boolean;
   notes: string;
   guests: GuestDraft[];
   reference: string;
@@ -1467,15 +1415,10 @@ function SummaryStep({
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
 }) {
-  const showDecorativeSignals = wizardMode !== "create";
   const invitationRows: Array<[string, string]> = [
     ["Cantidad", `${isPresale ? accessQuantity : guestCount}`],
     ["Registrados", `${guests.filter((guest) => guest.name.trim()).length}`],
   ];
-
-  if (showDecorativeSignals) {
-    invitationRows.push(["VIP", vip ? "Sí" : "No"], ["Historial frecuente", frequent ? "Sí" : "No"]);
-  }
 
   invitationRows.push(["Notas", notes || "Sin notas"]);
 
@@ -1618,46 +1561,6 @@ function Field({
       <span className="text-sm font-medium text-slate-200">{label}</span>
       <div className="mt-2">{children}</div>
     </label>
-  );
-}
-
-function ToggleField({
-  label,
-  active,
-  onToggle,
-}: {
-  label: string;
-  active: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={[
-        "flex items-center justify-between rounded-[1.5rem] border px-4 py-4 text-left transition",
-        active
-          ? "border-cyan-400/35 bg-cyan-400/10"
-          : "border-white/10 bg-slate-950/40 hover:border-white/15 hover:bg-slate-950/55",
-      ].join(" ")}
-    >
-      <span className="text-sm font-medium text-white">{label}</span>
-      <span
-        className={[
-          "inline-flex h-6 w-10 items-center rounded-full border p-1 transition",
-          active
-            ? "border-cyan-400/40 bg-cyan-400/20"
-            : "border-white/10 bg-white/[0.04]",
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "h-4 w-4 rounded-full transition",
-            active ? "translate-x-4 bg-cyan-100" : "translate-x-0 bg-slate-400",
-          ].join(" ")}
-        />
-      </span>
-    </button>
   );
 }
 
