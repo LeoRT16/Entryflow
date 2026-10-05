@@ -14,6 +14,7 @@ import { createSupabaseAccreditationRepositories } from "@/repositories/supabase
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
+import { formatEventWallDateTime } from "@/lib/date-time";
 
 export const metadata: Metadata = {
   title: "Acreditación",
@@ -176,7 +177,7 @@ export default async function AccreditationPage() {
                   </span>
                 </div>
                 <p className="mt-2 text-sm text-slate-400">{getOperationalModelLabel(event.operationalModel)}</p>
-                <p className="mt-3 text-sm text-slate-500">{event.venue} · {event.startAt}</p>
+                <p className="mt-3 text-sm text-slate-500">{event.venue} · {formatEventWallDateTime(event.startAt)}</p>
                 <p className="mt-4 text-sm font-medium text-cyan-200 transition group-hover:text-cyan-100">
                   Abrir perfil y participantes
                 </p>

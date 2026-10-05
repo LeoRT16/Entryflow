@@ -308,7 +308,7 @@ test("historical incomplete timeline entries degrade without leaking reservation
 
 test("timeline latest event renders as a compact local clock label", () => {
   assert.equal(formatTimelineDisplayTime("07:16"), "07:16");
-  assert.equal(formatTimelineDisplayTime("2026-08-17T15:33:19.003Z"), "11:33");
+  assert.equal(formatTimelineDisplayTime("2026-08-17T15:33:19.003Z", "America/La_Paz"), "11:33");
 });
 
 test("secondary timeline sections expand to full width when only one exists", () => {

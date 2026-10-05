@@ -449,7 +449,7 @@ export default function EventCommandCenter() {
                   key={event.id}
                   tone={event.tone}
                   href="/timeline"
-                  timestamp={formatTimelineDisplayTime(event.timestamp)}
+                  timestamp={formatTimelineDisplayTime(event.timestamp, currentEvent.timezone)}
                   title={event.title}
                   description={event.description}
                 />

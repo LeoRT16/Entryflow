@@ -9,6 +9,7 @@ import { resolveEventVenueDisplayName } from "@/features/events/domain/event-ven
 import type { Event as PlatformEvent } from "@/features/domain/types";
 import { isTerminalEventStatus } from "@/features/events/domain/event-rules";
 import type { TimelineEvent } from "@/features/timeline/types";
+import { formatEventWallDateTime } from "@/lib/date-time";
 
 export type LiveDashboardTone = "success" | "warning" | "danger" | "info";
 
@@ -88,17 +89,7 @@ type LiveDashboardInput = {
 };
 
 export function formatOverviewEventDateTime(startAt: string) {
-  const trimmed = startAt.trim();
-  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}:\d{2}))?/);
-  if (!match) {
-    const parts = trimmed.split(/\s+/).filter(Boolean);
-    return parts.length > 1 ? `${parts.slice(0, -1).join(" ")} · ${parts.at(-1)}` : trimmed;
-  }
-
-  const [, year, month, day, time] = match;
-  const monthLabels = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-  const monthLabel = monthLabels[Number(month) - 1] ?? month;
-  return `${Number(day)} ${monthLabel} ${year}${time ? ` · ${time}` : ""}`;
+  return formatEventWallDateTime(startAt);
 }
 
 function toLiveTone(tone: LiveDashboardTone): LiveDashboardTone {

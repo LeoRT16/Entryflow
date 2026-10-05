@@ -1,6 +1,7 @@
 import type { CheckIn, CheckInAttempt, Guest } from "@/features/check-in/types";
 import type { ReservationRecord, ReservationTimelineEntry } from "@/features/reservations/types";
 import type { TimelineEvent, TimelineIcon, TimelineKind, TimelineTone } from "@/features/timeline/types";
+import { formatTime as formatPresentationTime, formatTimestamp } from "@/lib/date-time";
 
 function parseTimelineTimestamp(timestamp: string) {
   const trimmed = timestamp.trim();
@@ -78,28 +79,16 @@ export function compareTimelineEventsDescending(a: Pick<TimelineEvent, "createdA
   return b.id.localeCompare(a.id);
 }
 
-export function formatTimelineDisplayTime(timestamp: string) {
+export function formatTimelineDisplayTime(timestamp: string, timeZone = "UTC") {
   const trimmed = timestamp.trim();
 
   if (!trimmed) {
     return "--:--";
   }
 
-  if (/^\d{2}:\d{2}(:\d{2})?$/.test(trimmed)) {
-    return trimmed.slice(0, 5);
-  }
-
-  const parsed = new Date(trimmed);
-
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toLocaleTimeString("es-BO", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-  }
-
-  return trimmed;
+  return formatPresentationTime(trimmed, timeZone) === "--:--"
+    ? formatTimestamp(trimmed, timeZone).split(" · ").at(-1) ?? trimmed
+    : formatPresentationTime(trimmed, timeZone);
 }
 
 export function getSecondaryTimelineSectionGridClass(sectionCount: number) {

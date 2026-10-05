@@ -93,7 +93,7 @@ function TimelineField({
   );
 }
 
-export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
+export default function TimelineFeed({ events, timeZone = "UTC" }: { events: TimelineEvent[]; timeZone?: string }) {
   const router = useRouter();
   const groupedEvents = useMemo(() => {
     const groups = {
@@ -260,7 +260,7 @@ export default function TimelineFeed({ events }: { events: TimelineEvent[] }) {
                   value={quickRead.operatorLine || quickRead.actorLine || "Sin operador"}
                 />
                 <div className="flex min-w-0 items-start md:items-end md:justify-end">
-                  <StatusBadge variant="info">{formatTimelineDisplayTime(quickRead.timestamp)}</StatusBadge>
+                  <StatusBadge variant="info">{formatTimelineDisplayTime(quickRead.timestamp, timeZone)}</StatusBadge>
                 </div>
               </div>
 

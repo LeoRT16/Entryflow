@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import StatusBadge from "@/components/status-badge";
+import { formatEventWallDateTime } from "@/lib/date-time";
 import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
 import { buildGuestSearchIndex } from "@/features/check-in/utils";
 import {
@@ -33,7 +34,7 @@ type CheckInAttemptState =
     };
 
 function formatEventContext(startAt: string) {
-  return startAt.trim().split(/\s+/).filter(Boolean).join(" · ");
+  return formatEventWallDateTime(startAt);
 }
 
 function getEventStatusLabel(status: "live" | "published" | "draft" | "finished" | "cancelled") {

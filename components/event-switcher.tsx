@@ -8,6 +8,7 @@ import type { OrganizationAccount } from "@/features/accounts/types";
 import { getEventTypeLabel } from "@/features/events/domain";
 import type { EventType } from "@/features/domain/types";
 import { useCheckInStore } from "@/services/workspace-service";
+import { formatEventWallDateTime } from "@/lib/date-time";
 
 function formatEventStatusLabel(status: string) {
   if (status === "live") return "En curso";
@@ -370,7 +371,7 @@ function EventSection({
                 </div>
                 <div className="flex flex-col items-end gap-1 text-[10px] uppercase tracking-[0.22em] text-slate-500">
                   <span>{formatEventStatusLabel(event.status)}</span>
-                  <span>{event.startAt}</span>
+                  <span>{formatEventWallDateTime(event.startAt)}</span>
                 </div>
               </div>
             </button>

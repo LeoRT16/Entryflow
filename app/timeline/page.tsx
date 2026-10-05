@@ -11,12 +11,12 @@ import { getWorkspaceActionableAlertCount } from "@/domain/workspace-priority";
 import { useCheckInStore } from "@/services/workspace-service";
 
 export default function TimelinePage() {
-  const { workspaceIntelligence, workspacePriority, reloadWorkspace } = useCheckInStore();
+  const { workspaceIntelligence, workspacePriority, reloadWorkspace, currentEvent } = useCheckInStore();
   const summary = workspaceIntelligence.timeline.summary;
   const checkedInGuests = workspaceIntelligence.statistics.cards.checkedInGuests;
   const events = workspacePriority.recentChanges;
   const actionableAlerts = getWorkspaceActionableAlertCount(workspacePriority);
-  const latestEvent = formatTimelineDisplayTime(summary.latest);
+  const latestEvent = formatTimelineDisplayTime(summary.latest, currentEvent.timezone);
 
   useEffect(() => {
     void refreshTimelineWorkspace(reloadWorkspace);
@@ -39,7 +39,7 @@ export default function TimelinePage() {
             <SummaryCard label="Último evento" value={latestEvent} tone="info" detail="Hora más reciente" />
           </section>
 
-          <TimelineFeed events={events} />
+          <TimelineFeed events={events} timeZone={currentEvent.timezone} />
         </div>
       </ModuleGuard>
     </PermissionGuard>
