@@ -780,14 +780,14 @@ function GeneralStep({
               className={inputClassName}
             />
           </Field>
-        ) : (
+        ) : isPresale ? (
           <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.04] p-4 text-sm text-slate-300">
             <label className="grid gap-2 text-sm text-slate-200">Accesos comprados
               <input type="number" min={1} max={100} value={accessQuantity} onChange={(event) => updateAccessQuantity(Number(event.target.value))} className={inputClassName} />
             </label>
             <p className="mt-2">Luego agrega sólo las personas identificadas en el paso Invitados. Los accesos pendientes no crean formularios vacíos.</p>
           </div>
-        )}
+        ) : null}
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -983,7 +983,7 @@ function GuestsStep({
 
         <div className="flex items-center gap-3">
           <StatusBadge variant="info">
-              {isPresale ? `${registeredGuests} asignados · ${pendingGuests} pendientes` : `${registeredGuests} ${isCourtesy ? `de ${guestCount} personas registradas` : `de ${guestCount} invitados registrados`}`}
+              {isPresale ? `${registeredGuests} asignados · ${pendingGuests} pendientes` : isCourtesy ? `${registeredGuests} personas registradas` : `${registeredGuests} de ${guestCount} invitados registrados`}
           </StatusBadge>
           <button
             type="button"
@@ -1083,6 +1083,10 @@ function GuestsStep({
           {isPresale ? (
             <>
               <span className="font-medium text-white">{registeredGuests}</span> accesos completos
+            </>
+          ) : isCourtesy ? (
+            <>
+              <span className="font-medium text-white">{registeredGuests}</span> personas registradas
             </>
           ) : (
             <>

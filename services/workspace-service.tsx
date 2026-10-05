@@ -2644,7 +2644,10 @@ export function WorkspaceServiceProvider({
         const persistedPresale = isPresale
           ? await repositories.reservations.createPresaleAtomic({ reservation, guests: reservationGuestsWithAccess })
           : null;
-        const persistedAtomic = persistedPhysical ?? persistedPresale;
+        const persistedCourtesy = isCourtesy
+          ? await repositories.reservations.createCourtesyAtomic({ reservation, guests: reservationGuestsWithAccess })
+          : null;
+        const persistedAtomic = persistedPhysical ?? persistedPresale ?? persistedCourtesy;
         const persistedReservation = persistedAtomic?.reservation ?? reservation;
         if (!persistedAtomic) await repositories.reservations.upsert(reservation);
         for (const guest of (persistedAtomic?.guests ?? reservationGuestsWithAccess)) {
@@ -2860,6 +2863,58 @@ export function WorkspaceServiceProvider({
           href: "/reservations",
         });
         return undefined;
+      }
+
+      if (reservation.reservationType === "Cortesía") {
+        if (input.reservationType !== "Cortesía") throw new Error("Una Cortesía no puede cambiar de tipo.");
+        const existingGuests = guests.filter((guest) => guest.reservationId === reservation.id && guest.admissionStatus !== "Anulada" && guest.reservationStatus !== "Cancelled");
+        const existingById = new Map(existingGuests.map((guest) => [guest.id, guest]));
+        const drafts = input.guests.filter(isCompleteGuestDraft);
+        if (!drafts.length) throw new Error("La lista de casa requiere al menos una persona completa.");
+        const existingDrafts = drafts.filter((draft) => existingById.has(draft.id));
+        const newDrafts = drafts.filter((draft) => !existingById.has(draft.id));
+        const timestamp = nowIso();
+        const nextName = input.reference?.trim() ? `Cortesía · ${input.reference.trim()}` : "Cortesía";
+        const nextReservation: ReservationRecord = {
+          ...reservation,
+          eventId: currentEvent.id,
+          eventName: currentEvent.name,
+          name: nextName,
+          reference: input.reference?.trim() || undefined,
+          tableId: undefined,
+          tableName: "",
+          resourceId: undefined,
+          resourceName: undefined,
+          sectorId: undefined,
+          sectorName: undefined,
+          venueId: undefined,
+          tableCapacity: 0,
+          holderName: "",
+          holderDocument: "",
+          holderWhatsapp: "",
+          holderEmail: "",
+          paymentStatus: "Pendiente",
+          amount: "0",
+          advance: "0",
+          commercialSnapshot: undefined,
+          guestIds: existingGuests.map((guest) => guest.id),
+          timeline: [...reservation.timeline, buildReservationTimelineEntry(reservation.id, timestamp, "Lista de casa actualizada", `${drafts.length} personas permanecen vinculadas.`, "info", { actor: currentAccount.displayName, actorRole: currentAccount.roleName, context: currentEvent.name, target: nextName })],
+          updatedAt: timestamp,
+        };
+        await repositories.reservations.upsert(nextReservation);
+        for (const draft of existingDrafts) {
+          const guest = existingById.get(draft.id)!;
+          await repositories.guests.upsert({ ...guest, guestName: draft.name.trim(), carnet: draft.document.trim(), whatsapp: draft.whatsapp.trim(), reservationName: nextName, reservationStatus: nextReservation.status, tableId: undefined, tableName: undefined, recentChange: true });
+        }
+        for (const draft of newDrafts) {
+          const guest = { id: undefined as unknown as string, guestName: draft.name.trim(), reservationName: nextName, reservationCode: reservation.code, reservationId: reservation.id, eventId: currentEvent.id, eventName: currentEvent.name, eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo", invitationSequence: "", invitationCode: reservation.code, carnet: draft.document.trim(), whatsapp: draft.whatsapp.trim(), deliveryStatus: "Enviada" as const, admissionStatus: "Pendiente" as const, reservationStatus: nextReservation.status, deliveryHistory: [], operatorActivity: [], qrStatus: "Válido" as const, manualAdmission: false } as Guest;
+          const accessEvent = buildAccessGrantTimelineEvent(guest, nextReservation, nowIso());
+          await repositories.reservations.addCourtesyGuestAtomic({ reservationId: reservation.id, guest, accessEvent });
+        }
+        await requestReportingAfterSuccess(currentEvent.id);
+        await reloadWorkspace();
+        notify({ title: "Lista de casa actualizada", description: `${nextName} quedó sincronizada en Supabase.`, tone: "success", icon: "reservation", href: "/reservations" });
+        return nextReservation;
       }
 
       if (reservation.reservationType === "Preventa") {
@@ -3346,7 +3401,20 @@ export function WorkspaceServiceProvider({
         await repositories.reservations.upsert(nextReservation);
         const persistedGuests: Guest[] = [];
         for (const guest of nextGuests) {
-          const persistedGuest = await repositories.guests.createWithAccessOrdinal(guest);
+          const timelineEntry = withAuditContext(
+            buildAccessGrantTimelineEvent(guest, reservation, nowIso()),
+            {
+              actor: currentAccount.displayName,
+              actorRole: currentAccount.roleName,
+              context: currentEvent.name,
+              target: nextReservation.name,
+              reason: guest.operatorActivity[0]?.reason,
+              reference: reservation.reference,
+            },
+          );
+          const persistedGuest = reservation.reservationType === "Cortesía"
+            ? await repositories.reservations.addCourtesyGuestAtomic({ reservationId: reservation.id, guest, accessEvent: timelineEntry })
+            : await repositories.guests.createWithAccessOrdinal(guest);
           persistedGuests.push(persistedGuest);
           if (reservation.reservationType === "Cortesía") {
             const courtesyEvent = buildCourtesyAddedTimelineEvent(
@@ -3358,17 +3426,6 @@ export function WorkspaceServiceProvider({
             upsertPersistedTimelineEvent(courtesyEvent);
             await repositories.timeline.upsert(courtesyEvent);
           }
-          const timelineEntry = withAuditContext(
-            buildAccessGrantTimelineEvent(persistedGuest, reservation, nowIso()),
-            {
-              actor: currentAccount.displayName,
-              actorRole: currentAccount.roleName,
-              context: currentEvent.name,
-              target: nextReservation.name,
-              reason: guest.operatorActivity[0]?.reason,
-              reference: reservation.reference,
-            },
-          );
           upsertPersistedTimelineEvent(timelineEntry);
           await repositories.timeline.upsert(timelineEntry);
         }
@@ -3487,7 +3544,9 @@ export function WorkspaceServiceProvider({
       );
       const persistedGuest = (reservation.reservationType as string) === "Preventa"
         ? await repositories.reservations.addPresaleGuestAtomic({ reservationId, guest: nextGuestWithAccess, accessEvent: timelineEntry })
-        : await repositories.reservations.addGuestAtomic({ reservationId, guest: nextGuestWithAccess, courtesyEvent, accessEvent: timelineEntry });
+        : (reservation.reservationType as string) === "Cortesía"
+          ? await repositories.reservations.addCourtesyGuestAtomic({ reservationId, guest: nextGuestWithAccess, accessEvent: timelineEntry })
+          : await repositories.reservations.addGuestAtomic({ reservationId, guest: nextGuestWithAccess, courtesyEvent, accessEvent: timelineEntry });
       await requestReportingAfterSuccess(currentEvent.id);
 
       setGuests((current) => [persistedGuest, ...current]);
