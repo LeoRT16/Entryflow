@@ -3,6 +3,10 @@ import type { ReservationCommercialSnapshot } from "@/features/events/domain/com
 export type { TableOption } from "@/features/tables/types";
 
 export type ReservationType = "Mesa" | "Preventa" | "Cortesía" | "Cumpleaños" | "VIP" | "Corporativo";
+export type CreatableReservationType = "Mesa" | "Preventa" | "Cortesía";
+export function isCreatableReservationType(type: ReservationType): type is CreatableReservationType {
+  return type === "Mesa" || type === "Preventa" || type === "Cortesía";
+}
 export type PaymentMethod = "Efectivo" | "Transferencia" | "Tarjeta" | "Cortesía";
 export type PaymentStatus = "Pendiente" | "Parcial" | "Pagado";
 export type GuestInvitationState = "Pendiente" | "Lista" | "Enviada" | "Transferida";

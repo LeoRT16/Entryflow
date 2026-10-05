@@ -10,6 +10,7 @@ import type { TableSummary } from "@/features/tables/types";
 import { reservationPaymentHistory } from "@/features/reservations/domain/reservation-presets";
 import type {
   GuestDraft,
+  CreatableReservationType,
   PaymentHistoryEntry,
   PaymentMethod,
   PaymentStatus,
@@ -55,7 +56,7 @@ export const wizardSteps: Array<{ step: WizardStep; title: string; subtitle: str
   },
 ];
 
-const reservationTypes: ReservationType[] = ["Mesa", "Preventa", "Cortesía", "Cumpleaños", "VIP", "Corporativo"];
+const creatableReservationTypes: CreatableReservationType[] = ["Mesa", "Preventa", "Cortesía"];
 const paymentMethods: PaymentMethod[] = ["Efectivo", "Transferencia", "Tarjeta", "Cortesía"];
 const paymentStatuses: PaymentStatus[] = ["Pendiente", "Parcial", "Pagado"];
 
@@ -269,6 +270,7 @@ export default function ReservationWizardModal({
                   >
                     {step === 1 ? (
                       <GeneralStep
+                        wizardMode={wizardMode}
                         eventName={eventName}
                         setEventName={setEventName}
                         eventOptions={eventOptions}
@@ -692,6 +694,7 @@ function WizardStepChip({
 }
 
 function GeneralStep({
+  wizardMode,
   eventName,
   setEventName,
   date,
@@ -711,6 +714,7 @@ function GeneralStep({
   presaleEnabled,
   isPresale,
 }: {
+  wizardMode: "create" | "edit" | "append";
   eventName: string;
   setEventName: Dispatch<SetStateAction<string>>;
   eventOptions: string[];
@@ -753,7 +757,9 @@ function GeneralStep({
             onChange={(event) => setReservationType(event.target.value as ReservationType)}
             className={selectClassName}
           >
-            {reservationTypes.filter((type) => type !== "Preventa" || presaleEnabled).map((type) => (
+            {[...(wizardMode === "edit" && !creatableReservationTypes.includes(reservationType as CreatableReservationType) ? [reservationType] : []), ...creatableReservationTypes]
+              .filter((type, index, options) => options.indexOf(type) === index)
+              .filter((type) => type !== "Preventa" || presaleEnabled).map((type) => (
               <option key={type} value={type}>
                 {type}
               </option>

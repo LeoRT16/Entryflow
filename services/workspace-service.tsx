@@ -82,6 +82,7 @@ import type {
   ReservationTimelineEntry,
   ReservationUpdateInput,
 } from "@/features/reservations/types";
+import { isCreatableReservationType } from "@/features/reservations/types";
 import type { ExtraWristbandPerson, ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
 import { buildTableSummaries } from "@/features/tables/domain/table-domain";
 import { canDeleteResource, runOptimisticResourceDelete } from "@/features/tables/domain/resource-lifecycle";
@@ -2567,6 +2568,9 @@ export function WorkspaceServiceProvider({
   const createReservation = useCallback(
     async (input: ReservationCreationInput) => {
       requirePermission("reservation.create");
+      if (!isCreatableReservationType(input.reservationType)) {
+        throw new Error("Este tipo de reserva ya no está disponible para nuevas reservas.");
+      }
       if (isTerminalEventStatus(currentEvent.status)) {
         notify({
           title: "Evento cerrado",
