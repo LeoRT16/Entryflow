@@ -25,6 +25,15 @@ test("new reservation selector exposes only the three active creatable types", (
   assert.doesNotMatch(source, /creatableReservationTypes[^\n]*Cumpleaños|creatableReservationTypes[^\n]*VIP|creatableReservationTypes[^\n]*Corporativo/);
 });
 
+test("courtesy atomic fix keeps reservation insert expressions aligned with its target columns", () => {
+  const sql = readFileSync("supabase/migrations/20261018000000_courtesy_reservation_atomic_fix.sql", "utf8");
+  assert.match(sql, /insert into reservations\(id,code,name,event_id,event_name,date,time,table_name,table_id,table_capacity,holder_name,holder_document,holder_whatsapp,holder_email,reservation_type/);
+  assert.match(sql, /0,'','','','', 'Cortesía','Pendiente','0','0'/);
+  assert.doesNotMatch(sql, /time,'',null,0,'','','','Cortesía','Pendiente','0','0'/);
+  assert.match(sql, /insert into guests\(id,event_id,guest_name,reservation_name,reservation_code,reservation_id,event_name/);
+  assert.match(sql, /prepare_guest_access_atomic\(gid,access_code,qr_token\)/);
+});
+
 test("courtesy wizard does not expose presale quantity or pending-capacity language", () => {
   const source = readFileSync("features/reservations/components/reservation-wizard-modal.tsx", "utf8");
   assert.match(source, /\) : isPresale \?/);
