@@ -209,6 +209,8 @@ test("tables flow exposes the venue context bar and the create-venue empty state
   assert.match(source, /Crear Venue/);
   assert.match(source, /<select/);
   assert.match(source, /VenueManagementSection/);
+  assert.match(source, /Cambiar mesa/);
+  assert.match(source, /can\("resource\.assign"\) && can\("reservation\.edit"\)/);
   assert.match(source, /getVenuesForOrganization\(currentOrganization\.id, venues\)/);
   assert.match(source, /const\s+\[selectedVenueId,\s+setSelectedVenueId\]\s*=\s*useState\s*\(\s*currentEvent\.venueId\s*\?\?\s*""\s*,?\s*\);/);
   assert.match(source, /hasHydratedVenuePreference/);

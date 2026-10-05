@@ -25,6 +25,7 @@ import {
 } from "@/features/tables/domain/venue-context";
 import VenueManagementSection from "@/features/tables/components/venue-management-section";
 import { isTerminalEventStatus } from "@/features/events/domain";
+import { isTerminalReservationStatus } from "@/features/reservations/domain/reservation-domain";
 import type {
   Event as PlatformEvent,
   Resource,
@@ -1258,6 +1259,18 @@ function TablesFlowWorkspace() {
                               >
                                 Ver reserva
                               </button>
+                              {can("resource.assign") && can("reservation.edit") && !isTerminalEvent && !isTerminalReservationStatus(activeReservation.status) ? (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedReservationResourceId(resource.id);
+                                  }}
+                                  className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-medium text-cyan-50"
+                                >
+                                  Cambiar mesa
+                                </button>
+                              ) : null}
                               {!isTerminalEvent ? (
                                 <button
                                   type="button"
