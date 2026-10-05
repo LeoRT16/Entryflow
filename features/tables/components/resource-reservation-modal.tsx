@@ -79,9 +79,13 @@ export default function ResourceReservationModal({
   const targetSummary = selectedTarget ? resourceSummaries.get(selectedTarget.id) ?? null : null;
   const destinationOccupied = Boolean(targetSummary?.reservations.length);
   const destinationGuestCount = targetSummary?.metrics.assignedGuests ?? 0;
-  const sourceResultCount = destinationOccupied ? destinationGuestCount : physicalGuestCount;
-  const destinationResultCount = destinationOccupied ? physicalGuestCount : guestCount;
-  const projectionValid = Boolean(selectedTarget) && sourceResultCount <= (selectedTarget?.capacity ?? 0) && (!destinationOccupied || destinationResultCount <= resource.capacity);
+  const sourceResultCount = destinationOccupied
+    ? guestCount - physicalGuestCount + destinationGuestCount
+    : guestCount - physicalGuestCount;
+  const destinationResultCount = destinationOccupied
+    ? destinationGuestCount - destinationGuestCount + physicalGuestCount
+    : physicalGuestCount;
+  const projectionValid = Boolean(selectedTarget) && sourceResultCount <= resource.capacity && destinationResultCount <= (selectedTarget?.capacity ?? 0);
   const submitChange = async () => {
     if (!changeTargetId || !projectionValid || isChangeSubmitting) return;
     setIsChangeSubmitting(true); setChangeError(null);
@@ -241,7 +245,7 @@ export default function ResourceReservationModal({
                 <div className="space-y-3">
                   <p className="text-sm font-semibold text-white">{selectedTarget ? (destinationOccupied ? "INTERCAMBIAR MESAS" : "CAMBIAR MESA") : "Selecciona una mesa destino"}</p>
                   <select aria-label="Mesa destino" value={changeTargetId} onChange={(event) => setChangeTargetId(event.target.value)} className="h-10 w-full rounded-xl border border-white/15 bg-slate-900 px-3 text-sm text-white"><option value="">Selecciona una mesa</option>{changeTargets.map((target) => <option key={target.id} value={target.id}>{target.name} · {resourceSummaries.get(target.id)?.metrics.assignedGuests ?? 0}/{target.capacity}</option>)}</select>
-                  {selectedTarget ? <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300"><p>{resource.name} → {selectedTarget.name}: {physicalGuestCount} invitados físicos</p>{destinationOccupied ? <p className="mt-1">{selectedTarget.name} → {resource.name}: {destinationGuestCount} invitados físicos</p> : null}<p className="mt-1">{selectedTarget.name} quedará en {sourceResultCount}/{selectedTarget.capacity}{destinationOccupied ? ` · ${resource.name} quedará en ${destinationResultCount}/${resource.capacity}` : ""}</p><p className={projectionValid ? "mt-1 text-emerald-200" : "mt-1 text-rose-200"}>{projectionValid ? "Capacidad válida" : "Capacidad excedida"}</p></div> : null}
+                  {selectedTarget ? <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300"><p>{resource.name} → {selectedTarget.name}: {physicalGuestCount} invitados físicos</p>{destinationOccupied ? <p className="mt-1">{selectedTarget.name} → {resource.name}: {destinationGuestCount} invitados físicos</p> : null}<p className="mt-1">{resource.name} quedará en {sourceResultCount}/{resource.capacity} · {selectedTarget.name} quedará en {destinationResultCount}/{selectedTarget.capacity}</p><p className={projectionValid ? "mt-1 text-emerald-200" : "mt-1 text-rose-200"}>{projectionValid ? "Capacidad válida" : "Capacidad excedida"}</p></div> : null}
                   {changeError ? <p role="alert" className="text-sm text-rose-200">{changeError}</p> : null}
                   <div className="flex justify-end gap-2"><button type="button" onClick={() => { setIsChangeOpen(false); setChangeError(null); }} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-white">Cancelar</button><button type="button" onClick={() => void submitChange()} disabled={!projectionValid || isChangeSubmitting} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">{isChangeSubmitting ? "Cambiando…" : destinationOccupied ? "Confirmar intercambio" : "Confirmar cambio"}</button></div>
                 </div>

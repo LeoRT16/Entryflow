@@ -235,10 +235,17 @@ test("resource reassignment preview is explicit, capacity-aware, and permission-
   assert.match(source, /Confirmar intercambio/);
   assert.match(source, /Confirmar cambio/);
   assert.match(source, /physicalGuestCount/);
+  assert.match(source, /guestCount - physicalGuestCount \+ destinationGuestCount/);
+  assert.match(source, /guestCount - physicalGuestCount/);
+  assert.match(source, /destinationGuestCount - destinationGuestCount \+ physicalGuestCount/);
   assert.match(source, /projectionValid/);
   assert.match(source, /disabled={!projectionValid \|\| isChangeSubmitting}/);
   assert.match(source, /max-h-\[calc\(100dvh-2rem\)\]/);
   assert.match(source, /overflow-y-auto/);
+
+  const summaryRow = readFileSync(new URL("../features/reservations/components/live-summary-row.tsx", import.meta.url), "utf8");
+  assert.match(summaryRow, /shrink-0 whitespace-nowrap/);
+  assert.match(summaryRow, /flex-1 break-words text-right/);
 });
 
 test("venue management section reuses the old editable venue fields and keeps map support absent", () => {
