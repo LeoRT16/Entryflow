@@ -102,11 +102,7 @@ test("duplicate guest card renders the calculated historical context conditional
 
   assert.match(source, /const selectedHistoricalContext = selectedGuestQuickRead/);
   assert.match(selectedBranch, /selectedHistoricalContext\?\.time/);
-  assert.match(selectedBranch, /selectedHistoricalContext\?\.gate/);
   assert.match(selectedBranch, /selectedHistoricalContext\?\.operator/);
-  assert.match(selectedBranch, /label="Hora"/);
-  assert.match(selectedBranch, /label="Puerta"/);
-  assert.match(selectedBranch, /label="Operador"/);
   assert.doesNotMatch(selectedBranch, /operatorActivity/);
 });
 

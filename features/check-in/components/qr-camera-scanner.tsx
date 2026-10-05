@@ -174,7 +174,7 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
       detectorRef.current = detectorRef.current ?? new window.BarcodeDetector({ formats: ["qr_code"] });
       runningRef.current = true;
       setStatus("scanning");
-      setMessage("Apuntá al QR o al código de acceso. La validación de ingreso ocurre al instante.");
+      setMessage("Apuntá al QR o al código de acceso.");
 
       const scanFrame = async () => {
         if (scannerSessionRef.current !== sessionId || !runningRef.current || !videoRef.current || !detectorRef.current) {
@@ -222,14 +222,14 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
   }, [startScanner]);
 
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+    <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
             Scanner con cámara
           </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-            Leer QR o código de acceso
+          <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">
+            Escanear
           </h2>
         </div>
         <StatusBadge variant={status === "scanning" ? "success" : status === "unsupported" || status === "error" || status === "permission_denied" || status === "camera_unavailable" ? "warning" : "info"}>
@@ -253,13 +253,8 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
         <div className="flex flex-col justify-between gap-4 rounded-[1.6rem] border border-white/10 bg-slate-950/40 p-4">
           <div className="space-y-3">
             <p className="text-sm leading-6 text-slate-300">
-              La cámara detecta QR o códigos de acceso en segundos. Si el navegador no lo soporta, el flujo sigue disponible con búsqueda manual.
+              La lectura valida el acceso del evento activo. Si la cámara no está disponible, puedes continuar con búsqueda manual.
             </p>
-            <div className="grid gap-3 rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-              <p>1. Activá la cámara.</p>
-              <p>2. Apuntá al QR o al código de acceso.</p>
-              <p>3. El ingreso queda validado en el evento activo.</p>
-            </div>
             <p className="rounded-[1.35rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-200">
               {message}
             </p>

@@ -9,8 +9,6 @@ import { buildGuestSearchIndex } from "@/features/check-in/utils";
 import {
   buildGuestQuickReadSummary,
   formatGuestCarnetLabel,
-  getCheckInActionLabel,
-  getEntryTone,
   getOperatorSafeCheckInError,
   mapOperatorAccessPresentation,
   resolveGuestCheckInEligibility,
@@ -52,18 +50,25 @@ function getAttemptTone(result: string) {
   return "danger" as const;
 }
 
-function QuickReadField({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function CompactGuestRow({ guest, onSelect }: { guest: Guest; onSelect: (guest: Guest) => void }) {
+  const quickRead = buildGuestQuickReadSummary(guest);
   return (
-    <div className="min-w-0 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
-      <p className="mt-2 break-words text-sm font-medium text-white">{value}</p>
-    </div>
+    <button
+      type="button"
+      onClick={() => onSelect(guest)}
+      className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-slate-950/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <p className="min-w-0 flex-1 break-words text-sm font-semibold text-white">{quickRead.name}</p>
+        <p className="shrink-0 text-xs font-medium text-slate-300">
+          {quickRead.entryStatus} <span className="text-slate-600">·</span> {quickRead.accessStatus}
+        </p>
+      </div>
+      <p className="mt-1 break-words text-xs text-slate-400">
+        {formatGuestCarnetLabel(quickRead.carnet)} <span aria-hidden="true" className="text-slate-600">·</span> {quickRead.reservation}
+        {quickRead.space && quickRead.space !== "Sin mesa" ? <><span aria-hidden="true" className="text-slate-600"> · </span>{quickRead.space}</> : null}
+      </p>
+    </button>
   );
 }
 
@@ -97,6 +102,7 @@ function CheckInWorkspace() {
   const [attemptState, setAttemptState] = useState<CheckInAttemptState>({ kind: "idle" });
   const [scannerCycle, setScannerCycle] = useState(0);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const validationRef = useRef<HTMLElement | null>(null);
 
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = deferredQuery.trim();
@@ -148,11 +154,11 @@ function CheckInWorkspace() {
     : null;
   const operatorPresentation = mapOperatorAccessPresentation(eligibility);
   const canRegister = Boolean(selectedGuest && !isTerminalEvent && operatorPresentation.canAdmit);
-  const primaryActionLabel = getCheckInActionLabel({
-    canEnter: Boolean(eligibility?.canEnter),
-    isTerminalEvent,
-  });
-
+  const primaryStatusLabel = operatorPresentation.state === "ready"
+    ? "Puede entrar"
+    : operatorPresentation.state === "entered"
+      ? "Ya ingresó"
+      : operatorPresentation.label;
   useEffect(() => {
     if (validationMethod === "Manual" && attemptState.kind === "idle" && !isSubmitting) {
       searchInputRef.current?.focus();
@@ -177,6 +183,7 @@ function CheckInWorkspace() {
       event: currentEvent,
     });
     setSelectedGuestId(match?.id ?? null);
+    requestAnimationFrame(() => validationRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
 
     if (
       match &&
@@ -235,7 +242,7 @@ function CheckInWorkspace() {
 
       setAttemptState({
         kind: tone,
-        title: result.result === "Encontrado" ? "Ingreso registrado" : result.result === "Usado" ? "Ingreso ya registrado" : "Acceso bloqueado",
+        title: result.result === "Encontrado" ? "Ingreso registrado" : result.result === "Usado" ? "Ya ingresó" : "Acceso bloqueado",
         note: result.result === "Usado" ? "Este acceso ya fue utilizado." : result.note,
         guest: result.guest ?? guest,
       });
@@ -263,18 +270,23 @@ function CheckInWorkspace() {
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(244,114,182,0.08),_transparent_26%),linear-gradient(180deg,#07111f_0%,#08111d_46%,#050b14_100%)] px-4 py-6 text-white sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_24px_90px_rgba(2,6,23,0.35)] backdrop-blur">
+        <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_rgba(2,6,23,0.35)] backdrop-blur sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-slate-500">
                 INGRESO
               </p>
-              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Ingreso
+              <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                Validar acceso
               </h1>
-              <p className="max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-                Valida y registra el acceso de invitados al evento activo.
-              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-slate-300">
+                <span className="font-medium text-white">{currentEvent.name}</span>
+                <span aria-hidden="true" className="text-slate-600">·</span>
+                <span>{formatEventContext(currentEvent.startAt)}</span>
+                {resolveEventVenueDisplayName({ currentVenueName: currentVenue?.name, eventVenue: currentEvent.venue }) ? (
+                  <><span aria-hidden="true" className="text-slate-600">·</span><span>{resolveEventVenueDisplayName({ currentVenueName: currentVenue?.name, eventVenue: currentEvent.venue })}</span></>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -287,55 +299,20 @@ function CheckInWorkspace() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                Evento
-              </p>
-              <p className="mt-2 text-sm font-medium text-white">{currentEvent.name}</p>
-            </div>
-            <div className="rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                Fecha y hora
-              </p>
-              <p className="mt-2 text-sm font-medium text-white">
-                {formatEventContext(currentEvent.startAt)}
-              </p>
-            </div>
-            <div className="rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                Sede
-              </p>
-              <p className="mt-2 text-sm font-medium text-white">
-                {resolveEventVenueDisplayName({
-                  currentVenueName: currentVenue?.name,
-                  eventVenue: currentEvent.venue,
-                })}
-              </p>
-            </div>
-            <div className="rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                Estado
-              </p>
-              <p className="mt-2 text-sm font-medium text-white">
-                {currentEvent.status === "live" ? "En curso" : "Próximo"}
-              </p>
-            </div>
-          </div>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-6">
+          <div className="space-y-4">
             <QrCameraScanner key={scannerCycle} eventName={currentEvent.name} onDetected={handleDetected} />
 
-            <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5">
+            <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
                     Búsqueda manual
                   </p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                    Buscar por nombre, carnet, invitación o reserva
+                  <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">
+                    Búsqueda manual
                   </h2>
                 </div>
                 <StatusBadge variant={validationMethod === "QR" ? "info" : "success"}>
@@ -363,10 +340,6 @@ function CheckInWorkspace() {
                 />
               </label>
 
-              <div className="mt-4 rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3 text-sm leading-6 text-slate-300">
-                Escribe un identificador existente o escanea un QR. Si la búsqueda devuelve una sola coincidencia, la validación se abre de inmediato.
-              </div>
-
               {shouldShowResults ? (
                 searchResults.length > 1 ? (
                   <div className="mt-4 space-y-3">
@@ -378,42 +351,12 @@ function CheckInWorkspace() {
                     </div>
 
                     <div className="grid gap-3">
-                      {searchResults.map((guest) => {
-                        const quickRead = buildGuestQuickReadSummary(guest);
-                        const tone = getEntryTone(guest.admissionStatus);
-                        return (
-                          <button
-                            key={guest.id}
-                            type="button"
-                            onClick={() => handleSelectGuest(guest)}
-                            className="rounded-[1.35rem] border border-white/10 bg-slate-950/70 p-4 text-left transition hover:border-cyan-400/30 hover:bg-slate-950/90"
-                          >
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <p className="break-words text-base font-semibold text-white">{quickRead.name}</p>
-                                <p className="mt-1 break-words text-sm text-slate-400">
-                                  {formatGuestCarnetLabel(quickRead.carnet)}
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <StatusBadge variant={tone}>{guest.admissionStatus}</StatusBadge>
-                                <StatusBadge variant={getEntryTone(guest.qrStatus)}>{guest.qrStatus}</StatusBadge>
-                              </div>
-                            </div>
-                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                              <QuickReadField label="Reserva" value={quickRead.reservation} />
-                              <QuickReadField label="Mesa / espacio" value={quickRead.space} />
-                              <QuickReadField label="Ingreso" value={quickRead.entryStatus} />
-                              <QuickReadField label="Acceso" value={quickRead.accessStatus} />
-                            </div>
-                          </button>
-                        );
-                      })}
+                      {searchResults.map((guest) => <CompactGuestRow key={guest.id} guest={guest} onSelect={handleSelectGuest} />)}
                     </div>
                   </div>
                 ) : searchResults.length === 1 ? (
                   <div className="mt-4 rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3 text-sm text-slate-300">
-                    Una coincidencia encontrada. La validación se muestra en el panel lateral.
+                    Una coincidencia encontrada. Revisa la validación antes de registrar.
                   </div>
                 ) : (
                   <div className="mt-4 rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3 text-sm text-slate-300">
@@ -424,16 +367,14 @@ function CheckInWorkspace() {
             </section>
           </div>
 
-          <aside className="space-y-6">
-            <section className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-5">
+          <aside ref={validationRef} aria-live="polite" className="space-y-4">
+            <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.05] p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                    Validación actual
+                    Resultado
                   </p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                    Una sola incidencia operativa visible
-                  </h2>
+                  <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Validación</h2>
                 </div>
 
                 {selectedGuest ? (
@@ -466,24 +407,18 @@ function CheckInWorkspace() {
                       ) : null}
                       <p className="mt-1 text-sm leading-6 text-slate-200">{attemptState.note}</p>
                     </div>
-                    {attemptState.guest ? (
-                      <StatusBadge variant={attemptState.kind === "success" ? "success" : attemptState.kind === "warning" ? "warning" : "danger"}>
-                        {attemptState.guest.guestName}
-                      </StatusBadge>
-                    ) : null}
                   </div>
 
                   {attemptGuestQuickRead ? (
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <QuickReadField label="Carnet" value={attemptGuestQuickRead.carnet} />
-                      <QuickReadField label="Reserva" value={attemptGuestQuickRead.reservation} />
-                      <QuickReadField label="Mesa / espacio" value={attemptGuestQuickRead.space} />
-                      <QuickReadField label="Ingreso" value={attemptGuestQuickRead.entryStatus} />
-                      <QuickReadField label="Acceso" value={attemptGuestQuickRead.accessStatus} />
-                      <QuickReadField label="Código visible" value={attemptGuestQuickRead.visibleCode} />
-                      {historicalContext?.time ? <QuickReadField label="Hora" value={historicalContext.time} /> : null}
-                      {historicalContext?.gate ? <QuickReadField label="Puerta" value={historicalContext.gate} /> : null}
-                      {historicalContext?.operator ? <QuickReadField label="Operador" value={historicalContext.operator} /> : null}
+                    <div className="mt-3 space-y-2 text-sm text-slate-300">
+                      <p className="font-medium text-white">{attemptGuestQuickRead.name}</p>
+                      <p>{formatGuestCarnetLabel(attemptGuestQuickRead.carnet)} · {attemptGuestQuickRead.reservation}</p>
+                      {attemptGuestQuickRead.space !== "Sin mesa" ? <p>{attemptGuestQuickRead.space}</p> : null}
+                      {historicalContext?.time || historicalContext?.operator ? (
+                        <p className="text-slate-200">
+                          {[historicalContext.time ? `Ingreso: ${historicalContext.time}` : null, historicalContext.operator ? `Operador: ${historicalContext.operator}` : null].filter(Boolean).join(" · ")}
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -506,27 +441,19 @@ function CheckInWorkspace() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <StatusBadge variant={operatorPresentation.tone}>{operatorPresentation.label}</StatusBadge>
-                        <StatusBadge variant={getEntryTone(selectedGuest.admissionStatus)}>{selectedGuest.admissionStatus}</StatusBadge>
-                        <StatusBadge variant={getEntryTone(selectedGuest.qrStatus)}>{selectedGuest.qrStatus}</StatusBadge>
+                        <StatusBadge variant={operatorPresentation.tone}>{primaryStatusLabel}</StatusBadge>
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <QuickReadField label="Reserva" value={selectedGuestQuickRead?.reservation ?? "Sin reserva"} />
-                      <QuickReadField label="Mesa / espacio" value={selectedGuestQuickRead?.space ?? "Sin mesa"} />
-                      <QuickReadField label="Ingreso" value={selectedGuestQuickRead?.entryStatus ?? "Sin estado"} />
-                      <QuickReadField label="Acceso" value={selectedGuestQuickRead?.accessStatus ?? "Sin estado"} />
-                      <QuickReadField label="Puede entrar" value={operatorPresentation.canAdmit ? "Sí" : "No"} />
-                      <QuickReadField label="Qué hacer" value={primaryActionLabel} />
-                      {selectedHistoricalContext?.time ? <QuickReadField label="Hora" value={selectedHistoricalContext.time} /> : null}
-                      {selectedHistoricalContext?.gate ? <QuickReadField label="Puerta" value={selectedHistoricalContext.gate} /> : null}
-                      {selectedHistoricalContext?.operator ? <QuickReadField label="Operador" value={selectedHistoricalContext.operator} /> : null}
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-300">
+                      <span>{selectedGuestQuickRead?.reservation ?? "Sin reserva"}</span>
+                      {selectedGuestQuickRead?.space && selectedGuestQuickRead.space !== "Sin mesa" ? <><span aria-hidden="true" className="text-slate-600">·</span><span>{selectedGuestQuickRead.space}</span></> : null}
+                      {operatorPresentation.state !== "entered" ? <><span aria-hidden="true" className="text-slate-600">·</span><span>{selectedGuestQuickRead?.accessStatus ?? "Sin estado"} · {selectedGuestQuickRead?.entryStatus ?? "Sin estado"}</span></> : null}
+                      {selectedHistoricalContext?.time ? <><span aria-hidden="true" className="text-slate-600">·</span><span>Ingreso: {selectedHistoricalContext.time}</span></> : null}
+                      {selectedHistoricalContext?.operator ? <><span aria-hidden="true" className="text-slate-600">·</span><span>Operador: {selectedHistoricalContext.operator}</span></> : null}
                     </div>
 
-                    <div className="mt-4 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-300">
-                      {operatorPresentation.description}
-                    </div>
+                    {operatorPresentation.state !== "ready" ? <div className="mt-4 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-300">{operatorPresentation.description}</div> : null}
                   </div>
 
                   <button
@@ -550,16 +477,6 @@ function CheckInWorkspace() {
               )}
             </section>
 
-            <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                Flujo
-              </p>
-              <div className="mt-4 space-y-3 text-sm leading-6 text-slate-300">
-                <p>1. Escaneá el QR o escribí un identificador conocido.</p>
-                <p>2. Confirmá la coincidencia correcta en el panel lateral.</p>
-                <p>3. Registrá el ingreso sin abrir listas ni paneles extra.</p>
-              </div>
-            </section>
           </aside>
         </section>
       </div>
