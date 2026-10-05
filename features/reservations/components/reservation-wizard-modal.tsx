@@ -214,7 +214,7 @@ export default function ReservationWizardModal({
     wizardMode === "edit" ? "Editar reserva" : wizardMode === "append" ? "Agregar manillas" : "Crear reserva";
 
   const liveSummary = [
-    { label: "Código", value: "RES-0108-DB" },
+    { label: "Código", value: wizardMode === "edit" ? selectedActiveReservation?.code ?? "" : "RES-0108-DB" },
     { label: isPresale ? "Accesos comprados" : isCourtesy ? "Personas" : "Invitados", value: `${isPresale ? accessQuantity : guestCount}` },
     ...(!isNonPhysical ? [{ label: "Recurso", value: visibleResource?.name ?? "Sin recurso" }] : []),
     ...(!isCourtesy ? [{ label: "Monto", value: formatCurrency(amount) }, { label: "Pago", value: paymentStatus }] : []),

@@ -1118,6 +1118,8 @@ function ReservationFlowWorkspace({
         return;
       }
 
+      editHydratedRef.current = null;
+      suppressEditHydrationRef.current = false;
       setActiveReservationId(reservationId);
       setEditingReservationId(reservationId);
       setWizardMode("edit");
