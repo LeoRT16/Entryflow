@@ -30,7 +30,8 @@ test("guest directory keeps invitation actions available without repeating the s
   const source = readFileSync(new URL("../features/customers/components/guest-directory.tsx", import.meta.url), "utf8");
 
   assert.match(source, /Quién es/);
-  assert.match(source, /Dónde pertenece/);
+  assert.match(source, /<p className="kicker">Reserva<\/p>/);
+  assert.match(source, /DefinitionList/);
   assert.match(source, /Visualizar invitación/);
   assert.match(source, /Enviar por WhatsApp/);
   assert.match(source, /WhatsApp/);

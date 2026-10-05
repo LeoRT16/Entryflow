@@ -2,19 +2,16 @@ import { SkeletonBlock, SkeletonStack } from "@/components/premium-feedback";
 
 export default function Loading() {
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <SkeletonBlock className="h-[220px]" />
-        <SkeletonBlock className="h-[220px]" />
+    <div className="space-y-5">
+      <div className="surface-panel space-y-4 p-4 xl:p-5">
+        <SkeletonBlock className="h-14" />
+        <SkeletonBlock className="h-12" />
+        <SkeletonStack count={5} className="flex gap-2" itemClassName="h-8 w-20" />
       </div>
-      <SkeletonBlock className="h-[120px]" />
-      <SkeletonStack
-        count={4}
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-        itemClassName="h-[118px]"
-      />
-      <SkeletonBlock className="h-[320px]" />
-      <SkeletonBlock className="h-[200px]" />
+      <div className="surface-panel space-y-3 p-4 xl:p-5">
+        <SkeletonBlock className="h-7 w-48" />
+        <SkeletonStack count={3} itemClassName="h-20" />
+      </div>
     </div>
   );
 }

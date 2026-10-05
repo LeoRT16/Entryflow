@@ -24,25 +24,30 @@ import {
 } from "@/features/access/domain/whatsapp-delivery-tracking";
 import StatusBadge from "@/components/status-badge";
 import { useFeedback } from "@/components/premium-feedback";
-import Topbar from "@/components/topbar";
 import type { Guest as CheckInGuest } from "@/features/check-in/types";
 import { buildGuestQuickReadSummary } from "@/features/check-in/domain/check-in-domain";
 import { formatGuestCarnetLabel } from "@/features/check-in/domain/check-in-domain";
-import { formatReservationStatus, getReservationStatusTone } from "@/features/reservations/domain/reservation-domain";
+import { normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
 import { useCheckInStore } from "@/services/workspace-service";
 import { matchesText, normalizeText } from "@/features/customers/utils";
 import { statusTone } from "@/features/customers/domain/customer-directory";
 import type { GuestRecord } from "@/features/customers/types";
 import GuestEditModal from "@/features/customers/components/guest-edit-modal";
+import { formatEventWallDateTime } from "@/lib/date-time";
+import { isOperationalReservationGuest } from "@/features/reservations/domain/reservation-domain";
+import type { ReservationType } from "@/features/reservations/types";
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 20;
+const attendeeFilters = ["Todos", "Mesa", "Preventa", "Cortesía", "Históricos"] as const;
+type AttendeeFilter = typeof attendeeFilters[number];
 
 export default function GuestDirectory() {
-  const { activeEvent, can, customers, updateGuestProfile, rotateGuestAccessCredential } = useCheckInStore();
+  const { activeEvent, can, customers, reservations, updateGuestProfile, rotateGuestAccessCredential } = useCheckInStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [editingGuestId, setEditingGuestId] = useState<string | null>(null);
+  const [attendeeFilter, setAttendeeFilter] = useState<AttendeeFilter>("Todos");
 
   const searchRef = useRef<HTMLInputElement | null>(null);
   const drawerRef = useRef<HTMLDivElement | null>(null);
@@ -67,6 +72,14 @@ export default function GuestDirectory() {
 
     return customers.guestRecords
       .filter((guest) => guest.eventId === activeEvent.id)
+      .filter((guest) => {
+        const operational = isOperationalReservationGuest(guest);
+        if (attendeeFilter === "Históricos") return !operational;
+        if (!operational) return false;
+        if (attendeeFilter === "Todos") return true;
+        const reservation = reservationsForGuest(guest, reservations);
+        return reservation?.reservationType === attendeeFilter;
+      })
       .filter((guest) =>
         matchesText(
           [
@@ -87,7 +100,7 @@ export default function GuestDirectory() {
         const aScore = a.guestName.localeCompare(b.guestName);
         return aScore;
       });
-  }, [activeEvent.id, customers.guestRecords, hasMeaningfulQuery, normalizedQuery]);
+  }, [activeEvent.id, attendeeFilter, customers.guestRecords, hasMeaningfulQuery, normalizedQuery]);
 
   const visibleGuests = matchedGuests.slice(0, MAX_RESULTS);
   const hasMoreResults = matchedGuests.length > MAX_RESULTS;
@@ -164,83 +177,46 @@ export default function GuestDirectory() {
   const eventSummary = formatEventSummary(activeEvent.date, activeEvent.startsAt);
 
   return (
-    <div className="space-y-6">
-      <Topbar
-        eyebrow="Invitados"
-        title="Invitados"
-        description="Busca y consulta invitados del evento activo."
-      />
-
-      <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
-        <p className="kicker">Evento activo</p>
-        <div className="mt-3 flex min-w-0 flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h2 className="break-words text-xl font-semibold tracking-tight text-white">
-              {activeEvent.name}
-            </h2>
-            <p className="mt-2 break-words text-sm text-slate-400">{eventSummary}</p>
-            <p className="mt-2 text-sm text-slate-400">
-              {activeEventStats.checkedIn} ingresados · {activeEventStats.pending} pendientes
+    <div className="space-y-5">
+      <section className="surface-panel space-y-4 p-4 xl:p-5">
+        <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="kicker">Invitados</p>
+            <h1 className="mt-2 break-words text-2xl font-semibold tracking-tight text-white">Buscar invitados</h1>
+            <p className="mt-1 break-words text-sm text-slate-400">
+              {activeEvent.name} · {eventSummary} · {activeEventStats.checkedIn} ingresados · {activeEventStats.pending} pendientes
             </p>
           </div>
           <StatusBadge variant="info">{activeEvent.status}</StatusBadge>
         </div>
-      </section>
-
-      <section className="rounded-[2rem] border border-white/10 bg-slate-950/40 p-5">
-        <p className="kicker">Búsqueda global</p>
-        <div className="mt-3 flex flex-col gap-3">
-          <div className="min-w-0">
-            <input
-              ref={searchRef}
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              data-shortcut-search="true"
-              placeholder="Buscar por nombre, carnet, reserva o código..."
-              className="h-13 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06] focus:ring-4 focus:ring-cyan-500/10"
-            />
-          </div>
-
-          <p className="text-sm leading-6 text-slate-400">
-            La lista completa no se muestra por defecto. Escribe al menos {MIN_QUERY_LENGTH} caracteres para ver coincidencias.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <label htmlFor="guest-directory-search" className="sr-only">Buscar invitados</label>
+          <input
+            id="guest-directory-search"
+            ref={searchRef}
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            data-shortcut-search="true"
+            placeholder="Buscar por nombre, carnet, reserva o código..."
+            className="h-12 min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:bg-white/[0.06] focus:ring-4 focus:ring-cyan-500/10"
+          />
+          <p className="shrink-0 text-xs text-slate-500">Escribe al menos {MIN_QUERY_LENGTH} caracteres.</p>
+        </div>
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="group" aria-label="Filtrar invitados">
+          {attendeeFilters.map((filter) => (
+            <button key={filter} type="button" aria-pressed={attendeeFilter === filter} onClick={() => setAttendeeFilter(filter)} className={["shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition", attendeeFilter === filter ? "border-cyan-300/40 bg-cyan-400/15 text-cyan-50" : "border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.07]"].join(" ")}>{filter}</button>
+          ))}
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="kicker">Resultados</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-              {hasMeaningfulQuery ? `${Math.min(visibleGuests.length, MAX_RESULTS)} coincidencias` : "Busca un invitado para ver coincidencias."}
-            </h2>
-            {hasMeaningfulQuery ? (
-              <p className="mt-2 text-sm text-slate-400">
-                {hasMoreResults ? `Mostrando ${MAX_RESULTS} de ${matchedGuests.length} coincidencias.` : `Mostrando ${matchedGuests.length} coincidencias.`}
-              </p>
-            ) : null}
-          </div>
+      <section className="surface-panel min-w-0 p-4 xl:p-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <div><p className="kicker">Resultados</p><h2 className="mt-1 text-xl font-semibold text-white">{hasMeaningfulQuery ? `${Math.min(visibleGuests.length, MAX_RESULTS)} coincidencias` : "Busca un invitado para comenzar."}</h2></div>
+          {hasMeaningfulQuery && hasMoreResults ? <p className="text-xs text-slate-500">Mostrando {MAX_RESULTS} de {matchedGuests.length}</p> : null}
         </div>
-
-        <div className="mt-5 space-y-3">
-          {!hasMeaningfulQuery ? (
-            <EmptyResultsState title="Busca un invitado para ver coincidencias." description="Usa nombre, carnet, reserva o código para comenzar." />
-          ) : visibleGuests.length ? (
-            visibleGuests.map((guest) => (
-              <GuestResultCard
-                key={guest.id}
-                guest={guest}
-                onOpenGuest={openGuest}
-                isSelected={selectedGuestId === guest.id}
-              />
-            ))
-          ) : (
-            <EmptyResultsState
-              title="Sin coincidencias"
-              description={`No encontramos invitados para “${searchQuery.trim()}”.`}
-            />
-          )}
+        <div className="mt-4 space-y-2">
+          {!hasMeaningfulQuery ? <EmptyResultsState title="Busca un invitado para comenzar." /> : visibleGuests.length ? visibleGuests.map((guest) => <GuestResultCard key={guest.id} guest={guest} reservation={reservationsForGuest(guest, reservations)} onOpenGuest={openGuest} isSelected={selectedGuestId === guest.id} />) : <EmptyResultsState title="No encontramos invitados que coincidan con esta búsqueda." />}
         </div>
       </section>
 
@@ -269,10 +245,12 @@ export default function GuestDirectory() {
 
 function GuestResultCard({
   guest,
+  reservation,
   onOpenGuest,
   isSelected,
 }: {
   guest: GuestRecord;
+  reservation?: { reservationType?: ReservationType } | null;
   onOpenGuest: (guest: GuestRecord, trigger?: HTMLElement | null) => void;
   isSelected: boolean;
 }) {
@@ -290,7 +268,6 @@ function GuestResultCard({
           : "border-white/10 bg-slate-950/40 hover:border-white/15 hover:bg-slate-950/55",
       ].join(" ")}
     >
-      <div className="flex min-w-0 flex-col gap-3">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="break-words text-sm font-semibold text-white">{quickRead.name}</p>
@@ -298,19 +275,20 @@ function GuestResultCard({
           </div>
           <div className="flex min-w-0 flex-wrap justify-end gap-2">
             <StatusBadge variant={statusTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
-            <StatusBadge variant={deliveryTone}>{getGuestDeliveryStatusLabel(guest)}</StatusBadge>
+            {reservation?.reservationType ? <span className="text-xs text-slate-500">{reservation.reservationType}</span> : null}
           </div>
         </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          <CompactMeta label="Reserva" value={quickRead.reservation} />
-          <CompactMeta label="Mesa / espacio" value={quickRead.space} />
-          <CompactMeta label="Ingreso" value={quickRead.entryStatus} />
-          <CompactMeta label="WhatsApp" value={guest.whatsapp || "Sin WhatsApp"} />
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+          <span>{quickRead.reservation}</span>
+          {quickRead.space !== "Sin mesa" ? <span>{quickRead.space}</span> : null}
+          <span className={deliveryTone === "danger" ? "text-rose-200" : "text-slate-400"}>{getGuestDeliveryStatusLabel(guest)}</span>
         </div>
-      </div>
     </button>
   );
+}
+
+function reservationsForGuest(guest: GuestRecord, reservations: Array<{ id: string; code: string; reservationType?: ReservationType }>) {
+  return reservations.find((reservation) => reservation.id === guest.reservationId || reservation.code === guest.reservationCode) ?? null;
 }
 
 function GuestDrawer({
@@ -340,6 +318,8 @@ function GuestDrawer({
   const visibleInvitationCode = guest.accessCode ?? guest.invitationCode;
   const isWhatsAppReady = Boolean(normalizeWhatsAppPhoneNumber(guest.whatsapp));
   const canRegenerateGuest = canRegenerate && guest.admissionStatus !== "Ingresó" && guest.admissionStatus !== "Anulada" && guest.reservationStatus !== "Cancelled";
+  const showReservationStatus = !(guest.admissionStatus === "Ingresó" && normalizeReservationStatus(guest.reservationStatus) === "Checked In");
+  const reservation = reservations.find((item) => item.id === guest.reservationId || item.code === guest.reservationCode);
   const handleRegenerate = () => {
     if (!canRegenerateGuest || isRegenerating) return;
     confirm({
@@ -637,12 +617,10 @@ function GuestDrawer({
               <p className="mt-1 break-words text-sm text-slate-400">
                 {guest.reservationName} · {guest.invitationCode}
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <StatusBadge variant={statusTone(guest.admissionStatus)}>{guest.admissionStatus}</StatusBadge>
-                <StatusBadge variant={getGuestDeliveryStatusTone(guest)}>{getGuestDeliveryStatusLabel(guest)}</StatusBadge>
-                <StatusBadge variant={getReservationStatusTone(guest.reservationStatus)}>
-                  {formatReservationStatus(guest.reservationStatus)}
-                </StatusBadge>
+                <span className="text-xs text-slate-400">{getDeliveryPresentationLabel(guest)}</span>
+                {showReservationStatus ? <span className="text-xs text-slate-400">{getReservationPresentationLabel(guest.reservationStatus)}</span> : null}
               </div>
             </div>
 
@@ -653,39 +631,23 @@ function GuestDrawer({
             >
               Cerrar
             </button>
-            {onEdit ? (
-              <button
-                type="button"
-                onClick={() => onEdit(guest)}
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15"
-              >
-                Editar
-              </button>
-            ) : null}
-            {canRegenerateGuest ? (
-              <button type="button" onClick={handleRegenerate} disabled={isRegenerating} className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60">
-                {isRegenerating ? "Regenerando…" : "Regenerar QR"}
-              </button>
-            ) : null}
+            <GuestActionMenu items={[
+              ...(onEdit ? [{ id: "edit", label: "Editar invitado", onSelect: () => onEdit(guest) }] : []),
+              { id: "download", label: isExportingInvitation ? "Descargando…" : "Descargar PNG", onSelect: () => void handleDownloadInvitation() },
+              ...(isWhatsAppReady ? [{ id: "whatsapp", label: isSendingWhatsApp ? "Enviando…" : "Enviar por WhatsApp", onSelect: () => void handleSendWhatsApp() }] : []),
+              ...(canRegenerateGuest ? [{ id: "regenerate", label: isRegenerating ? "Regenerando…" : "Regenerar QR", onSelect: handleRegenerate }] : []),
+            ]} />
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto p-5">
             <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
               <p className="kicker">Quién es</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <CompactMeta label="Carnet" value={guest.carnet} />
-                <CompactMeta label="WhatsApp" value={guest.whatsapp || "Sin WhatsApp"} />
-                <CompactMeta label="Estado de ingreso" value={guest.admissionStatus} />
-                <CompactMeta label="Estado de entrega" value={getGuestDeliveryStatusLabel(guest)} />
-              </div>
+              <DefinitionList className="mt-3" items={[{ label: "Carnet", value: guest.carnet || "No registrado" }, { label: "WhatsApp", value: guest.whatsapp || "Sin WhatsApp" }, { label: "Ingreso", value: guest.admissionStatus }]} />
             </section>
 
             <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-              <p className="kicker">Dónde pertenece</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <CompactMeta label="Reserva" value={`${guest.reservationCode} · ${guest.reservationName}`} />
-                <CompactMeta label="Mesa / espacio" value={guest.tableName || "Sin mesa"} />
-              </div>
+              <p className="kicker">Reserva</p>
+              <DefinitionList className="mt-3" items={[{ label: "Nombre", value: guest.reservationName }, { label: "Tipo", value: reservation?.reservationType ?? "Reserva" }, ...(guest.tableName ? [{ label: "Mesa / espacio", value: guest.tableName }] : []),]} />
             </section>
 
             <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
@@ -693,15 +655,12 @@ function GuestDrawer({
                 <div className="min-w-0">
                   <p className="kicker">Invitación</p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Revisa, descarga o comparte la misma invitación real que consume Ingreso.
+                    Invitación asociada a este invitado.
                   </p>
                 </div>
-                <StatusBadge variant={getGuestDeliveryStatusTone(guest)}>{getGuestDeliveryStatusLabel(guest)}</StatusBadge>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <CompactMeta label="Código visible" value={visibleInvitationCode} />
-              </div>
+              <DefinitionList className="mt-3" items={[{ label: "Código", value: visibleInvitationCode }]} />
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
@@ -711,28 +670,10 @@ function GuestDrawer({
                 >
                   Visualizar invitación
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void handleDownloadInvitation()}
-                  disabled={isExportingInvitation}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isExportingInvitation ? "Descargando..." : "Descargar PNG"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleSendWhatsApp()}
-                  disabled={isSendingWhatsApp || !isWhatsAppReady}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 text-sm font-medium text-emerald-50 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSendingWhatsApp ? "Enviando..." : "Enviar por WhatsApp"}
-                </button>
               </div>
 
               <p className="mt-3 text-xs leading-5 text-slate-500">
-                {isWhatsAppReady
-                  ? "El botón usa el número del invitado y el QR opaco real."
-                  : "Agrega un WhatsApp válido para habilitar el envío."}
+                {isWhatsAppReady ? "WhatsApp disponible para envío desde Más acciones." : "No hay un WhatsApp válido para enviar."}
               </p>
             </section>
 
@@ -743,12 +684,7 @@ function GuestDrawer({
                   {guest.attention || guest.internalNotes || "Sin observaciones operativas."}
                 </p>
               </section>
-            ) : (
-              <section className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
-                <p className="kicker">Observaciones</p>
-                <p className="mt-3 text-sm leading-6 text-slate-300">Sin observaciones operativas.</p>
-              </section>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -795,21 +731,41 @@ function getGuestDeliveryStatusTone(guest: GuestRecord) {
   return statusTone(guest.deliveryStatus);
 }
 
-function CompactMeta({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function getDeliveryPresentationLabel(guest: GuestRecord) {
+  const status = getGuestDeliveryStatusLabel(guest);
+  return status === "Pendiente de envío" ? "Invitación pendiente" : status === "Enviada" ? "Invitación enviada" : status === "Reenviada" ? "Invitación reenviada" : status === "Vista" ? "Invitación vista" : "Invitación fallida";
+}
+
+function getReservationPresentationLabel(status: GuestRecord["reservationStatus"]) {
+  const normalized = normalizeReservationStatus(status);
+  return normalized === "Confirmed" ? "Reserva confirmada" : normalized === "Pending" ? "Reserva pendiente" : normalized === "Cancelled" ? "Reserva cancelada" : normalized === "Completed" ? "Reserva completada" : "Reserva en estado operativo";
+}
+
+function DefinitionList({ items, className = "" }: { items: Array<{ label: string; value: string }>; className?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <p className="break-words text-[10px] font-semibold uppercase tracking-[0.26em] text-slate-500">
-        {label}
-      </p>
-      <p className="break-words text-sm font-medium text-white">{value}</p>
-    </div>
+    <dl className={`divide-y divide-white/10 ${className}`}>
+      {items.map((item) => <div key={item.label} className="grid min-w-0 gap-1 py-2 first:pt-0 last:pb-0 sm:grid-cols-[8rem_minmax(0,1fr)] sm:gap-3"><dt className="text-xs text-slate-500">{item.label}</dt><dd className="break-words text-sm font-medium text-white">{item.value}</dd></div>)}
+    </dl>
   );
+}
+
+function GuestActionMenu({ items }: { items: Array<{ id: string; label: string; onSelect: () => void }> }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", escape);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", escape); };
+  }, [open]);
+  return <div ref={rootRef} className="relative">
+    <button type="button" aria-label="Más acciones del invitado" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white">•••</button>
+    {open ? <div role="menu" aria-label="Más acciones del invitado" className="absolute right-0 top-12 z-10 w-52 rounded-2xl border border-white/10 bg-[#0b0f14] p-2 shadow-2xl">
+      {items.map((item) => <button key={item.id} type="button" role="menuitem" onClick={() => { item.onSelect(); setOpen(false); }} className="w-full rounded-xl px-3 py-2.5 text-left text-sm text-white hover:bg-white/[0.08]">{item.label}</button>)}
+    </div> : null}
+  </div>;
 }
 
 function InvitationPreviewModal({
@@ -942,12 +898,12 @@ function EmptyResultsState({
   description,
 }: {
   title: string;
-  description: string;
+  description?: string;
 }) {
   return (
     <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-5 text-center">
       <p className="text-sm font-medium text-white">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p>
+      {description ? <p className="mt-1 text-xs leading-5 text-slate-400">{description}</p> : null}
     </div>
   );
 }
@@ -956,6 +912,6 @@ function formatEventSummary(date?: string, startsAt?: string) {
   if (!date && !startsAt) {
     return "Evento activo";
   }
-
-  return [date, startsAt].filter(Boolean).join(" · ");
+  const value = date?.includes("T") || date?.includes(" ") ? date : [date, startsAt].filter(Boolean).join("T");
+  return formatEventWallDateTime(value ?? "");
 }
