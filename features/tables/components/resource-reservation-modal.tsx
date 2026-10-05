@@ -10,7 +10,6 @@ import { formatReservationStatus, getReservationStatusTone, isTerminalReservatio
 import type { Guest } from "@/features/check-in/types";
 import type { ReservationRecord } from "@/features/reservations/types";
 import type { TableSummary } from "@/features/tables/types";
-import { isPhysicalTableGuest } from "@/features/tables/domain/table-domain";
 
 type MoveGuestAction = (guestId: string, resourceId: string) => Promise<void>;
 type ChangeTableAction = (input: { reservationId: string; destinationResourceId: string; idempotencyKey: string }) => Promise<{ kind: "change" | "swap" }>;
@@ -68,7 +67,10 @@ export default function ResourceReservationModal({
   }
 
   const guestCount = summary?.metrics.assignedGuests ?? guests.length;
-  const physicalGuests = guests.filter((guest) => guest.tableId === resource.id && isPhysicalTableGuest(guest));
+  // The table summary is produced by the same canonical resource/physical-location
+  // resolver that drives the Spaces card. Keep the preview on that authority so
+  // legacy reservation identities and Guest Move overrides remain consistent.
+  const physicalGuestCount = summary?.metrics.assignedGuests ?? 0;
   const overCapacity = summary?.metrics.overCapacity ?? Math.max(guestCount - resource.capacity, 0);
   const reservationTone = getReservationStatusTone(reservation.status);
   const moveTargets = availableResources.filter((item) => item.id !== resource.id);
@@ -77,8 +79,8 @@ export default function ResourceReservationModal({
   const targetSummary = selectedTarget ? resourceSummaries.get(selectedTarget.id) ?? null : null;
   const destinationOccupied = Boolean(targetSummary?.reservations.length);
   const destinationGuestCount = targetSummary?.metrics.assignedGuests ?? 0;
-  const sourceResultCount = destinationOccupied ? destinationGuestCount : physicalGuests.length;
-  const destinationResultCount = destinationOccupied ? physicalGuests.length : guestCount;
+  const sourceResultCount = destinationOccupied ? destinationGuestCount : physicalGuestCount;
+  const destinationResultCount = destinationOccupied ? physicalGuestCount : guestCount;
   const projectionValid = Boolean(selectedTarget) && sourceResultCount <= (selectedTarget?.capacity ?? 0) && (!destinationOccupied || destinationResultCount <= resource.capacity);
   const submitChange = async () => {
     if (!changeTargetId || !projectionValid || isChangeSubmitting) return;
@@ -239,7 +241,7 @@ export default function ResourceReservationModal({
                 <div className="space-y-3">
                   <p className="text-sm font-semibold text-white">{selectedTarget ? (destinationOccupied ? "INTERCAMBIAR MESAS" : "CAMBIAR MESA") : "Selecciona una mesa destino"}</p>
                   <select aria-label="Mesa destino" value={changeTargetId} onChange={(event) => setChangeTargetId(event.target.value)} className="h-10 w-full rounded-xl border border-white/15 bg-slate-900 px-3 text-sm text-white"><option value="">Selecciona una mesa</option>{changeTargets.map((target) => <option key={target.id} value={target.id}>{target.name} · {resourceSummaries.get(target.id)?.metrics.assignedGuests ?? 0}/{target.capacity}</option>)}</select>
-                  {selectedTarget ? <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300"><p>{resource.name} → {selectedTarget.name}: {physicalGuests.length} invitados físicos</p>{destinationOccupied ? <p className="mt-1">{selectedTarget.name} → {resource.name}: {destinationGuestCount} invitados físicos</p> : null}<p className="mt-1">{selectedTarget.name} quedará en {sourceResultCount}/{selectedTarget.capacity}{destinationOccupied ? ` · ${resource.name} quedará en ${destinationResultCount}/${resource.capacity}` : ""}</p><p className={projectionValid ? "mt-1 text-emerald-200" : "mt-1 text-rose-200"}>{projectionValid ? "Capacidad válida" : "Capacidad excedida"}</p></div> : null}
+                  {selectedTarget ? <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300"><p>{resource.name} → {selectedTarget.name}: {physicalGuestCount} invitados físicos</p>{destinationOccupied ? <p className="mt-1">{selectedTarget.name} → {resource.name}: {destinationGuestCount} invitados físicos</p> : null}<p className="mt-1">{selectedTarget.name} quedará en {sourceResultCount}/{selectedTarget.capacity}{destinationOccupied ? ` · ${resource.name} quedará en ${destinationResultCount}/${resource.capacity}` : ""}</p><p className={projectionValid ? "mt-1 text-emerald-200" : "mt-1 text-rose-200"}>{projectionValid ? "Capacidad válida" : "Capacidad excedida"}</p></div> : null}
                   {changeError ? <p role="alert" className="text-sm text-rose-200">{changeError}</p> : null}
                   <div className="flex justify-end gap-2"><button type="button" onClick={() => { setIsChangeOpen(false); setChangeError(null); }} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-white">Cancelar</button><button type="button" onClick={() => void submitChange()} disabled={!projectionValid || isChangeSubmitting} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">{isChangeSubmitting ? "Cambiando…" : destinationOccupied ? "Confirmar intercambio" : "Confirmar cambio"}</button></div>
                 </div>

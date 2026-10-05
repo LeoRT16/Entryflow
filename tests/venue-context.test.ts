@@ -229,12 +229,12 @@ test("tables flow exposes the venue context bar and the create-venue empty state
 test("resource reassignment preview is explicit, capacity-aware, and permission-gated", () => {
   const source = readFileSync(new URL("../features/tables/components/resource-reservation-modal.tsx", import.meta.url), "utf8");
 
-  assert.match(source, /isPhysicalTableGuest/);
+  assert.match(source, /summary\?\.metrics\.assignedGuests/);
   assert.match(source, /INTERCAMBIAR MESAS/);
   assert.match(source, /CAMBIAR MESA/);
   assert.match(source, /Confirmar intercambio/);
   assert.match(source, /Confirmar cambio/);
-  assert.match(source, /physicalGuests\.length/);
+  assert.match(source, /physicalGuestCount/);
   assert.match(source, /projectionValid/);
   assert.match(source, /disabled={!projectionValid \|\| isChangeSubmitting}/);
   assert.match(source, /max-h-\[calc\(100dvh-2rem\)\]/);
