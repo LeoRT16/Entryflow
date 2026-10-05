@@ -121,8 +121,10 @@ function getTableGuests(table: TableRecord, reservations: ReservationRecord[], g
       (!guest.tableId || guest.tableId === table.id),
   );
 
-  if (reservationGuests.length > 0) {
-    return dedupeGuestsById(reservationGuests);
+  const physicallyLocatedGuests = guests.filter((guest) => guest.tableId === table.id);
+
+  if (reservationGuests.length > 0 || physicallyLocatedGuests.length > 0) {
+    return dedupeGuestsById([...reservationGuests, ...physicallyLocatedGuests]);
   }
 
   if (activeReservations.length === 1) {
@@ -187,7 +189,15 @@ export function buildTableMetrics(
   const tableReservations = getActiveTableReservations(table, reservations, currentEventId);
   const allTableGuests = getTableGuests(table, reservations, guests, currentEventId);
   const tableGuests = allTableGuests.filter(isPhysicalTableGuest);
-  const extraGuestCount = allTableGuests.filter((guest) => !isPhysicalTableGuest(guest)).length;
+  const primaryReservation = getPrimaryTableReservation(table, reservations, currentEventId);
+  const primaryReservationGuestIds = new Set((primaryReservation?.guestIds ?? []).filter(Boolean));
+  const extraGuestCount = guests.filter(
+    (guest) =>
+      !isPhysicalTableGuest(guest) &&
+      (primaryReservation
+        ? guest.reservationId === primaryReservation.id || primaryReservationGuestIds.has(guest.id)
+        : allTableGuests.some((tableGuest) => tableGuest.id === guest.id)),
+  ).length;
   const assignedGuests = tableGuests.length;
   const checkedInGuests = tableGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
   const pendingGuests = tableGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;

@@ -186,6 +186,40 @@ test("physical guest moves follow guest tableId instead of commercial reservatio
   assert.deepEqual(destinationSummary.guestIds, ["g1"]);
 });
 
+test("physical guest moves add a normal guest to a destination with another reservation", () => {
+  const destination = buildTable({ id: "table-b", name: "Mesa B", capacity: 5 });
+  const destinationReservation = buildReservation({ id: "reservation-b", tableId: "table-b", resourceId: "table-b", guestIds: ["b1", "b2"] });
+  const sourceReservation = buildReservation({ id: "reservation-a", tableId: "table-a", resourceId: "table-a", guestIds: ["moved"] });
+  const guests = [
+    { id: "b1", reservationId: destinationReservation.id, tableId: "table-b", guestName: "B1", admissionStatus: "Pendiente" },
+    { id: "b2", reservationId: destinationReservation.id, tableId: "table-b", guestName: "B2", admissionStatus: "Pendiente" },
+    { id: "moved", reservationId: sourceReservation.id, tableId: "table-b", guestName: "Moved", admissionStatus: "Pendiente" },
+  ] as never;
+
+  const summary = buildTableSummary(destination, [destinationReservation, sourceReservation], guests, [], "event-current");
+
+  assert.equal(summary.metrics.assignedGuests, 3);
+  assert.equal(summary.metrics.extraGuestCount, 0);
+  assert.deepEqual(summary.guestIds, ["b1", "b2", "moved"]);
+});
+
+test("extra badge stays attached to the commercial reservation after a normal guest move", () => {
+  const source = buildTable({ id: "table-a", name: "Mesa A", capacity: 5 });
+  const destination = buildTable({ id: "table-b", name: "Mesa B", capacity: 5 });
+  const reservation = buildReservation({ id: "reservation-a", tableId: "table-a", resourceId: "table-a", guestIds: ["normal", "extra-1", "extra-2"] });
+  const guests = [
+    { id: "normal", reservationId: reservation.id, tableId: "table-b", guestName: "Moved", admissionStatus: "Pendiente" },
+    { id: "extra-1", reservationId: reservation.id, tableId: "table-a", extraWristbandSaleId: "sale-1", guestName: "Extra 1", admissionStatus: "Pendiente" },
+    { id: "extra-2", reservationId: reservation.id, tableId: "table-b", extraWristbandSaleId: "sale-1", guestName: "Extra 2", admissionStatus: "Pendiente" },
+  ] as never;
+  const sourceSummary = buildTableSummary(source, [reservation], guests, [], "event-current");
+  const destinationSummary = buildTableSummary(destination, [reservation], guests, [], "event-current");
+  assert.equal(sourceSummary.metrics.assignedGuests, 0);
+  assert.equal(sourceSummary.metrics.extraGuestCount, 2);
+  assert.equal(destinationSummary.metrics.assignedGuests, 1);
+  assert.equal(destinationSummary.metrics.extraGuestCount, 1);
+});
+
 test("extra wristband Guests remain linked but do not consume physical table capacity", () => {
   const table = buildTable({ capacity: 5 });
   const reservation = buildReservation({ guestIds: ["base-1", "extra-1", "extra-2"] });
