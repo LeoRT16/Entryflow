@@ -5,69 +5,7 @@ import StatusBadge from "@/components/status-badge";
 import { useCheckInStore } from "@/services/workspace-service";
 import PermissionGuard from "@/components/permission-guard";
 import { buildStatisticsViewModel, displayMoney } from "@/features/reporting/domain/statistics-view-model";
-
-function StatCard({
-  label,
-  value,
-  hint,
-  tone = "info",
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  tone?: "success" | "warning" | "danger" | "info";
-}) {
-  const toneClasses =
-    tone === "danger"
-      ? "border-rose-400/20 bg-rose-400/8"
-      : tone === "warning"
-        ? "border-amber-400/20 bg-amber-400/8"
-        : tone === "success"
-          ? "border-emerald-400/20 bg-emerald-400/8"
-          : "border-cyan-400/20 bg-cyan-400/8";
-
-  return (
-    <div className={`surface-panel flex min-h-[108px] min-w-0 flex-col justify-between border ${toneClasses} p-4`}>
-      <p className="kicker">{label}</p>
-      <p className="min-w-0 break-words text-3xl font-semibold tracking-tight text-white">{value}</p>
-      {hint ? <p className="mt-2 text-xs leading-5 text-slate-400">{hint}</p> : null}
-    </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  tone: "success" | "warning" | "danger" | "info";
-}) {
-  const toneClasses =
-    tone === "danger"
-      ? "border-rose-400/20 bg-rose-400/8 text-rose-100"
-      : tone === "warning"
-        ? "border-amber-400/20 bg-amber-400/8 text-amber-100"
-        : tone === "success"
-          ? "border-emerald-400/20 bg-emerald-400/8 text-emerald-100"
-          : "border-cyan-400/20 bg-cyan-400/8 text-cyan-100";
-
-  return (
-    <div className={`rounded-[1.25rem] border p-4 ${toneClasses}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-white">{label}</p>
-          <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
-        </div>
-        <StatusBadge variant={tone}>{tone === "danger" ? "Crítico" : tone === "warning" ? "Atención" : tone === "success" ? "Saludable" : "Info"}</StatusBadge>
-      </div>
-      <p className="mt-3 text-sm leading-6 text-slate-300">{detail}</p>
-    </div>
-  );
-}
+import { formatTimestamp } from "@/lib/date-time";
 
 export default function StatisticsPage() {
   const { status, error } = useCheckInStore();
@@ -96,249 +34,36 @@ export default function StatisticsPage() {
 }
 
 function StatisticsContent() {
-  const { eventReport, workspaceIntelligence, workspacePriority } = useCheckInStore();
-
-  const dashboard = workspaceIntelligence.dashboard;
-  const statistics = workspaceIntelligence.statistics;
+  const { eventReport, workspaceIntelligence, workspacePriority, currentEvent } = useCheckInStore();
   const reportStatistics = buildStatisticsViewModel(eventReport, workspaceIntelligence);
-  const statisticsInsights = workspacePriority.byModule.Statistics;
-  const health = workspaceIntelligence.health;
-  const activity = workspaceIntelligence.activity;
-  const prioritySummary = workspacePriority.summary;
-  const commercial = reportStatistics.commercial;
+  const statistics = workspaceIntelligence.statistics;
+  const attention = workspacePriority.allItems.filter((item) => item.requiresAction).slice(0, 6);
+  const formatStatTime = (value: string) => value.includes("T") ? formatTimestamp(value, currentEvent.timezone) : value;
+  const summary = eventReport.summary;
 
   return (
-    <div className="space-y-6">
-      <Topbar
-        eyebrow="Estadísticas"
-        title="Estadísticas"
-        description={`Métricas operativas del evento activo: ${dashboard.currentEvent.name}.`}
-        primaryAction={{ label: "Ir al dashboard", href: "/" }}
-        secondaryAction={{ label: "Ver timeline", href: "/timeline" }}
-      />
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Críticos"
-          value={prioritySummary.critical}
-        />
-        <StatCard
-          label="Atención"
-          value={prioritySummary.attention}
-        />
-        <StatCard
-          label="Eventos recientes"
-          value={activity.recentEvents}
-        />
-        <StatCard
-          label="Estables"
-          value={prioritySummary.healthy}
-        />
-      </section>
-
-      <section className="surface-panel p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="kicker">Métricas canónicas</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Lectura analítica del evento</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-              Esta superficie resume el comportamiento del evento activo con los indicadores que ya alimentan el workspace.
-            </p>
-          </div>
-          <StatusBadge variant="info">{reportStatistics.metrics.length} métricas</StatusBadge>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {reportStatistics.metrics.map((metric) => (
-            <MetricCard key={metric.label} label={metric.label} value={metric.value} detail={metric.detail} tone={metric.tone} />
-          ))}
+    <div className="space-y-5">
+      <Topbar title="Estadísticas" description="Métricas operativas y comerciales del evento activo." compact />
+      <section className="surface-panel p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3"><div><p className="kicker">Resumen del evento</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Lectura operativa</h2></div><StatusBadge variant="info">{summary.operationalPeople} personas</StatusBadge></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <CompactStat label="Personas operativas" value={summary.operationalPeople} detail="En reservas activas" />
+          <CompactStat label="Ingresados" value={summary.checkedInPeople} detail="Accesos confirmados" tone="success" />
+          <CompactStat label="Pendientes" value={summary.pendingPeople} detail="Por ingresar" tone="warning" />
+          <CompactStat label="Reservas activas" value={summary.activeReservations} detail="En operación" />
+          <CompactStat label="Capacidad" value={`${reportStatistics.capacity.capacityAssigned}/${reportStatistics.capacity.physicalCapacity}`} detail={`${reportStatistics.capacity.capacityRemaining} disponibles · ${reportStatistics.capacity.occupancyPercent}%`} />
         </div>
       </section>
-
-      <section className="surface-panel p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="kicker">Valor comercial registrado</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Consolidado histórico</h2>
-          </div>
-          <p className="text-2xl font-semibold text-white">{displayMoney(commercial.total)}</p>
-        </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            ["Mesas", displayMoney(commercial.mesas.value)],
-            ["Preventa", displayMoney(commercial.presales.value)],
-            ["Manillas extra", displayMoney(commercial.extraWristbands.value)],
-            ["Cortesías", `${commercial.courtesies.people} personas`],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-sm text-slate-400">{label}</p>
-              <p className="mt-2 text-lg font-semibold text-white">{value}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-4 text-sm text-slate-400">Personas operativas: {eventReport.summary.operationalPeople}</p>
-        {reportStatistics.diagnostics.hasRelevantDiagnostics ? (
-          <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/8 px-3 py-2 text-sm text-amber-100">
-            Datos incompletos: revisá los diagnósticos comerciales o de recursos históricos del evento.
-          </p>
-        ) : null}
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-        <div className="surface-panel p-5">
-          <p className="kicker">Lectura inteligente</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">{health.title}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-300">{health.description}</p>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {health.modules.slice(0, 4).map((module) => (
-              <div key={module.module} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-white">{module.label}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-500">{module.module}</p>
-                  </div>
-                  <StatusBadge variant={module.tone}>{module.state}</StatusBadge>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-400">{module.detail}</p>
-              </div>
-            ))}
-          </div>
-
-          {health.blockers.length ? (
-            <div className="mt-5 rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
-              <p className="kicker">Bloqueadores</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {health.blockers.map((blocker) => (
-                  <span key={blocker.id} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">
-                    {blocker.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="surface-panel p-5">
-          <p className="kicker">Ritmo reciente</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Actividad y capacidad</h2>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Último ingreso</p>
-              <p className="mt-2 text-lg font-semibold text-white">{statistics.cards.lastCheckInAt}</p>
-              <p className="mt-1 text-sm text-slate-400">Marca el último movimiento de check-in del evento.</p>
-            </div>
-            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Última reserva</p>
-              <p className="mt-2 text-lg font-semibold text-white">{statistics.cards.lastReservationAt}</p>
-              <p className="mt-1 text-sm text-slate-400">Ayuda a entender el ritmo de entrada de demanda.</p>
-            </div>
-            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Pico de check-ins</p>
-              <p className="mt-2 text-lg font-semibold text-white">{statistics.cards.peakCheckInMinute}</p>
-              <p className="mt-1 text-sm text-slate-400">
-                {statistics.cards.checkInsPerMinute} ingresos por minuto en promedio.
-              </p>
-            </div>
-            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Actividad reciente</p>
-              <p className="mt-2 text-lg font-semibold text-white">{statistics.cards.recentActivity}</p>
-              <p className="mt-1 text-sm text-slate-400">{statistics.cards.averageCheckInIntervalMinutes} min entre ingresos en promedio.</p>
-            </div>
-          </div>
-
-          <div className="mt-5 rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-white">Operadores activos</p>
-              <StatusBadge variant={statistics.cards.activeOperators.length ? "success" : "info"}>
-                {statistics.cards.activeOperators.length}
-              </StatusBadge>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {statistics.cards.activeOperators.length ? (
-                statistics.cards.activeOperators.map((operator) => (
-                  <span key={operator} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-300">
-                    {operator}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-slate-400">No se registraron operadores activos.</span>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {statisticsInsights.length ? (
-              statisticsInsights.map((item) => (
-                <div key={item.id} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">{item.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-400">{item.description}</p>
-                      <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-slate-500">
-                        {item.module} · {item.route}
-                      </p>
-                    </div>
-                    <StatusBadge variant={item.tone}>{item.priority}</StatusBadge>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
-                No hay señales de foco activas.
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1.02fr_0.98fr]">
-        <div className="surface-panel p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="kicker">Capacidad operativa</p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Distribución del evento</h2>
-            </div>
-            <StatusBadge variant="info">{reportStatistics.capacity.occupancyPercent}%</StatusBadge>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {reportStatistics.resources.slice(0, 4).map((resource) => (
-              <div key={resource.resourceId} className="rounded-[1.25rem] border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-sm font-medium text-white">{resource.resourceName}</p>
-                <p className="mt-2 text-xs uppercase tracking-[0.24em] text-slate-500">{resource.sectorName ?? "Sin zona"}</p>
-                <p className="mt-3 text-sm text-slate-300">
-                  {resource.capacityAssigned}/{resource.physicalCapacity} ocupados
-                </p>
-                <p className="mt-1 text-xs text-slate-500">Restantes: {resource.capacityRemaining}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="surface-panel p-5">
-          <p className="kicker">Estado del dashboard</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Resumen operativo vivo</h2>
-
-          <div className="mt-5 space-y-3">
-            {[
-              ["Reservas", eventReport.summary.activeReservations],
-              ["Invitados", eventReport.summary.operationalPeople],
-              ["Ingresados", eventReport.summary.checkedInPeople],
-              ["Pendientes", eventReport.summary.pendingPeople],
-              ["Atención", workspaceIntelligence.dashboard.summaryMetrics.find((item) => item.label === "Atención")?.value ?? "0"],
-            ].map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <span className="text-sm text-slate-300">{label}</span>
-                <span className="text-sm font-semibold text-white">{String(value)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <section className="surface-panel p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><div><p className="kicker">Comercial</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Resumen comercial</h2><p className="mt-1 text-sm text-slate-400">Valores registrados para el evento activo.</p></div><p className="text-xl font-semibold text-white">{displayMoney(reportStatistics.commercial.total)}</p></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[["Mesas", displayMoney(reportStatistics.commercial.mesas.value)], ["Preventa", displayMoney(reportStatistics.commercial.presales.value)], ["Manillas extra", displayMoney(reportStatistics.commercial.extraWristbands.value)], ["Cortesías", `${reportStatistics.commercial.courtesies.people} personas`]].map(([label, value]) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><p className="text-sm text-slate-400">{label}</p><p className="mt-1 text-lg font-semibold text-white">{value}</p></div>)}</div></section>
+      <section className="surface-panel p-4 sm:p-5"><div><p className="kicker">Ingreso y ritmo</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Flujo de admisión</h2></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><CompactStat label="Último ingreso" value={formatStatTime(statistics.cards.lastCheckInAt)} detail="Último check-in registrado" /><CompactStat label="Check-ins por minuto" value={statistics.cards.checkInsPerMinute} detail="Promedio del intervalo cargado" /><CompactStat label="Intervalo promedio" value={`${statistics.cards.averageCheckInIntervalMinutes} min`} detail="Tiempo medio entre ingresos registrados" /><CompactStat label="Pico de ingresos" value={statistics.cards.peakCheckInMinute} detail="Mayor concentración de ingresos" /></div><p className="mt-3 text-sm text-slate-400">Última reserva: {formatStatTime(statistics.cards.lastReservationAt)}</p></section>
+      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"><div className="surface-panel p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><div><p className="kicker">Distribución</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Ocupación física</h2></div><StatusBadge variant="info">{reportStatistics.capacity.occupancyPercent}%</StatusBadge></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{reportStatistics.resources.map((resource) => <div key={resource.resourceId} className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><p className="truncate text-sm font-medium text-white">{resource.resourceName}</p><p className="mt-1 text-xs text-slate-500">{resource.sectorName ?? "Sin zona"}</p><p className="mt-2 text-sm text-slate-300">{resource.capacityAssigned}/{resource.physicalCapacity} ocupados</p><p className="text-xs text-slate-500">{resource.capacityRemaining} disponibles{resource.extraWristbands ? ` · ${resource.extraWristbands} extras` : ""}</p></div>)}</div></div><div className="surface-panel p-4 sm:p-5"><div><p className="kicker">Atención</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Excepciones operativas</h2></div>{attention.length ? <div className="mt-4 space-y-2">{attention.map((item) => <div key={item.id} className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-3"><p className="text-sm font-medium text-white">{item.title}</p><p className="mt-1 text-sm leading-5 text-slate-400">{item.description}</p></div>)}</div> : <p className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-sm text-emerald-100">Sin alertas operativas.</p>}</div></section>
     </div>
   );
+}
+
+function CompactStat({ label, value, detail, tone = "info" }: { label: string; value: string | number; detail: string; tone?: "info" | "success" | "warning" }) {
+  const color = tone === "success" ? "text-emerald-100" : tone === "warning" ? "text-amber-100" : "text-white";
+  return <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"><p className="kicker">{label}</p><p className={`mt-2 text-2xl font-semibold tracking-tight ${color}`}>{value}</p><p className="mt-1 text-xs text-slate-400">{detail}</p></div>;
 }
 
 function StateShell({

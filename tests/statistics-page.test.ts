@@ -6,15 +6,16 @@ const statisticsPageSource = readFileSync(new URL("../app/statistics/page.tsx", 
 
 test("statistics page uses EventReport facts while retaining operational intelligence", () => {
   assert.match(statisticsPageSource, /buildStatisticsViewModel\(eventReport, workspaceIntelligence\)/);
-  assert.match(statisticsPageSource, /reportStatistics\.metrics\.map/);
-  assert.match(statisticsPageSource, /eventReport\.summary\.operationalPeople/);
-  assert.match(statisticsPageSource, /workspaceIntelligence\.health/);
-  assert.match(statisticsPageSource, /workspacePriority\.byModule\.Statistics/);
-  assert.match(statisticsPageSource, /Métricas canónicas/);
-  assert.match(statisticsPageSource, /Ritmo reciente/);
-  assert.match(statisticsPageSource, /Datos incompletos/);
+  assert.match(statisticsPageSource, /Resumen del evento/);
+  assert.match(statisticsPageSource, /summary\.operationalPeople/);
+  assert.match(statisticsPageSource, /workspacePriority\.allItems/);
+  assert.match(statisticsPageSource, /Resumen comercial/);
+  assert.match(statisticsPageSource, /Ingreso y ritmo/);
+  assert.match(statisticsPageSource, /Ocupación física/);
+  assert.doesNotMatch(statisticsPageSource, /activeOperators/);
+  assert.doesNotMatch(statisticsPageSource, /slice\(0, 4\)/);
   assert.doesNotMatch(statisticsPageSource, /tableSummaries/);
-  assert.doesNotMatch(statisticsPageSource, /statistics\.commercial/);
+  assert.doesNotMatch(statisticsPageSource, /Resumen operativo vivo/);
   assert.doesNotMatch(statisticsPageSource, /GuidedActionPanel/);
   assert.doesNotMatch(statisticsPageSource, /buildGuidedActionItem/);
 });

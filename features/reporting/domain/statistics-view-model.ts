@@ -64,5 +64,6 @@ export function buildStatisticsViewModel(
 export function displayMoney(value: MoneyValue) {
   if (!value.complete || value.amount === null) return "Datos incompletos";
   const amount = value.amount.toLocaleString("es-BO");
-  return value.currency ? `${value.currency} ${amount}` : amount;
+  const currency = value.currency === "BOB" ? "Bs" : value.currency;
+  return currency ? `${currency} ${amount}` : amount;
 }

@@ -63,6 +63,10 @@ test("mixed currencies and missing snapshots render as incomplete instead of fal
   assert.equal(displayMoney(missing.commercial.total), "Datos incompletos");
 });
 
+test("BOB is presented as Bs without changing the money model", () => {
+  assert.equal(displayMoney({ currency: "BOB", amount: 1520, complete: true, currencies: ["BOB"] }), "Bs 1.520");
+});
+
 test("Statistics follows physical Guest location while preserving commercial ownership", () => {
   const input = structuredClone(buildEventReportFixtureInput());
   input.guests.find((guest) => guest.id === "guest-1")!.tableId = "layout-mesa-2";
