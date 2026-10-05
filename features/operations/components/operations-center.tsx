@@ -4,20 +4,9 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import StatusBadge from "@/components/status-badge";
-import Topbar from "@/components/topbar";
-import type { WorkspacePriorityItem } from "@/domain/workspace-priority";
 import { isAccreditationPhase2EventType } from "@/features/accreditation/events";
+import { buildOperationsIncidents, type OperationsIncident } from "@/features/operations/domain/operations-domain";
 import { useCheckInStore } from "@/services/workspace-service";
-
-type OperationsIncident = {
-  id: string;
-  title: string;
-  description: string;
-  route: string;
-  module: WorkspacePriorityItem["module"];
-  priority: "critical" | "attention";
-  tone: "danger" | "warning";
-};
 
 const MODULE_LABELS: Record<string, string> = {
   Operations: "Operaciones",
@@ -38,46 +27,6 @@ const ACTION_LABELS: Record<string, string> = {
   Dashboard: "Ver resumen",
   Statistics: "Ver estadísticas",
 };
-
-function priorityRank(priority: WorkspacePriorityItem["priority"]) {
-  if (priority === "critical") return 0;
-  if (priority === "high") return 1;
-  if (priority === "medium") return 2;
-  return 3;
-}
-
-function incidentKey(item: WorkspacePriorityItem) {
-  if (item.module === "Check-in" && (item.title === "Check-in detenido" || item.title === "Puerta congestionada")) {
-    return "Check-in::Ingreso detenido";
-  }
-
-  return `${item.module}::${item.title}::${item.description}`;
-}
-
-function toIncident(item: WorkspacePriorityItem): OperationsIncident {
-  if (item.module === "Check-in" && (item.title === "Check-in detenido" || item.title === "Puerta congestionada")) {
-    return {
-      id: "checkin-stalled-visible",
-      title: "Ingreso detenido",
-      description: item.description,
-      route: "/check-in",
-      module: item.module,
-      priority: "critical",
-      tone: "danger",
-    };
-  }
-
-  const priority = item.priority === "critical" ? "critical" : "attention";
-  return {
-    id: item.id,
-    title: item.title,
-    description: item.description,
-    route: item.route,
-    module: item.module,
-    priority,
-    tone: priority === "critical" ? "danger" : "warning",
-  };
-}
 
 function getModuleLabel(module: string) {
   return MODULE_LABELS[module] ?? module;
@@ -129,11 +78,11 @@ function IncidentGroup({
         </div>
         <StatusBadge variant={tone}>{count}</StatusBadge>
       </div>
-      <div className="space-y-3">
+      <ul className="space-y-2" aria-label={title}>
         {incidents.map((incident) => (
-          <IncidentCard key={incident.id} incident={incident} />
+          <li key={incident.id}><IncidentCard incident={incident} /></li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 }
@@ -165,60 +114,33 @@ function StableState({ accreditation, eventId }: { accreditation: boolean; event
 }
 
 export default function OperationsCenter() {
-  const { workspacePriority, currentEvent } = useCheckInStore();
+  const { workspacePriority, currentEvent, status } = useCheckInStore();
   const accreditation = isAccreditationPhase2EventType(currentEvent.eventType);
 
   const incidents = useMemo(() => {
-    const seen = new Map<string, OperationsIncident>();
-    const orderedItems = [...workspacePriority.criticalItems, ...workspacePriority.attentionNow].sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
-
-    for (const item of orderedItems) {
-      const key = incidentKey(item);
-      const nextIncident = toIncident(item);
-      const existing = seen.get(key);
-
-      if (!existing) {
-        seen.set(key, nextIncident);
-        continue;
-      }
-
-      if (existing.id === "checkin-stalled-visible" || nextIncident.id === "checkin-stalled-visible") {
-        seen.set(key, nextIncident.id === "checkin-stalled-visible" ? nextIncident : existing);
-        continue;
-      }
-
-      if (existing.priority === "attention" && nextIncident.priority === "critical") {
-        seen.set(key, nextIncident);
-      }
-    }
-
-    const deduped = Array.from(seen.values());
-    return {
-      critical: deduped.filter((incident) => incident.priority === "critical"),
-      attention: deduped.filter((incident) => incident.priority === "attention"),
-    };
+    return buildOperationsIncidents(workspacePriority);
   }, [workspacePriority.attentionNow, workspacePriority.criticalItems]);
 
   const hasIncidents = incidents.critical.length > 0 || incidents.attention.length > 0;
 
   return (
-    <div className="space-y-6">
-      <Topbar
-        eyebrow="Operaciones"
-        title="Operaciones"
-        description="Control operativo en tiempo real del evento activo."
-      />
-
-      <section className="surface-panel p-5 sm:p-6">
-        <div className="flex flex-col gap-4 border-b border-white/10 pb-4">
+    <div className="space-y-4 sm:space-y-5">
+      <section className="surface-panel p-4 sm:p-5">
+        <div className="flex flex-col gap-3 border-b border-white/10 pb-3">
           <div>
-            <p className="kicker">ATENCIÓN OPERATIVA</p>
+            <p className="kicker">OPERACIONES</p>
             <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Incidencias activas</h2>
           </div>
         </div>
 
-        <div className="mt-5 space-y-6">
-          {hasIncidents ? (
+        <div className="mt-4 space-y-5">
+          {status === "error" ? (
+            <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-100">
+              No pudimos cargar las incidencias operativas. Reintenta la sincronización.
+            </div>
+          ) : status === "loading" ? (
+            <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-slate-400">Sincronizando incidencias…</div>
+          ) : hasIncidents ? (
             <>
               {incidents.critical.length ? (
                 <IncidentGroup title="Críticos" count={incidents.critical.length} tone="danger" incidents={incidents.critical} />

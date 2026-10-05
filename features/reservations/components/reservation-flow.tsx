@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import Topbar from "@/components/topbar";
 import { useFeedback } from "@/components/premium-feedback";
 import ReservationWizardModal, {
   wizardSteps,
@@ -1163,21 +1162,13 @@ function ReservationFlowWorkspace({
   }, [cancelReservation, showToast]);
 
   return (
-    <div className="space-y-6">
-      <Topbar
-        eyebrow="Reservas"
-        title="Reservas"
-        description="Vista compacta para crear y operar reservas sin salir del flujo principal."
-      />
-
-      <section className="flex flex-col gap-3 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4">
+      <section className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-            Contexto activo
-          </p>
-          <p className="mt-2 break-words text-sm font-medium text-white">{currentEvent.name}</p>
-          <p className="mt-1 text-sm leading-6 text-slate-400">
-            {isTerminalEvent ? "Evento cerrado" : "Operación activa"}
+          <p className="kicker">Reservas</p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-white">Reservas activas</h1>
+          <p className="mt-1 break-words text-sm text-slate-400">
+            {currentEvent.name} · {isTerminalEvent ? "Evento cerrado" : "Operación activa"}
           </p>
         </div>
 
@@ -1191,26 +1182,26 @@ function ReservationFlowWorkspace({
         </button>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         <KpiCard
           label="OCUPACIÓN"
           value={`${reservationFlowTotals.occupancyPercent}%`}
-          detail="Capacidad utilizada sobre el total disponible."
+          detail=""
         />
         <KpiCard
           label="INGRESADOS"
           value={`${reservationFlowTotals.checkedInGuests}`}
-          detail="Ingresos ya registrados en el evento."
+          detail=""
         />
         <KpiCard
           label="PENDIENTES"
           value={`${reservationFlowTotals.pendingGuests}`}
-          detail="Invitados pendientes de ingreso."
+          detail=""
         />
         <KpiCard
           label="CAPACIDAD RESTANTE"
           value={`${reservationFlowTotals.capacityRemaining}`}
-          detail="Lugar disponible por operar."
+          detail=""
         />
       </section>
 
@@ -1373,10 +1364,10 @@ function KpiCard({
   detail: string;
 }) {
   return (
-    <section className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4">
+    <section className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-3 sm:px-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
-      <p className="mt-3 text-sm leading-6 text-slate-400">{detail}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{value}</p>
+      {detail ? <p className="mt-1 text-xs leading-5 text-slate-400">{detail}</p> : null}
     </section>
   );
 }

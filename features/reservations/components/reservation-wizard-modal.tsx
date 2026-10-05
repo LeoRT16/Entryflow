@@ -225,7 +225,7 @@ export default function ReservationWizardModal({
         className="absolute inset-0"
       />
 
-      <div className="relative mx-auto flex h-full w-full max-w-[1700px] items-stretch p-0 lg:p-4">
+      <div className="relative mx-auto flex h-full w-full max-w-[1700px] items-stretch p-0 lg:p-4" role="dialog" aria-modal="true" aria-labelledby="reservation-wizard-title">
         <div
           className="relative flex h-full w-full flex-col overflow-hidden surface-panel bg-[#0b0f14]"
           aria-busy={isSubmitting}
@@ -237,7 +237,7 @@ export default function ReservationWizardModal({
                 <p className="kicker">{modeLabel}</p>
                 <StatusBadge variant="info">{isCreateMode ? "Borrador" : wizardMode === "edit" ? "Edición" : "Manillas"}</StatusBadge>
               </div>
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-[2rem]">
+              <h2 id="reservation-wizard-title" className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-[2rem]">
                 {currentStepCopy.title}
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">

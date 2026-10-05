@@ -527,12 +527,14 @@ function resolveBootstrapCurrentProfileId(
 }
 
 export function resolveWorkspaceBootstrapSelection(initialWorkspace: WorkspaceBootstrap | null | undefined, currentUserId = "") {
-  const currentOrganizationId = resolveInitialCurrentOrganizationId(initialWorkspace);
+  // The first client render must match the server bootstrap exactly. Browser
+  // preferences are restored after hydration by the preference effect below.
+  const currentOrganizationId = resolveBootstrapCurrentOrganizationId(initialWorkspace);
 
   const selection = {
     currentOrganizationId,
-    currentEventId: resolveInitialCurrentEventId(initialWorkspace, currentOrganizationId),
-    currentProfileId: resolveInitialCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
+    currentEventId: resolveBootstrapCurrentEventId(initialWorkspace, currentOrganizationId),
+    currentProfileId: resolveBootstrapCurrentProfileId(initialWorkspace, currentOrganizationId, currentUserId),
   };
   return selection;
 }

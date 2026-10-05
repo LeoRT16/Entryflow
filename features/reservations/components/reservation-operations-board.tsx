@@ -37,6 +37,10 @@ import type {
   ReservationWhatsAppInvitationCandidate,
   ReservationWhatsAppInvitationPlan,
 } from "@/features/access/domain/whatsapp-reservation-invitations";
+import { formatEventWallDateTime, formatTimestamp } from "@/lib/date-time";
+import JSZip from "jszip";
+import { renderInvitationImageBlob, waitForInvitationImageNodeReady } from "@/features/access/domain/invitation-image-export";
+import { buildGuestInvitationDesign } from "@/features/access/domain/whatsapp-reservation-invitations";
 
 type ReservationOperationsBoardProps = {
   currentEvent: Pick<PlatformEvent, "id" | "name" | "startAt" | "timezone" | "venue" | "metadata">;
@@ -184,8 +188,10 @@ export default function ReservationOperationsBoard({
   const [cancellationError, setCancellationError] = useState<string | null>(null);
   const [isCancellationSubmitting, setIsCancellationSubmitting] = useState(false);
   const [isSendingReservationInvitations, setIsSendingReservationInvitations] = useState(false);
+  const [isDownloadingInvitations, setIsDownloadingInvitations] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
   const [lastBatchResult, setLastBatchResult] = useState<ReservationWhatsAppBatchSummary | null>(null);
+  const [mobileDetail, setMobileDetail] = useState(false);
   const [bulkExportCandidate, setBulkExportCandidate] = useState<ReservationWhatsAppInvitationCandidate | null>(null);
   const bulkExportInvitationRef = useRef<HTMLDivElement | null>(null);
   const bulkExportReadyResolverRef = useRef<(() => void) | null>(null);
@@ -237,6 +243,15 @@ export default function ReservationOperationsBoard({
         : null,
     [activeReservation, currentEvent, currentVenueName, reservationGuests],
   );
+  const downloadableInvitationCandidates = useMemo(() => reservationGuests
+    .filter((guest) => guest.reservationId === activeReservation?.id && guest.admissionStatus !== "Anulada" && guest.reservationStatus !== "Cancelled" && Boolean((guest.accessCode ?? guest.invitationCode)?.trim()))
+    .map((guest) => ({
+      guest,
+      recipient: guest.whatsapp,
+      accessCode: guest.accessCode ?? guest.invitationCode,
+      invitation: buildGuestInvitationDesign({ guest, currentEvent, currentVenueName, reservationHolderName: activeReservation?.holderName }),
+      isRetry: false,
+    })), [activeReservation?.holderName, activeReservation?.id, currentEvent, currentVenueName, reservationGuests]);
   const whatsappCandidateCount = whatsappPlan?.eligibleCount ?? 0;
   const whatsappRetryableCount = whatsappPlan?.retryableCount ?? 0;
   const whatsappAlreadySentCount = whatsappPlan?.alreadySentCount ?? 0;
@@ -293,6 +308,7 @@ export default function ReservationOperationsBoard({
 
   const handleSelectReservation = (reservationId: string) => {
     onSelectReservation(reservationId);
+    setMobileDetail(true);
     setIsAddGuestFormOpen(false);
     resetGuestForm();
   };
@@ -330,6 +346,60 @@ export default function ReservationOperationsBoard({
     setIsAddGuestFormOpen(false);
     resetGuestForm();
   };
+
+  const handleDownloadInvitations = useCallback(async () => {
+    showToast({ title: "Preparando invitaciones…", description: "Generando el archivo de descarga.", tone: "info" });
+    if (!activeReservation || isDownloadingInvitations || !downloadableInvitationCandidates.length) {
+      showToast({ title: "No hay invitaciones elegibles", description: "No hay personas operativas con una invitación disponible para descargar.", tone: "warning" });
+      return;
+    }
+    setIsDownloadingInvitations(true);
+    let stage = "prepare";
+    try {
+      const zip = new JSZip();
+      const seen = new Map<string, number>();
+      for (const guest of downloadableInvitationCandidates) {
+        stage = "render";
+        await waitForBulkExportCandidate(guest);
+        const node = bulkExportInvitationRef.current;
+        if (!node) throw new Error("No se pudo preparar una invitación.");
+        stage = "render";
+        const rect = node.getBoundingClientRect();
+        if (!rect.width || !rect.height) throw new Error("La invitación no pudo prepararse para la descarga.");
+        await waitForInvitationImageNodeReady(node);
+        stage = "render";
+        const filenameBase = sanitizeDownloadFilename(`${guest.accessCode} - ${guest.guest.guestName}`);
+        const count = seen.get(filenameBase) ?? 0;
+        seen.set(filenameBase, count + 1);
+        const filename = `${filenameBase}${count ? ` (${count + 1})` : ""}.png`;
+        const image = await renderInvitationImageBlob(node, { filename, pixelRatio: 1 });
+        if (!image.blob.size) throw new Error("PNG vacío");
+        zip.file(filename, image.blob);
+      }
+      stage = "zip";
+      const blob = await zip.generateAsync({ type: "blob" });
+      if (!blob.size) throw new Error("ZIP vacío");
+      const holder = activeReservation.reservationType === "Cortesía" ? activeReservation.reference || activeReservation.name : activeReservation.holderName || activeReservation.name;
+      const zipName = `${sanitizeDownloadFilename(`${activeReservation.code} - ${holder} - Invitaciones`)}.zip`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = zipName;
+      link.rel = "noopener";
+      link.style.display = "none";
+      document.body.appendChild(link);
+      stage = "download";
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast({ title: "Invitaciones descargadas", description: `${downloadableInvitationCandidates.length} invitaciones incluidas en el archivo.`, tone: "success" });
+    } catch (error) {
+      showToast({ title: "No se pudieron descargar las invitaciones", description: error instanceof Error ? error.message : `Error durante la exportación (${stage}).`, tone: "error" });
+    } finally {
+      setBulkExportCandidate(null);
+      setIsDownloadingInvitations(false);
+    }
+  }, [activeReservation, downloadableInvitationCandidates, isDownloadingInvitations, showToast, waitForBulkExportCandidate]);
 
   const sendOneReservationInvitation = useCallback(
     async (guest: ReservationWhatsAppInvitationPlan["eligibleGuests"][number]) => {
@@ -623,7 +693,7 @@ export default function ReservationOperationsBoard({
 
   return (
     <section className="grid min-w-0 gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-      <div className="surface-panel min-w-0 p-5">
+      <div className={["surface-panel min-w-0 p-4 xl:p-5", mobileDetail ? "hidden xl:block" : ""].join(" ")}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="kicker">Reservas activas</p>
@@ -635,7 +705,8 @@ export default function ReservationOperationsBoard({
         </div>
 
         <div className="mt-4">
-          <input
+            <input
+            aria-label="Buscar reservas"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Buscar por nombre, código, mesa o evento"
@@ -652,6 +723,7 @@ export default function ReservationOperationsBoard({
                 key={filter}
                 type="button"
                 onClick={() => setReservationFilter(filter)}
+                aria-pressed={selected}
                 className={[
                   "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
                   selected
@@ -729,10 +801,13 @@ export default function ReservationOperationsBoard({
         </div>
       </div>
 
-      <section className="surface-panel min-w-0 space-y-5 p-5">
+      <section className={["surface-panel min-w-0 space-y-4 p-4 xl:p-5", !mobileDetail ? "hidden xl:block" : ""].join(" ")}>
         <div className="space-y-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <p className="kicker">Detalle de reserva</p>
+            <div className="flex items-center gap-3">
+              <button type="button" className="inline-flex h-10 items-center rounded-xl border border-white/10 px-3 text-sm text-white xl:hidden" onClick={() => setMobileDetail(false)}>← Reservas</button>
+              <p className="kicker">Detalle de reserva</p>
+            </div>
 
             <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-end">
               <StatusBadge variant={getReservationStatusTone(activeReservation.status)}>
@@ -753,82 +828,19 @@ export default function ReservationOperationsBoard({
               ) : null}
               {canMutateReservation ? (
                 <>
-                  {canIssueWhatsAppInvitations && hasReservationGuests ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleBulkSendReservations()}
-                      disabled={isSendingReservationInvitations}
-                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-300/40 bg-emerald-400/15 px-4 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      {isSendingReservationInvitations && bulkProgress
-                        ? `Enviando ${bulkProgress.current}/${bulkProgress.total}`
-                        : "Enviar invitaciones"}
-                    </button>
-                  ) : null}
-                  {canEditReservation ? (
-                    <button
-                      type="button"
-                      onClick={() => onEditReservation(activeReservation.id)}
-                      className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
-                    >
-                      Editar reserva
-                    </button>
-                  ) : null}
-                  {canDeleteReservation ? (
-                    canHardDeleteActiveReservation ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          confirm({
-                            title: "Eliminar borrador",
-                            description: `Vas a eliminar ${activeReservation.name}. Este borrador no tiene actividad registrada.`,
-                            confirmLabel: "Eliminar borrador",
-                            cancelLabel: "Cancelar",
-                            tone: "danger",
-                            onConfirm: () => {
-                              void onDeleteReservation(activeReservation.id);
-                            },
-                          })
-                        }
-                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-rose-400/25 bg-rose-400/10 px-4 text-sm font-medium text-rose-50 transition hover:bg-rose-400/15"
-                      >
-                        Eliminar borrador
-                      </button>
-                    ) : activeReservation.status === "Draft" ? (
-                      <button
-                        type="button"
-                        onClick={() => showToast({
-                          title: "Borrador con información",
-                          description: "Este borrador contiene información que debe preservarse y no puede eliminarse.",
-                          tone: "warning",
-                        })}
-                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-slate-300"
-                      >
-                        Borrador no eliminable
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          confirm({
-                            title: "Cancelar reserva",
-                            description: `Esta reserva ya tiene invitados o actividad registrada. La cancelaremos para conservar el historial operativo.`,
-                            confirmLabel: "Cancelar reserva",
-                            cancelLabel: "Cancelar",
-                            tone: "warning",
-                            onConfirm: () => {
-                              void onCancelReservation(activeReservation.id);
-                            },
-                          })
-                        }
-                        className="inline-flex h-11 items-center justify-center rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15"
-                      >
-                        Cancelar reserva
-                      </button>
-                    )
-                  ) : null}
                 </>
               ) : null}
+              <ReservationActionMenu items={[
+                ...(canIssueWhatsAppInvitations && hasReservationGuests ? [{ id: "send", label: isSendingReservationInvitations && bulkProgress ? `Enviando ${bulkProgress.current}/${bulkProgress.total}` : "Enviar invitaciones", onSelect: () => void handleBulkSendReservations }] : []),
+                ...[{
+                  id: "download",
+                  label: isDownloadingInvitations ? "Preparando invitaciones…" : "Descargar invitaciones",
+                  onSelect: () => void handleDownloadInvitations(),
+                }],
+                ...(canEditReservation ? [{ id: "edit", label: "Editar reserva", onSelect: () => onEditReservation(activeReservation.id) }] : []),
+                ...(canDeleteReservation && canHardDeleteActiveReservation ? [{ id: "delete", label: "Eliminar borrador", tone: "danger" as const, onSelect: () => confirm({ title: "Eliminar borrador", description: `Vas a eliminar ${activeReservation.name}. Este borrador no tiene actividad registrada.`, confirmLabel: "Eliminar borrador", cancelLabel: "Cancelar", tone: "danger", onConfirm: () => void onDeleteReservation(activeReservation.id) }) }] : []),
+                ...(canDeleteReservation && !canHardDeleteActiveReservation && activeReservation.status !== "Draft" ? [{ id: "cancel", label: "Cancelar reserva", tone: "warning" as const, onSelect: () => confirm({ title: "Cancelar reserva", description: "Esta reserva ya tiene invitados o actividad registrada. La cancelaremos para conservar el historial operativo.", confirmLabel: "Cancelar reserva", cancelLabel: "Cancelar", tone: "warning", onConfirm: () => void onCancelReservation(activeReservation.id) }) }] : []),
+              ]} />
             </div>
           </div>
 
@@ -850,21 +862,18 @@ export default function ReservationOperationsBoard({
           <p className="break-words text-xs text-slate-400">{whatsappInvitationStatusMessage}</p>
         ) : null}
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ReservationInfoRow label="Fecha" value={activeReservation.date} />
-          <ReservationInfoRow label="Hora" value={activeReservation.time} />
-          <ReservationInfoRow
-            label={activeReservation.reservationType === "Preventa" || activeReservation.reservationType === "Cortesía" ? "Tipo" : "Mesa / espacio"}
-            value={activeReservation.reservationType === "Preventa" || activeReservation.reservationType === "Cortesía" ? activeReservation.reservationType : activeReservation.tableName}
-          />
-          {activeReservation.reservationType !== "Cortesía" ? <ReservationInfoRow label="Pago" value={activeReservation.paymentStatus} /> : null}
-        </div>
+        <p className="text-sm font-medium text-slate-300">
+          {formatReservationWallDateTime(activeReservation.date, activeReservation.time)}
+          {activeReservation.reservationType !== "Cortesía" ? ` · ${activeReservation.paymentStatus}` : ""}
+        </p>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ReservationInfoRow label={activeReservation.reservationType === "Preventa" ? "Accesos comprados" : activeReservation.reservationType === "Cortesía" ? "Cortesías" : "Invitados"} value={`${activeReservation.reservationType === "Preventa" ? activeReservation.metrics.purchasedAccesses : activeReservation.metrics.guestCount}`} />
-          <ReservationInfoRow label="Ingresados" value={`${activeReservation.metrics.checkedInGuests}`} />
-          <ReservationInfoRow label="Pendientes" value={`${activeReservation.metrics.pendingGuests}`} />
-          {activeReservation.reservationType === "Preventa" ? <ReservationInfoRow label="Por asignar" value={`${activeReservation.metrics.unassignedAccesses}`} /> : activeReservation.reservationType !== "Cortesía" ? <ReservationInfoRow label="Capacidad restante" value={`${activeReservation.metrics.capacityRemaining}`} /> : null}
+        <div className="flex flex-wrap items-stretch divide-x divide-white/10 border-y border-white/10 py-3">
+          <CompactMetric label={activeReservation.reservationType === "Preventa" ? "Accesos" : activeReservation.reservationType === "Cortesía" ? "Personas" : "Invitados"} value={activeReservation.reservationType === "Preventa" ? activeReservation.metrics.purchasedAccesses : activeReservation.metrics.guestCount} />
+          {activeReservation.reservationType === "Preventa" ? <CompactMetric label="Asignados" value={activeReservation.metrics.assignedAccesses} /> : null}
+          {activeReservation.reservationType === "Preventa" ? <CompactMetric label="Por asignar" value={activeReservation.metrics.unassignedAccesses} /> : null}
+          <CompactMetric label="Ingresados" value={activeReservation.metrics.checkedInGuests} />
+          <CompactMetric label="Pendientes" value={activeReservation.metrics.pendingGuests} />
+          {activeReservation.reservationType === "Mesa" ? <CompactMetric label="Capacidad restante" value={activeReservation.metrics.capacityRemaining} /> : null}
         </div>
 
         {activeReservation.reservationType === "Cortesía" ? (
@@ -944,7 +953,7 @@ export default function ReservationOperationsBoard({
                   <div key={sale.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
                     <div className="min-w-0">
                       <p className="break-words text-sm font-medium text-white">{formatManillaLabel(sale.quantity, true)} × {formatCommercialCurrency(sale.currency)} {formatCommercialAmount(sale.unitPrice)}</p>
-                      <p className="mt-1 text-xs text-slate-400">{formatCommercialCurrency(sale.currency)} {formatCommercialAmount(sale.totalPrice)} · {formatSaleDate(sale.createdAt)}{sale.createdBy ? ` · ${sale.createdBy}` : ""}</p>
+                      <p className="mt-1 text-xs text-slate-400">{formatCommercialCurrency(sale.currency)} {formatCommercialAmount(sale.totalPrice)} · {formatSaleDate(sale.createdAt, currentEvent.timezone)}{sale.createdBy ? ` · ${sale.createdBy}` : ""}</p>
                       {sale.status === "cancelled" && sale.cancellationReason ? <p className="mt-1 break-words text-xs text-amber-200">Motivo: {sale.cancellationReason}</p> : null}
                     </div>
                     <div className="flex items-center gap-2">
@@ -1464,13 +1473,62 @@ function ReservationInfoRow({
   value: string;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+    <div className="flex min-w-0 flex-col gap-1 border-b border-white/10 px-1 py-3">
       <p className="break-words text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
         {label}
       </p>
       <p className="break-words text-sm font-medium text-white">{value}</p>
     </div>
   );
+}
+
+function ReservationActionMenu({
+  items,
+}: {
+  items: Array<{ id: string; label: string; tone?: "warning" | "danger"; onSelect: () => void }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", escape);
+    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", escape); };
+  }, [open]);
+  if (!items.length) return null;
+  return <div ref={rootRef} className="relative">
+    <button type="button" className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-lg text-white" aria-label="Más acciones de la reserva" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>•••</button>
+    {open ? <div ref={menuRef} role="menu" aria-label="Más acciones de la reserva" className="absolute right-0 top-12 z-30 w-56 rounded-2xl border border-white/10 bg-[#0b0f14] p-2 shadow-2xl">
+      {items.map((item) => <button key={item.id} type="button" role="menuitem" onClick={() => { item.onSelect(); setOpen(false); }} className={`w-full rounded-xl px-3 py-2.5 text-left text-sm ${item.tone === "danger" ? "text-rose-100 hover:bg-rose-400/10" : item.tone === "warning" ? "text-amber-100 hover:bg-amber-400/10" : "text-white hover:bg-white/[0.08]"}`}>{item.label}</button>)}
+    </div> : null}
+  </div>;
+}
+
+function CompactMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="min-w-[6.5rem] flex-1 px-4 first:pl-0">
+      <p className="text-2xl font-semibold tracking-tight text-white">{value}</p>
+      <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p>
+    </div>
+  );
+}
+
+function formatReservationWallDateTime(date: string, time: string) {
+  const value = date.includes("T") || date.includes(" ") ? date : time ? `${date}T${time}` : date;
+  return formatEventWallDateTime(value);
+}
+
+function sanitizeDownloadFilename(value: string) {
+  const sanitized = value
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "");
+  return sanitized || "Invitaciones";
 }
 
 function formatCommercialAmount(value: number) {
@@ -1484,8 +1542,8 @@ function formatCommercialCurrency(currency: string) {
   return currency === "BOB" ? "Bs" : currency;
 }
 
-function formatSaleDate(value: string) {
-  return new Intl.DateTimeFormat("es-BO", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+function formatSaleDate(value: string, timeZone: string) {
+  return formatTimestamp(value, timeZone);
 }
 
 function getPresaleUnitPrice(snapshot: NonNullable<ReservationSummary["commercialSnapshot"]>) {

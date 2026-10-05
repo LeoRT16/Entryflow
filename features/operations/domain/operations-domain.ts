@@ -5,6 +5,17 @@ import { buildTimelineEvents } from "@/features/timeline/domain/timeline-domain"
 import type { TimelineEvent } from "@/features/timeline/types";
 import type { TableSummary } from "@/features/tables/types";
 import { normalizeReservationStatus } from "@/features/reservations/domain/reservation-domain";
+import type { WorkspacePriorityItem } from "@/domain/workspace-priority";
+
+export type OperationsIncident = {
+  id: string;
+  title: string;
+  description: string;
+  route: string;
+  module: WorkspacePriorityItem["module"];
+  priority: "critical" | "attention";
+  tone: "danger" | "warning";
+};
 
 export type OperationsAlertTone = "success" | "warning" | "danger" | "info";
 
@@ -49,6 +60,47 @@ export type OperationsSnapshot = {
   };
   recentActivity: TimelineEvent[];
 };
+
+function priorityRank(priority: WorkspacePriorityItem["priority"]) {
+  return priority === "critical" ? 0 : priority === "high" ? 1 : priority === "medium" ? 2 : 3;
+}
+
+function incidentKey(item: WorkspacePriorityItem) {
+  if (item.module === "Check-in" && (item.title === "Check-in detenido" || item.title === "Puerta congestionada")) {
+    return "Check-in::Ingreso detenido";
+  }
+  return `${item.module}::${item.title}::${item.description}`;
+}
+
+export function buildOperationsIncidents(priority: {
+  criticalItems: WorkspacePriorityItem[];
+  attentionNow: WorkspacePriorityItem[];
+}) {
+  const seen = new Map<string, OperationsIncident>();
+  const orderedItems = [...priority.criticalItems, ...priority.attentionNow].sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
+
+  for (const item of orderedItems) {
+    const stalledCheckIn = item.module === "Check-in" && (item.title === "Check-in detenido" || item.title === "Puerta congestionada");
+    const incident: OperationsIncident = {
+      id: stalledCheckIn ? "checkin-stalled-visible" : item.id,
+      title: stalledCheckIn ? "Ingreso detenido" : item.title,
+      description: item.description,
+      route: stalledCheckIn ? "/check-in" : item.route,
+      module: item.module,
+      priority: item.priority === "critical" ? "critical" : "attention",
+      tone: item.priority === "critical" ? "danger" : "warning",
+    };
+    const key = incidentKey(item);
+    const existing = seen.get(key);
+    if (!existing || (existing.priority === "attention" && incident.priority === "critical")) seen.set(key, incident);
+  }
+
+  const deduped = Array.from(seen.values());
+  return {
+    critical: deduped.filter((incident) => incident.priority === "critical"),
+    attention: deduped.filter((incident) => incident.priority === "attention"),
+  };
+}
 
 function timeToMinutes(timestamp: string) {
   const [hours, minutes] = timestamp.split(":").map((value) => Number.parseInt(value, 10));

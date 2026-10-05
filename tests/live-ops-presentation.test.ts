@@ -10,7 +10,11 @@ test("reservation operations board keeps the primary action ahead of secondary g
   assert.match(source, /Editar/);
   assert.match(source, /Cancelar invitado/);
   assert.match(source, /Eliminar/);
-  assert.match(source, /Mesa \/ espacio/);
+  assert.match(source, /Más acciones de la reserva/);
+  assert.match(source, /Descargar invitaciones/);
+  assert.match(source, /id: "download"/);
+  assert.match(source, /void handleDownloadInvitations\(\)/);
+  assert.match(source, /formatReservationWallDateTime/);
 });
 
 test("reservation wizard keeps the payment section compact and coherent", () => {

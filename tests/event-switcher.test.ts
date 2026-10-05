@@ -317,9 +317,9 @@ test("bootstrap selection stays deterministic while persisted selection can be r
     () => {
       const bootstrapSelection = resolveWorkspaceBootstrapSelection(workspace, "user-1");
 
-      assert.equal(bootstrapSelection.currentOrganizationId, "org-2");
-      assert.equal(bootstrapSelection.currentEventId, "event-2");
-      assert.equal(bootstrapSelection.currentProfileId, "profile-2");
+      assert.equal(bootstrapSelection.currentOrganizationId, "org-1");
+      assert.equal(bootstrapSelection.currentEventId, "event-1");
+      assert.equal(bootstrapSelection.currentProfileId, "profile-1");
       assert.equal(resolveInitialCurrentOrganizationId(workspace), "org-2");
       assert.equal(resolveInitialCurrentEventId(workspace, "org-2"), "event-2");
       assert.equal(resolveInitialCurrentProfileId(workspace, "org-2", "user-1"), "profile-2");
@@ -384,7 +384,7 @@ test("bootstrap reconciliation hydrates B once and preserves an explicit C", () 
   assert.equal(state.currentEventId, "event-c");
 });
 
-test("cold bootstrap prefers persisted B over loader live default A", () => {
+test("cold bootstrap stays deterministic until post-hydration preference restore", () => {
   const workspace = buildWorkspace({
     organizations: [{ id: "org-1", name: "Org", slug: "org", status: "active", timezone: "America/La_Paz", branding: {}, settings: {} }],
     profiles: [{ id: "profile-1", organizationId: "org-1", userId: "user-1", roleId: "role-1", displayName: "Owner", attributes: {}, status: "active", createdAt: "2026-08-14T10:00:00.000Z", updatedAt: "2026-08-14T10:00:00.000Z" }],
@@ -405,7 +405,7 @@ test("cold bootstrap prefers persisted B over loader live default A", () => {
   }, () => {
     const selection = resolveWorkspaceBootstrapSelection(workspace, "user-1");
     assert.equal(selection.currentOrganizationId, "org-1");
-    assert.equal(selection.currentEventId, "event-b");
+    assert.equal(selection.currentEventId, "event-a");
     assert.equal(selection.currentProfileId, "profile-1");
   });
 });
