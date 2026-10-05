@@ -4,7 +4,6 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import Topbar from "@/components/topbar";
 import StatusBadge from "@/components/status-badge";
 import { isTerminalEventStatus } from "@/features/events/domain";
 import { buildLiveDashboardModel, type LiveDashboardAlert } from "@/features/events/domain/live-dashboard";
@@ -74,15 +73,17 @@ function MiniMetric({
   label,
   value,
   tone,
+  loading = false,
 }: {
   label: string;
   value: string;
   tone: "success" | "warning" | "danger" | "info";
+  loading?: boolean;
 }) {
   return (
-    <article className={`rounded-2xl border p-4 ${valueToneClass(tone)}`}>
+    <article className={`rounded-2xl border p-3.5 ${valueToneClass(tone)}`}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-white">{loading ? "…" : value}</p>
     </article>
   );
 }
@@ -161,7 +162,7 @@ function CompactStat({
   );
 }
 
-function AdmissionCapacityBlock({ model }: { model: ReturnType<typeof buildLiveDashboardModel> }) {
+function AdmissionCapacityBlock({ model, loading = false }: { model: ReturnType<typeof buildLiveDashboardModel>; loading?: boolean }) {
   const capacityTone =
     model.capacity.state === "blocked" ? "danger" : model.capacity.state === "watch" ? "warning" : "success";
 
@@ -175,6 +176,9 @@ function AdmissionCapacityBlock({ model }: { model: ReturnType<typeof buildLiveD
         <StatusBadge variant={capacityTone}>{model.capacity.state === "blocked" ? "Crítica" : model.capacity.state === "watch" ? "En vigilancia" : "Estable"}</StatusBadge>
       </div>
 
+      {loading ? (
+        <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-sm text-slate-400">Sincronizando datos operativos…</div>
+      ) : (
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-[#0f151d] p-4">
           <p className="kicker">Admisión</p>
@@ -221,6 +225,7 @@ function AdmissionCapacityBlock({ model }: { model: ReturnType<typeof buildLiveD
           <p className="mt-4 text-sm leading-6 text-slate-400">{model.capacity.summary}</p>
         </div>
       </div>
+      )}
     </section>
   );
 }
@@ -230,13 +235,17 @@ function CompactAlertCenter({ alerts, alertCount }: { alerts: LiveDashboardAlert
   const [floatingStyle, setFloatingStyle] = useState<AlertCenterFloatingStyle | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const panelId = useId();
   const portalTarget = typeof document !== "undefined" ? document.body : null;
 
   useLayoutEffect(() => {
     if (!open) {
+      previouslyFocusedRef.current?.focus();
       return;
     }
+
+    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
     const updateFloatingStyle = () => {
       if (!buttonRef.current) {
@@ -263,12 +272,26 @@ function CompactAlertCenter({ alerts, alertCount }: { alerts: LiveDashboardAlert
     };
 
     updateFloatingStyle();
+    const focusableSelector = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusFirst = () => panelRef.current?.querySelector<HTMLElement>(focusableSelector)?.focus();
+    const onPanelKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || !panelRef.current) return;
+      const focusable = [...panelRef.current.querySelectorAll<HTMLElement>(focusableSelector)];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    focusFirst();
+    panelRef.current?.addEventListener("keydown", onPanelKeyDown);
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", updateFloatingStyle);
     window.addEventListener("scroll", updateFloatingStyle, true);
 
     return () => {
+      panelRef.current?.removeEventListener("keydown", onPanelKeyDown);
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", updateFloatingStyle);
@@ -367,32 +390,30 @@ export default function EventCommandCenter() {
   );
 
   return (
-    <div className="space-y-6">
-      <Topbar eyebrow="Resumen" title="Resumen" />
-
-      <section className="surface-panel overflow-hidden p-5 sm:p-6">
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="space-y-4 sm:space-y-5">
+      <section className="surface-panel overflow-hidden p-4 sm:p-5">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0">
             <p className="kicker">{model.header.organizationName}</p>
             <h2 className="mt-2 truncate text-2xl font-semibold tracking-tight text-white sm:text-3xl">{model.header.eventName}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-400 sm:text-[0.95rem]">
               {model.header.eventType} · {model.header.timestampLabel} · {model.header.venue}
             </p>
-            <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-300">{model.header.summary}</p>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">{model.header.summary}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <StatusBadge variant={toneToVariant(model.header.liveTone)}>{model.header.liveLabel}</StatusBadge>
               <StatusBadge variant="info">{model.header.statusLabel}</StatusBadge>
               <StatusBadge variant={model.alertCount > 0 ? "warning" : "success"}>{model.alertCount > 0 ? `${model.alertCount} alertas` : "Sin alertas"}</StatusBadge>
             </div>
           </div>
 
-          <div className="space-y-3 xl:justify-self-end">
+          <div className="space-y-2 lg:justify-self-end lg:w-full">
             <CompactAlertCenter alerts={model.alerts} alertCount={model.alertCount} />
             {!isTerminalEvent ? (
               <button
                 type="button"
                 onClick={() => setEventStatus(currentEvent.id, "finished")}
-                className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 text-sm font-medium text-amber-50 transition hover:bg-amber-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+                className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-amber-100 transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
               >
                 Cerrar evento
               </button>
@@ -406,14 +427,18 @@ export default function EventCommandCenter() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {status === "error" ? (
+        <div role="alert" className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">No pudimos cargar el estado operativo del evento. Reintenta la sincronización.</div>
+      ) : null}
+
+      <section className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {model.kpis.map((metric) => (
-          <MiniMetric key={metric.label} label={metric.label} value={metric.value} tone={metric.tone} />
+          <MiniMetric key={metric.label} label={metric.label} value={metric.value} tone={metric.tone} loading={status === "loading"} />
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
-        <AdmissionCapacityBlock model={model} />
+      <section className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+        <AdmissionCapacityBlock model={model} loading={status === "loading"} />
 
         <section className="surface-panel p-5 sm:p-6">
           <PreviewHeader title="Actividad reciente" action={{ label: "Ver actividad", href: "/timeline" }} />

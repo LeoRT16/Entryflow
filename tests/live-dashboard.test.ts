@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { buildLiveDashboardModel, buildLiveDashboardQuickActions } from "../features/events/domain/live-dashboard";
+import { buildLiveDashboardModel, formatOverviewEventDateTime } from "../features/events/domain/live-dashboard";
 import type { WorkspaceIntelligence } from "../domain/workspace-intelligence";
 import type { WorkspacePrioritySnapshot } from "../domain/workspace-priority";
 import type { ReservationSummary } from "../features/reservations/types";
@@ -518,8 +518,6 @@ test("buildLiveDashboardModel derives the main KPIs and keeps scanner first", ()
   assert.equal(model.alertCount, 10);
   assert.equal(model.alerts.length, 6);
   assert.equal(model.alerts[0]?.route, "/tables");
-  assert.equal(model.quickActions[0]?.route, "/check-in");
-  assert.equal(model.quickActions[0]?.label, "Escanear / Ingreso");
 });
 
 test("buildLiveDashboardModel returns an empty alert state when the workspace is clean", () => {
@@ -671,14 +669,6 @@ test("buildLiveDashboardModel keeps alert priority aligned with operations", () 
   assert.equal(model.alertCount, 1);
 });
 
-test("buildLiveDashboardQuickActions keeps the scanner as the first mobile-critical action", () => {
-  const actions = buildLiveDashboardQuickActions();
-
-  assert.equal(actions[0]?.route, "/check-in");
-  assert.equal(actions[0]?.label, "Escanear / Ingreso");
-  assert.equal(actions[0]?.shortcut, "⌘1");
-});
-
 test("buildLiveDashboardModel marks terminal events as read-only while preserving navigation", () => {
   const model = buildLiveDashboardModel({
     currentOrganizationName: "EntryFlow",
@@ -702,13 +692,9 @@ test("buildLiveDashboardModel marks terminal events as read-only while preservin
     }),
   });
 
-  const quickActions = buildLiveDashboardQuickActions({ terminalEvent: true });
-
   assert.equal(model.header.liveLabel, "Cerrado");
   assert.equal(model.header.summary, "Este evento está cerrado. La información permanece disponible en modo lectura.");
   assert.equal(model.header.nextAction, "Evento cerrado. Revisa historial, reservas y trazabilidad sin ejecutar mutaciones.");
-  assert.equal(quickActions[0]?.label, "Ingreso · solo lectura");
-  assert.equal(quickActions[0]?.route, "/check-in");
 });
 
 test("event command center keeps quick actions out of the overview shell", () => {
@@ -727,4 +713,10 @@ test("event command center renders the alert popover in a portal with fixed view
   assert.match(source, /role="dialog"/);
   assert.match(source, /buttonRef\.current\?\.contains\(target\) \|\| panelRef\.current\?\.contains\(target\)/);
   assert.doesNotMatch(source, /className="absolute right-0 top-\[calc\(100%\+0\.75rem\)\] z-20/);
+});
+
+test("overview event datetime uses compact Spanish presentation without timezone conversion", () => {
+  assert.equal(formatOverviewEventDateTime("2026-10-22 21:00"), "22 oct 2026 · 21:00");
+  assert.equal(formatOverviewEventDateTime("2026-10-22T21:00"), "22 oct 2026 · 21:00");
+  assert.equal(formatOverviewEventDateTime("2026-10-22"), "22 oct 2026");
 });

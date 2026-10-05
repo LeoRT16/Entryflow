@@ -30,15 +30,6 @@ export type LiveDashboardAlert = {
   tableName?: string;
 };
 
-export type LiveDashboardQuickAction = {
-  id: string;
-  label: string;
-  description: string;
-  route: string;
-  tone: LiveDashboardTone;
-  shortcut: string;
-};
-
 export type LiveDashboardModel = {
   header: {
     eventName: string;
@@ -85,7 +76,6 @@ export type LiveDashboardModel = {
     pendingGuests: number;
   }>;
   recentActivity: TimelineEvent[];
-  quickActions: LiveDashboardQuickAction[];
 };
 
 type LiveDashboardInput = {
@@ -97,17 +87,18 @@ type LiveDashboardInput = {
   workspacePriority: Pick<WorkspacePrioritySnapshot, "criticalItems" | "attentionNow" | "summary">;
 };
 
-function formatEventDateTime(startAt: string) {
-  const parts = startAt.trim().split(/\s+/);
-  if (!parts.length) {
-    return startAt;
+export function formatOverviewEventDateTime(startAt: string) {
+  const trimmed = startAt.trim();
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}:\d{2}))?/);
+  if (!match) {
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    return parts.length > 1 ? `${parts.slice(0, -1).join(" ")} · ${parts.at(-1)}` : trimmed;
   }
 
-  if (parts.length === 1) {
-    return startAt;
-  }
-
-  return `${parts.slice(0, -1).join(" ")} · ${parts.at(-1)}`;
+  const [, year, month, day, time] = match;
+  const monthLabels = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  const monthLabel = monthLabels[Number(month) - 1] ?? month;
+  return `${Number(day)} ${monthLabel} ${year}${time ? ` · ${time}` : ""}`;
 }
 
 function toLiveTone(tone: LiveDashboardTone): LiveDashboardTone {
@@ -169,49 +160,6 @@ function mapPriorityItemToAlert(item: WorkspacePriorityItem): LiveDashboardAlert
   };
 }
 
-export function buildLiveDashboardQuickActions({
-  terminalEvent = false,
-}: {
-  terminalEvent?: boolean;
-} = {}): LiveDashboardQuickAction[] {
-  return [
-    {
-      id: "quick-action-check-in",
-      label: terminalEvent ? "Ingreso · solo lectura" : "Escanear / Ingreso",
-      description: terminalEvent
-        ? "Abrir el historial y la trazabilidad de accesos del evento cerrado."
-        : "Abrir el scanner y registrar accesos.",
-      route: "/check-in",
-      tone: "danger",
-      shortcut: "⌘1",
-    },
-    {
-      id: "quick-action-reservations",
-      label: "Reservas",
-      description: "Revisar confirmaciones y pendientes.",
-      route: "/reservations",
-      tone: "info",
-      shortcut: "⌘2",
-    },
-    {
-      id: "quick-action-tables",
-      label: "Mesas / Recursos",
-      description: "Controlar asignación de mesas y conflictos.",
-      route: "/tables",
-      tone: "warning",
-      shortcut: "⌘3",
-    },
-    {
-      id: "quick-action-timeline",
-      label: "Trazabilidad",
-      description: "Ver actividad y cambios recientes.",
-      route: "/timeline",
-      tone: "success",
-      shortcut: "⌘4",
-    },
-  ];
-}
-
 export function buildLiveDashboardModel({
   currentOrganizationName,
   currentEvent,
@@ -249,7 +197,7 @@ export function buildLiveDashboardModel({
       statusLabel: getStatusLabel(currentEvent.status),
       liveLabel: getRealtimeLabel(workspaceStatus, currentEvent.status),
       liveTone: toLiveTone(getRealtimeTone(workspaceStatus, currentEvent.status)),
-      timestampLabel: formatEventDateTime(currentEvent.startAt),
+      timestampLabel: formatOverviewEventDateTime(currentEvent.startAt),
       venue: resolveEventVenueDisplayName({
         currentVenueName,
         eventVenue: currentEvent.venue,
@@ -343,6 +291,5 @@ export function buildLiveDashboardModel({
       pendingGuests: reservation.metrics.pendingGuests,
     })),
     recentActivity: workspaceIntelligence.operations.recentActivity.slice(0, 3),
-    quickActions: buildLiveDashboardQuickActions({ terminalEvent }),
   };
 }
