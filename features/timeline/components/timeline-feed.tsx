@@ -195,12 +195,14 @@ export default function TimelineFeed({ events, timeZone = "UTC" }: { events: Tim
               tabIndex={-1}
               className="grid gap-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start justify-between gap-3 pr-11">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">{quickRead.action}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">{quickRead.description}</p>
                 </div>
-                <StatusBadge variant="info">{formatTimelineDisplayTime(getTimelineDisplayTimestamp(event), timeZone)}</StatusBadge>
+                <span className="shrink-0 whitespace-nowrap">
+                  <StatusBadge variant="info">{formatTimelineDisplayTime(getTimelineDisplayTimestamp(event), timeZone)}</StatusBadge>
+                </span>
               </div>
 
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">

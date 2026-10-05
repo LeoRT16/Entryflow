@@ -25,11 +25,12 @@ export default function TimelinePage() {
   return (
     <PermissionGuard permission="timeline.view">
       <ModuleGuard module="activity">
-        <div className="space-y-5">
+        <div className="space-y-4">
           <Topbar
             eyebrow="Actividad"
             title="Actividad"
             description="Cronología en tiempo real de los cambios operativos del evento activo."
+            compact
           />
 
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -67,10 +68,10 @@ function SummaryCard({
           : "border-sky-400/20 bg-sky-400/10 text-sky-100";
 
   return (
-    <article className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+    <article className="rounded-3xl border border-white/10 bg-white/[0.03] p-3.5 sm:p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{label}</p>
-      <p className={`mt-3 inline-flex rounded-2xl border px-3 py-2 text-xl font-semibold ${toneClasses}`}>{value}</p>
-      <p className="mt-3 text-sm text-slate-400">{detail}</p>
+      <p className={`mt-2 inline-flex rounded-2xl border px-3 py-1.5 text-xl font-semibold ${toneClasses}`}>{value}</p>
+      <p className="mt-2 text-sm text-slate-400">{detail}</p>
     </article>
   );
 }

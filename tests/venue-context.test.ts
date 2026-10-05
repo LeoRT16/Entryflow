@@ -266,6 +266,8 @@ test("activity cards keep non-guest events free of guest placeholders", () => {
   assert.doesNotMatch(source, /Sin invitado/);
   assert.match(source, /Ver detalles/);
   assert.match(source, /renderTimelineCard\(event, true\)/);
+  assert.match(source, /gap-3 pr-11/);
+  assert.match(source, /shrink-0 whitespace-nowrap/);
 });
 
 test("legacy guest table identity follows swaps without moving overrides or extras", () => {
