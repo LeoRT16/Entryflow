@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import StatusBadge from "@/components/status-badge";
 import { ContextualCard } from "@/components/quick-actions-menu";
 import { useKeyboardShortcuts } from "@/components/keyboard-shortcuts";
-import { buildTimelineQuickReadSummary, formatTimelineDisplayTime, getSecondaryTimelineSectionGridClass } from "@/features/timeline/domain/timeline-domain";
+import { buildTimelineQuickReadSummary, formatTimelineDisplayTime, getSecondaryTimelineSectionGridClass, getTimelineDisplayTimestamp } from "@/features/timeline/domain/timeline-domain";
 import type { TimelineEvent } from "@/features/timeline/types";
 
 function TimelineMark({ tone }: { tone: TimelineEvent["tone"] }) {
@@ -260,7 +260,7 @@ export default function TimelineFeed({ events, timeZone = "UTC" }: { events: Tim
                   value={quickRead.operatorLine || quickRead.actorLine || "Sin operador"}
                 />
                 <div className="flex min-w-0 items-start md:items-end md:justify-end">
-                  <StatusBadge variant="info">{formatTimelineDisplayTime(quickRead.timestamp, timeZone)}</StatusBadge>
+                  <StatusBadge variant="info">{formatTimelineDisplayTime(getTimelineDisplayTimestamp(event), timeZone)}</StatusBadge>
                 </div>
               </div>
 

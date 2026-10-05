@@ -7,7 +7,7 @@ import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import StatusBadge from "@/components/status-badge";
 import { isTerminalEventStatus } from "@/features/events/domain";
 import { buildLiveDashboardModel, type LiveDashboardAlert } from "@/features/events/domain/live-dashboard";
-import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
+import { formatTimelineDisplayTime, getTimelineDisplayTimestamp } from "@/features/timeline/domain/timeline-domain";
 import { useCheckInStore } from "@/services/workspace-service";
 
 function toneToVariant(tone: "success" | "warning" | "danger" | "info") {
@@ -449,7 +449,7 @@ export default function EventCommandCenter() {
                   key={event.id}
                   tone={event.tone}
                   href="/timeline"
-                  timestamp={formatTimelineDisplayTime(event.timestamp, currentEvent.timezone)}
+                  timestamp={formatTimelineDisplayTime(getTimelineDisplayTimestamp(event), currentEvent.timezone)}
                   title={event.title}
                   description={event.description}
                 />

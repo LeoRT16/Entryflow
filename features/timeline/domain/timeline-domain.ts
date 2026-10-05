@@ -91,6 +91,10 @@ export function formatTimelineDisplayTime(timestamp: string, timeZone = "UTC") {
     : formatPresentationTime(trimmed, timeZone);
 }
 
+export function getTimelineDisplayTimestamp(event: Pick<TimelineEvent, "createdAt" | "timestamp">) {
+  return event.createdAt?.trim() || event.timestamp;
+}
+
 export function getSecondaryTimelineSectionGridClass(sectionCount: number) {
   return sectionCount > 1 ? "grid gap-4 xl:grid-cols-2" : "grid gap-4";
 }

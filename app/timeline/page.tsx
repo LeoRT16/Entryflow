@@ -6,7 +6,7 @@ import Topbar from "@/components/topbar";
 import ModuleGuard from "@/components/module-guard";
 import PermissionGuard from "@/components/permission-guard";
 import TimelineFeed from "@/features/timeline/components/timeline-feed";
-import { formatTimelineDisplayTime, refreshTimelineWorkspace } from "@/features/timeline/domain/timeline-domain";
+import { formatTimelineDisplayTime, getTimelineDisplayTimestamp, refreshTimelineWorkspace } from "@/features/timeline/domain/timeline-domain";
 import { getWorkspaceActionableAlertCount } from "@/domain/workspace-priority";
 import { useCheckInStore } from "@/services/workspace-service";
 
@@ -16,7 +16,7 @@ export default function TimelinePage() {
   const checkedInGuests = workspaceIntelligence.statistics.cards.checkedInGuests;
   const events = workspacePriority.recentChanges;
   const actionableAlerts = getWorkspaceActionableAlertCount(workspacePriority);
-  const latestEvent = formatTimelineDisplayTime(summary.latest, currentEvent.timezone);
+  const latestEvent = formatTimelineDisplayTime(getTimelineDisplayTimestamp(events[0] ?? { timestamp: summary.latest }), currentEvent.timezone);
 
   useEffect(() => {
     void refreshTimelineWorkspace(reloadWorkspace);
