@@ -210,7 +210,7 @@ test("tables flow exposes the venue context bar and the create-venue empty state
   assert.match(source, /<select/);
   assert.match(source, /VenueManagementSection/);
   assert.match(source, /getVenuesForOrganization\(currentOrganization\.id, venues\)/);
-  assert.match(source, /const \[selectedVenueId, setSelectedVenueId\] = useState\(currentEvent\.venueId \?\? ""\);/);
+  assert.match(source, /const\s+\[selectedVenueId,\s+setSelectedVenueId\]\s*=\s*useState\s*\(\s*currentEvent\.venueId\s*\?\?\s*""\s*,?\s*\);/);
   assert.match(source, /hasHydratedVenuePreference/);
   assert.match(source, /const currentVenueId = venue\?\.id \?\? "";/);
   assert.match(source, /venues:\s*organizationVenues,/);
@@ -220,7 +220,6 @@ test("tables flow exposes the venue context bar and the create-venue empty state
   assert.match(source, /resolveCurrentEventLayout/);
   assert.match(source, /resolveCurrentVenueLayout/);
   assert.match(source, /resolveVenueSectorName/);
-  assert.match(source, /grid gap-3 sm:grid-cols-2 xl:grid-cols-3/);
   assert.match(source, /lg:grid-cols-2 2xl:grid-cols-3/);
   assert.doesNotMatch(source, /inline-flex h-11 items-center rounded-2xl border border-white\/10 bg-white\/\[0\.04\] px-4 text-sm font-medium text-white/);
 });

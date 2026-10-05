@@ -12,6 +12,7 @@ import type { ReservationRecord } from "@/features/reservations/types";
 import type { TableSummary } from "@/features/tables/types";
 
 type MoveGuestAction = (guestId: string, resourceId: string) => Promise<void>;
+type ChangeTableAction = (input: { reservationId: string; destinationResourceId: string; idempotencyKey: string }) => Promise<{ kind: "change" | "swap" }>;
 
 type ResourceReservationModalProps = {
   isOpen: boolean;
@@ -29,6 +30,8 @@ type ResourceReservationModalProps = {
   resourceSummaries: Map<string, TableSummary>;
   canMoveGuests: boolean;
   onMoveGuest: MoveGuestAction;
+  canChangeTable: boolean;
+  onChangeTable: ChangeTableAction;
 };
 
 export default function ResourceReservationModal({
@@ -47,11 +50,17 @@ export default function ResourceReservationModal({
   resourceSummaries,
   canMoveGuests,
   onMoveGuest,
+  canChangeTable,
+  onChangeTable,
 }: ResourceReservationModalProps) {
   const [movingGuestId, setMovingGuestId] = useState<string | null>(null);
   const [moveTargetId, setMoveTargetId] = useState("");
   const [moveError, setMoveError] = useState<string | null>(null);
   const [isMoveSubmitting, setIsMoveSubmitting] = useState(false);
+  const [isChangeOpen, setIsChangeOpen] = useState(false);
+  const [changeTargetId, setChangeTargetId] = useState("");
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [isChangeSubmitting, setIsChangeSubmitting] = useState(false);
 
   if (!isOpen || !resource || !reservation) {
     return null;
@@ -61,6 +70,18 @@ export default function ResourceReservationModal({
   const overCapacity = summary?.metrics.overCapacity ?? Math.max(guestCount - resource.capacity, 0);
   const reservationTone = getReservationStatusTone(reservation.status);
   const moveTargets = availableResources.filter((item) => item.id !== resource.id);
+  const changeTargets = moveTargets.filter((item) => item.status !== "Closed" && item.status !== "Blocked");
+  const submitChange = async () => {
+    if (!changeTargetId || isChangeSubmitting) return;
+    setIsChangeSubmitting(true); setChangeError(null);
+    try {
+      const result = await onChangeTable({ reservationId: reservation.id, destinationResourceId: changeTargetId, idempotencyKey: `${reservation.id}:${resource.id}:${changeTargetId}` });
+      setIsChangeOpen(false);
+      setChangeTargetId("");
+      onClose();
+      void result;
+    } catch (error) { setChangeError(error instanceof Error ? error.message : "No se pudo completar el cambio de mesa."); } finally { setIsChangeSubmitting(false); }
+  };
 
   const beginMove = (guestId: string) => {
     setMovingGuestId(guestId);
@@ -201,6 +222,19 @@ export default function ResourceReservationModal({
               </div>
             </section>
           </div>
+
+          {canChangeTable && !isTerminalEvent && !isTerminalReservationStatus(reservation.status) ? (
+            <section className="mt-5 rounded-[1.25rem] border border-cyan-400/20 bg-cyan-400/[0.05] p-4">
+              {!isChangeOpen ? <button type="button" onClick={() => setIsChangeOpen(true)} className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-50">Cambiar mesa</button> : (
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-white">{changeTargetId && availableResources.find((item) => item.id === changeTargetId)?.id ? "Confirmar cambio o intercambio" : "Selecciona una mesa destino"}</p>
+                  <select aria-label="Mesa destino" value={changeTargetId} onChange={(event) => setChangeTargetId(event.target.value)} className="h-10 w-full rounded-xl border border-white/15 bg-slate-900 px-3 text-sm text-white"><option value="">Selecciona una mesa</option>{changeTargets.map((target) => <option key={target.id} value={target.id}>{target.name} · {resourceSummaries.get(target.id)?.metrics.assignedGuests ?? 0}/{target.capacity}</option>)}</select>
+                  {changeError ? <p role="alert" className="text-sm text-rose-200">{changeError}</p> : null}
+                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setIsChangeOpen(false); setChangeError(null); }} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-white">Cancelar</button><button type="button" onClick={() => void submitChange()} disabled={!changeTargetId || isChangeSubmitting} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">{isChangeSubmitting ? "Cambiando…" : "Confirmar"}</button></div>
+                </div>
+              )}
+            </section>
+          ) : null}
 
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <button

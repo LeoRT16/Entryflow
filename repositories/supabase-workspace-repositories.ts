@@ -241,6 +241,7 @@ export type SupabaseWorkspaceRepositories = {
     setStatusAtomic(reservationId: string, status: ReservationStatus): Promise<{ reservationId: string; previousStatus: ReservationStatus; status: ReservationStatus; changed: boolean }>;
     assignToTable(reservationId: string, tableId: string): Promise<void>;
     assignReservationTableAtomic(input: { reservationId: string; resourceId: string }): Promise<import('./workspace-repositories').ReservationTableAtomicResult>;
+    swapResourceReservationsAtomic(input: { reservationAId: string; reservationBId?: string; resourceAId: string; resourceBId: string; idempotencyKey: string }): Promise<Record<string, unknown>>;
     releaseReservationTableAtomic(input: { reservationId: string; expectedResourceId: string }): Promise<import('./workspace-repositories').ReleaseReservationTableAtomicResult>;
   };
   extraWristbandSales: {
@@ -1247,6 +1248,18 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
         if (error) throw error;
         const result = data as { reservation_id: string; previous_status: ReservationStatus; status: ReservationStatus; changed: boolean };
         return { reservationId: result.reservation_id, previousStatus: result.previous_status, status: result.status, changed: result.changed };
+      },
+      async swapResourceReservationsAtomic({ reservationAId, reservationBId, resourceAId, resourceBId, idempotencyKey }) {
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { data, error } = await client.rpc("swap_resource_reservations_atomic" as never, {
+          p_reservation_a: reservationAId,
+          p_reservation_b: reservationBId ?? null,
+          p_resource_a: resourceAId,
+          p_resource_b: resourceBId,
+          p_idempotency_key: idempotencyKey,
+        } as never);
+        if (error) throw error;
+        return data as Record<string, unknown>;
       },
       async assignReservationTableAtomic({ reservationId, resourceId }) {
         if (!client) throw new Error("Supabase client is unavailable.");

@@ -351,6 +351,7 @@ type WorkspaceServiceValue = {
   setReservationStatus: (reservationId: string, status: ReservationStatus) => void;
   assignReservationToTable: (reservationId: string, tableId: string) => void;
   moveGuestToTable: (guestId: string, tableId: string) => Promise<void>;
+  changeReservationTable: (input: { reservationId: string; destinationResourceId: string; idempotencyKey: string }) => Promise<{ kind: "change" | "swap"; destinationResourceId: string; reservationId: string; swappedReservationId?: string }>;
   updateGuestProfile: (params: {
     guestId: string;
     guestName: string;
@@ -3843,6 +3844,29 @@ export function WorkspaceServiceProvider({
     const result = await runAssignReservationTable({ reservationId, resourceId: tableId, persist: () => repositories.reservations.assignReservationTableAtomic({ reservationId, resourceId: tableId }), commit: (value) => { setReservations((current) => current.map((item) => item.id === reservationId ? { ...item, resourceId: tableId, tableId, tableName: table.name, resourceName: table.name, tableCapacity: value.reservation?.table_capacity ?? table.capacity, eventLayoutResourceId: reservation.eventLayoutResourceId } : item)); setGuests((current) => current.map((guest) => guest.reservationId === reservationId ? { ...guest, tableId, tableName: table.name } : guest)); setTables((current) => current.map((item) => item.id === tableId ? { ...item, status: "Reserved", closed: false } : item)); }, report: () => requestReportingAfterSuccess(currentEvent.id) });
   }, [currentEvent, currentVenue, requestReportingAfterSuccess, repositories.reservations, requirePermission, reservations, setGuests, setReservations, setTables, tables]);
 
+  const changeReservationTable = useCallback(async ({ reservationId, destinationResourceId, idempotencyKey }: { reservationId: string; destinationResourceId: string; idempotencyKey: string }) => {
+    requirePermission("resource.assign");
+    requirePermission("reservation.edit");
+    const reservation = reservations.find((item) => item.id === reservationId);
+    const destination = resources.find((item) => item.id === destinationResourceId);
+    if (!reservation || !destination) throw new Error("No se pudo resolver la mesa seleccionada.");
+    const active = reservations.filter((item) => item.eventId === currentEvent.id && (item.resourceId === destinationResourceId || item.tableId === destinationResourceId) && !isTerminalReservationStatus(item.status));
+    if (active.length > 1) throw new Error("Esta mesa tiene un conflicto de reservas y no puede utilizarse para el cambio.");
+    const other = active[0] && active[0].id !== reservation.id ? active[0] : undefined;
+    const source = reservation.resourceId ?? reservation.tableId;
+    if (!source) throw new Error("Esta reserva no tiene una mesa asignada.");
+    const result = await repositories.reservations.swapResourceReservationsAtomic({ reservationAId: reservation.id, reservationBId: other?.id, resourceAId: source, resourceBId: destinationResourceId, idempotencyKey });
+    const sourceResource = resources.find((item) => item.id === source);
+    setReservations((current) => current.map((item) => item.id === reservation.id ? { ...item, resourceId: destinationResourceId, tableId: destinationResourceId, tableName: destination.name, resourceName: destination.name, tableCapacity: destination.capacity } : other && item.id === other.id && sourceResource ? { ...item, resourceId: source, tableId: source, tableName: sourceResource.name, resourceName: sourceResource.name, tableCapacity: sourceResource.capacity } : item));
+    setGuests((current) => current.map((guest) => {
+      if (guest.reservationId === reservation.id && guest.tableId === source) return { ...guest, tableId: destinationResourceId, tableName: destination.name };
+      if (other && sourceResource && guest.reservationId === other.id && guest.tableId === destinationResourceId) return { ...guest, tableId: source, tableName: sourceResource.name };
+      return guest;
+    }));
+    requestReportingAfterSuccess(currentEvent.id);
+    return { kind: (other ? "swap" : "change") as "change" | "swap", destinationResourceId, reservationId: reservation.id, swappedReservationId: other?.id };
+  }, [currentEvent.id, repositories.reservations, reservations, resources, requirePermission, requestReportingAfterSuccess, setGuests, setReservations]);
+
   const moveGuestToTable = useCallback(
     async (guestId: string, tableId: string) => {
       requirePermission("resource.assign");
@@ -4362,6 +4386,7 @@ export function WorkspaceServiceProvider({
       updateReservationGuest,
       assignReservationToTable,
       moveGuestToTable,
+      changeReservationTable,
       updateGuestProfile,
       updateGuestWhatsApp,
       rotateGuestAccessCredential,
@@ -4441,6 +4466,7 @@ export function WorkspaceServiceProvider({
       guests,
       hasPermission,
       moveGuestToTable,
+      changeReservationTable,
       updateGuestProfile,
       updateGuestWhatsApp,
       organizations,

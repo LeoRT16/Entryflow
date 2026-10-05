@@ -65,6 +65,7 @@ export type ReservationRepository = CrudRepository<ReservationRecord, Reservatio
   setStatusAtomic(reservationId: string, status: ReservationStatus): Promise<{ reservationId: string; previousStatus: ReservationStatus; status: ReservationStatus; changed: boolean }>;
   assignToTable(reservationId: string, tableId: string): void;
   assignReservationTableAtomic(input: { reservationId: string; resourceId: string }): Promise<ReservationTableAtomicResult>;
+  swapResourceReservationsAtomic(input: { reservationAId: string; reservationBId?: string; resourceAId: string; resourceBId: string; idempotencyKey: string }): Promise<Record<string, unknown>>;
   releaseReservationTableAtomic(input: { reservationId: string; expectedResourceId: string }): Promise<ReleaseReservationTableAtomicResult>;
 };
 
@@ -435,6 +436,7 @@ export function createSupabaseWorkspaceRepositories(): WorkspaceRepositories {
       setStatusAtomic: notImplemented,
       assignToTable: notImplemented,
       assignReservationTableAtomic: notImplemented,
+      swapResourceReservationsAtomic: notImplemented,
       releaseReservationTableAtomic: notImplemented,
     },
     guests: {
