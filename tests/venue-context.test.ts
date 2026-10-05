@@ -248,6 +248,20 @@ test("resource reassignment preview is explicit, capacity-aware, and permission-
   assert.match(summaryRow, /flex-1 break-words text-right/);
 });
 
+test("legacy guest table identity follows swaps without moving overrides or extras", () => {
+  const service = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../supabase/migrations/20261022000000_resource_reservation_swap_atomic_legacy_guest_compat.sql", import.meta.url), "utf8");
+
+  assert.match(service, /guest\.tableId == null && guest\.tableName === sourceResource\?\.name/);
+  assert.match(service, /guest\.tableId == null && guest\.tableName === destination\.name/);
+  assert.match(service, /!guest\.extraWristbandSaleId/);
+  assert.match(migration, /g\.table_id is null and g\.table_name=rsrc\.name/);
+  assert.match(migration, /g\.table_id is null and g\.table_name=rdst\.name/);
+  assert.match(migration, /g\.extra_wristband_sale_id is null/);
+  assert.match(migration, /update guests set table_id=p_resource_b::text,table_name=rdst\.name/);
+  assert.match(migration, /update guests set table_id=p_resource_a::text,table_name=rsrc\.name/);
+});
+
 test("venue management section reuses the old editable venue fields and keeps map support absent", () => {
   const source = readFileSync(new URL("../features/tables/components/venue-management-section.tsx", import.meta.url), "utf8");
 

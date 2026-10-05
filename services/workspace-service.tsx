@@ -3859,8 +3859,16 @@ export function WorkspaceServiceProvider({
     const sourceResource = resources.find((item) => item.id === source);
     setReservations((current) => current.map((item) => item.id === reservation.id ? { ...item, resourceId: destinationResourceId, tableId: destinationResourceId, tableName: destination.name, resourceName: destination.name, tableCapacity: destination.capacity } : other && item.id === other.id && sourceResource ? { ...item, resourceId: source, tableId: source, tableName: sourceResource.name, resourceName: sourceResource.name, tableCapacity: sourceResource.capacity } : item));
     setGuests((current) => current.map((guest) => {
-      if (guest.reservationId === reservation.id && guest.tableId === source) return { ...guest, tableId: destinationResourceId, tableName: destination.name };
-      if (other && sourceResource && guest.reservationId === other.id && guest.tableId === destinationResourceId) return { ...guest, tableId: source, tableName: sourceResource.name };
+      const followsReservation = Boolean(sourceResource)
+        && guest.reservationId === reservation.id
+        && !guest.extraWristbandSaleId
+        && (guest.tableId === source || (guest.tableId == null && guest.tableName === sourceResource?.name));
+      const followsOtherReservation = Boolean(other && sourceResource)
+        && !guest.extraWristbandSaleId
+        && guest.reservationId === other?.id
+        && (guest.tableId === destinationResourceId || (guest.tableId == null && guest.tableName === destination.name));
+      if (followsReservation) return { ...guest, tableId: destinationResourceId, tableName: destination.name };
+      if (followsOtherReservation) return { ...guest, tableId: source, tableName: sourceResource?.name };
       return guest;
     }));
     requestReportingAfterSuccess(currentEvent.id);
