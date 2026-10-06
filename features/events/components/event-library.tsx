@@ -133,13 +133,15 @@ export default function EventLibrary() {
         ? {
             label: "Publicar evento",
             tone: "info",
-            onClick: () => setEventStatus(currentEvent.id, "published"),
+            onClick: () => confirm({ title: "¿Publicar este evento?", description: "Al publicarlo podrás gestionar reservas, invitados y accesos.", confirmLabel: "Publicar evento", cancelLabel: "Cancelar", tone: "info", onConfirm: () => void setEventStatus(currentEvent.id, "published") }),
           }
         : currentEvent.status === "live" ? {
             label: "Cerrar evento",
             tone: "warning",
             onClick: () => setEventStatus(currentEvent.id, "finished"),
-          } : null;
+        } : null;
+
+  const cancelEvent = (event: Event) => confirm({ title: "¿Cancelar este evento?", description: "Dejará de aceptar operación nueva. El historial se conservará y la acción es irreversible.", confirmLabel: "Cancelar evento", cancelLabel: "Volver", tone: "danger", onConfirm: () => void setEventStatus(event.id, "cancelled") });
 
   const requestActivation = (event: Event) => {
     const liveEvent = organizationEvents.find((candidate) => candidate.status === "live" && candidate.id !== event.id);
@@ -194,6 +196,7 @@ export default function EventLibrary() {
               onSelectEvent={setCurrentEventId}
               onEditEvent={openEventEditor}
               onActivateEvent={requestActivation}
+              onCancelEvent={cancelEvent}
               canActivate={can("event.edit")}
               canEdit={can("event.edit")}
               activatingEventId={activatingEventId}
@@ -246,6 +249,7 @@ function LibrarySection({
   onSelectEvent,
   onEditEvent,
   onActivateEvent,
+  onCancelEvent,
   activatingEventId,
   canActivate,
   canEdit,
@@ -258,6 +262,7 @@ function LibrarySection({
   onSelectEvent: (eventId: string) => void;
   onEditEvent: (event: Event) => void;
   onActivateEvent: (event: Event) => void;
+  onCancelEvent: (event: Event) => void;
   activatingEventId: string | null;
   canActivate: boolean;
   canEdit: boolean;
@@ -281,6 +286,7 @@ function LibrarySection({
             onSelect={() => onSelectEvent(event.id)}
             onEditEvent={() => onEditEvent(event)}
             onActivateEvent={() => onActivateEvent(event)}
+            onCancelEvent={onCancelEvent}
             activating={activatingEventId === event.id}
             canActivate={canActivate}
             canEdit={canEdit}
@@ -298,6 +304,7 @@ function EventCard({
   onSelect,
   onEditEvent,
   onActivateEvent,
+  onCancelEvent,
   activating,
   canActivate,
   canEdit,
@@ -308,6 +315,7 @@ function EventCard({
   onSelect: () => void;
   onEditEvent: () => void;
   onActivateEvent: () => void;
+  onCancelEvent: (event: Event) => void;
   activating: boolean;
   canActivate: boolean;
   canEdit: boolean;
@@ -360,6 +368,7 @@ function EventCard({
               Editar
             </button>
           ) : null}
+          {(event.status === "draft" || event.status === "published") && canEdit ? <button type="button" onClick={() => onCancelEvent(event)} className="inline-flex h-9 items-center justify-center rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 text-sm font-medium text-rose-50">Cancelar evento</button> : null}
           {event.status === "published" && canActivate ? (
             <button
               type="button"

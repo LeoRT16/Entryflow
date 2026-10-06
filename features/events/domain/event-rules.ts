@@ -10,6 +10,13 @@ export type EventSelectionCandidate = {
 };
 
 const TERMINAL_EVENT_STATUSES: ReadonlySet<EventStatus> = new Set(["finished", "cancelled"]);
+const EVENT_TRANSITIONS: ReadonlyMap<EventStatus, ReadonlySet<EventStatus>> = new Map([
+  ["draft", new Set(["published", "cancelled"])], ["published", new Set(["live", "cancelled"])],
+  ["live", new Set(["finished"])], ["finished", new Set()], ["cancelled", new Set()],
+]);
+export function canTransitionEventStatus(from: EventStatus, to: EventStatus) { return EVENT_TRANSITIONS.get(from)?.has(to) ?? false; }
+export function assertEventStatusTransition(from: EventStatus, to: EventStatus) { if (!canTransitionEventStatus(from, to)) throw new Error(`Transición de evento no permitida: ${from} → ${to}.`); }
+export function isEventOperational(status: EventStatus) { return status === "published" || status === "live"; }
 
 function compareDatesDesc(a?: string, b?: string) {
   if (a === b) {
@@ -92,10 +99,6 @@ export function pickCurrentEventCandidate(
 
   if (operationalEvents.length) {
     return operationalEvents[0];
-  }
-
-  if (currentEvent) {
-    return currentEvent;
   }
 
   return organizationEvents

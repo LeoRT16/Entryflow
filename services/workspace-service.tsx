@@ -51,6 +51,7 @@ import { createResourceOperation, moveResourceToSectorOperation } from "@/featur
 import { updateEventOperation } from "@/features/events/application/update-event";
 import {
   buildEventSelectionCandidate,
+  assertEventStatusTransition,
   isTerminalEventStatus,
   pickCurrentEventCandidate,
   validateEventForPersistence,
@@ -2514,6 +2515,7 @@ export function WorkspaceServiceProvider({
       }
       const targetEvent = events.find((event) => event.id === eventId);
       if (!targetEvent) return;
+      assertEventStatusTransition(targetEvent.status, status);
 
       if (isTerminalEventStatus(targetEvent.status)) {
         notify({
@@ -2524,9 +2526,6 @@ export function WorkspaceServiceProvider({
           href: "/events",
         });
         return;
-      }
-      if (status === "finished" && targetEvent.status !== "live") {
-        throw new Error("Sólo se puede cerrar un evento que está en vivo.");
       }
 
       const snapshot = captureSnapshot();

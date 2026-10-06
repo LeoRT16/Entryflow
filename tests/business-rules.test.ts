@@ -83,7 +83,7 @@ test("event selection keeps a historical event when no operational events exist"
     "event-finished",
   );
 
-  assert.equal(nextId, "event-finished");
+  assert.equal(nextId, "");
 });
 
 test("closed reservations are terminal", () => {
