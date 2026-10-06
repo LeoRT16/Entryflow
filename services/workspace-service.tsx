@@ -52,6 +52,7 @@ import { updateEventOperation } from "@/features/events/application/update-event
 import {
   buildEventSelectionCandidate,
   assertEventStatusTransition,
+  isEventOperational,
   isTerminalEventStatus,
   pickCurrentEventCandidate,
   validateEventForPersistence,
