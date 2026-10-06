@@ -2,6 +2,13 @@ import { getRolePresetBySlug } from "@/features/accounts/domain/accounts-domain"
 import type { AccountRolePreset, OrganizationMembership } from "@/features/accounts/types";
 import type { Organization } from "@/features/domain/types";
 
+export function validateOrganizationName(value: string) {
+  const name = value.trim();
+  if (!name) return "El nombre de la organización es obligatorio.";
+  if (name.length > 100) return "El nombre de la organización no puede superar los 100 caracteres.";
+  return null;
+}
+
 export type OrganizationSwitcherOption = {
   id: string;
   name: string;

@@ -8,7 +8,7 @@ import OrganizationCreationModal from "@/features/events/components/organization
 import TimezoneSelect from "@/components/timezone-select";
 import Topbar from "@/components/topbar";
 import { useCheckInStore } from "@/services/workspace-service";
-import { buildOrganizationSwitcherOptions } from "@/features/settings/domain/organization-settings";
+import { buildOrganizationSwitcherOptions, validateOrganizationName } from "@/features/settings/domain/organization-settings";
 import { buildSlugFromName } from "@/lib/slug";
 import { formatTimezoneLabel, getDefaultTimezone } from "@/lib/timezone";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -22,6 +22,7 @@ function Input({
   placeholder,
   type = "text",
   disabled = false,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -29,6 +30,7 @@ function Input({
   placeholder?: string;
   type?: string;
   disabled?: boolean;
+  maxLength?: number;
 }) {
   return (
     <label className="block">
@@ -37,6 +39,7 @@ function Input({
         type={type}
         value={value}
         disabled={disabled}
+        maxLength={maxLength}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
@@ -108,7 +111,7 @@ export default function SettingsPage() {
               <p className="mt-1 text-sm text-slate-400">Configura conexiones aquí; la operación y sincronización siguen sus flujos propios.</p>
             </div>
             <div className="grid gap-4">
-              <GoogleSheetsSettingsCard eventId={currentEvent.id} organizationId={currentOrganizationId} authReady={browserAuthReady} canManage={canManageOrganization} />
+              <GoogleSheetsSettingsCard eventId={currentEvent.id} eventName={currentEvent.name} organizationId={currentOrganizationId} authReady={browserAuthReady} canManage={canManageOrganization} />
               <GoogleDriveSettingsCard organizationId={currentOrganizationId} canManage={canManageOrganization} />
             </div>
           </section>
@@ -119,25 +122,27 @@ export default function SettingsPage() {
 }
 
 function GoogleDriveSettingsCard({ organizationId, canManage }: { organizationId: string; canManage: boolean }) {
+  const { confirm, showToast } = useFeedback();
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [integration, setIntegration] = useState<Record<string, unknown> | null>(null);
   const requestVersion = useRef(0);
   const load = useCallback(async () => { const version = ++requestVersion.current; try { const response = await fetch(`/api/integrations/google-drive/status?organizationId=${encodeURIComponent(organizationId)}`); if (!response.ok) throw new Error(); const next = await response.json(); if (version !== requestVersion.current) return; setIntegration(next); setState("ready"); } catch { if (version === requestVersion.current) setState("error"); } }, [organizationId]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
-  const disconnect = async () => { const response = await fetch("/api/integrations/google-drive/disconnect", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ organizationId }) }); if (response.ok) void load(); };
+  const disconnect = async () => { const response = await fetch("/api/integrations/google-drive/disconnect", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ organizationId }) }); if (response.ok) { showToast({ title: "Google Drive desconectado", description: "Las hojas y configuraciones existentes se conservaron.", tone: "success" }); void load(); } else showToast({ title: "No pudimos desconectar Google Drive", description: "Revisá la conexión e intentá nuevamente.", tone: "error" }); };
   const connected = integration?.connected === true;
-  return <section className="surface-panel p-4 sm:p-5"><p className="kicker">Integraciones · Organización</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Google Drive</h2><p className="mt-1 text-sm text-slate-400">{state === "loading" ? "Cargando integración…" : state === "error" ? "No pudimos cargar la integración." : connected ? `Conectado como ${String(integration?.accountEmail ?? "cuenta de Google")}` : integration?.status === "needs_reauth" ? "Necesita reconexión" : integration?.status === "disabled" ? "Desactivado" : "No conectado"}</p><div className="mt-4 flex flex-wrap gap-2">{canManage && !connected ? <a href={`/api/integrations/google-drive/connect?organizationId=${encodeURIComponent(organizationId)}`} className="inline-flex h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950">Conectar Google Drive</a> : null}{canManage && connected ? <button type="button" onClick={() => void disconnect()} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white">Desconectar</button> : null}</div></section>;
+  return <section className="surface-panel p-4 sm:p-5"><p className="kicker">Integraciones · Organización</p><h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Google Drive</h2><p className="mt-1 text-sm text-slate-400">{state === "loading" ? "Cargando integración…" : state === "error" ? "No pudimos cargar la integración." : connected ? `Conectado como ${String(integration?.accountEmail ?? "cuenta de Google")}` : integration?.status === "needs_reauth" ? "Necesita reconexión" : integration?.status === "disabled" ? "Desactivado" : "No conectado"}</p><div className="mt-4 flex flex-wrap gap-2">{canManage && !connected ? <a href={`/api/integrations/google-drive/connect?organizationId=${encodeURIComponent(organizationId)}`} className="inline-flex h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950">Conectar Google Drive</a> : null}{canManage && connected ? <button type="button" onClick={() => confirm({ title: "¿Desconectar Google Drive?", description: "La conexión de Google Drive de esta organización se desconectará. Las hojas y configuraciones existentes no se eliminarán; las funciones dependientes necesitarán reconexión.", confirmLabel: "Desconectar", cancelLabel: "Cancelar", tone: "danger", onConfirm: () => void disconnect() })} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white">Desconectar</button> : null}</div></section>;
 }
 
-function GoogleSheetsSettingsCard({ eventId, organizationId, authReady, canManage }: { eventId: string; organizationId: string; authReady: boolean; canManage: boolean }) {
-  const { showToast } = useFeedback();
+function GoogleSheetsSettingsCard({ eventId, eventName, organizationId, authReady, canManage }: { eventId: string; eventName: string; organizationId: string; authReady: boolean; canManage: boolean }) {
+  const { showToast, confirm } = useFeedback();
   const [destination, setDestination] = useState<Record<string, unknown> | null>(null);
   const [draftSpreadsheetId, setDraftSpreadsheetId] = useState("");
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [busy, setBusy] = useState(false);
   const [provisioning, setProvisioning] = useState<"idle" | "pending">("idle");
   const [driveConnected, setDriveConnected] = useState(false);
+  const [editingSheet, setEditingSheet] = useState(false);
   const mutationLockRef = useRef(false);
   const requestVersion = useRef(0);
   const loadedEventId = useRef("");
@@ -194,7 +199,8 @@ function GoogleSheetsSettingsCard({ eventId, organizationId, authReady, canManag
   };
   const sync = async () => { if (!client || busy || mutationLockRef.current) return; mutationLockRef.current = true; setBusy(true); try { await requestReportingSync(client, eventId); showToast({ title: "Sincronización solicitada", description: "Se procesará en segundo plano.", tone: "success" }); try { await load(); } catch { showToast({ title: "La solicitud se guardó, pero no pudimos actualizar su estado.", description: "Actualiza la página para reconciliar el estado.", tone: "warning" }); } } catch { showToast({ title: "No se pudo solicitar la sincronización", description: "Revisá la conexión e inténtalo nuevamente.", tone: "error" }); } finally { mutationLockRef.current = false; setBusy(false); } };
   const provision = async () => { if (busy) return; setBusy(true); setProvisioning("pending"); try { const response = await fetch("/api/reporting/provisioning", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventId }) }); const result = await response.json().catch(() => null); if (!response.ok) throw new Error(String(result?.error ?? "reporting_provisioning_failed")); showToast({ title: result?.status === "ready" ? "Reportes configurados" : "Configuración en proceso", description: result?.status === "ready" ? "Drive y Google Sheets quedaron listos para este evento." : "La configuración continuará en segundo plano.", tone: "success" }); await load(); } catch { showToast({ title: "No pudimos configurar reportes", description: "Verificá la conexión de Google Drive e inténtalo nuevamente.", tone: "error" }); setProvisioning("idle"); } finally { setBusy(false); } };
-  return <section className="surface-panel p-4 sm:p-5"><p className="kicker">Integraciones · Evento</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Google Sheets</h2><p className="mt-1 text-sm text-slate-400">{loadState === "loading" ? "Cargando integración…" : loadState === "error" ? "No pudimos cargar la integración de Google Sheets." : status.configured ? status.enabled ? "Google Sheets conectado" : "Sincronización pausada" : provisioning === "pending" ? "Configurando reportes…" : "No configurado"}</p><div className="mt-4 grid gap-3">{!status.configured && driveConnected && canManage ? <button type="button" disabled={busy} onClick={() => void provision()} className="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950">{provisioning === "pending" ? "Configurando…" : "Configurar reportes"}</button> : null}<Input label="Spreadsheet ID" value={draftSpreadsheetId} onChange={setDraftSpreadsheetId} placeholder="ID de la hoja de Google Sheets" disabled={!canManage || busy || loadState !== "ready"} /><p className="text-xs text-slate-500">La configuración automática usa la conexión OAuth de Google Drive. El ID manual queda disponible para integraciones heredadas.</p>{status.lastSuccessAt ? <p className="text-xs text-slate-400">Última sincronización exitosa: {new Date(status.lastSuccessAt).toLocaleString()}</p> : null}{status.error ? <p className="text-sm text-rose-300">No se pudo sincronizar: {status.error}</p> : null}<div className="flex flex-wrap gap-2">{loadState === "error" ? <button type="button" disabled={busy} onClick={() => void load()} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white">Reintentar</button> : null}{canManage && loadState === "ready" ? <button type="button" disabled={busy || !draftSpreadsheetId.trim()} onClick={() => void save(true, draftSpreadsheetId.trim(), "save")} className="inline-flex h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 disabled:opacity-50">{busy ? "Guardando…" : status.configured ? "Cambiar hoja" : "Guardar conexión"}</button> : null}{status.configured && canManage && loadState === "ready" ? <button type="button" disabled={busy || !persistedSpreadsheetId} onClick={() => void save(!status.enabled, persistedSpreadsheetId, status.enabled ? "disable" : "enable")} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white">{status.enabled ? "Desactivar" : "Activar"}</button> : null}{status.configured && status.enabled && loadState === "ready" ? <button type="button" disabled={busy} onClick={() => void sync()} className="inline-flex h-10 items-center rounded-xl border border-cyan-300/30 px-4 text-sm font-semibold text-cyan-200">Sincronizar ahora</button> : null}</div></div></section>;
+  if (!eventId) return <section className="surface-panel p-4 sm:p-5"><p className="kicker">Integraciones · Evento</p><h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Google Sheets</h2><p className="mt-2 text-sm text-slate-400">Seleccioná un evento para configurar Google Sheets.</p></section>;
+  return <section className="surface-panel p-4 sm:p-5"><p className="kicker">Integraciones · Evento</p><h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Google Sheets</h2><p className="mt-1 text-xs text-slate-500">Evento: {eventName}</p><p className="mt-1 text-sm text-slate-400">{loadState === "loading" ? "Cargando integración…" : loadState === "error" ? "No pudimos cargar la integración de Google Sheets." : status.configured ? status.enabled ? "Google Sheets activo" : "Sincronización pausada" : provisioning === "pending" ? "Configurando reportes…" : "No configurado"}</p><div className="mt-4 grid gap-3">{!status.configured && driveConnected && canManage ? <button type="button" disabled={busy} onClick={() => void provision()} className="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950">{provisioning === "pending" ? "Configurando…" : "Configurar reportes"}</button> : null}{editingSheet ? <Input label="Nueva hoja" value={draftSpreadsheetId} onChange={setDraftSpreadsheetId} placeholder="ID de la hoja de Google Sheets" disabled={!canManage || busy || loadState !== "ready"} /> : null}{status.lastSuccessAt ? <p className="text-xs text-slate-400">Última sincronización exitosa: {new Date(status.lastSuccessAt).toLocaleString()}</p> : null}{status.error ? <p className="text-sm text-rose-300">No se pudo sincronizar: {status.error}</p> : null}<div className="flex flex-wrap gap-2">{loadState === "error" ? <button type="button" disabled={busy} onClick={() => void load()} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white">Reintentar</button> : null}{canManage && loadState === "ready" ? <button type="button" disabled={busy || (editingSheet && !draftSpreadsheetId.trim())} onClick={() => { if (!editingSheet) setEditingSheet(true); else { void save(true, draftSpreadsheetId.trim(), "save"); setEditingSheet(false); } }} className="inline-flex h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-950 disabled:opacity-50">{busy ? "Guardando…" : status.configured ? "Cambiar hoja" : "Guardar conexión"}</button> : null}{status.configured && canManage && loadState === "ready" ? <button type="button" disabled={busy || !persistedSpreadsheetId} onClick={() => status.enabled ? confirm({ title: "¿Desactivar Google Sheets?", description: "Se detendrá la sincronización para este evento. La hoja y su configuración no se eliminarán y podrás volver a activarlas.", confirmLabel: "Desactivar", cancelLabel: "Cancelar", tone: "danger", onConfirm: () => void save(false, persistedSpreadsheetId, "disable") }) : void save(true, persistedSpreadsheetId, "enable")} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-4 text-sm font-semibold text-white">{status.enabled ? "Desactivar" : "Activar"}</button> : null}{status.configured && status.enabled && loadState === "ready" ? <button type="button" disabled={busy} onClick={() => void sync()} className="inline-flex h-10 items-center rounded-xl border border-cyan-300/30 px-4 text-sm font-semibold text-cyan-200">{busy ? "Solicitando…" : "Sincronizar ahora"}</button> : null}</div>{status.configured ? <details className="rounded-xl border border-white/10 px-3 py-2"><summary className="cursor-pointer text-xs font-medium text-slate-300">Detalles avanzados</summary><p className="mt-2 break-all text-xs text-slate-500">Spreadsheet ID: {persistedSpreadsheetId || "No configurado"}</p></details> : null}</div></section>;
 }
 
 function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
@@ -229,11 +235,17 @@ function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
   );
 
   const saveOrganization = async () => {
+    const trimmedName = organizationName.trim();
+    const nameError = validateOrganizationName(trimmedName);
+    if (nameError) {
+      showToast({ title: "Revisá el nombre de la organización", description: nameError, tone: "error" });
+      return;
+    }
     setIsSaving(true);
 
     const nextOrganization = {
       ...currentOrganization,
-      name: organizationName.trim() || currentOrganization.name,
+      name: trimmedName,
       slug: currentOrganization.slug || buildSlugFromName(organizationName),
       timezone: organizationTimezone.trim() || currentOrganization.timezone,
     };
@@ -300,13 +312,13 @@ function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
         <div className="grid gap-4">
           {canManage ? (
             <>
-              <Input label="Nombre de la organización" value={organizationName} onChange={setOrganizationName} placeholder="Nombre de la organización" />
+              <Input label="Nombre de la organización" value={organizationName} onChange={setOrganizationName} placeholder="Nombre de la organización" maxLength={100} />
               <TimezoneSelect
                 label="Zona horaria"
                 value={organizationTimezone}
                 onChange={setOrganizationTimezone}
                 preferredTimezone={currentOrganization.timezone}
-                helperText="Define los horarios utilizados por la organización."
+                helperText="Se usará como zona horaria predeterminada para nuevos eventos."
               />
             </>
           ) : (

@@ -8,6 +8,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
 import { buildSlugFromName } from "@/lib/slug";
+import { validateOrganizationName } from "@/features/settings/domain/organization-settings";
 
 type OrganizationRequestBody = {
   id?: string;
@@ -176,6 +177,10 @@ export async function handleOrganizationBootstrap(request: Request, dependencies
       },
       { status: 400 },
     );
+  }
+  const nameError = validateOrganizationName(name);
+  if (nameError) {
+    return NextResponse.json({ ok: false, error: { code: name.length > 100 ? "organization_name_too_long" : "missing_fields", message: nameError } }, { status: 400 });
   }
 
   const client = dependencies.getClient();
