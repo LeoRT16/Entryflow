@@ -6,6 +6,7 @@ import { formatInvitationEventDateLabel, getEventInvitationOverlayLayout } from 
 import { resolveEventVenueDisplayName } from "@/features/events/domain/event-venue-boundary";
 import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
 import { normalizeWhatsAppPhoneNumber } from "@/features/access/domain/whatsapp-delivery";
+import { getQrToken } from "@/features/access/domain/access-ledger";
 
 type ReservationInvitationEventSource = {
   name?: string;
@@ -17,7 +18,7 @@ type ReservationInvitationEventSource = {
 } & Record<string, unknown>;
 
 export type ReservationWhatsAppInvitationDesignInput = {
-  guest: Pick<CheckInGuest, "id" | "guestName" | "reservationName" | "reservationCode" | "seat" | "tableName" | "accessCode" | "invitationCode" | "qrToken">;
+  guest: Pick<CheckInGuest, "id" | "guestName" | "reservationName" | "reservationCode" | "seat" | "tableName" | "accessCode" | "invitationCode" | "qrToken"> & Partial<Pick<CheckInGuest, "reservationId" | "eventId">>;
   currentEvent: ReservationInvitationEventSource;
   currentVenueName?: string | null;
   reservationHolderName?: string | null;
@@ -99,7 +100,7 @@ export function buildGuestInvitationDesign({
 }: ReservationWhatsAppInvitationDesignInput): InvitationDesign {
   const invitationEvent = resolveInvitationEventSource(currentEvent);
   const visibleInvitationCode = guest.accessCode ?? guest.invitationCode;
-  const invitationQrToken = guest.qrToken ?? visibleInvitationCode;
+  const invitationQrToken = guest.qrToken ?? (guest.reservationId && guest.eventId ? getQrToken(guest as CheckInGuest) : visibleInvitationCode);
   const invitationArtwork = getEventInvitationArtwork(invitationEvent);
   const invitationOverlayLayout = getEventInvitationOverlayLayout(invitationEvent);
 

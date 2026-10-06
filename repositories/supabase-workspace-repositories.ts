@@ -869,6 +869,35 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     toRow: mapGuestToRow,
   }) as SupabaseWorkspaceRepositories["guests"];
 
+  const hydrateCanonicalGuestAccess = async (guest: Guest): Promise<Guest> => {
+    const { data, error } = await client!
+      .from("accreditation_enrollments" as never)
+      .select("reservation_guest_id, event_id, accreditation_access_grants(id, access_code, qr_token, status, event_id)" as never)
+      .eq("reservation_guest_id" as never, guest.id)
+      .eq("event_id" as never, guest.eventId)
+      .is("deleted_at" as never, null)
+      .maybeSingle() as never;
+    if (error) throw error;
+    const enrollment = data as { reservation_guest_id?: string; event_id?: string; accreditation_access_grants?: Array<{ id: string; access_code: string; qr_token: string; status: string; event_id: string }> } | null;
+    const grant = enrollment?.accreditation_access_grants?.find((item) => item.status === "active" && item.event_id === guest.eventId);
+    return grant
+      ? { ...guest, accessGrantId: grant.id, accessCode: grant.access_code, qrToken: grant.qr_token }
+      : guest;
+  };
+
+  const listGuests = guests.list.bind(guests);
+  guests.list = async () => {
+    const items = await listGuests();
+    return Promise.all(items.map(hydrateCanonicalGuestAccess));
+  };
+
+  const findGuestById = guests.findById.bind(guests);
+  guests.findById = async (guestId: string) => {
+    const guest = await findGuestById(guestId);
+    return guest ? hydrateCanonicalGuestAccess(guest) : undefined;
+  };
+  guests.getById = guests.findById;
+
   guests.delete = async (guestId: string) => {
     if (!client) throw new Error("Supabase client is unavailable.");
     return softDeleteGuest(client, guestId);
