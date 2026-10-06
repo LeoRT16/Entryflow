@@ -352,6 +352,17 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
   const repositories = dependencies.createRepositories(client);
 
   try {
+    const membershipMutation = await client.rpc("mutate_organization_membership_atomic" as never, {
+      p_profile_id: targetProfile.id,
+      p_role_id: targetRole.id,
+      p_area: area,
+      p_status: requestedStatus,
+      p_permissions: desiredPermissions,
+      p_permissions_source: hasSameAccountPermissionSet(desiredPermissions, targetRole.permissions) ? "preset" : "custom",
+      p_remove: false,
+      p_restore: false,
+    } as never);
+    if (membershipMutation.error) throw membershipMutation.error;
     const persistedUser = await repositories.users.update(targetUser.id, {
       ...targetUser,
       email: nextEmail,
@@ -365,8 +376,7 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
       );
     }
 
-    const permissionsSource = hasSameAccountPermissionSet(desiredPermissions, targetRole.permissions) ? "preset" : "custom";
-    const persistedProfile = await repositories.profiles.update(targetProfile.id, {
+    const persistedProfile = {
       ...targetProfile,
       roleId: targetRole.id,
       displayName: nextDisplayName,
@@ -384,17 +394,11 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
           status: requestedStatus,
         },
         permissions: desiredPermissions,
-        permissionsSource,
+        permissionsSource: hasSameAccountPermissionSet(desiredPermissions, targetRole.permissions) ? "preset" : "custom",
       },
-      deletedAt: targetProfile.deletedAt ?? null,
-    });
-
-    if (!persistedProfile) {
-      return NextResponse.json(
-        { ok: false, error: { code: "profile_update_failed", message: "No pudimos guardar la membresía del miembro." } },
-        { status: 500 },
-      );
-    }
+      status: requestedStatus,
+      deletedAt: null,
+    };
 
     return NextResponse.json(buildAccountResponse(persistedUser, persistedProfile, targetRole));
   } catch (error) {
@@ -496,30 +500,32 @@ async function deleteAccount(request: Request, context: { params: Promise<{ prof
   const removedAt = nowIso();
 
   try {
-    const persistedProfile = await repositories.profiles.update(targetProfile.id, {
+    const membershipMutation = await client.rpc("mutate_organization_membership_atomic" as never, {
+      p_profile_id: targetProfile.id,
+      p_role_id: targetRole.id,
+      p_status: "inactive",
+      p_remove: true,
+      p_restore: false,
+    } as never);
+    if (membershipMutation.error) throw membershipMutation.error;
+    const persistedProfile = {
       ...targetProfile,
+      status: "inactive" as const,
       deletedAt: removedAt,
       attributes: {
         ...targetProfile.attributes,
-        status: "inactive",
+        status: "inactive" as const,
       },
       metadata: {
         ...(targetProfile.metadata ?? {}),
         attributes: {
           ...(targetProfile.attributes ?? {}),
-          status: "inactive",
+          status: "inactive" as const,
         },
         removed: true,
         removedAt,
       },
-    });
-
-    if (!persistedProfile) {
-      return NextResponse.json(
-        { ok: false, error: { code: "profile_delete_failed", message: "No pudimos eliminar la membresía del miembro." } },
-        { status: 500 },
-      );
-    }
+    };
 
     return NextResponse.json(buildAccountResponse(targetUser, persistedProfile, targetRole));
   } catch (error) {
