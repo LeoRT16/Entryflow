@@ -27,4 +27,7 @@ test("successful authoritative access response remains mapped to the grant id", 
   const source = readFileSync("repositories/supabase-workspace-repositories.ts", "utf8");
   assert.match(source, /prepare_guest_access_atomic/);
   assert.match(source, /accessGrantId: row\.access_grant_id/);
+  assert.match(source, /accreditation_access_grants\(id, access_code, qr_token, status, organization_id, event_id\)/);
+  assert.match(source, /accessCode = canonicalGrant\.access_code/);
+  assert.match(source, /qrToken = canonicalGrant\.qr_token/);
 });

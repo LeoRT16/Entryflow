@@ -904,10 +904,25 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
 
   guests.prepareAuthoritativeAccess = async (guest) => {
     if (!client) throw new Error("Supabase client is unavailable.");
+    let accessCode = guest.accessCode ?? guest.invitationCode;
+    let qrToken = guest.qrToken ?? getQrToken(guest);
+    const { data: enrollment, error: enrollmentError } = await client
+      .from("accreditation_enrollments" as never)
+      .select("id, organization_id, event_id, accreditation_access_grants(id, access_code, qr_token, status, organization_id, event_id)" as never)
+      .eq("reservation_guest_id" as never, guest.id)
+      .eq("event_id" as never, guest.eventId)
+      .is("deleted_at" as never, null)
+      .maybeSingle() as never;
+    if (enrollmentError) throw enrollmentError;
+    const canonicalGrant = (enrollment as { accreditation_access_grants?: Array<{ id: string; access_code: string; qr_token: string; status: string; organization_id: string; event_id: string }> } | null)?.accreditation_access_grants?.find((grant) => grant.status === "active" && grant.organization_id && grant.event_id === guest.eventId);
+    if (canonicalGrant) {
+      accessCode = canonicalGrant.access_code;
+      qrToken = canonicalGrant.qr_token;
+    }
     const { data, error } = await client.rpc("prepare_guest_access_atomic" as never, {
       p_guest_id: guest.id,
-      p_access_code: guest.accessCode ?? guest.invitationCode,
-      p_qr_token: guest.qrToken ?? getQrToken(guest),
+      p_access_code: accessCode,
+      p_qr_token: qrToken,
     } as never);
     if (error) {
       const diagnostic = toAccessPreparationError(error);
