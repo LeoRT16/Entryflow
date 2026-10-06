@@ -127,6 +127,10 @@ test("event editor modal keeps the venue selector bound to venueId and persists 
   assert.match(source, /Sin venue seleccionado/);
   assert.doesNotMatch(source, /venue\.name === event\.venue/);
   assert.doesNotMatch(source, /defaultVenue/);
+  assert.match(source, /<span className="text-sm font-medium text-slate-200">Venue<\/span>/);
+  assert.doesNotMatch(source, />Contexto<\/p>/);
+  assert.match(source, /Preparar layout físico/);
+  assert.match(source, /Esenciales/);
 });
 
 test("venue change confirmation copy stays on the shared confirmation pattern", () => {

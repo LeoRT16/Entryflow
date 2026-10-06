@@ -534,7 +534,7 @@ export default function EventEditorModal({
             <Field label="Capacidad" value={eventCapacity} onChange={setEventCapacity} placeholder="800" type="number" disabled={!canEditEvent} />
             {venueOptions.length ? (
               <label className="block">
-                <span className="text-sm font-medium text-slate-200">Venue canónico</span>
+                <span className="text-sm font-medium text-slate-200">Venue</span>
                 <select
                   value={eventVenueId}
                   disabled={!canEditEvent}
@@ -576,19 +576,16 @@ export default function EventEditorModal({
           <section className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Módulos</p>
-              <p className="mt-2 text-sm leading-6 text-slate-400">Las capacidades actuales se conservan. Activá únicamente las opciones que este evento necesita.</p>
-            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Los módulos esenciales se conservan; aquí puedes ajustar las opciones disponibles para el evento.</p>
+          </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {blueprint.requiredModules.map((module) => (
-                <ModuleToggle
-                  key={module}
-                  module={module}
-                  selected={enabledModules.includes(module)}
-                  required
-                  disabled
-                />
-              ))}
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/10 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Esenciales</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {blueprint.requiredModules.map((module) => <span key={module} className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs text-cyan-100">{getEventModuleLabel(module)}</span>)}
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
               {blueprint.optionalModules.map((module) => (
                 <ModuleToggle
                   key={module}
@@ -722,7 +719,7 @@ export default function EventEditorModal({
                   </div>
                 </div>
               ) : (
-                <div className="flex min-h-40 items-center justify-center px-6 py-8 text-sm leading-6 text-slate-400">
+                <div className="flex min-h-20 items-center justify-center px-6 py-5 text-sm leading-6 text-slate-400">
                   Todavía no hay arte cargado para este evento.
                 </div>
               )}
@@ -746,20 +743,15 @@ export default function EventEditorModal({
             </div>
           ) : null}
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Contexto</p>
-              <p className="mt-2 text-sm text-slate-300">
-                {selectedVenue?.name ?? event.venue} · {event.capacity} personas
-              </p>
-              <p className="mt-1 text-xs text-slate-500">La edición del evento ya no vive en Ajustes.</p>
-              {onPrepareEventPhysicalLayout && canEditEvent ? (
-                <button type="button" onClick={() => void preparePhysicalLayout()} disabled={isPreparingLayout || isSaving} className="mt-3 inline-flex h-9 items-center rounded-xl border border-cyan-400/30 px-3 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60">
-                  {isPreparingLayout ? "Preparando layout…" : "Preparar layout físico"}
-                </button>
-              ) : null}
-            </div>
-          </div>
+          {onPrepareEventPhysicalLayout && canEditEvent ? (
+            <section className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Espacios</p>
+              <p className="mt-2 text-sm text-slate-400">Prepara el layout físico para habilitar los recursos del venue.</p>
+              <button type="button" onClick={() => void preparePhysicalLayout()} disabled={isPreparingLayout || isSaving} className="mt-3 inline-flex h-9 items-center rounded-xl border border-cyan-400/30 px-3 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60">
+                {isPreparingLayout ? "Preparando layout…" : "Preparar layout físico"}
+              </button>
+            </section>
+          ) : null}
         </div>
 
         <div className="mt-6 shrink-0 border-t border-white/10 bg-[#08111f] pt-4">
