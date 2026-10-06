@@ -20,6 +20,7 @@ import {
 import { resolveWorkspaceRole } from "@/app/api/accounts/invite/helpers";
 import type { OrganizationMembership, AccountUser } from "@/features/accounts/types";
 import { resolveAccountManagementAuthority } from "@/features/accounts/server/account-authority";
+import { mapProfileRowToDomain } from "@/lib/supabase/mappers";
 
 type InviteTeamMemberBody = {
   email?: string;
@@ -262,6 +263,7 @@ export async function handleInvite(request: Request, dependencies = createInvite
 
   let persistedUser: AccountUser | null = null;
   let persistedMembership: OrganizationMembership | null = null;
+  let membershipResult: "added" | "restored" | "reactivated" | "existing" | null = null;
 
   try {
     const existingUser = await repositories.users.getByEmail(email);
@@ -294,51 +296,6 @@ export async function handleInvite(request: Request, dependencies = createInvite
     }
     persistedUser = nextUser;
 
-    const existingMembership = await repositories.profiles.getByOrganizationAndUser(organizationId, persistedUser.id);
-    const membershipPayload = {
-      id: existingMembership?.id ?? createUuid(),
-      organizationId,
-      userId: persistedUser.id,
-      roleId: targetRole.id,
-      displayName,
-      attributes: {
-        area,
-        status: "active" as const,
-        permissions: desiredPermissions,
-      },
-      metadata: {
-        ...(existingMembership?.metadata ?? {}),
-        attributes: {
-          ...(existingMembership?.attributes ?? {}),
-          area,
-          status: "active" as const,
-        },
-        permissions: desiredPermissions,
-        permissionsSource,
-      },
-      status: "active" as const,
-      createdAt: existingMembership?.createdAt ?? nowIso(),
-      updatedAt: nowIso(),
-      deletedAt: null,
-    };
-
-    const nextMembership = existingMembership
-      ? await repositories.profiles.update(existingMembership.id, membershipPayload)
-      : await repositories.profiles.create(membershipPayload);
-
-    if (!nextMembership) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "membership_persist_failed",
-            message: "No pudimos guardar la membresía del miembro.",
-          },
-        },
-        { status: 500 },
-      );
-    }
-    persistedMembership = nextMembership;
   } catch (error) {
     const message =
       error instanceof Error && error.message.includes("invalid input syntax for type uuid")
@@ -360,9 +317,8 @@ export async function handleInvite(request: Request, dependencies = createInvite
   }
 
   const currentPersistedUser = persistedUser;
-  const currentPersistedMembership = persistedMembership;
 
-  if (!currentPersistedUser || !currentPersistedMembership) {
+  if (!currentPersistedUser) {
     return NextResponse.json(
       {
         ok: false,
@@ -469,6 +425,26 @@ export async function handleInvite(request: Request, dependencies = createInvite
     currentPersistedUser.mustChangePassword = updatedUser.mustChangePassword ?? true;
   }
 
+  const rpcClient = client as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: Record<string, unknown> | null; error: unknown }> };
+  const { data: membershipRow, error: membershipError } = await rpcClient.rpc("upsert_organization_membership_atomic", {
+    p_user_id: currentPersistedUser.id,
+    p_organization_id: organizationId,
+    p_role_id: targetRole.id,
+    p_display_name: displayName,
+    p_area: area || null,
+    p_status: "active",
+    p_permissions: desiredPermissions,
+    p_permissions_source: permissionsSource,
+  });
+  if (membershipError || !membershipRow) {
+    return NextResponse.json({ ok: false, error: { code: "membership_persist_failed", message: "No pudimos guardar la membresía del miembro." } }, { status: 500 });
+  }
+  persistedMembership = mapProfileRowToDomain(membershipRow as Parameters<typeof mapProfileRowToDomain>[0]);
+  const resultMetadata = membershipRow.metadata as { membershipResult?: string } | null;
+  const rpcKind = resultMetadata?.membershipResult;
+  membershipResult = rpcKind === "member.added" ? "added" : rpcKind === "member.restored" ? "restored" : rpcKind === "member.reactivated" ? "reactivated" : "existing";
+  const currentPersistedMembership = persistedMembership;
+
   const account = {
     id: currentPersistedMembership.id,
     organizationId: currentPersistedMembership.organizationId,
@@ -497,6 +473,7 @@ export async function handleInvite(request: Request, dependencies = createInvite
     user: persistedUser,
     profile: persistedMembership,
     account,
+    membershipResult,
   });
 }
 

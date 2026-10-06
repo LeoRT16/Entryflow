@@ -58,9 +58,11 @@ declare target profiles%rowtype; actor profiles%rowtype; role_row roles%rowtype;
 begin
   if auth.uid() is null then raise exception 'account_unauthenticated' using errcode='28000'; end if;
   perform pg_advisory_xact_lock(hashtextextended(p_organization_id::text || ':' || p_user_id::text, 0));
-  select * into actor from profiles where user_id=current_app_user_id() and organization_id=p_organization_id and deleted_at is null for update;
-  if not found then raise exception 'account_forbidden' using errcode='42501'; end if;
-  if not exists (select 1 from roles r where r.id=actor.role_id and r.slug='owner') and not (coalesce(actor.metadata->'permissions','[]'::jsonb) ? 'accounts.manage') then raise exception 'account_forbidden' using errcode='42501'; end if;
+  if not is_platform_root() then
+    select * into actor from profiles where user_id=current_app_user_id() and organization_id=p_organization_id and deleted_at is null for update;
+    if not found then raise exception 'account_forbidden' using errcode='42501'; end if;
+    if not exists (select 1 from roles r where r.id=actor.role_id and r.slug='owner') and not (coalesce(actor.metadata->'permissions','[]'::jsonb) ? 'accounts.manage') then raise exception 'account_forbidden' using errcode='42501'; end if;
+  end if;
   select * into role_row from roles where id=p_role_id and deleted_at is null;
   if not found then raise exception 'account_role_not_found' using errcode='22023'; end if;
   select * into target from profiles where user_id=p_user_id and organization_id=p_organization_id order by deleted_at nulls first, updated_at desc limit 1 for update;
@@ -75,10 +77,12 @@ begin
     previous_status := target.status;
     update profiles set role_id=p_role_id,display_name=p_display_name,status=p_status,deleted_at=null,
       attributes=jsonb_build_object('area',coalesce(p_area,''),'status',p_status,'permissions',p_permissions),
-      metadata=jsonb_build_object('permissions',p_permissions,'permissionsSource',p_permissions_source,'attributes',jsonb_build_object('area',coalesce(p_area,''),'status',p_status)),updated_at=now()
+      metadata=jsonb_build_object('permissions',p_permissions,'permissionsSource',p_permissions_source,'membershipResult',case when was_removed then 'restored' when previous_status='inactive' and p_status='active' then 'reactivated' else 'existing' end,'attributes',jsonb_build_object('area',coalesce(p_area,''),'status',p_status)),updated_at=now()
       where id=target.id returning * into target;
     kind := case when was_removed then 'member.restored' when previous_status='inactive' and target.status='active' then 'member.reactivated' else 'member.updated' end;
   end if;
+  update profiles set metadata=jsonb_set(coalesce(metadata,'{}'::jsonb),'{membershipResult}',to_jsonb(kind),true) where id=target.id;
+  select * into target from profiles where id=target.id;
   insert into activity_logs(organization_id,event_id,timestamp,kind,icon,tone,title,description,metadata)
     values(p_organization_id,null,to_char(now(),'HH24:MI'),kind,'users','info',kind,'Cambio administrativo de membresía',jsonb_build_object('actorUserId',current_app_user_id(),'profileId',target.id,'roleId',target.role_id,'status',target.status));
   return target;

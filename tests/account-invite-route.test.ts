@@ -191,20 +191,6 @@ function buildInviteRequest(organizationId: string, email = "member@example.com"
 }
 
 function buildInviteDependencies(workspace: WorkspaceBootstrap) {
-  const client = {
-    auth: {
-      admin: {
-        updateUserById: async (uid: string) => {
-          calls.updateUserById += 1;
-          return {
-            data: { user: { id: uid } },
-            error: null,
-          };
-        },
-      },
-    },
-  } as never;
-
   const calls = {
     getClient: 0,
     createRepositories: 0,
@@ -219,7 +205,33 @@ function buildInviteDependencies(workspace: WorkspaceBootstrap) {
     createOrUpdateTemporaryPasswordAuthIdentity: 0,
     linkPublicUserToAuthIdentity: 0,
     setPublicUserMustChangePassword: 0,
+    rpc: 0,
   };
+  const client = {
+    auth: {
+      admin: {
+        updateUserById: async (uid: string) => {
+          calls.updateUserById += 1;
+          return {
+            data: { user: { id: uid } },
+            error: null,
+          };
+        },
+      },
+    },
+    rpc: async (_name: string, args: Record<string, unknown>) => {
+      calls.rpc += 1;
+      const existing = workspace.profiles.find((profile) => profile.organizationId === args.p_organization_id && profile.userId === args.p_user_id);
+      const now = "2026-08-13T00:00:00.000Z";
+      const result = {
+        id: existing?.id ?? "profile-created",
+        organization_id: String(args.p_organization_id), user_id: String(args.p_user_id), role_id: String(args.p_role_id),
+        display_name: String(args.p_display_name), status: "active", deleted_at: null, created_at: existing?.createdAt ?? now, updated_at: now,
+        metadata: { permissions: args.p_permissions, membershipResult: existing ? "member.updated" : "member.added", permissionsSource: args.p_permissions_source, attributes: { area: args.p_area ?? "", status: "active" } },
+      };
+      return { data: result, error: null };
+    },
+  } as never;
 
   const repositories = {
     users: {
@@ -361,9 +373,10 @@ test("invite route accepts the active organization and persists the member there
   assert.equal(calls.createRepositories, 1);
   assert.equal(calls.getByEmail, 1);
   assert.equal(calls.updateUser, 1);
-  assert.equal(calls.getByOrganizationAndUser, 1);
-  assert.equal(calls.createMembership, 1);
+  assert.equal(calls.getByOrganizationAndUser, 0);
+  assert.equal(calls.createMembership, 0);
   assert.equal(calls.updateMembership, 0);
+  assert.equal(calls.rpc, 1);
   assert.equal(calls.findAuthIdentityByEmail, 1);
   assert.equal(calls.setPublicUserMustChangePassword, 1);
   assert.equal(calls.updateUserById, 1);
@@ -387,5 +400,6 @@ test("Root can invite Reception into a target organization without a membership 
   assert.equal(payload.ok, true);
   assert.equal(payload.account?.organizationId, "org-b");
   assert.equal(payload.account?.roleSlug, "reception");
-  assert.equal(calls.createMembership, 1);
+  assert.equal(calls.createMembership, 0);
+  assert.equal(calls.rpc, 1);
 });
