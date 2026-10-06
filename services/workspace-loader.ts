@@ -429,6 +429,8 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     checkInRows,
     timelineRows,
     extraWristbandSaleRows,
+    accreditationEnrollmentRows,
+    accreditationGrantRows,
   ] = await Promise.all([
     fetchSupabaseTable<UserRow>("users"),
     fetchSupabaseTable<RoleRow>("roles"),
@@ -444,6 +446,8 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
     fetchSupabaseTable<CheckInRow>("checkins"),
     fetchSupabaseTable<TimelineRow>("timeline_events"),
     fetchSupabaseTable<ExtraWristbandSaleRow>("reservation_extra_wristband_sales", { optional: true }),
+    fetchSupabaseTable<{ id: string; reservation_guest_id: string; event_id: string; deleted_at: string | null }>("accreditation_enrollments", { optional: true }),
+    fetchSupabaseTable<{ id: string; enrollment_id: string; event_id: string; access_code: string; qr_token: string; status: string }>("accreditation_access_grants", { optional: true }),
   ]);
   const whatsappDeliveryAttemptRows = await fetchSupabaseTable<WhatsAppDeliveryAttemptRow>("whatsapp_delivery_attempts", { optional: true });
 
@@ -621,10 +625,24 @@ export async function loadWorkspaceBootstrap(authUser?: { id: string; email?: st
   const resources = resourceRowsForWorkspace.map((row) => mapResourceRowToDomain(row));
   const events = eventRowsForWorkspace.map((row) => mapEventRowToDomain(row));
   const whatsappDeliveryStateByGuestId = buildWhatsAppDeliveryStateIndex(whatsappDeliveryAttemptRowsForWorkspace);
-  const guests = guestRowsForWorkspace.map((row) => ({
-    ...mapGuestRowToDomain(row),
-    whatsappDelivery: whatsappDeliveryStateByGuestId.get(row.id),
-  }));
+  const activeGrantByGuestId = new Map(
+    accreditationEnrollmentRows
+      .filter((enrollment) => enrollment.deleted_at === null && allowedEventIds.has(enrollment.event_id))
+      .map((enrollment) => {
+        const grant = accreditationGrantRows.find((candidate) => candidate.enrollment_id === enrollment.id && candidate.event_id === enrollment.event_id && candidate.status === "active");
+        return grant ? [enrollment.reservation_guest_id, grant] as const : null;
+      })
+      .filter((entry): entry is readonly [string, (typeof accreditationGrantRows)[number]] => Boolean(entry)),
+  );
+  const guests = guestRowsForWorkspace.map((row) => {
+    const guest = mapGuestRowToDomain(row);
+    const grant = activeGrantByGuestId.get(row.id);
+    return {
+      ...guest,
+      ...(grant ? { accessGrantId: grant.id, accessCode: grant.access_code, qrToken: grant.qr_token } : {}),
+      whatsappDelivery: whatsappDeliveryStateByGuestId.get(row.id),
+    };
+  });
   const reservations = reservationRowsForWorkspace.map((row) => mapReservationRowToDomain(row));
   const extraWristbandSales = extraWristbandSaleRowsForWorkspace.map(mapExtraWristbandSaleRowToDomain);
   const tables = tableRowsForWorkspace.map((row) => mapTableRowToDomain(row));
