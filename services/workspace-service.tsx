@@ -53,6 +53,7 @@ import {
   buildEventSelectionCandidate,
   isTerminalEventStatus,
   pickCurrentEventCandidate,
+  validateEventForPersistence,
 } from "@/features/events/domain";
 import { compareTimelineEventsDescending, mergeTimelineEvents } from "@/features/timeline/domain/timeline-domain";
 import {
@@ -2219,6 +2220,9 @@ export function WorkspaceServiceProvider({
         return undefined;
       }
 
+      const validationErrors = validateEventForPersistence(event, venues);
+      if (validationErrors.length) throw new Error(validationErrors[0]);
+
       const snapshot = captureSnapshot();
       try {
         setEvents((current) => (current.some((item) => item.id === event.id) ? current.map((item) => (item.id === event.id ? event : item)) : [event, ...current]));
@@ -2256,9 +2260,11 @@ export function WorkspaceServiceProvider({
         });
         return undefined;
       }
-      if (event.status === "live" && existingEvent.status !== "live") {
-        throw new Error("La activación debe realizarse mediante activateEvent.");
+      if (event.status !== existingEvent.status) {
+        throw new Error("Los cambios de estado deben realizarse desde la acción de ciclo de vida correspondiente.");
       }
+      const validationErrors = validateEventForPersistence(event, venues);
+      if (validationErrors.length) throw new Error(validationErrors[0]);
 
       const snapshot = captureSnapshot();
       try {

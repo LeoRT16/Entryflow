@@ -15,6 +15,7 @@ import {
   getEventNavigation,
   getEventTypeLabel,
   getOperationalModelLabel,
+  validateEventClockInput,
 } from "@/features/events/domain";
 import { resolveManagedVenueById } from "@/features/events/domain/event-venue-boundary";
 import type { EventBlueprint, EventDraft } from "@/features/events/domain";
@@ -177,6 +178,12 @@ export default function EventCreationWizard({
       draft,
       status: "published",
     });
+
+    const validationErrors = validateEventClockInput({ name: draft.name, date: draft.date, startTime: draft.startTime, endTime: draft.endTime, timezone: draft.timezone, capacity: draft.capacity, eventType: blueprint.eventType });
+    if (validationErrors.length) {
+      showToast({ title: "Revisá la información del evento", description: validationErrors[0], tone: "error" });
+      return;
+    }
 
     try {
       const createdEvent = await onCreate(nextEvent);

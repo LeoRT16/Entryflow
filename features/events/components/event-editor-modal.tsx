@@ -185,7 +185,6 @@ export default function EventEditorModal({
   const [eventCapacity, setEventCapacity] = useState(String(event.capacity));
   const [eventStartAt, setEventStartAt] = useState(() => toEventDateTimeInputValue(event.startAt, event.timezone));
   const [eventStartAtTouched, setEventStartAtTouched] = useState(false);
-  const [eventStatus, setEventStatus] = useState(event.status);
   const [enabledModules, setEnabledModules] = useState<Event["enabledModules"]>(() => [...event.enabledModules]);
   const [commercialConfig, setCommercialConfig] = useState<EventCommercialConfig>(() => getEventCommercialConfig(event));
   const [metadataTouched, setMetadataTouched] = useState(false);
@@ -322,7 +321,7 @@ export default function EventEditorModal({
       description: eventDescription.trim() || undefined,
       capacity: Number.parseInt(eventCapacity, 10) || event.capacity,
       startAt: resolveEventStartAtForSave({ original: event.startAt, input: eventStartAt, touched: eventStartAtTouched }),
-      status: eventStatus,
+      status: event.status,
       enabledModules,
       metadata: resolveEventMetadataForSave(event.metadata, metadataTouched, buildNextMetadata()),
     };
@@ -742,27 +741,6 @@ export default function EventEditorModal({
           ) : null}
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-200">Estado del evento</span>
-              <select
-                value={eventStatus}
-                disabled={!canEditEvent}
-                onChange={(changeEvent) => setEventStatus(changeEvent.target.value as Event["status"])}
-                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
-              >
-                {(eventStatus === "live" ? [["live", "En curso"]] : []).concat([
-                  ["draft", "Borrador"],
-                  ["published", "Publicado"],
-                  ["finished", "Finalizado"],
-                  ["cancelled", "Cancelado"],
-                ]).map(([value, label]) => (
-                  <option key={value} value={value} disabled={value === "live"}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Contexto</p>
               <p className="mt-2 text-sm text-slate-300">
