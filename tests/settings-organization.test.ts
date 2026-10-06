@@ -11,6 +11,7 @@ test("organization names are trimmed and capped at 100 characters", () => {
 
 test("settings uses the shared compact page header", () => {
   const source = readFileSync(new URL("../app/settings/page.tsx", import.meta.url), "utf8");
-  assert.match(source, /<Topbar eyebrow="Ajustes" title="Ajustes"[^>]*compact \/>/);
+  assert.match(source, /<Topbar title="Ajustes" description="Configuración general de tu organización\." compact \/>/);
+  assert.doesNotMatch(source, /<Topbar[^>]*eyebrow="Ajustes"[^>]*title="Ajustes"/);
   assert.doesNotMatch(source, /bare/);
 });
