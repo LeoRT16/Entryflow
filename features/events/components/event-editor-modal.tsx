@@ -517,7 +517,9 @@ export default function EventEditorModal({
         )}
 
         <div className="mt-6 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Información</p>
+            <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Field label="Nombre del evento" value={eventName} onChange={setEventName} placeholder="Evento principal" disabled={!canEditEvent} />
             <Field
               label="Fecha y hora"
@@ -555,9 +557,12 @@ export default function EventEditorModal({
               placeholder="Sala, club o espacio"
               disabled={!canEditEvent}
             />
-          </div>
+            </div>
+          </section>
 
-          <div className="mt-4">
+          <section className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Fecha y horario · Lugar</p>
+            <div className="mt-3">
             <TextArea
               label="Descripción"
               value={eventDescription}
@@ -565,7 +570,8 @@ export default function EventEditorModal({
               placeholder="Contexto operativo del evento"
               disabled={!canEditEvent}
             />
-          </div>
+            </div>
+          </section>
 
           <section className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
             <div>

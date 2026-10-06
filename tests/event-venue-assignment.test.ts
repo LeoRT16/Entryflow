@@ -198,4 +198,8 @@ test("event creation wizard selects and persists organization venues through ven
   assert.match(source, /<option value="">Sin venue seleccionado<\/option>/);
   assert.match(source, /label="Lugar \/ ubicación"/);
   assert.doesNotMatch(source, /defaultVenue/);
+  const wizard = readFileSync(new URL("../features/events/components/event-creation-wizard.tsx", import.meta.url), "utf8");
+  assert.match(wizard, /Math\.min\(current \+ 1, 3\)/);
+  assert.match(wizard, /labels = \["Tipo", "Información", "Revisión"\]/);
+  assert.match(wizard, /Configuración avanzada/);
 });

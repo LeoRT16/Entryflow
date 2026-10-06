@@ -96,7 +96,7 @@ export default function EventCreationWizard({
         organizationId,
         blueprint,
         draft,
-        status: step === 6 ? "published" : "draft",
+        status: step === 3 ? "published" : "draft",
       }),
     [blueprint, draft, organizationId, step],
   );
@@ -207,7 +207,7 @@ export default function EventCreationWizard({
     }
   };
 
-  const nextStep = () => setStep((current) => Math.min(current + 1, 6));
+  const nextStep = () => setStep((current) => Math.min(current + 1, 3));
   const previousStep = () => setStep((current) => Math.max(current - 1, 1));
 
   const selectedModules = getEnabledModules(previewEvent);
@@ -382,10 +382,10 @@ export default function EventCreationWizard({
               </section>
             ) : null}
 
-            {step === 3 ? (
+            {false ? (
               <section className="mt-6 space-y-6">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Paso 3</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Configuración avanzada</p>
                   <h3 className="mt-2 text-xl font-semibold text-white">Modelo operativo</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
                     La plantilla limita las opciones para mantener coherencia operativa.
@@ -458,7 +458,7 @@ export default function EventCreationWizard({
               </section>
             ) : null}
 
-            {step === 4 ? (
+            {false ? (
               <section className="mt-6 space-y-6">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Paso 4</p>
@@ -520,7 +520,7 @@ export default function EventCreationWizard({
               </section>
             ) : null}
 
-            {step === 5 ? (
+            {false ? (
               <section className="mt-6 space-y-4">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Paso 5</p>
@@ -556,10 +556,10 @@ export default function EventCreationWizard({
               </section>
             ) : null}
 
-            {step === 6 ? (
+            {step === 3 ? (
               <section className="mt-6 space-y-5">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Paso 6</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Paso 3</p>
                   <h3 className="mt-2 text-xl font-semibold text-white">Revisión</h3>
                 </div>
 
@@ -571,10 +571,6 @@ export default function EventCreationWizard({
                       <SummaryRow label="Nombre" value={draft.name} />
                       <SummaryRow label="Tipo" value={getEventTypeLabel(blueprint.eventType)} />
                       <SummaryRow label="Fecha" value={draft.date} />
-                      <SummaryRow label="Capacidad" value={draft.capacity || "0"} />
-                      <SummaryRow label="Modelo operativo" value={getOperationalModelLabel(draft.operationalModel)} />
-                      <SummaryRow label="Módulos incluidos" value={`${draft.enabledModules.length}`} />
-                      <SummaryRow label="Admisión" value={draft.admissionMethods.map((method) => admissionMethodLabels[method]).join(" · ")} />
                     </dl>
                   </div>
 
@@ -614,6 +610,15 @@ export default function EventCreationWizard({
                     </div>
                   </div>
                 </div>
+                {blueprint.eventType === "custom" ? (
+                  <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+                    <p className="text-sm font-medium text-white">Configuración avanzada</p>
+                    <p className="mt-1 text-xs text-slate-400">Ajustes adicionales para eventos personalizados.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {blueprint.optionalModules.map((module) => <ModuleChip key={module} label={getEventModuleLabel(module)} selected={draft.enabledModules.includes(module)} onClick={() => toggleModule(module)} />)}
+                    </div>
+                  </div>
+                ) : null}
               </section>
             ) : null}
 
@@ -629,7 +634,7 @@ export default function EventCreationWizard({
 
               <div className="flex items-center gap-3">
                 <span className="text-xs uppercase tracking-[0.28em] text-slate-500">
-                  {step} / 6
+                  {step} / 3
                 </span>
 
                 {step < 6 ? (
@@ -653,7 +658,7 @@ export default function EventCreationWizard({
             </div>
           </div>
 
-          <aside className="min-h-0 overflow-y-auto border-t border-white/10 bg-black/20 px-5 py-5 xl:border-l xl:border-t-0 sm:px-6">
+          {blueprint.eventType === "custom" ? (<aside className="min-h-0 overflow-y-auto border-t border-white/10 bg-black/20 px-5 py-5 xl:border-l xl:border-t-0 sm:px-6">
             <div className="space-y-4">
               <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Vista previa del evento</p>
@@ -719,18 +724,22 @@ export default function EventCreationWizard({
                 </p>
               </div>
             </div>
-          </aside>
+          </aside>) : <aside className="hidden xl:block" aria-hidden="true" /> }
         </div>
       </div>
     </div>
   );
 }
 
+function ModuleChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className={`rounded-full border px-3 py-2 text-xs ${selected ? "border-cyan-400/40 bg-cyan-400/10 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-300"}`}>{label}</button>;
+}
+
 function WizardStepper({ step }: { step: number }) {
-  const labels = ["Tipo", "General", "Modelo", "Módulos", "Admisión", "Revisión"];
+  const labels = ["Tipo", "Información", "Revisión"];
 
   return (
-    <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-2 sm:grid-cols-3">
       {labels.map((label, index) => {
         const current = index + 1 === step;
         const completed = index + 1 < step;
