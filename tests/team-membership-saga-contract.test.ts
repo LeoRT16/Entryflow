@@ -23,6 +23,16 @@ test("membership authority covers lifecycle convergence and exactly-once activit
   assert.match(migration, /if not is_platform_root\(\)/);
 });
 
+test("metadata corrective migration matches the canonical profiles schema", () => {
+  const correction = readFileSync("supabase/migrations/20261026000000_team_membership_authority_metadata_fix.sql", "utf8");
+  assert.doesNotMatch(correction, /profiles\.attributes|profiles\.status|target\.status|insert into profiles\([^)]*attributes|insert into profiles\([^)]*status/i);
+  assert.match(correction, /metadata->'attributes'->>'status'/);
+  assert.match(correction, /'\{area\}'/);
+  assert.match(correction, /'\{status\}'/);
+  assert.match(correction, /upsert_organization_membership_atomic/);
+  assert.match(correction, /mutate_organization_membership_atomic/);
+});
+
 test("membership authority does not persist temporary passwords", () => {
   assert.doesNotMatch(migration, /password|tempPassword|temporary/i);
 });
