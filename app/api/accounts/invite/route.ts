@@ -264,9 +264,13 @@ export async function handleInvite(request: Request, dependencies = createInvite
   let persistedUser: AccountUser | null = null;
   let persistedMembership: OrganizationMembership | null = null;
   let membershipResult: "added" | "restored" | "reactivated" | "existing" | null = null;
+  let publicUserCreatedByRequest = false;
+  let authIdentityCreatedByRequest = false;
+  let authIdentityPreexisting = false;
 
   try {
     const existingUser = await repositories.users.getByEmail(email);
+    publicUserCreatedByRequest = !existingUser;
     const nextUser = existingUser
       ? await repositories.users.update(existingUser.id, {
           ...existingUser,
@@ -332,6 +336,7 @@ export async function handleInvite(request: Request, dependencies = createInvite
   }
 
   const existingAuthIdentity = await dependencies.findAuthIdentityByEmail(client, email);
+  authIdentityPreexisting = Boolean(existingAuthIdentity || currentPersistedUser.authUserId);
 
   if (existingAuthIdentity && currentPersistedUser.authUserId && currentPersistedUser.authUserId !== existingAuthIdentity.id) {
     return NextResponse.json(
@@ -399,6 +404,7 @@ export async function handleInvite(request: Request, dependencies = createInvite
     }
 
     resolvedAuthUserId = authResult.data.user.id;
+    authIdentityCreatedByRequest = authResult.data.mode === "created";
   }
 
   if (resolvedAuthUserId && currentPersistedUser.authUserId !== resolvedAuthUserId) {
@@ -437,6 +443,26 @@ export async function handleInvite(request: Request, dependencies = createInvite
     p_permissions_source: permissionsSource,
   });
   if (membershipError || !membershipRow) {
+    const rpcError = membershipError && typeof membershipError === "object" ? membershipError as {
+      code?: unknown;
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    } : null;
+    console.error("[accounts/invite:membership-rpc-error]", {
+      rpcName: "upsert_organization_membership_atomic",
+      code: typeof rpcError?.code === "string" ? rpcError.code : undefined,
+      message: typeof rpcError?.message === "string" ? rpcError.message : undefined,
+      details: typeof rpcError?.details === "string" ? rpcError.details : undefined,
+      hint: typeof rpcError?.hint === "string" ? rpcError.hint : undefined,
+      organizationId,
+      roleSlug,
+      roleId: targetRole.id,
+      authIdentityPreexisting,
+      authIdentityCreatedByRequest,
+      publicUserCreatedByRequest,
+      membershipAlreadyExisted: workspace.profiles.some((profile) => profile.organizationId === organizationId && profile.userId === currentPersistedUser.id),
+    });
     return NextResponse.json({ ok: false, error: { code: "membership_persist_failed", message: "No pudimos guardar la membresía del miembro." } }, { status: 500 });
   }
   persistedMembership = mapProfileRowToDomain(membershipRow as Parameters<typeof mapProfileRowToDomain>[0]);

@@ -26,3 +26,12 @@ test("membership authority covers lifecycle convergence and exactly-once activit
 test("membership authority does not persist temporary passwords", () => {
   assert.doesNotMatch(migration, /password|tempPassword|temporary/i);
 });
+
+test("invite membership RPC diagnostics stay server-side and sanitized", () => {
+  const inviteRoute = readFileSync("app/api/accounts/invite/route.ts", "utf8");
+  assert.match(inviteRoute, /\[accounts\/invite:membership-rpc-error\]/);
+  assert.match(inviteRoute, /membership_persist_failed/);
+  assert.doesNotMatch(inviteRoute, /console\.error\([^\n]*tempPassword/);
+  assert.doesNotMatch(inviteRoute, /console\.error\([^\n]*(authorization|access_token|refresh_token|service_role)/i);
+  assert.doesNotMatch(inviteRoute, /console\.error\([^\n]*body/);
+});
