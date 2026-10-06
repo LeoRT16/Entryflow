@@ -1037,11 +1037,9 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
         await client.from("events").update({ updated_at: nowIso() } as never).eq("id", eventId).select("id");
       },
       async setStatus(eventId: string, status: PlatformEvent["status"]) {
-        if (!client) {
-          return;
-        }
-
-        await client.from("events").update({ status, updated_at: nowIso() } as never).eq("id", eventId).select("id");
+        if (!client) throw new Error("Supabase client is unavailable.");
+        const { error } = await client.rpc("transition_event_status" as never, { p_event_id: eventId, p_next_status: status } as never);
+        if (error) throw error;
       },
       async activate(eventId: string) {
         if (!client) throw new Error("Supabase client is unavailable.");

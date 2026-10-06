@@ -2579,10 +2579,10 @@ export function WorkspaceServiceProvider({
       if (!isCreatableReservationType(input.reservationType)) {
         throw new Error("Este tipo de reserva ya no está disponible para nuevas reservas.");
       }
-      if (isTerminalEventStatus(currentEvent.status)) {
+      if (!isEventOperational(currentEvent.status)) {
         notify({
-          title: "Evento cerrado",
-          description: "No podés crear reservas sobre un evento cerrado.",
+          title: "Evento no operativo",
+          description: "Publicá el evento antes de crear reservas.",
           tone: "warning",
           icon: "alert",
           href: "/reservations",
@@ -3908,6 +3908,7 @@ export function WorkspaceServiceProvider({
 
   const moveGuestToTable = useCallback(
     async (guestId: string, tableId: string) => {
+      if (!isEventOperational(currentEvent.status)) throw new Error("El evento no está operativo para mover invitados.");
       requirePermission("resource.assign");
       const table = tables.find((item) => item.id === tableId);
       const destinationResource = resources.find((item) => item.id === tableId);
