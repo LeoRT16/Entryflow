@@ -139,6 +139,7 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
     ? model.members.find((member) => member.id === selectedAccount.id) ?? null
     : null;
   const selectedRole = getRoleMvpIntent(form.roleSlug);
+  const isNewMember = selectedId === "new" || !selectedAccount;
 
   useEffect(() => {
     if (newMemberRequest === undefined || newMemberRequest === lastRequestRef.current) {
@@ -220,6 +221,10 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
       });
 
       if (!selectedAccount || selectedId === "new") {
+        if (!form.userEmail.trim()) {
+          setSaveError("Ingresá un email para el nuevo miembro.");
+          return;
+        }
         const tempPassword = form.tempPassword.trim();
         const confirmTempPassword = form.confirmTempPassword.trim();
 
@@ -506,7 +511,8 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
                 <span className="text-sm font-medium text-slate-200">Email</span>
                 <input
                   value={form.userEmail}
-                  readOnly
+                  onChange={(event) => setForm((current) => ({ ...current, userEmail: event.target.value }))}
+                  readOnly={!isNewMember}
                   className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
                   placeholder="miembro@dominio.com"
                 />
