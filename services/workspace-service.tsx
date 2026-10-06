@@ -4214,6 +4214,22 @@ export function WorkspaceServiceProvider({
               ? "access_code"
               : "invalid";
 
+        if (credentialKind === "invalid") {
+          const note = "El código presentado no coincide con el acceso vigente.";
+          logCheckInDiagnostic({
+            stage: "credential-classification-mismatch",
+            organizationId: currentOrganizationId,
+            eventId: currentEvent.id,
+            guestId: guest.id,
+            accessGrantId: guest.accessGrantId ?? guest.id,
+            operatorProfileId: currentProfileId,
+            credentialKind,
+            authenticatedContext: true,
+          });
+          notify({ title: "Acceso bloqueado", description: note, tone: "warning", icon: "alert", href: "/check-in" });
+          return { result: "Bloqueado" as const, guest, note };
+        }
+
         try {
           if (repositories.checkIns.persistCompletedAtomic) {
             await repositories.checkIns.persistCompletedAtomic({

@@ -16,6 +16,9 @@ test("atomic check-in validates credential after locking the grant", () => {
 test("non-credential lookup cannot silently become QR or code admission", () => {
   assert.match(service, /credentialKind/);
   assert.match(service, /: "invalid"/);
+  assert.match(service, /if \(credentialKind === "invalid"\)/);
+  assert.match(service, /return \{ result: "Bloqueado" as const, guest, note \}/);
+  assert.doesNotMatch(service, /p_credential_kind:.*invalid/);
 });
 
 test("credential modes reject null or empty presented values", () => {
