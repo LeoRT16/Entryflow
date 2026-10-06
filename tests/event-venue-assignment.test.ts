@@ -202,4 +202,9 @@ test("event creation wizard selects and persists organization venues through ven
   assert.match(wizard, /Math\.min\(current \+ 1, 3\)/);
   assert.match(wizard, /labels = \["Tipo", "Información", "Revisión"\]/);
   assert.match(wizard, /Configuración avanzada/);
+  assert.match(wizard, /label="Capacidad"/);
+  assert.match(wizard, /step < 3/);
+  assert.match(wizard, /Crear evento/);
+  assert.doesNotMatch(wizard, /Capacidades habilitadas/);
+  assert.match(wizard, /formatReviewDate/);
 });

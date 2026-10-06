@@ -12,7 +12,6 @@ import {
   getEventBlueprint,
   getEventBlueprints,
   getEventModuleLabel,
-  getEventNavigation,
   getEventTypeLabel,
   getOperationalModelLabel,
   validateEventClockInput,
@@ -101,7 +100,6 @@ export default function EventCreationWizard({
     [blueprint, draft, organizationId, step],
   );
 
-  const navigationPreview = useMemo(() => getEventNavigation(previewEvent), [previewEvent]);
   const eventBlueprints = useMemo(() => getEventBlueprints(), []);
 
   if (!open) {
@@ -243,7 +241,7 @@ export default function EventCreationWizard({
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[1.08fr_0.92fr]">
+        <div className="min-h-0 flex-1">
           <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">
             <WizardStepper step={step} />
 
@@ -309,7 +307,8 @@ export default function EventCreationWizard({
                   />
                   {venueOptions.length ? (
                     <label className="block">
-                      <span className="mb-2 block text-sm font-medium text-slate-300">Venue canónico</span>
+                      <span className="mb-2 block text-sm font-medium text-slate-300">Venue</span>
+                      <span className="mb-2 block text-xs text-slate-500">Venue registrado para la operación del evento.</span>
                       <select
                         value={draft.venueId}
                         onChange={(event) => {
@@ -350,7 +349,7 @@ export default function EventCreationWizard({
                     value={draft.timezone}
                     onChange={(value) => updateDraft((current) => ({ ...current, timezone: value }))}
                     preferredTimezone={preferredTimezone}
-                    helperText="Se ajusta sola según tu equipo, pero puedes cambiarla si el evento opera en otra franja horaria."
+                    helperText="Elegí la zona horaria en la que operará el evento."
                   />
                   <Field
                     label="Hora inicio"
@@ -567,49 +566,19 @@ export default function EventCreationWizard({
                   <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Resumen</p>
 
-                    <dl className="mt-4 space-y-3 text-sm">
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                       <SummaryRow label="Nombre" value={draft.name} />
                       <SummaryRow label="Tipo" value={getEventTypeLabel(blueprint.eventType)} />
-                      <SummaryRow label="Fecha" value={draft.date} />
+                      <SummaryRow label="Fecha" value={formatReviewDate(draft.date, draft.timezone)} />
+                      <SummaryRow label="Horario" value={`${draft.startTime || "—"} – ${draft.endTime || "—"}`} />
+                      <SummaryRow label="Zona horaria" value={draft.timezone} />
+                      <SummaryRow label="Venue" value={draft.venue || "Sin venue seleccionado"} />
+                      <SummaryRow label="Capacidad del evento" value={`${draft.capacity || "0"} personas`} />
+                      {draft.description ? <SummaryRow label="Descripción" value={draft.description} /> : null}
                     </dl>
                   </div>
-
-                  <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Capacidades habilitadas</p>
-
-                    <div className="mt-4 space-y-3">
-                      {navigationPreview.map((group) => (
-                        <div key={group.title} className="space-y-2">
-                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">{group.title}</p>
-                          <div className="space-y-2">
-                            {group.items.map((item) => (
-                              <div
-                                key={`${group.title}-${item.module}`}
-                                className={`rounded-2xl border px-3 py-2 ${
-                                  item.enabled
-                                    ? "border-white/10 bg-white/[0.04]"
-                                    : item.future
-                                      ? "border-white/5 bg-black/20 opacity-70"
-                                      : "border-white/5 bg-black/10 opacity-55"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <div>
-                                    <p className="text-sm font-medium text-white">{item.label}</p>
-                                    <p className="text-xs text-slate-400">{item.description}</p>
-                                  </div>
-                                  <div className="flex flex-col items-end gap-1 text-[10px] uppercase tracking-[0.24em] text-slate-500">
-                                    <span>{item.required ? "Esencial" : item.future ? "Próximamente" : "Opcional"}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 </div>
+                {blueprint.eventType !== "custom" ? <p className="text-sm text-slate-400">Configuración de {getEventTypeLabel(blueprint.eventType)} aplicada automáticamente.</p> : null}
                 {blueprint.eventType === "custom" ? (
                   <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
                     <p className="text-sm font-medium text-white">Configuración avanzada</p>
@@ -637,7 +606,7 @@ export default function EventCreationWizard({
                   {step} / 3
                 </span>
 
-                {step < 6 ? (
+                {step < 3 ? (
                   <button
                     type="button"
                     onClick={nextStep}
@@ -658,7 +627,7 @@ export default function EventCreationWizard({
             </div>
           </div>
 
-          {blueprint.eventType === "custom" ? (<aside className="min-h-0 overflow-y-auto border-t border-white/10 bg-black/20 px-5 py-5 xl:border-l xl:border-t-0 sm:px-6">
+          {blueprint.eventType === "custom" ? (<aside className="mt-5 border-t border-white/10 bg-black/20 px-5 py-5 sm:px-6">
             <div className="space-y-4">
               <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Vista previa del evento</p>
@@ -724,11 +693,18 @@ export default function EventCreationWizard({
                 </p>
               </div>
             </div>
-          </aside>) : <aside className="hidden xl:block" aria-hidden="true" /> }
+          </aside>) : null}
         </div>
       </div>
     </div>
   );
+}
+
+function formatReviewDate(value: string, timezone: string) {
+  if (!value) return "Sin fecha";
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return new Intl.DateTimeFormat("es-BO", { day: "numeric", month: "short", year: "numeric", timeZone: timezone || "America/La_Paz" }).format(new Date(Date.UTC(year, month - 1, day, 12)));
 }
 
 function ModuleChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
