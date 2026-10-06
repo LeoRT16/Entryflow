@@ -19,6 +19,7 @@ import {
 import { resolveManagedVenueById } from "@/features/events/domain/event-venue-boundary";
 import type { EventBlueprint, EventDraft } from "@/features/events/domain";
 import { getDefaultTimezone } from "@/lib/timezone";
+import { buildEventWallClockInterval } from "@/features/events/domain/event-date-time";
 
 const admissionMethodLabels: Record<EventDraft["admissionMethods"][number], string> = {
   qr: "Código QR",
@@ -209,6 +210,7 @@ export default function EventCreationWizard({
   const previousStep = () => setStep((current) => Math.max(current - 1, 1));
 
   const selectedModules = getEnabledModules(previewEvent);
+  const eventInterval = buildEventWallClockInterval({ date: draft.date, startTime: draft.startTime, endTime: draft.endTime });
 
   return (
     <div
@@ -357,6 +359,7 @@ export default function EventCreationWizard({
                     onChange={(value) => updateDraft((current) => ({ ...current, startTime: value }))}
                     type="time"
                   />
+                  {eventInterval.overnight ? <p className="text-xs text-cyan-200/80 md:col-span-2 xl:col-span-1">Finaliza al día siguiente.</p> : null}
                   <Field
                     label="Hora fin"
                     value={draft.endTime}

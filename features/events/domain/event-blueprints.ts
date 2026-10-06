@@ -8,6 +8,7 @@ import type {
   ResourceType,
 } from "@/features/domain/types";
 import { getDefaultTimezone } from "@/lib/timezone";
+import { buildEventWallClockInterval } from "./event-date-time";
 
 function getCurrentDateForTimezone(timezone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -419,6 +420,7 @@ export function buildEventFromDraft(params: {
   id?: string;
 }): Event {
   const nextId = params.id ?? globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const interval = buildEventWallClockInterval({ date: params.draft.date, startTime: params.draft.startTime, endTime: params.draft.endTime });
 
   return {
     id: nextId,
@@ -427,8 +429,8 @@ export function buildEventFromDraft(params: {
     description: params.draft.description || params.blueprint.description,
     eventType: params.blueprint.eventType,
     status: params.status ?? "published",
-    startAt: `${params.draft.date} ${params.draft.startTime}`,
-    endAt: params.draft.endTime ? `${params.draft.date} ${params.draft.endTime}` : undefined,
+    startAt: interval.startAt,
+    endAt: interval.endAt,
     timezone: params.draft.timezone,
     venueId: params.draft.venueId || undefined,
     venue: params.draft.venue,
