@@ -75,7 +75,7 @@ test("check-in flow prioritizes scanner usage before manual lookup", () => {
     ? flowSource.slice(handleDetectedStart, handleSelectGuestStart)
     : "";
 
-  assert.match(flowSource, /QrCameraScanner(?: key=\{scannerCycle\})? eventName={currentEvent\.name} onDetected={handleDetected} \/>/);
+  assert.match(flowSource, /QrCameraScanner(?: key=\{scannerCycle\})? eventName={currentEvent\.name} onDetected={handleDetected} onRestart=\{resetAdmissionState\} \/>/);
   assert.match(flowSource, /Búsqueda manual/);
   assert.match(handleDetectedBlock, /shouldAutoSubmitDetectedCheckIn/);
   assert.doesNotMatch(handleDetectedBlock, /setAttemptState\(\{ kind: "idle" \}\);/);

@@ -213,11 +213,16 @@ function CheckInWorkspace() {
     await submitCheckIn(selectedGuest, buildGuestSearchIndex(selectedGuest), validationMethod);
   };
 
+  const resetAdmissionState = () => {
+    setQuery("");
+    setSelectedGuestId(null);
+    setAttemptState({ kind: "idle" });
+  };
+
   const startNextAdmission = () => {
     if (isSubmitting) return;
     const nextMethod = validationMethod;
-    setQuery("");
-    setSelectedGuestId(null);
+    resetAdmissionState();
     setValidationMethod(nextMethod);
     setAttemptState({ kind: "idle" });
     setScannerCycle((cycle) => cycle + 1);
@@ -303,7 +308,7 @@ function CheckInWorkspace() {
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-4">
-            <QrCameraScanner key={scannerCycle} eventName={currentEvent.name} onDetected={handleDetected} />
+            <QrCameraScanner key={scannerCycle} eventName={currentEvent.name} onDetected={handleDetected} onRestart={resetAdmissionState} />
 
             <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">

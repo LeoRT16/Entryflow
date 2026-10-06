@@ -18,6 +18,7 @@ declare global {
 type QrCameraScannerProps = {
   eventName: string;
   onDetected: (value: string) => void;
+  onRestart?: () => void;
 };
 
 type ScannerStatus = "idle" | "starting" | "scanning" | "detected" | "permission_denied" | "camera_unavailable" | "unsupported" | "error";
@@ -71,7 +72,7 @@ export function QrCameraControls({ status, onActivate, onStop, onRestart }: Scan
   );
 }
 
-export default function QrCameraScanner({ eventName, onDetected }: QrCameraScannerProps) {
+export default function QrCameraScanner({ eventName, onDetected, onRestart }: QrCameraScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<BarcodeDetectorLike | null>(null);
@@ -218,8 +219,10 @@ export default function QrCameraScanner({ eventName, onDetected }: QrCameraScann
   }, [eventName, onDetected, stopScanner]);
 
   const restartScanner = useCallback(() => {
+    stopScanner({ updateUi: false });
+    onRestart?.();
     void startScanner();
-  }, [startScanner]);
+  }, [onRestart, startScanner, stopScanner]);
 
   return (
     <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
