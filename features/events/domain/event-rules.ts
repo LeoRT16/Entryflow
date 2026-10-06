@@ -101,22 +101,7 @@ export function pickCurrentEventCandidate(
     return operationalEvents[0];
   }
 
-  return organizationEvents
-    .sort((a, b) => {
-      const statusOrder = a.status === "live" ? 0 : a.status === "published" ? 1 : a.status === "draft" ? 2 : 3;
-      const otherStatusOrder = b.status === "live" ? 0 : b.status === "published" ? 1 : b.status === "draft" ? 2 : 3;
-
-      if (statusOrder !== otherStatusOrder) {
-        return statusOrder - otherStatusOrder;
-      }
-
-      const updatedComparison = compareDatesDesc(a.updatedAt, b.updatedAt);
-      if (updatedComparison !== 0) {
-        return updatedComparison;
-      }
-
-      return compareDatesDesc(a.startAt, b.startAt);
-    })[0] ?? null;
+  return null;
 }
 
 export function pickCurrentEventId(
