@@ -18,7 +18,7 @@ import {
   buildGuestWhatsAppUpdate,
   validateGuestProfileUpdateInput,
 } from "@/features/customers/domain/customer-directory";
-import { getOperatorSafeCheckInError, searchGuests } from "@/features/check-in/domain/check-in-domain";
+import { getOperatorSafeCheckInError, logCheckInDiagnostic, searchGuests } from "@/features/check-in/domain/check-in-domain";
 import { requestReportingSyncAfterSuccess } from "@/features/reporting/sync/request-after-success";
 import { runAssignReservationTable, runReleaseReservationTable, runCloseTable } from "@/features/tables/application/atomic-table-operations";
 import { runMoveGuestToResource } from "@/features/tables/application/guest-move-operations";
@@ -4239,6 +4239,17 @@ export function WorkspaceServiceProvider({
             });
           }
         } catch (exception) {
+          logCheckInDiagnostic({
+            stage: "rpc-error",
+            organizationId: currentOrganizationId,
+            eventId: currentEvent.id,
+            guestId: guest.id,
+            accessGrantId: guest.accessGrantId ?? guest.id,
+            operatorProfileId: currentProfileId,
+            credentialKind,
+            authenticatedContext: true,
+            error: exception,
+          });
           if (exception instanceof CheckInAlreadyConsumedError && guest) {
             const duplicateTicket = buildAccessTicketFromGuest(
               { ...guest, admissionStatus: "Ingresó", checkInTime: guest.checkInTime ?? timestampIso },

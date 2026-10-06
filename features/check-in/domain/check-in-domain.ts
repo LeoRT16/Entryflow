@@ -106,6 +106,37 @@ export function getOperatorSafeCheckInError(error: unknown) {
   return "No pudimos registrar el ingreso. Intenta nuevamente.";
 }
 
+export function logCheckInDiagnostic(input: {
+  stage: string;
+  organizationId?: string;
+  eventId?: string;
+  guestId?: string;
+  accessGrantId?: string;
+  operatorProfileId?: string;
+  credentialKind?: string;
+  authenticatedContext?: boolean;
+  error?: unknown;
+}) {
+  const error = input.error && typeof input.error === "object" ? input.error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown } : undefined;
+  const payload = {
+    marker: "[checkin:admission-diagnostic]",
+    stage: input.stage,
+    organizationId: input.organizationId,
+    eventId: input.eventId,
+    guestId: input.guestId,
+    accessGrantId: input.accessGrantId,
+    operatorProfileId: input.operatorProfileId,
+    credentialKind: input.credentialKind,
+    authenticatedContext: input.authenticatedContext,
+    ...(error ? { code: error.code, message: error.message, details: error.details, hint: error.hint } : {}),
+  };
+  if (input.stage === "rpc-error") {
+    console.error("[checkin:persist-completed-rpc-error]", { rpcName: "persist_completed_checkin_atomic", ...payload });
+  } else {
+    console.warn("[checkin:admission-diagnostic]", payload);
+  }
+}
+
 export function searchGuests(guests: Guest[], query: string) {
   const normalizedQuery = normalizeCheckInText(query);
 
