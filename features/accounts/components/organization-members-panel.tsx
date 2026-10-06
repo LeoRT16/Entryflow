@@ -303,9 +303,9 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
     }
 
     confirm({
-      title: "Eliminar usuario",
-      description: `Vas a eliminar a ${selectedAccount.displayName}. Su acceso quedará retirado y la membresía dejará de mostrarse en el equipo.`,
-      confirmLabel: "Eliminar usuario",
+      title: "Quitar del equipo",
+      description: `Vas a quitar a ${selectedAccount.displayName} de esta organización. Se conservarán su identidad y el historial.`,
+      confirmLabel: "Quitar del equipo",
       cancelLabel: "Cancelar",
       tone: "danger",
       onConfirm: () => {
@@ -396,7 +396,7 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
     <section className="surface-panel mx-auto w-full max-w-[1140px] p-4 sm:p-5">
       <div className="grid gap-4">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryPill label="Visibles" value={model.totalMembers} tone="info" />
+          <SummaryPill label="Miembros" value={model.totalMembers} tone="info" />
           <SummaryPill label="Activos" value={model.activeMembers} tone="success" />
           <SummaryPill label="Inactivos" value={model.inactiveMembers} tone="warning" />
           <SummaryPill label="Owners" value={model.ownerMembers} tone="danger" />
@@ -506,7 +506,7 @@ export default function OrganizationMembersPanel({ newMemberRequest }: Organizat
                 <span className="text-sm font-medium text-slate-200">Email</span>
                 <input
                   value={form.userEmail}
-                  onChange={(event) => setForm((current) => ({ ...current, userEmail: event.target.value }))}
+                  readOnly
                   className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition placeholder:text-slate-500 disabled:cursor-not-allowed disabled:bg-white/[0.02] disabled:text-slate-400 focus:border-cyan-400/60 focus:bg-white/[0.06]"
                   placeholder="miembro@dominio.com"
                 />

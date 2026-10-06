@@ -301,7 +301,9 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
         : "active";
   const nextDisplayName = normalized.displayName || normalized.userDisplayName || targetProfile.displayName;
   const nextUserDisplayName = normalized.userDisplayName || normalized.displayName || targetUser.displayName;
-  const nextEmail = normalized.email || targetUser.email;
+  // Auth is the identity authority; Team keeps email read-only until a safe
+  // cross-system synchronization path is available.
+  const nextEmail = targetUser.email;
   const area = normalized.area || (targetProfile.attributes.area ?? "");
 
   const selfProtectionError = getCriticalSelfMutationBlockReason({

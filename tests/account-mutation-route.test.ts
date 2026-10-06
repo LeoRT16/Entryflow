@@ -219,7 +219,7 @@ test("owner can edit own benign profile fields through the trusted account route
   assert.equal(payload.ok, true);
   assert.equal(payload.account.displayName, "Owner Visible");
   assert.equal(payload.account.userDisplayName, "Owner Updated");
-  assert.equal(payload.account.userEmail, "owner+updated@example.com");
+  assert.equal(payload.account.userEmail, "owner@example.com");
   assert.equal(payload.profile.attributes.area, "Dirección");
   assert.equal(dependencies.state.users.find((user) => user.id === "user-owner")?.displayName, "Owner Updated");
 });

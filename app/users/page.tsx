@@ -15,7 +15,6 @@ function UsersContent() {
       <header className="surface-panel flex flex-col gap-4 p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2">
-            <p className="kicker">Equipo</p>
             <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2.35rem]">Equipo</h1>
             <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-[0.95rem]">
               Administra los miembros y accesos de tu organización.
