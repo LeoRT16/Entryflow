@@ -211,4 +211,7 @@ test("event creation wizard selects and persists organization venues through ven
   assert.match(wizard, /Crear evento/);
   assert.doesNotMatch(wizard, /Capacidades habilitadas/);
   assert.match(wizard, /formatReviewDate/);
+  assert.match(wizard, /flex min-h-0 flex-1 flex-col/);
+  assert.match(wizard, /min-h-0 flex-1 overflow-y-auto/);
+  assert.match(wizard, /step < 3/);
 });

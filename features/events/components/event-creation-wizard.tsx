@@ -243,8 +243,8 @@ export default function EventCreationWizard({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1">
-          <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
             <WizardStepper step={step} />
 
             {step === 1 ? (
@@ -594,6 +594,9 @@ export default function EventCreationWizard({
               </section>
             ) : null}
 
+
+          </div>
+
             <div className="mt-6 flex items-center justify-between gap-3 border-t border-white/10 pt-5">
               <button
                 type="button"
@@ -628,9 +631,8 @@ export default function EventCreationWizard({
                 )}
               </div>
             </div>
-          </div>
 
-          {blueprint.eventType === "custom" ? (<aside className="mt-5 border-t border-white/10 bg-black/20 px-5 py-5 sm:px-6">
+          {blueprint.eventType === "custom" ? (<aside className="mt-5 max-h-64 overflow-y-auto border-t border-white/10 bg-black/20 px-5 py-5 sm:px-6">
             <div className="space-y-4">
               <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Vista previa del evento</p>
