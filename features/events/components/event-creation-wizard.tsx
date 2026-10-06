@@ -8,7 +8,6 @@ import type { Event, Venue } from "@/features/domain/types";
 import {
   buildEventFromDraft,
   buildEventDraft,
-  getEnabledModules,
   getEventBlueprint,
   getEventBlueprints,
   getEventModuleLabel,
@@ -89,17 +88,6 @@ export default function EventCreationWizard({
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open, onClose]);
-
-  const previewEvent = useMemo(
-    () =>
-      buildEventFromDraft({
-        organizationId,
-        blueprint,
-        draft,
-        status: step === 3 ? "published" : "draft",
-      }),
-    [blueprint, draft, organizationId, step],
-  );
 
   const eventBlueprints = useMemo(() => getEventBlueprints(), []);
 
@@ -209,7 +197,6 @@ export default function EventCreationWizard({
   const nextStep = () => setStep((current) => Math.min(current + 1, 3));
   const previousStep = () => setStep((current) => Math.max(current - 1, 1));
 
-  const selectedModules = getEnabledModules(previewEvent);
   const eventInterval = buildEventWallClockInterval({ date: draft.date, startTime: draft.startTime, endTime: draft.endTime });
 
   return (
@@ -632,73 +619,6 @@ export default function EventCreationWizard({
               </div>
             </div>
 
-          {blueprint.eventType === "custom" ? (<aside className="mt-5 max-h-64 overflow-y-auto border-t border-white/10 bg-black/20 px-5 py-5 sm:px-6">
-            <div className="space-y-4">
-              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Vista previa del evento</p>
-                <h3 className="mt-2 text-xl font-semibold text-white">{previewEvent.name}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-400">{previewEvent.description}</p>
-
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <InfoChip label="Tipo" value={getEventTypeLabel(blueprint.eventType)} />
-                  <InfoChip label="Modelo" value={getOperationalModelLabel(draft.operationalModel)} />
-                  <InfoChip label="Módulos" value={`${selectedModules.length}`} />
-                  <InfoChip label="Capacidad" value={draft.capacity || "0"} />
-                </div>
-              </div>
-
-              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Módulos seleccionados</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {selectedModules.map((module) => (
-                    <span
-                      key={module}
-                      className={`rounded-full border px-3 py-2 text-xs font-medium uppercase tracking-[0.22em] ${
-                        blueprint.requiredModules.includes(module)
-                          ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-100"
-                          : "border-white/10 bg-white/[0.03] text-slate-300"
-                      }`}
-                    >
-                      {getEventModuleLabel(module)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Métodos de admisión</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {draft.admissionMethods.map((method) => (
-                    <span key={method} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-medium uppercase tracking-[0.22em] text-slate-300">
-                      {admissionMethodLabels[method]}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Recursos</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {draft.resourceTypes.length ? (
-                    draft.resourceTypes.map((resourceType) => (
-                      <span key={resourceType} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-medium uppercase tracking-[0.22em] text-slate-300">
-                        {resourceTypeLabels[resourceType]}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-sm text-slate-500">Sin recursos seleccionados.</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-[1.5rem] border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-50">
-                <p className="font-medium">Configuración lista para operar.</p>
-                <p className="mt-2 leading-6 text-cyan-50/75">
-                  Al crear el evento, sus capacidades quedarán disponibles según el formato elegido.
-                </p>
-              </div>
-            </div>
-          </aside>) : null}
         </div>
       </div>
     </div>
@@ -828,15 +748,6 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-start justify-between gap-4 border-b border-white/5 pb-2 last:border-b-0 last:pb-0">
       <dt className="text-slate-500">{label}</dt>
       <dd className="max-w-[60%] text-right text-white">{value}</dd>
-    </div>
-  );
-}
-
-function InfoChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
-      <p className="mt-2 text-sm font-medium text-white">{value}</p>
     </div>
   );
 }

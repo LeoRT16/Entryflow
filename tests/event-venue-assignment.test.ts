@@ -214,4 +214,10 @@ test("event creation wizard selects and persists organization venues through ven
   assert.match(wizard, /flex min-h-0 flex-1 flex-col/);
   assert.match(wizard, /min-h-0 flex-1 overflow-y-auto/);
   assert.match(wizard, /step < 3/);
+  assert.doesNotMatch(wizard, /Vista previa del evento/);
+  assert.doesNotMatch(wizard, /El usuario define modelo operativo, módulos, admisión y recursos/);
+  const bodyStart = wizard.indexOf('<div className="min-h-0 flex-1 overflow-y-auto');
+  const footerStart = wizard.indexOf('Anterior');
+  assert.ok(bodyStart >= 0 && footerStart > bodyStart);
+  assert.equal(wizard.slice(footerStart).includes('overflow-y-auto'), false);
 });
