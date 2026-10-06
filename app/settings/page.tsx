@@ -91,7 +91,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1140px] space-y-5 px-4 sm:px-6 lg:px-0">
-      <Topbar eyebrow="Ajustes" title="Ajustes" description="Configuración general de tu organización." compact />
+      <Topbar eyebrow="Ajustes" title="Ajustes" description="Configuración general de tu organización." bare />
 
       <PermissionGuard permission="settings.view">
         <div className="space-y-6">
