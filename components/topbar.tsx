@@ -13,7 +13,6 @@ export default function Topbar({
   primaryAction,
   secondaryAction,
   compact = false,
-  bare = false,
 }: {
   eyebrow?: string;
   title: string;
@@ -27,17 +26,16 @@ export default function Topbar({
     href: string;
   };
   compact?: boolean;
-  bare?: boolean;
 }) {
   const { currentEvent } = useCheckInStore();
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
 
   return (
-    <header className={bare ? "flex flex-col gap-2" : `surface-panel flex flex-col ${compact ? "gap-3 p-4 sm:p-4" : "gap-4 p-5 sm:p-6"}`}>
+    <header className={`surface-panel flex flex-col ${compact ? "gap-3 p-4 sm:p-4" : "gap-4 p-5 sm:p-6"}`}>
       <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className={`min-w-0 ${bare ? "space-y-1" : compact ? "space-y-2" : "space-y-3"}`}>
+        <div className={`min-w-0 ${compact ? "space-y-2" : "space-y-3"}`}>
           {eyebrow ? <p className="kicker">{eyebrow}</p> : null}
-          <h1 className={`font-semibold tracking-tight text-white ${bare || compact ? "text-2xl sm:text-[2.2rem]" : "text-3xl sm:text-[2.6rem]"}`}>{title}</h1>
+          <h1 className={`font-semibold tracking-tight text-white ${compact ? "text-2xl sm:text-[2.2rem]" : "text-3xl sm:text-[2.6rem]"}`}>{title}</h1>
           {description ? <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-[0.95rem]">{description}</p> : null}
         </div>
 
