@@ -156,14 +156,21 @@ test("table context does not accept a venueId that merely matches the event id",
   );
 });
 
-test("event library shows edit on every card and opens the modal for the clicked event", () => {
+test("event library keeps permission-aware edit and opens the modal for the clicked event", () => {
   const source = readFileSync(new URL("../features/events/components/event-library.tsx", import.meta.url), "utf8");
 
   assert.match(source, /onSelectEvent=\{setCurrentEventId\}/);
   assert.match(source, /onEditEvent=\{openEventEditor\}/);
   assert.match(source, /onEditEvent=\{\(\) => onEditEvent\(event\)\}/);
   assert.match(source, /current \? null : \(/);
-  assert.match(source, /Editar evento/);
+  assert.match(source, /Editar/);
+  assert.match(source, /canEdit=\{can\("event\.edit"\)\}/);
+  assert.doesNotMatch(source, /Modelo.*operationalModel/);
+  assert.doesNotMatch(source, /Recursos.*resourceLabel/);
+  assert.doesNotMatch(source, /Capacidad.*event.capacity/);
+  assert.doesNotMatch(source, /getEventTypeLabel/);
+  assert.match(source, /Eventos disponibles/);
+  assert.match(source, /Venue/);
   assert.match(source, /event=\{editorEvent\}/);
   assert.match(source, /onPatchEvent=\{updateEvent\}/);
   assert.match(source, /const organizationVenues = useMemo\(\(\) => getVenuesForOrganization\(currentOrganization\.id, venues\), \[currentOrganization\.id, venues\]\);/);

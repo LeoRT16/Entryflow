@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 
 import StatusBadge from "@/components/status-badge";
-import type { Event, ResourceType } from "@/features/domain/types";
+import type { Event } from "@/features/domain/types";
 import { getEventsForOrganization, getVenuesForOrganization } from "@/features/domain/selectors";
-import { getEventTypeLabel, getOperationalModelLabel, isTerminalEventStatus } from "@/features/events/domain";
+import { isTerminalEventStatus } from "@/features/events/domain";
 import EventEditorModal from "@/features/events/components/event-editor-modal";
 import EventCreationWizard from "@/features/events/components/event-creation-wizard";
 import { useCheckInStore } from "@/services/workspace-service";
@@ -19,20 +19,8 @@ type EventAction = {
   onClick: () => void;
 };
 
-const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
-  table: "Mesas",
-  lounge: "Lounges",
-  box: "Boxes",
-  seat: "Asientos",
-  zone: "Zonas",
-  booth: "Stands",
-  room: "Salas",
-  gate: "Puertas",
-  area: "Áreas",
-};
-
 function formatEventStatusLabel(status: Event["status"]) {
-  if (status === "live") return "En curso";
+  if (status === "live") return "En vivo";
   if (status === "published") return "Publicado";
   if (status === "draft") return "Borrador";
   if (status === "finished") return "Finalizado";
@@ -44,14 +32,6 @@ function getEventStatusTone(status: Event["status"]) {
   if (status === "published") return "info" as const;
   if (status === "draft") return "warning" as const;
   return "warning" as const;
-}
-
-function getResourceTypeLabel(resourceType: ResourceType) {
-  return RESOURCE_TYPE_LABELS[resourceType] ?? resourceType;
-}
-
-function formatResourceTypes(resourceTypes: Event["resourceTypes"]) {
-  return resourceTypes.map(getResourceTypeLabel).join(" · ");
 }
 
 export default function EventLibrary() {
@@ -118,7 +98,7 @@ export default function EventLibrary() {
         },
         {
           key: "upcoming",
-          title: "Próximos",
+          title: "Eventos disponibles",
           accent: "info" as const,
           events: groupedEvents.upcoming,
         },
@@ -183,20 +163,21 @@ export default function EventLibrary() {
       <header className="surface-panel flex flex-col gap-3 px-4 py-4 sm:px-5 sm:py-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2">
-            <p className="kicker">Eventos</p>
             <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-[2.35rem]">Eventos</h1>
             <p className="max-w-2xl text-sm leading-6 text-slate-400 sm:text-[0.95rem]">
               Crea y administra los eventos de tu organización.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => openEventWizard(currentOrganization.id)}
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
-          >
-            + Crear evento
-          </button>
+          {can("event.create") ? (
+            <button
+              type="button"
+              onClick={() => openEventWizard(currentOrganization.id)}
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              + Crear evento
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -214,6 +195,7 @@ export default function EventLibrary() {
               onEditEvent={openEventEditor}
               onActivateEvent={requestActivation}
               canActivate={can("event.edit")}
+              canEdit={can("event.edit")}
               activatingEventId={activatingEventId}
             />
           ))
@@ -266,6 +248,7 @@ function LibrarySection({
   onActivateEvent,
   activatingEventId,
   canActivate,
+  canEdit,
 }: {
   title: string;
   events: Event[];
@@ -277,6 +260,7 @@ function LibrarySection({
   onActivateEvent: (event: Event) => void;
   activatingEventId: string | null;
   canActivate: boolean;
+  canEdit: boolean;
 }) {
   return (
     <section className="surface-panel p-4 sm:p-5">
@@ -293,12 +277,13 @@ function LibrarySection({
             key={event.id}
             event={event}
             current={event.id === currentEventId}
-            currentEventAction={event.id === currentEventId ? currentEventAction : null}
+            currentEventAction={event.id === currentEventId && canEdit ? currentEventAction : null}
             onSelect={() => onSelectEvent(event.id)}
             onEditEvent={() => onEditEvent(event)}
             onActivateEvent={() => onActivateEvent(event)}
             activating={activatingEventId === event.id}
             canActivate={canActivate}
+            canEdit={canEdit}
           />
         ))}
       </div>
@@ -315,6 +300,7 @@ function EventCard({
   onActivateEvent,
   activating,
   canActivate,
+  canEdit,
 }: {
   event: Event;
   current: boolean;
@@ -324,8 +310,9 @@ function EventCard({
   onActivateEvent: () => void;
   activating: boolean;
   canActivate: boolean;
+  canEdit: boolean;
 }) {
-  const resourceLabel = event.resourceTypes.length ? formatResourceTypes(event.resourceTypes.slice(0, 3)) : "";
+  const venueLabel = event.venue?.trim() || "Venue no definido";
 
   return (
     <article
@@ -339,34 +326,18 @@ function EventCard({
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge variant={getEventStatusTone(event.status)}>{formatEventStatusLabel(event.status)}</StatusBadge>
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-300">
-              {getEventTypeLabel(event.eventType)}
-            </span>
           </div>
 
           <h3 className="break-words text-[1.05rem] font-semibold tracking-tight text-white sm:text-lg">{event.name}</h3>
 
-          {event.description ? <p className="break-words text-sm leading-6 text-slate-400">{event.description}</p> : null}
+          {event.description ? <p className="line-clamp-2 break-words text-sm leading-5 text-slate-400">{event.description}</p> : null}
         </div>
 
         {current ? <StatusBadge variant="info">En uso</StatusBadge> : null}
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm leading-6 text-slate-300">
-        <p className="min-w-0 break-words">
-          <span className="text-slate-500">Modelo</span> {getOperationalModelLabel(event.operationalModel)}
-        </p>
-        <p className="min-w-0 break-words">
-          <span className="text-slate-500">Capacidad</span> {event.capacity}
-        </p>
-        <p className="min-w-0 break-words">
-          <span className="text-slate-500">Venue</span> {event.venue}
-        </p>
-        {resourceLabel ? (
-          <p className="min-w-0 break-words">
-            <span className="text-slate-500">Recursos</span> {resourceLabel}
-          </p>
-        ) : null}
+      <div className="min-w-0 text-sm text-slate-300">
+        <span className="text-slate-500">Venue</span>{" "}{venueLabel}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -377,16 +348,18 @@ function EventCard({
               onClick={onSelect}
               className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
             >
-              Seleccionar evento
+              Seleccionar
             </button>
           )}
-          <button
-            type="button"
-            onClick={onEditEvent}
-            className="inline-flex h-9 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
-          >
-            Editar evento
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={onEditEvent}
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+            >
+              Editar
+            </button>
+          ) : null}
           {event.status === "published" && canActivate ? (
             <button
               type="button"
