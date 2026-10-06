@@ -2188,6 +2188,9 @@ export function WorkspaceServiceProvider({
         } else if (kind === "table") {
           await repositories.tables.upsert(value as TableRecord);
         } else if (kind === "checkin") {
+          if (!isEventOperational(currentEvent.status)) {
+            throw new Error("El check-in solo está disponible para eventos publicados o en vivo.");
+          }
           await repositories.checkIns.upsert(value as CheckIn);
         } else if (kind === "attempt") {
           await repositories.timeline.upsert(value as TimelineEvent);
@@ -2198,7 +2201,7 @@ export function WorkspaceServiceProvider({
         throw exception;
       }
     },
-    [repositories],
+    [currentEvent.status, repositories],
   );
 
   const createEvent = useCallback(
@@ -2310,21 +2313,27 @@ export function WorkspaceServiceProvider({
   const createExtraWristbandSaleMutation = useCallback(
     async (input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[] }) => {
       requirePermission("reservation.edit");
+      if (!isEventOperational(currentEvent.status)) {
+        throw new Error("La venta de manillas extra solo está disponible para eventos publicados o en vivo.");
+      }
       await repositories.extraWristbandSales.create({ ...input, actor: currentAccount.displayName });
       await requestReportingAfterSuccess(input.eventId);
       await reloadWorkspace();
     },
-    [currentAccount.displayName, reloadWorkspace, repositories.extraWristbandSales, requirePermission, requestReportingAfterSuccess],
+    [currentAccount.displayName, currentEvent.status, reloadWorkspace, repositories.extraWristbandSales, requirePermission, requestReportingAfterSuccess],
   );
 
   const cancelExtraWristbandSaleMutation = useCallback(
     async (input: { saleId: string; reason: string }) => {
       requirePermission("reservation.cancel");
+      if (!isEventOperational(currentEvent.status)) {
+        throw new Error("La cancelación de manillas extra solo está disponible para eventos publicados o en vivo.");
+      }
       await repositories.extraWristbandSales.cancel({ ...input, actor: currentAccount.displayName });
       await requestReportingAfterSuccess(currentEvent.id);
       await reloadWorkspace();
     },
-    [currentAccount.displayName, currentEvent.id, reloadWorkspace, repositories.extraWristbandSales, requirePermission, requestReportingAfterSuccess],
+    [currentAccount.displayName, currentEvent.id, currentEvent.status, reloadWorkspace, repositories.extraWristbandSales, requirePermission, requestReportingAfterSuccess],
   );
 
   const createOrganization = useCallback(

@@ -22,7 +22,7 @@ import {
   isTerminalReservationStatus,
 } from "@/features/reservations/domain/reservation-domain";
 import { calculateCommercialTotal, formatManillaLabel, getExtraWristbandCancellationErrorMessage, validateExtraWristbandSaleInput, type ExtraWristbandPerson, type ExtraWristbandSale } from "@/features/reservations/domain/extra-wristbands";
-import { getEventCommercialConfig } from "@/features/events/domain";
+import { getEventCommercialConfig, isEventOperational } from "@/features/events/domain";
 import {
   canHardDeleteGuest,
   canHardDeleteReservation,
@@ -43,7 +43,7 @@ import { renderInvitationImageBlob, waitForInvitationImageNodeReady } from "@/fe
 import { buildGuestInvitationDesign } from "@/features/access/domain/whatsapp-reservation-invitations";
 
 type ReservationOperationsBoardProps = {
-  currentEvent: Pick<PlatformEvent, "id" | "name" | "startAt" | "timezone" | "venue" | "metadata">;
+  currentEvent: Pick<PlatformEvent, "id" | "name" | "status" | "startAt" | "timezone" | "venue" | "metadata">;
   currentVenueName?: string | null;
   reservationGuests: CheckInGuest[];
   reservations: ReservationSummary[];
@@ -403,6 +403,9 @@ export default function ReservationOperationsBoard({
 
   const sendOneReservationInvitation = useCallback(
     async (guest: ReservationWhatsAppInvitationPlan["eligibleGuests"][number]) => {
+      if (!isEventOperational(currentEvent.status)) {
+        throw new Error("Las invitaciones por WhatsApp solo están disponibles para eventos publicados o en vivo.");
+      }
       await waitForBulkExportCandidate(guest);
 
       if (!bulkExportInvitationRef.current) {
@@ -458,7 +461,7 @@ export default function ReservationOperationsBoard({
 
       return acceptedResult;
     },
-    [currentEvent.name, setGuestsState, waitForBulkExportCandidate],
+    [currentEvent.name, currentEvent.status, setGuestsState, waitForBulkExportCandidate],
   );
 
   const runBulkSendReservations = useCallback(
