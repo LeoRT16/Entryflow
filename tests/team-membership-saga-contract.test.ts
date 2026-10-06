@@ -35,3 +35,13 @@ test("invite membership RPC diagnostics stay server-side and sanitized", () => {
   assert.doesNotMatch(inviteRoute, /console\.error\([^\n]*(authorization|access_token|refresh_token|service_role)/i);
   assert.doesNotMatch(inviteRoute, /console\.error\([^\n]*body/);
 });
+
+test("membership mutations use the authenticated server client, not the service client", () => {
+  const inviteRoute = readFileSync("app/api/accounts/invite/route.ts", "utf8");
+  const accountRoute = readFileSync("app/api/accounts/[profileId]/route.ts", "utf8");
+  assert.match(inviteRoute, /const authenticatedClient = await dependencies\.createAuthClient\(\)/);
+  assert.match(inviteRoute, /rpcClient\.rpc\("upsert_organization_membership_atomic"/);
+  assert.match(accountRoute, /const authenticatedClient = await dependencies\.createAuthClient\(\)/);
+  assert.match(accountRoute, /authenticatedClient\.rpc\("mutate_organization_membership_atomic"/);
+  assert.doesNotMatch(accountRoute, /client\.rpc\("mutate_organization_membership_atomic"/);
+});

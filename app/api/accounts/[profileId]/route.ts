@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { canonicalizeAccountPermissionsForPersistence, canGrantAccountPermission, getCriticalSelfMutationBlockReason, getRolePresetBySlug, hasSameAccountPermissionSet, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import { resolveWorkspaceRole } from "@/app/api/accounts/invite/helpers";
 import type { AccountPermissionKey, AccountRolePreset, AccountUser, OrganizationAccount, OrganizationMembership } from "@/features/accounts/types";
-import { getSupabaseAuthUser } from "@/lib/supabase/auth";
+import { createSupabaseAuthServerClient, getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { nowIso } from "@/lib/supabase/helpers";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
@@ -33,6 +33,7 @@ type AccountMutationDependencies = {
   loadWorkspace: typeof loadWorkspaceBootstrap;
   getClient: typeof getSupabaseServerClient;
   createRepositories: typeof createSupabaseWorkspaceRepositories;
+  createAuthClient: typeof createSupabaseAuthServerClient;
 };
 
 function createDependencies(): AccountMutationDependencies {
@@ -41,6 +42,7 @@ function createDependencies(): AccountMutationDependencies {
     loadWorkspace: loadWorkspaceBootstrap,
     getClient: getSupabaseServerClient,
     createRepositories: createSupabaseWorkspaceRepositories,
+    createAuthClient: createSupabaseAuthServerClient,
   };
 }
 
@@ -352,9 +354,13 @@ async function mutateAccount(request: Request, context: { params: Promise<{ prof
   }
 
   const repositories = dependencies.createRepositories(client);
+  const authenticatedClient = await dependencies.createAuthClient();
+  if (!authenticatedClient) {
+    return NextResponse.json({ ok: false, error: { code: "supabase_unavailable", message: "No pudimos preparar la cuenta." } }, { status: 503 });
+  }
 
   try {
-    const membershipMutation = await client.rpc("mutate_organization_membership_atomic" as never, {
+    const membershipMutation = await authenticatedClient.rpc("mutate_organization_membership_atomic" as never, {
       p_profile_id: targetProfile.id,
       p_role_id: targetRole.id,
       p_area: area,
@@ -499,10 +505,14 @@ async function deleteAccount(request: Request, context: { params: Promise<{ prof
   }
 
   const repositories = dependencies.createRepositories(client);
+  const authenticatedClient = await dependencies.createAuthClient();
+  if (!authenticatedClient) {
+    return NextResponse.json({ ok: false, error: { code: "supabase_unavailable", message: "No pudimos preparar la eliminación." } }, { status: 503 });
+  }
   const removedAt = nowIso();
 
   try {
-    const membershipMutation = await client.rpc("mutate_organization_membership_atomic" as never, {
+    const membershipMutation = await authenticatedClient.rpc("mutate_organization_membership_atomic" as never, {
       p_profile_id: targetProfile.id,
       p_role_id: targetRole.id,
       p_status: "inactive",

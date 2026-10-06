@@ -183,6 +183,14 @@ function buildDependencies(workspace: WorkspaceBootstrap) {
       },
     } as never),
     createRepositories: () => repositories as never,
+    createAuthClient: async () => ({
+      rpc: async (_name: string, args: { p_profile_id?: string; p_status?: string; p_remove?: boolean }) => {
+        const profile = state.profiles.find((item) => item.id === args.p_profile_id);
+        if (profile && args.p_status) profile.status = args.p_status as "active" | "inactive";
+        if (profile && args.p_remove) profile.deletedAt = "2026-08-21T00:00:00.000Z";
+        return { data: null, error: null };
+      },
+    } as never),
     state,
   };
 }

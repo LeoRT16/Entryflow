@@ -300,6 +300,7 @@ function buildInviteDependencies(workspace: WorkspaceBootstrap) {
         calls.createRepositories += 1;
         return repositories;
       },
+      createAuthClient: async () => client,
       findAuthIdentityByEmail: async (_client: unknown, email: string) => {
         calls.findAuthIdentityByEmail += 1;
         if (email === "member-b@example.com") {

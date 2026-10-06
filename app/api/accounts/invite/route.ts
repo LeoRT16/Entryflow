@@ -6,7 +6,7 @@ import {
   linkPublicUserToAuthIdentity,
   setPublicUserMustChangePassword,
 } from "@/app/api/accounts/auth-onboarding";
-import { getSupabaseAuthUser } from "@/lib/supabase/auth";
+import { createSupabaseAuthServerClient, getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
 import { getWorkspaceAuthStateMessage, loadWorkspaceBootstrap } from "@/services/workspace-loader";
@@ -46,6 +46,7 @@ type InviteRouteDependencies = {
   createOrUpdateTemporaryPasswordAuthIdentity: typeof createOrUpdateTemporaryPasswordAuthIdentity;
   linkPublicUserToAuthIdentity: typeof linkPublicUserToAuthIdentity;
   setPublicUserMustChangePassword: typeof setPublicUserMustChangePassword;
+  createAuthClient: typeof createSupabaseAuthServerClient;
 };
 
 function createInviteRouteDependencies(): InviteRouteDependencies {
@@ -58,6 +59,7 @@ function createInviteRouteDependencies(): InviteRouteDependencies {
     createOrUpdateTemporaryPasswordAuthIdentity,
     linkPublicUserToAuthIdentity,
     setPublicUserMustChangePassword,
+    createAuthClient: createSupabaseAuthServerClient,
   };
 }
 
@@ -431,7 +433,11 @@ export async function handleInvite(request: Request, dependencies = createInvite
     currentPersistedUser.mustChangePassword = updatedUser.mustChangePassword ?? true;
   }
 
-  const rpcClient = client as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: Record<string, unknown> | null; error: unknown }> };
+  const authenticatedClient = await dependencies.createAuthClient();
+  if (!authenticatedClient) {
+    return NextResponse.json({ ok: false, error: { code: "supabase_unavailable", message: "No pudimos preparar el alta." } }, { status: 503 });
+  }
+  const rpcClient = authenticatedClient as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: Record<string, unknown> | null; error: unknown }> };
   const { data: membershipRow, error: membershipError } = await rpcClient.rpc("upsert_organization_membership_atomic", {
     p_user_id: currentPersistedUser.id,
     p_organization_id: organizationId,
