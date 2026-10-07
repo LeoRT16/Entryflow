@@ -4233,6 +4233,9 @@ export function WorkspaceServiceProvider({
               ? "access_code"
               : "invalid";
 
+        const credentialFingerprints = { raw: fingerprintCredential(query), trimmed: fingerprintCredential(query.trim()), normalized: fingerprintCredential(query.trim().toLowerCase()), preparedQr: fingerprintCredential(guest.qrToken), preparedAccessCode: fingerprintCredential(guest.accessCode) };
+        const credentialRelationships = { rawEqualsTrimmed: query === query.trim(), rawEqualsCanonicalExact: query === guest.qrToken || query === guest.accessCode, trimmedEqualsCanonicalExact: query.trim() === guest.qrToken || query.trim() === guest.accessCode, normalizedEqualsCanonicalNormalized: query.trim().toLowerCase() === guest.qrToken?.trim().toLowerCase() || query.trim().toLowerCase() === guest.accessCode?.trim().toLowerCase() };
+
         logCheckInDiagnostic({
           attemptId: admissionAttemptId,
           buildId: admissionBuildId,
@@ -4241,8 +4244,8 @@ export function WorkspaceServiceProvider({
           guestId: guest.id,
           accessGrantId: guest.accessGrantId,
           credentialKind,
-          credentialFingerprints: { raw: fingerprintCredential(query), trimmed: fingerprintCredential(query.trim()), normalized: fingerprintCredential(query.trim().toLowerCase()), preparedQr: fingerprintCredential(guest.qrToken), preparedAccessCode: fingerprintCredential(guest.accessCode) },
-          relationships: { rawEqualsTrimmed: query === query.trim(), rawEqualsCanonicalExact: query === guest.qrToken || query === guest.accessCode, trimmedEqualsCanonicalExact: query.trim() === guest.qrToken || query.trim() === guest.accessCode, normalizedEqualsCanonicalNormalized: query.trim().toLowerCase() === guest.qrToken?.trim().toLowerCase() || query.trim().toLowerCase() === guest.accessCode?.trim().toLowerCase() },
+          credentialFingerprints,
+          relationships: credentialRelationships,
         });
 
         if (credentialKind === "invalid") {
@@ -4258,6 +4261,8 @@ export function WorkspaceServiceProvider({
             operatorProfileId: currentProfileId,
             credentialKind,
             authenticatedContext: true,
+            credentialFingerprints,
+            relationships: credentialRelationships,
           });
           notify({ title: "Acceso bloqueado", description: note, tone: "warning", icon: "alert", href: "/check-in" });
           return { result: "Bloqueado" as const, guest, note };

@@ -24,3 +24,9 @@ test("non-credential lookup cannot silently become QR or code admission", () => 
 test("credential modes reject null or empty presented values", () => {
   assert.match(sql, /p_credential_kind in \('qr_token','access_code'\).*nullif\(trim\(coalesce\(p_presented_credential,''\)\)/);
 });
+
+test("classification mismatch diagnostics retain sanitized comparison fields", () => {
+  const mismatch = service.slice(service.indexOf('stage: "credential-classification-mismatch"'));
+  assert.match(mismatch, /credentialFingerprints/);
+  assert.match(mismatch, /relationships/);
+});
