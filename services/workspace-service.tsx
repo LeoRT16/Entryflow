@@ -2230,7 +2230,7 @@ export function WorkspaceServiceProvider({
 
       const snapshot = captureSnapshot();
       try {
-        const persistedEvent = !existingEvent && event.venueId && repositories.events.createWithLayoutAtomic
+        const persistedEvent = !existingEvent && repositories.events.createWithLayoutAtomic
           ? await repositories.events.createWithLayoutAtomic(event)
           : (await persist("event", event), event);
         setEvents((current) => (current.some((item) => item.id === persistedEvent.id) ? current.map((item) => (item.id === persistedEvent.id ? persistedEvent : item)) : [persistedEvent, ...current]));
