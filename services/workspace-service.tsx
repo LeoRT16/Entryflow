@@ -18,7 +18,7 @@ import {
   buildGuestWhatsAppUpdate,
   validateGuestProfileUpdateInput,
 } from "@/features/customers/domain/customer-directory";
-import { createAdmissionAttemptId, fingerprintCredential, getAdmissionBuildId, getOperatorSafeCheckInError, logCheckInDiagnostic, searchGuests } from "@/features/check-in/domain/check-in-domain";
+import { getOperatorSafeCheckInError, searchGuests } from "@/features/check-in/domain/check-in-domain";
 import { requestReportingSyncAfterSuccess } from "@/features/reporting/sync/request-after-success";
 import { runAssignReservationTable, runReleaseReservationTable, runCloseTable } from "@/features/tables/application/atomic-table-operations";
 import { runMoveGuestToResource } from "@/features/tables/application/guest-move-operations";
@@ -3998,9 +3998,6 @@ export function WorkspaceServiceProvider({
 
   const registerCheckIn = useCallback(
     async ({ query, method, operator = method === "Manual" ? "Recepción" : "Escáner" }: { query: string; method: CheckInMethod; operator?: string; manual?: boolean }) => {
-      const admissionAttemptId = createAdmissionAttemptId();
-      const admissionBuildId = getAdmissionBuildId();
-      logCheckInDiagnostic({ attemptId: admissionAttemptId, buildId: admissionBuildId, stage: "admission-start", credentialFingerprints: { raw: fingerprintCredential(query), trimmed: fingerprintCredential(query.trim()), normalized: fingerprintCredential(query.trim().toLowerCase()) } });
       requirePermission("checkin.perform");
       if (isTerminalEventStatus(currentEvent.status)) {
         const note = "Este evento está cerrado y no admite nuevos ingresos.";
@@ -4045,24 +4042,8 @@ export function WorkspaceServiceProvider({
           event: currentEvent,
         });
         let guest = resolution.status === "found" ? resolution.guest : resolution.status === "ambiguous" ? null : findGuestByQuery(query);
-        logCheckInDiagnostic({
-          attemptId: admissionAttemptId,
-          buildId: admissionBuildId,
-          stage: "lookup-resolved",
-          eventId: currentEvent.id,
-          guestId: guest?.id,
-          accessGrantId: guest?.accessGrantId,
-          credentialFingerprints: {
-            presented: fingerprintCredential(query),
-            guestQr: fingerprintCredential(guest?.qrToken),
-            guestAccessCode: fingerprintCredential(guest?.accessCode),
-          },
-          relationships: { lookupCredentialKind: guest?.qrToken?.trim().toLowerCase() === query.trim().toLowerCase() ? "qr_token" : guest?.accessCode?.trim().toLowerCase() === query.trim().toLowerCase() ? "access_code" : "unknown" },
-        });
         if (guest && repositories.guests.prepareAuthoritativeAccess) {
-          logCheckInDiagnostic({ attemptId: admissionAttemptId, buildId: admissionBuildId, stage: "prepare-start", eventId: currentEvent.id, guestId: guest.id, accessGrantId: guest.accessGrantId });
           guest = await repositories.guests.prepareAuthoritativeAccess(guest);
-          logCheckInDiagnostic({ attemptId: admissionAttemptId, buildId: admissionBuildId, stage: "prepare-complete", eventId: currentEvent.id, guestId: guest.id, accessGrantId: guest.accessGrantId, credentialFingerprints: { preparedQr: fingerprintCredential(guest.qrToken), preparedAccessCode: fingerprintCredential(guest.accessCode) } });
           setGuests((current) => current.map((candidate) => candidate.id === guest?.id ? guest : candidate));
         }
         const accessGrantKey = guest?.accessGrantId ?? guest?.id;
@@ -4235,43 +4216,13 @@ export function WorkspaceServiceProvider({
               ? "access_code"
               : "invalid";
 
-        const credentialFingerprints = { raw: fingerprintCredential(query), trimmed: fingerprintCredential(query.trim()), normalized: fingerprintCredential(query.trim().toLowerCase()), preparedQr: fingerprintCredential(guest.qrToken), preparedAccessCode: fingerprintCredential(guest.accessCode) };
-        const credentialRelationships = { rawEqualsTrimmed: query === query.trim(), rawEqualsCanonicalExact: query === guest.qrToken || query === guest.accessCode, trimmedEqualsCanonicalExact: query.trim() === guest.qrToken || query.trim() === guest.accessCode, normalizedEqualsCanonicalNormalized: query.trim().toLowerCase() === guest.qrToken?.trim().toLowerCase() || query.trim().toLowerCase() === guest.accessCode?.trim().toLowerCase() };
-
-        logCheckInDiagnostic({
-          attemptId: admissionAttemptId,
-          buildId: admissionBuildId,
-          stage: "credential-classified",
-          eventId: currentEvent.id,
-          guestId: guest.id,
-          accessGrantId: guest.accessGrantId,
-          credentialKind,
-          credentialFingerprints,
-          relationships: credentialRelationships,
-        });
-
         if (credentialKind === "invalid") {
           const note = "El código presentado no coincide con el acceso vigente.";
-          logCheckInDiagnostic({
-            attemptId: admissionAttemptId,
-            buildId: admissionBuildId,
-            stage: "credential-classification-mismatch",
-            organizationId: currentOrganizationId,
-            eventId: currentEvent.id,
-            guestId: guest.id,
-            accessGrantId: guest.accessGrantId ?? guest.id,
-            operatorProfileId: currentProfileId,
-            credentialKind,
-            authenticatedContext: true,
-            credentialFingerprints,
-            relationships: credentialRelationships,
-          });
           notify({ title: "Acceso bloqueado", description: note, tone: "warning", icon: "alert", href: "/check-in" });
           return { result: "Bloqueado" as const, guest, note };
         }
 
         try {
-          logCheckInDiagnostic({ attemptId: admissionAttemptId, buildId: admissionBuildId, stage: "persist-start", eventId: currentEvent.id, guestId: guest.id, accessGrantId: guest.accessGrantId, credentialKind, credentialFingerprints: { presented: fingerprintCredential(query) } });
           if (repositories.checkIns.persistCompletedAtomic) {
             await repositories.checkIns.persistCompletedAtomic({
               guestId: guest.id,
@@ -4295,21 +4246,7 @@ export function WorkspaceServiceProvider({
               bundle,
             });
           }
-          logCheckInDiagnostic({ attemptId: admissionAttemptId, buildId: admissionBuildId, stage: "persist-success", eventId: currentEvent.id, guestId: guest.id, accessGrantId: guest.accessGrantId, credentialKind });
         } catch (exception) {
-          logCheckInDiagnostic({
-            attemptId: admissionAttemptId,
-            buildId: admissionBuildId,
-            stage: "rpc-error",
-            organizationId: currentOrganizationId,
-            eventId: currentEvent.id,
-            guestId: guest.id,
-            accessGrantId: guest.accessGrantId ?? guest.id,
-            operatorProfileId: currentProfileId,
-            credentialKind,
-            authenticatedContext: true,
-            error: exception,
-          });
           if (exception instanceof CheckInAlreadyConsumedError && guest) {
             const duplicateTicket = buildAccessTicketFromGuest(
               { ...guest, admissionStatus: "Ingresó", checkInTime: guest.checkInTime ?? timestampIso },

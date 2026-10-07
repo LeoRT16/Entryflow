@@ -16,6 +16,20 @@ test("oauth V2 destination routes only to OAuth request RPC", async () => {
   assert.deepEqual(calls, ["request_reporting_oauth_sync"]);
 });
 
+test("missing destination is a successful no-op and does not invoke an RPC", async () => {
+  const calls: string[] = [];
+  const result = await requestReportingSync(client(null, calls), "event");
+  assert.equal(result, null);
+  assert.deepEqual(calls, []);
+});
+
+test("disabled destination preserves no-sync semantics", async () => {
+  const calls: string[] = [];
+  const result = await requestReportingSync(client({ enabled: false, writer_mode: "service_account", sheet_schema_version: 1 }, calls), "event");
+  assert.equal(result, null);
+  assert.deepEqual(calls, []);
+});
+
 test("legacy destination routes only to legacy request RPC", async () => {
   const calls: string[] = [];
   await requestReportingSync(client({ writer_mode: "service_account", sheet_schema_version: 1, enabled: true }, calls), "event");

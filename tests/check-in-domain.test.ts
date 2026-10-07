@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildDashboardSnapshot, buildGuestQuickReadSummary, getOperatorSafeCheckInError, logCheckInDiagnostic, mapOperatorAccessPresentation, resolveGuestCheckInEligibility } from "../features/check-in/domain/check-in-domain";
+import { buildDashboardSnapshot, buildGuestQuickReadSummary, getOperatorSafeCheckInError, mapOperatorAccessPresentation, resolveGuestCheckInEligibility } from "../features/check-in/domain/check-in-domain";
 import type { Event as PlatformEvent } from "../features/domain/types";
 import type { ReservationRecord } from "../features/reservations/types";
 import type { Guest } from "../features/check-in/types";
@@ -150,22 +150,6 @@ test("los errores técnicos nunca exponen detalles del backend al operador", () 
   const message = getOperatorSafeCheckInError({ code: "23505", message: "SQLSTATE secret internal detail" });
   assert.equal(message, "No pudimos registrar el ingreso. Intenta nuevamente.");
   assert.equal(getOperatorSafeCheckInError({ code: "access_grant_revoked" }), "El acceso está bloqueado o anulado.");
-});
-
-test("check-in diagnostics retain safe RPC fields without credential values", () => {
-  const originalError = console.error;
-  let captured: unknown;
-  console.error = (...args: unknown[]) => { captured = args[1]; };
-  try {
-    logCheckInDiagnostic({ stage: "rpc-error", organizationId: "org-1", eventId: "event-1", guestId: "guest-1", accessGrantId: "grant-1", operatorProfileId: "profile-1", credentialKind: "qr_token", authenticatedContext: true, error: { code: "55000", message: "checkin_grant_invalid", details: "grant state invalid", hint: "inspect grant" } });
-  } finally {
-    console.error = originalError;
-  }
-  const serialized = JSON.stringify(captured);
-  assert.match(serialized, /55000/);
-  assert.match(serialized, /checkin_grant_invalid/);
-  assert.match(serialized, /qr_token/);
-  assert.doesNotMatch(serialized, /qr_secret|access_token|refresh_token/);
 });
 
 test("el contexto de duplicado usa el CheckIn autoritativo y sólo hace fallback para hora y puerta", () => {

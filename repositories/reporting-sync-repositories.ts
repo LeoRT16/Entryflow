@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/types";
 import type { ReportingSyncRequest } from "@/features/reporting/sync/types";
 
-export async function requestReportingSync(client: SupabaseClient<Database>, eventId: string): Promise<ReportingSyncRequest> {
+export async function requestReportingSync(client: SupabaseClient<Database>, eventId: string): Promise<ReportingSyncRequest | null> {
   const routed = client as unknown as {
     from: (table: string) => { select: (columns: string) => { eq: (column: string, value: string) => { eq: (column: string, value: string) => { is: (column: string, value: null) => Promise<{ data: unknown; error: Error | null }> } } } };
     rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: Error | null }>;
@@ -10,6 +10,7 @@ export async function requestReportingSync(client: SupabaseClient<Database>, eve
   const destination = await routed.from("reporting_destinations").select("writer_mode,sheet_schema_version,enabled").eq("event_id", eventId).eq("provider", "google_sheets").is("deleted_at", null);
   if (destination.error) throw destination.error;
   const row = Array.isArray(destination.data) ? destination.data[0] as Record<string, unknown> | undefined : destination.data as Record<string, unknown> | null;
+  if (!row || row.enabled === false) return null;
   const rpcName = row?.writer_mode === "oauth_user" && Number(row.sheet_schema_version) === 2
     ? "request_reporting_oauth_sync"
     : "request_reporting_sync";

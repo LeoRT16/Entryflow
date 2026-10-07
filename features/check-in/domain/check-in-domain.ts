@@ -106,63 +106,6 @@ export function getOperatorSafeCheckInError(error: unknown) {
   return "No pudimos registrar el ingreso. Intenta nuevamente.";
 }
 
-export function logCheckInDiagnostic(input: {
-  attemptId?: string;
-  buildId?: string;
-  stage: string;
-  organizationId?: string;
-  eventId?: string;
-  guestId?: string;
-  accessGrantId?: string;
-  operatorProfileId?: string;
-  credentialKind?: string;
-  authenticatedContext?: boolean;
-  error?: unknown;
-  credentialFingerprints?: Record<string, unknown>;
-  relationships?: Record<string, unknown>;
-}) {
-  const error = input.error && typeof input.error === "object" ? input.error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown } : undefined;
-  const payload = {
-    marker: "[checkin:admission-diagnostic]",
-    attemptId: input.attemptId,
-    buildId: input.buildId,
-    stage: input.stage,
-    organizationId: input.organizationId,
-    eventId: input.eventId,
-    guestId: input.guestId,
-    accessGrantId: input.accessGrantId,
-    operatorProfileId: input.operatorProfileId,
-    credentialKind: input.credentialKind,
-    authenticatedContext: input.authenticatedContext,
-    credentialFingerprints: input.credentialFingerprints,
-    relationships: input.relationships,
-    ...(error ? { code: error.code, message: error.message, details: error.details, hint: error.hint } : {}),
-  };
-  if (input.stage === "rpc-error") {
-    console.error("[checkin:persist-completed-rpc-error]", { rpcName: "persist_completed_checkin_atomic", ...payload });
-  } else {
-    console.warn("[checkin:admission-diagnostic]", payload);
-  }
-}
-
-export function createAdmissionAttemptId() {
-  return `adm-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-export function getAdmissionBuildId() {
-  return process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? process.env.NEXT_PUBLIC_BUILD_ID ?? "unknown";
-}
-
-export function fingerprintCredential(value: string | undefined) {
-  if (value === undefined) return undefined;
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return { length: value.length, fingerprint: (hash >>> 0).toString(16).padStart(8, "0") };
-}
-
 export function searchGuests(guests: Guest[], query: string) {
   const normalizedQuery = normalizeCheckInText(query);
 
