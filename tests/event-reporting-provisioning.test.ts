@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 
-const migration = new URL("../supabase/migrations/20261024000000_event_reporting_provisioning_intent.sql", import.meta.url);
+const migration = new URL("../supabase/migrations/20261027000000_event_reporting_provisioning_intent.sql", import.meta.url);
 
 test("Event creation migration preserves layout behavior and records eligible Reporting intent", async () => {
   const sql = await readFile(migration, "utf8");
