@@ -20,6 +20,7 @@ export type OrganizationRepository = CrudRepository<Organization> & {
 };
 
 export type EventRepository = CrudRepository<PlatformEvent> & {
+  createWithLayoutAtomic?(event: PlatformEvent): Promise<PlatformEvent>;
   setActive(eventId: string): void;
   setStatus(eventId: string, status: PlatformEvent["status"]): void;
   activate(eventId: string): Promise<{ activatedEventId: string; previousLiveEventId: string | null }>;

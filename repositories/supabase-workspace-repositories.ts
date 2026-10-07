@@ -221,6 +221,7 @@ export type SupabaseWorkspaceRepositories = {
     moveToSector(resourceId: string, sectorId: string): Promise<void>;
   };
   events: SupabaseCrudRepository<PlatformEvent> & {
+    createWithLayoutAtomic(event: PlatformEvent): Promise<PlatformEvent>;
     setActive(eventId: string): Promise<void>;
     setStatus(eventId: string, status: PlatformEvent["status"]): Promise<void>;
     activate(eventId: string): Promise<import('./workspace-repositories').EventActivationResult>;
@@ -804,6 +805,19 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
   });
 
   const events = eventsBase;
+  (events as SupabaseWorkspaceRepositories["events"]).createWithLayoutAtomic = async (event: PlatformEvent) => {
+    if (!client) throw new Error("Supabase client is unavailable.");
+    const row = mapEventToRow(event);
+    const { data, error } = await client.rpc("create_event_with_layout_atomic" as never, {
+      p_id: row.id, p_organization_id: row.organization_id, p_name: row.name, p_description: row.description,
+      p_event_type: row.event_type, p_status: row.status, p_start_at: row.start_at, p_end_at: row.end_at,
+      p_timezone: row.timezone, p_venue_id: row.venue_id, p_venue: row.venue, p_capacity: row.capacity,
+      p_enabled_modules: row.enabled_modules, p_operational_model: row.operational_model,
+      p_admission_methods: row.admission_methods, p_resource_types: row.resource_types, p_icon: row.icon, p_metadata: row.metadata,
+    } as never);
+    if (error) throw error;
+    return mapEventRowToDomain((data as { event: EventRow }).event);
+  };
 
   const reservations = buildCrudRepository<ReservationRecord, ReservationRow>({
     client,
@@ -1073,6 +1087,7 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
     },
     events: {
       ...events,
+      createWithLayoutAtomic: (events as SupabaseWorkspaceRepositories["events"]).createWithLayoutAtomic,
       async setActive(eventId: string) {
         if (!client) {
           return;

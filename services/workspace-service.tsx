@@ -2230,12 +2230,14 @@ export function WorkspaceServiceProvider({
 
       const snapshot = captureSnapshot();
       try {
-        setEvents((current) => (current.some((item) => item.id === event.id) ? current.map((item) => (item.id === event.id ? event : item)) : [event, ...current]));
-        await persist("event", event);
+        const persistedEvent = !existingEvent && event.venueId && repositories.events.createWithLayoutAtomic
+          ? await repositories.events.createWithLayoutAtomic(event)
+          : (await persist("event", event), event);
+        setEvents((current) => (current.some((item) => item.id === persistedEvent.id) ? current.map((item) => (item.id === persistedEvent.id ? persistedEvent : item)) : [persistedEvent, ...current]));
         await requestReportingAfterSuccess(event.id);
         setCurrentOrganizationIdState(event.organizationId);
         setCurrentEventIdWithTrace(event.id, "event-created");
-        return event;
+        return persistedEvent;
       } catch (exception) {
         restoreSnapshot(snapshot);
         throw exception;
