@@ -5,7 +5,6 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import StatusBadge from "@/components/status-badge";
 import { formatEventWallDateTime } from "@/lib/date-time";
 import QrCameraScanner from "@/features/check-in/components/qr-camera-scanner";
-import { buildGuestSearchIndex } from "@/features/check-in/utils";
 import {
   buildGuestQuickReadSummary,
   formatGuestCarnetLabel,
@@ -210,7 +209,11 @@ function CheckInWorkspace() {
       return;
     }
 
-    await submitCheckIn(selectedGuest, buildGuestSearchIndex(selectedGuest), validationMethod);
+    const presentedCredential = query;
+    const normalizedCredential = presentedCredential.trim().toLowerCase();
+    const isCredentialMatch = normalizedCredential === selectedGuest.qrToken?.trim().toLowerCase()
+      || normalizedCredential === selectedGuest.accessCode?.trim().toLowerCase();
+    await submitCheckIn(selectedGuest, presentedCredential, isCredentialMatch ? "QR" : validationMethod);
   };
 
   const resetAdmissionState = () => {
