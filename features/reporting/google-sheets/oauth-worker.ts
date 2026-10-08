@@ -6,6 +6,7 @@ import { buildGoogleSheetsProjection, buildWorkbookDatasetHashInput, hashWorkboo
 import { AtomicWorkbookWriterError, createAtomicGoogleSheetsTransport, safeGoogleSheetsDiagnostic, updateAtomicWorkbookSyncTimestamp, writeAtomicWorkbookSnapshot, type AtomicGoogleSheetsTransport } from "./atomic-writer";
 import { canSkipReportingWrite } from "@/features/reporting/sync/skip";
 import { computeReportingRetryAt } from "@/features/reporting/sync/worker/retry";
+import { classifyReportingFailure } from "@/features/reporting/recovery";
 
 export type ClaimedOAuthReportingWork = { outboxId: string; syncRunId: string; destinationId: string; organizationId: string; eventId: string; requestedSequence: number; attempts: number; provider: string; spreadsheetId: string | null; sheetSchemaVersion: number; writerMode: string };
 export type OAuthReportingRepository = {
@@ -20,14 +21,15 @@ export type OAuthReportingBatchResult = { claimed: number; synced: number; skipp
 
 function classify(error: unknown): { code: string; status: OAuthFailureStatus; recoverable: boolean } {
   if (error instanceof AtomicWorkbookWriterError) {
-    if (error.code === "google_invalid_grant" || error.code === "google_auth_failed") return { code: error.code, status: "needs_reauth", recoverable: false };
     if (error.code === "google_scope_insufficient") return { code: error.code, status: "needs_scope_upgrade", recoverable: false };
-    if (error.code === "google_permission_denied" || error.code === "spreadsheet_not_found" || error.code === "managed_sheet_needs_action") return { code: error.code, status: "needs_action", recoverable: false };
-    if (error.recoverable) return { code: error.code, status: "retry", recoverable: true };
+    const policy = classifyReportingFailure(error.code);
+    if (policy === "REAUTH_REQUIRED") return { code: error.code, status: "needs_reauth", recoverable: false };
+    if (policy === "NEEDS_ACTION" || policy === "REPAIRABLE_DRIFT") return { code: error.code, status: "needs_action", recoverable: false };
+    if (policy === "AUTO_RETRY") return { code: error.code, status: "retry", recoverable: true };
     return { code: error.code, status: "failed", recoverable: false };
   }
   if (process.env.NODE_ENV !== "production") console.error("[oauth-reporting]", safeGoogleSheetsDiagnostic(error, "oauth_reporting_sync"));
-  return { code: "reporting_sync_failed", status: "retry", recoverable: true };
+  return { code: "unknown_reporting_failure", status: "failed", recoverable: false };
 }
 
 export async function processOAuthReportingSyncBatch(deps: OAuthReportingWorkerDependencies, workerId: string, limit = 5): Promise<OAuthReportingBatchResult> {

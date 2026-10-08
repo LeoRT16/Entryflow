@@ -43,3 +43,13 @@ test("recovery clears only stale authorization errors after connected recovery",
   assert.match(fix, /set last_error_code=null/);
   assert.doesNotMatch(fix, /02cf45fb-25fe-4287-be1f-71154bb102b3/);
 });
+
+test("terminal retry migration preserves work identity and rejects broad retry", () => {
+  const fix = readFileSync("supabase/migrations/20261101000000_reporting_terminal_retry_policy.sql", "utf8");
+  assert.match(fix, /retry_reporting_terminal_work/);
+  assert.match(fix, /status='dead'/);
+  assert.match(fix, /requested_sequence/);
+  assert.match(fix, /reporting_retry_audit/);
+  assert.match(fix, /reporting_retry_not_allowed/);
+  assert.doesNotMatch(fix, /insert into public\.reporting_outbox/);
+});
