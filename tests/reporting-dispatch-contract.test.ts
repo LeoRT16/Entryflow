@@ -19,3 +19,10 @@ test("unified reporting route isolates stage failures", () => {
   assert.ok(route.includes('stages.spreadsheet = { error: "spreadsheet_worker_failed" }'));
   assert.ok(route.includes('stages.sync = { error: "sync_worker_failed" }'));
 });
+
+test("legacy runtime is optional and lazy", () => {
+  assert.ok(route.includes("hasLegacyReportingRuntimeConfig"));
+  assert.ok(route.includes('status: "skipped", reason: "legacy_runtime_not_configured"'));
+  assert.ok(route.indexOf("if (hasLegacyReportingRuntimeConfig())") < route.indexOf("loadWorkspaceBootstrap({"));
+  assert.ok(route.includes("processOAuthReportingSyncBatch(createOAuthReportingWorkerDependencies(client"));
+});
