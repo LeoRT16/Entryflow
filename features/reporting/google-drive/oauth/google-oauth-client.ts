@@ -8,7 +8,7 @@ export const GOOGLE_DRIVE_OAUTH_SCOPES = [
 ] as const;
 
 export type GoogleOAuthConfig = { clientId: string; clientSecret: string; redirectUri: string };
-export type GoogleOAuthErrorCode = "google_oauth_not_configured" | "google_oauth_code_exchange_failed" | "google_oauth_refresh_failed";
+export type GoogleOAuthErrorCode = "google_oauth_not_configured" | "google_oauth_code_exchange_failed" | "google_oauth_refresh_failed" | "google_oauth_account_mismatch";
 export class GoogleOAuthError extends Error { constructor(public readonly code: GoogleOAuthErrorCode, message: string) { super(message); this.name = "GoogleOAuthError"; } }
 
 
