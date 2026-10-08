@@ -30,6 +30,12 @@ export async function requestReportingReconciliationBatch(client: SupabaseClient
   return (data ?? { destinations_considered: 0, requested: 0, failed: 0 }) as { destinations_considered: number; requested: number; failed: number };
 }
 
+export async function reconcileReportingAutomaticDestinations(client: SupabaseClient<Database>, limit = 100) {
+  const { data, error } = await (client as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: Error | null }> }).rpc("reconcile_reporting_destinations_automatic", { p_limit: limit });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data ?? { destinations_considered: 0, activated: 0, failed: 0 }) as { destinations_considered: number; activated: number; failed: number };
+}
+
 export const requestFinalEventReportingSync = requestReportingSync;
 
 export async function getReportingDestination(client: SupabaseClient<Database>, eventId: string) {
