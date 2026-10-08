@@ -15,7 +15,7 @@ export type OAuthReportingRepository = {
   completeFailure(work: ClaimedOAuthReportingWork, code: string, failureStatus: OAuthFailureStatus, recoverable: boolean, nextAvailableAt: string): Promise<void>;
 };
 export type OAuthFailureStatus = "retry" | "needs_reauth" | "needs_action" | "needs_scope_upgrade" | "failed";
-export type OAuthReportingWorkerDependencies = { repository: OAuthReportingRepository; loadReport(eventId: string): Promise<EventReport>; readRefreshToken(organizationId: string): Promise<string>; createTransport(refreshToken: string): AtomicGoogleSheetsTransport; now?: () => Date };
+export type OAuthReportingWorkerDependencies = { repository: OAuthReportingRepository; loadReport(eventId: string, organizationId: string): Promise<EventReport>; readRefreshToken(organizationId: string): Promise<string>; createTransport(refreshToken: string): AtomicGoogleSheetsTransport; now?: () => Date };
 export type OAuthReportingBatchResult = { claimed: number; synced: number; skipped: number; failed: number };
 
 function classify(error: unknown): { code: string; status: OAuthFailureStatus; recoverable: boolean } {
@@ -39,7 +39,7 @@ export async function processOAuthReportingSyncBatch(deps: OAuthReportingWorkerD
     try {
       if (work.writerMode !== "oauth_user" || work.sheetSchemaVersion !== 2) throw new AtomicWorkbookWriterError("google_write_failed", "OAuth workbook schema is unsupported.", false);
       if (!work.spreadsheetId) throw new AtomicWorkbookWriterError("spreadsheet_not_found", "The spreadsheet is unavailable.", false);
-      const report = await deps.loadReport(work.eventId);
+      const report = await deps.loadReport(work.eventId, work.organizationId);
       const projection = buildGoogleSheetsProjection(report, { snapshotTimestamp });
       const hash = hashWorkbookDataset(buildWorkbookDatasetHashInput(projection));
       const transport = deps.createTransport(await deps.readRefreshToken(work.organizationId));
@@ -94,7 +94,7 @@ export async function readOAuthReportingRefreshToken(client: SupabaseClient<Data
 
 export function createOAuthReportingWorkerDependencies(
   client: SupabaseClient<Database>,
-  loadReport: (eventId: string) => Promise<EventReport>,
+  loadReport: (eventId: string, organizationId: string) => Promise<EventReport>,
   options: { now?: () => Date } = {},
 ): OAuthReportingWorkerDependencies {
   return {
