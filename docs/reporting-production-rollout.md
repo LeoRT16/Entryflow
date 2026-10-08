@@ -4,7 +4,7 @@ EntryFlow beta keeps Vercel Hobby and does not use Vercel Cron. The production
 scheduler decision is Supabase `pg_cron` + `pg_net` calling the protected Node
 endpoints:
 
-- `GET /api/reporting/worker` every minute
+- `GET /api/reporting/worker` every minute (Drive provisioning, Spreadsheet provisioning, and Reporting sync in bounded stages)
 - `GET /api/reporting/reconciliation` every ten minutes
 
 This configuration is intentionally deferred until the production rollout
