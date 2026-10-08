@@ -145,7 +145,7 @@ function GoogleSheetsSettingsCard({ eventId, eventName, organizationId, authRead
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [busy, setBusy] = useState(false);
   const [provisioning, setProvisioning] = useState<"idle" | "pending">("idle");
-  const [driveConnected, setDriveConnected] = useState(false);
+  const [driveIntegration, setDriveIntegration] = useState<{ connected: boolean; status?: string | null; errorCode?: string | null }>({ connected: false });
   const [editingSheet, setEditingSheet] = useState(false);
   const mutationLockRef = useRef(false);
   const requestVersion = useRef(0);
@@ -171,9 +171,10 @@ function GoogleSheetsSettingsCard({ eventId, eventName, organizationId, authRead
   // The effect hydrates persisted integration state after the event context is ready.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [eventId, organizationId, authReady]);
-  useEffect(() => { let active = true; void fetch(`/api/integrations/google-drive/status?organizationId=${encodeURIComponent(organizationId)}`).then((response) => response.ok ? response.json() : null).then((value) => { if (active) setDriveConnected(value?.connected === true); }).catch(() => undefined); return () => { active = false; }; }, [organizationId]);
+  useEffect(() => { let active = true; void fetch(`/api/integrations/google-drive/status?organizationId=${encodeURIComponent(organizationId)}`).then((response) => response.ok ? response.json() : null).then((value) => { if (active) setDriveIntegration({ connected: value?.connected === true, status: value?.status ?? null, errorCode: value?.errorCode ?? null }); }).catch(() => undefined); return () => { active = false; }; }, [organizationId]);
   const status = buildReportingSyncStatus({ destination: destination as never });
-  const recovery = buildReportingRecoveryStatus({ integrationStatus: driveConnected ? "connected" : "", enabled: destination?.enabled as boolean | null, lastError: destination?.last_error as string | null, lastRequestedSequence: destination?.last_requested_sequence as number | null, lastProcessedSequence: destination?.last_processed_sequence as number | null });
+  const driveConnected = driveIntegration.connected;
+  const recovery = buildReportingRecoveryStatus({ integrationStatus: driveIntegration.status, integrationErrorCode: driveIntegration.errorCode, enabled: destination?.enabled as boolean | null, lastError: destination?.last_error as string | null, lastRequestedSequence: destination?.last_requested_sequence as number | null, lastProcessedSequence: destination?.last_processed_sequence as number | null });
   const persistedSpreadsheetId = String(destination?.spreadsheet_id ?? "");
   const save = async (nextEnabled: boolean, nextSpreadsheetId: string, operation: "save" | "disable" | "enable") => {
     if (!client || busy || mutationLockRef.current) return;

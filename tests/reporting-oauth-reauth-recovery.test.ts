@@ -35,3 +35,11 @@ test("recovery is organization scoped and idempotent by status transition", () =
   assert.match(migration, /status='pending'/);
   assert.match(migration, /grant execute on function public\.recover_reporting_google_authorization\(uuid\) to service_role/);
 });
+
+test("recovery clears only stale authorization errors after connected recovery", () => {
+  const fix = readFileSync("supabase/migrations/20261031000000_reporting_oauth_recovery_error_cleanup.sql", "utf8");
+  assert.match(fix, /status='connected'/);
+  assert.match(fix, /last_error_code in \('google_invalid_grant','google_auth_failed'\)/);
+  assert.match(fix, /set last_error_code=null/);
+  assert.doesNotMatch(fix, /02cf45fb-25fe-4287-be1f-71154bb102b3/);
+});

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildReportingRecoveryStatus } from "../features/reporting/sync/recovery-status";
 
 test("healthy connected reporting is healthy", () => assert.equal(buildReportingRecoveryStatus({ integrationStatus: "connected", enabled: true, lastRequestedSequence: 1, lastProcessedSequence: 1 }).state, "HEALTHY"));
+test("connected integration ignores historical authorization error", () => assert.equal(buildReportingRecoveryStatus({ integrationStatus: "connected", integrationErrorCode: "google_invalid_grant", enabled: true, lastRequestedSequence: 1, lastProcessedSequence: 1 }).state, "HEALTHY"));
 test("authorization failures require reconnection", () => {
   const status = buildReportingRecoveryStatus({ integrationStatus: "needs_reauth", integrationErrorCode: "google_invalid_grant" });
   assert.equal(status.state, "NEEDS_REAUTH"); assert.equal(status.canReconnect, true); assert.match(status.label, /reconexión/);
