@@ -12,10 +12,17 @@ const metadata: AtomicWorkbookMetadata = { spreadsheetId: "sheet", title: "Entry
 const report = buildEventReport(buildEventReportFixtureInput());
 function make(overrides: Partial<OAuthReportingWorkerDependencies> = {}) {
   const completions: unknown[][] = []; const calls: sheets_v4.Schema$BatchUpdateSpreadsheetRequest[] = [];
+  const reportLoads: string[][] = [];
   const transport: AtomicGoogleSheetsTransport = { getWorkbookMetadata: async () => metadata, batchUpdate: async (_id, body) => { calls.push(structuredClone(body)); } };
-  const deps: OAuthReportingWorkerDependencies = { repository: { claim: async () => [work], lastSuccessfulHash: async () => null, completeSuccess: async (...args) => { completions.push(["success", ...args]); }, completeFailure: async (...args) => { completions.push(["failure", ...args]); } }, loadReport: async () => report, readRefreshToken: async () => "synthetic-refresh-token", createTransport: () => transport, now: () => new Date("2026-09-18T17:45:00.000Z"), ...overrides };
-  return { deps, completions, calls, transport };
+  const deps: OAuthReportingWorkerDependencies = { repository: { claim: async () => [work], lastSuccessfulHash: async () => null, completeSuccess: async (...args) => { completions.push(["success", ...args]); }, completeFailure: async (...args) => { completions.push(["failure", ...args]); } }, loadReport: async (eventId, organizationId) => { reportLoads.push([eventId, organizationId]); return report; }, readRefreshToken: async () => "synthetic-refresh-token", createTransport: () => transport, now: () => new Date("2026-09-18T17:45:00.000Z"), ...overrides };
+  return { deps, completions, calls, transport, reportLoads };
 }
+
+test("OAuth worker passes the claimed event and organization identities to report loading", async () => {
+  const { deps, reportLoads } = make();
+  await processOAuthReportingSyncBatch(deps, "oauth-worker");
+  assert.deepEqual(reportLoads, [[work.eventId, work.organizationId]]);
+});
 
 test("OAuth V2 worker writes one snapshot and persists the identical logical success timestamp", async () => {
   const { deps, completions, calls } = make();
