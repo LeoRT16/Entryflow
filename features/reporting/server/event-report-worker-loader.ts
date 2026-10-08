@@ -19,9 +19,9 @@ export async function loadEventReportForWorker(client: SupabaseClient<Database>,
   const eventResult = await db.from("events").select("*").eq("id", input.eventId).is("deleted_at", null).maybeSingle();
   if (eventResult.error || !eventResult.data) throw new WorkerEventReportScopeError();
   const eventRow = eventResult.data as EventRow;
-  if (eventRow.organization_id !== input.organizationId) throw new WorkerEventReportScopeError();
+  if (eventRow.deleted_at !== null || eventRow.organization_id !== input.organizationId) throw new WorkerEventReportScopeError();
   const orgResult = await db.from("organizations").select("*").eq("id", input.organizationId).is("deleted_at", null).maybeSingle();
-  if (orgResult.error || !orgResult.data) throw new WorkerEventReportScopeError();
+  if (orgResult.error || !orgResult.data || (orgResult.data as OrganizationRow).deleted_at !== null) throw new WorkerEventReportScopeError();
   const organization = mapOrganizationRowToDomain(orgResult.data as OrganizationRow);
   if (organization.status !== "active") throw new WorkerEventReportScopeError();
 
