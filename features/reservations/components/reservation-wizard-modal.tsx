@@ -210,7 +210,7 @@ export default function ReservationWizardModal({
 
   const liveSummary = [
     { label: "Código", value: wizardMode === "edit" ? selectedActiveReservation?.code ?? "" : "RES-0108-DB" },
-    { label: isPresale ? "Accesos comprados" : isCourtesy ? "Personas" : "Invitados", value: `${isPresale ? accessQuantity : guestCount}` },
+    { label: isPresale ? "Accesos comprados" : isCourtesy ? "Personas" : "Invitados", value: `${isPresale ? accessQuantity : isCourtesy ? registeredGuests : guestCount}` },
     ...(!isNonPhysical ? [{ label: "Recurso", value: visibleResource?.name ?? "Sin recurso" }] : []),
     ...(!isCourtesy ? [{ label: "Monto", value: formatCurrency(amount) }, { label: "Pago", value: paymentStatus }] : []),
   ];
@@ -543,7 +543,7 @@ export default function ReservationWizardModal({
                       {!isCourtesy ? <LiveSummaryRow label="Recurso" value={visibleResource?.name ?? "Sin recurso"} /> : null}
                       <LiveSummaryRow
                         label={isCourtesy ? "Personas" : "Invitados"}
-                        value={`${registeredGuests} / ${isPresale ? accessQuantity : guestCount}`}
+                        value={isCourtesy ? `${registeredGuests}` : `${registeredGuests} / ${isPresale ? accessQuantity : guestCount}`}
                       />
                     </div>
                   </div>
@@ -1426,7 +1426,7 @@ function SummaryStep({
   paymentStatus: PaymentStatus;
 }) {
   const invitationRows: Array<[string, string]> = [
-    ["Cantidad", `${isPresale ? accessQuantity : guestCount}`],
+    ["Cantidad", `${isPresale ? accessQuantity : isCourtesy ? guests.filter((guest) => guest.name.trim()).length : guestCount}`],
     ["Registrados", `${guests.filter((guest) => guest.name.trim()).length}`],
   ];
 

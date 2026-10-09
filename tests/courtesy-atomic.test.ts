@@ -35,7 +35,7 @@ test("courtesy atomic fix keeps reservation insert expressions aligned with its 
 });
 
 test("deployed courtesy corrective migration preserves atomic multi-guest creation", () => {
-  const sql = readFileSync("supabase/migrations/20261021000000_courtesy_reservation_atomic_deployed_fix.sql", "utf8");
+  const sql = readFileSync("supabase/migrations/20261105000000_courtesy_reservation_atomic_fix.sql", "utf8");
   assert.match(sql, /create or replace function public\.create_courtesy_reservation_atomic\(p_reservation jsonb, p_guests jsonb\)/);
   assert.match(sql, /holder_name,holder_document,holder_whatsapp,holder_email,reservation_type/);
   assert.match(sql, /0,'','','','', 'Cortesía','Pendiente','0','0'/);
@@ -59,4 +59,11 @@ test("courtesy wizard does not expose presale quantity or pending-capacity langu
   const source = readFileSync("features/reservations/components/reservation-wizard-modal.tsx", "utf8");
   assert.match(source, /\) : isPresale \?/);
   assert.match(source, /isCourtesy \? `\$\{registeredGuests\} personas registradas`/);
+});
+
+test("courtesy wizard summary uses registered guests as its quantity", () => {
+  const source = readFileSync("features/reservations/components/reservation-wizard-modal.tsx", "utf8");
+  assert.match(source, /isCourtesy \? registeredGuests : guestCount/);
+  assert.match(source, /isCourtesy \? `\$\{registeredGuests\}` : `\$\{registeredGuests\} \/ \$\{isPresale \? accessQuantity : guestCount\}`/);
+  assert.match(source, /isCourtesy \? guests\.filter\(\(guest\) => guest\.name\.trim\(\)\)\.length : guestCount/);
 });
