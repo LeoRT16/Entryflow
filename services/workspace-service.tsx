@@ -4325,7 +4325,6 @@ export function WorkspaceServiceProvider({
           consumedAccessGrantIdsRef.current.add(accessGrantKey);
         }
         upsertPersistedTimelineEvent(bundle.timelineEntry);
-        await requestReportingAfterSuccess(currentEvent.id);
         notify({
           title: result.title,
           description: result.note,
