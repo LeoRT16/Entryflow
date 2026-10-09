@@ -1,43 +1,30 @@
 import PDFDocument from "pdfkit";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { EventReport } from "@/features/reporting/types";
+import type { EventReport, MoneyValue, ResourceReport } from "@/features/reporting/types";
 
 const FONT = join(process.cwd(), "assets/fonts/NotoSans.ttf");
 const BOLD_FONT = join(process.cwd(), "assets/fonts/NotoSans-Bold.woff");
-function wrap(value: string, width = 92) { const words = value.split(/\s+/); const out: string[] = []; let line = ""; for (const word of words) { if ((line ? line.length + 1 : 0) + word.length > width) { if (line) out.push(line); line = word; } else line = line ? `${line} ${word}` : word; } if (line) out.push(line); return out.length ? out : [""]; }
+const NAVY = "#17324d", BLUE = "#2f6f9f", INK = "#1f2933", MUTED = "#667788", LINE = "#d8e0e7", PALE = "#f3f7fa";
+function money(v?: MoneyValue) { return !v || v.amount === null || !v.complete ? "Sin dato" : `${v.currency ?? ""} ${v.amount.toLocaleString("es-BO")}`.trim(); }
+function amount(v?: MoneyValue) { return v?.amount ?? 0; }
+function safe(v: unknown, fallback = "Sin dato") { return v === null || v === undefined || v === "" ? fallback : String(v); }
+function rule(d: PDFKit.PDFDocument, y: number) { d.strokeColor(LINE).lineWidth(.7).moveTo(42,y).lineTo(750,y).stroke(); }
+function heading(d: PDFKit.PDFDocument, title: string, subtitle: string) { d.fillColor(NAVY).font("NotoBold").fontSize(20).text(title,42,38); d.fillColor(MUTED).font("Noto").fontSize(9).text(subtitle,42,64); rule(d,82); }
+function card(d: PDFKit.PDFDocument,x:number,y:number,w:number,label:string,value:string,accent=BLUE) { d.roundedRect(x,y,w,53,5).fillAndStroke(PALE,LINE); d.rect(x,y,4,53).fill(accent); d.fillColor(MUTED).font("Noto").fontSize(8).text(label.toUpperCase(),x+13,y+10,{width:w-20}); d.fillColor(INK).font("NotoBold").fontSize(16).text(value,x+13,y+25,{width:w-20}); }
+function tableHeader(d: PDFKit.PDFDocument,y:number,cols:Array<[string,number]>) { d.rect(42,y,708,23).fill(NAVY); let x=52; d.fillColor("white").font("NotoBold").fontSize(8); for(const [label,w] of cols){d.text(label,x,y+8,{width:w});x+=w;} }
+function row(d: PDFKit.PDFDocument,y:number,vals:Array<[string,number]>,shade:boolean) { if(shade)d.rect(42,y,708,22).fill(PALE); let x=52; d.fillColor(INK).font("Noto").fontSize(8); for(const [v,w] of vals){d.text(v,x,y+7,{width:w,ellipsis:true});x+=w;} rule(d,y+22); }
+function chart(d: PDFKit.PDFDocument,x:number,y:number,w:number,items:Array<[string,number,string]>) { const max=Math.max(1,...items.map(([,v])=>v)); d.fillColor(NAVY).font("NotoBold").fontSize(10).text("Distribución comercial",x,y); items.forEach(([label,v,color],i)=>{const yy=y+24+i*27;d.fillColor(MUTED).font("Noto").fontSize(8).text(label,x,yy,{width:105});d.roundedRect(x+108,yy-1,w-155,12,3).fill("#e8eef3");d.roundedRect(x+108,yy-1,Math.max(2,(w-155)*v/max),12,3).fill(color);d.fillColor(INK).font("NotoBold").fontSize(8).text(`BOB ${v.toLocaleString("es-BO")}`,x+w-45,yy,{width:45,align:"right"});}); }
 
-/** PDFKit embeds the OFL-licensed Noto Sans TrueType font with a Unicode ToUnicode map. */
+/** Executive/admin PDF. It deliberately omits attendee-level PII; Sheets remains the operational detail surface. */
 export async function renderFinalEventReportPdf(report: EventReport): Promise<Buffer> {
-  const attendees = report.attendees ?? [];
-  const lines = [
-    "ENTRYFLOW  |  INFORME FINAL DEL EVENTO", report.metadata.eventName,
-    `${report.metadata.organizationName}  |  ${report.metadata.venueName}`, `Finalizado: ${report.metadata.generatedAt}`, "",
-    "RESUMEN COMERCIAL Y OPERATIVO",
-    `Reservas activas: ${report.summary.activeReservations}   Canceladas: ${report.summary.cancelledReservations}`,
-    `Personas operativas: ${report.summary.operationalPeople}   Históricas: ${report.summary.historicalPeople}`,
-    `Ingresaron: ${report.summary.checkedInPeople}   Pendientes: ${report.summary.pendingPeople}`,
-    `Preventas: ${report.summary.presalePurchases}   Cortesías: ${report.summary.activeCourtesyPeople}   Pulseras extra: ${report.summary.activeExtraWristbands}`,
-    `Total comercial: ${report.commercial?.sold?.total?.amount ?? "—"} ${report.commercial?.sold?.total?.currency ?? ""}`, "",
-    "ASISTENTES", "Nombre | Carnet | Reserva | Estado | Zona/Recurso",
-    ...attendees.map((a) => `${a.name || "—"} | ${a.carnet || "—"} | ${a.reservationCode || "—"} | ${a.admissionStatus || "—"} | ${a.zoneName ?? "—"}/${a.resourceName ?? "—"}`),
-  ].flatMap(wrap);
-  const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true, autoFirstPage: true });
-  const chunks: Buffer[] = []; doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-  const font = readFileSync(FONT);
-  doc.registerFont("Noto", font);
-  doc.registerFont("NotoBold", readFileSync(BOLD_FONT));
-  doc.font("Noto").fontSize(9);
-  const pageLines = 49;
-  for (let i = 0; i < lines.length; i += pageLines) {
-    if (i) doc.addPage();
-    const page = lines.slice(i, i + pageLines);
-    page.forEach((line, offset) => {
-      const global = i + offset;
-      doc.font([0, 5, 10, 12, 13].includes(global) ? "NotoBold" : "Noto").text(line, { lineGap: 5 });
-    });
-  }
-  const totalPages = doc.bufferedPageRange().count;
-  for (let i = 0; i < totalPages; i++) { doc.switchToPage(i); doc.font("NotoBold").fontSize(8).text(`Página ${i + 1} de ${totalPages}`, 50, 805, { align: "left" }); }
-  return await new Promise<Buffer>((resolve) => { doc.on("end", () => resolve(Buffer.concat(chunks))); doc.end(); });
+  const d=new PDFDocument({size:"LETTER",layout:"landscape",margin:42,bufferPages:true,autoFirstPage:true}); const chunks:Buffer[]=[]; d.on("data",(c:Buffer)=>chunks.push(c)); d.registerFont("Noto",readFileSync(FONT)); d.registerFont("NotoBold",readFileSync(BOLD_FONT));
+  const s=report.summary,c=report.commercial.sold;
+  heading(d,"Informe final del evento","Resumen ejecutivo y administrativo · EntryFlow"); d.fillColor(INK).font("NotoBold").fontSize(17).text(safe(report.metadata.eventName),42,100,{width:470}); d.fillColor(MUTED).font("Noto").fontSize(10).text(`${safe(report.metadata.organizationName)}  ·  ${safe(report.metadata.venueName)}`,42,128); d.text(`Fecha del evento: ${safe(report.metadata.eventStartAt)}    ·    Finalización: ${safe(report.metadata.generatedAt)}`,42,146);
+  card(d,42,185,132,"Registrados",String(s.operationalPeople)); card(d,184,185,132,"Ingresados",String(s.checkedInPeople),"#23866d"); card(d,326,185,132,"Pendientes",String(s.pendingPeople),"#c88728"); card(d,468,185,132,"Asistencia",s.operationalPeople?`${((s.checkedInPeople/s.operationalPeople)*100).toFixed(1)}%`:"0%","#23866d"); card(d,610,185,140,"Valor registrado",money(c.total),NAVY);
+  d.fillColor(NAVY).font("NotoBold").fontSize(10).text("Estado operativo",42,268); d.fillColor(INK).font("Noto").fontSize(9).text(`Reservas activas: ${s.activeReservations}   ·   Canceladas: ${s.cancelledReservations}   ·   Personas históricas: ${s.historicalPeople}`,42,287); chart(d,430,268,320,[["Mesas",amount(c.mesas.value),"#2f6f9f"],["Preventas",amount(c.presales.value),"#4d8fbd"],["Cortesías",amount(c.courtesies.value),"#8da8bb"],["Manillas extra",amount(c.extraWristbands.value),"#23866d"]]);
+  d.addPage(); heading(d,"Reporte comercial","Valores registrados según el snapshot final inmutable"); tableHeader(d,105,[["Categoría",190],["Transacciones",100],["Personas",90],["Valor registrado",150],["Moneda",100]]); const rows: Array<[string, typeof c.mesas]> = [["Mesas / reservas",c.mesas],["Preventas",c.presales],["Cortesías",c.courtesies],["Manillas extra",c.extraWristbands]]; rows.forEach(([label,v],i)=>row(d,128+i*22,[[label,190],[String(v.transactions),100],[String(v.people),90],[money(v.value),150],[safe(v.value.currency,"Sin moneda"),100]],i%2===0)); row(d,216,[["TOTAL REGISTRADO",190],[String(c.mesas.transactions+c.presales.transactions+c.courtesies.transactions+c.extraWristbands.transactions),100],[String(c.mesas.people+c.presales.people+c.courtesies.people+c.extraWristbands.people),90],[money(c.total),150],[safe(c.total.currency,"Sin moneda"),100]],true);
+  d.addPage(); heading(d,"Operaciones","Capacidad física, reservas y estado de admisión; sin datos personales"); tableHeader(d,105,[["Tipo de reserva",190],["Operativas",100],["Ingresados",90],["Pendientes",90],["Valor",150]]); report.reservations.forEach((r,i)=>row(d,128+i*22,[[safe(r.type),190],[String(r.operationalPeople),100],[String(r.checkedInPeople),90],[String(r.pendingPeople),90],[money(r.soldTotal),150]],i%2===0)); const y=128+report.reservations.length*22+30; d.fillColor(NAVY).font("NotoBold").fontSize(11).text("Recursos físicos",42,y); tableHeader(d,y+20,[["Recurso",190],["Zona",170],["Capacidad",90],["Asignada",90],["Admisión",100]]); report.resources.slice(0,24).forEach((r:ResourceReport,i)=>row(d,y+43+i*22,[[safe(r.resourceName),190],[safe(r.sectorName),170],[String(r.physicalCapacity),90],[String(r.capacityAssigned),90],[`${r.checkedInPeople}/${r.operationalPeople}`,100]],i%2===0)); if(!report.resources.length)d.fillColor(MUTED).font("Noto").fontSize(9).text("No hay recursos físicos disponibles en el snapshot.",52,y+52);
+  const range=d.bufferedPageRange(); for(let i=0;i<range.count;i++){d.switchToPage(i); d.fillColor(MUTED).font("Noto").fontSize(7).text(`ENTRYFLOW  ·  ${safe(report.metadata.eventName)}  ·  Generado ${safe(report.metadata.generatedAt)}  ·  Página ${i+1} de ${range.count}`,42,558,{width:708,align:"center"});}
+  return await new Promise<Buffer>(resolve=>{d.on("end",()=>resolve(Buffer.concat(chunks)));d.end();});
 }

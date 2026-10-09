@@ -1,25 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { renderFinalEventReportPdf } from "@/features/reporting/final-report/pdf";
-
-const migration = readFileSync("supabase/migrations/20261103000000_reporting_final_pdf_workflow.sql", "utf8");
-test("finalization creates one immutable snapshot and one durable job", () => {
-  assert.match(migration, /unique\(event_id\)/g);
-  assert.match(migration, /on conflict\(event_id\) do nothing/);
-  assert.match(migration, /p_next_status='finished'/);
-});
-test("PDF rendering is deterministic and excludes credential material", async () => {
-  const report = { metadata: { eventName: "Evento Á", organizationName: "Org", venueName: "Sala", generatedAt: "2026-01-01", eventStatus: "finished" }, summary: { activeReservations: 0, cancelledReservations: 0, operationalPeople: 0, historicalPeople: 0, checkedInPeople: 0, pendingPeople: 0, activeCourtesyPeople: 0, presalePurchases: 0, presaleAccessesSold: 0, presalePeopleLoaded: 0, presalePendingToLoad: 0, activeExtraWristbands: 0 }, attendees: [{ name: "José", carnet: "1", reservationCode: "R1", admissionStatus: "Pendiente", resourceName: null }] } as never;
-  const pdf = await renderFinalEventReportPdf(report);
-  assert.match(pdf.subarray(0, 8).toString(), /^%PDF-1\.[34]/);
-  assert.doesNotMatch(pdf.toString(), /qr_|accessGrant|qrToken/);
-});
-
-test("PDF embeds and extracts Latin Unicode attendee names across pages", async () => {
-  const names = ["José María Núñez", "María José Quiroga", "Álvaro Muñoz", "Güido Peña", "Óscar Ibáñez"];
-  const report = { metadata: { eventName: "Evento Unicode", organizationName: "Org", venueName: "Sala", generatedAt: "2026-01-01", eventStatus: "finished" }, summary: { activeReservations: 0, cancelledReservations: 0, operationalPeople: 0, historicalPeople: 0, checkedInPeople: 0, pendingPeople: 0, activeCourtesyPeople: 0, presalePurchases: 0, presaleAccessesSold: 0, presalePeopleLoaded: 0, presalePendingToLoad: 0, activeExtraWristbands: 0 }, attendees: Array.from({ length: 160 }, (_, i) => ({ name: names[i % names.length], carnet: String(i), reservationCode: "R1", admissionStatus: "Pendiente", resourceName: null })) } as never;
-  const pdf = await renderFinalEventReportPdf(report);
-  const { mkdtempSync, writeFileSync, readFileSync } = await import("node:fs"); const { tmpdir } = await import("node:os"); const { join } = await import("node:path"); const { spawnSync } = await import("node:child_process");
-  const dir = mkdtempSync(join(tmpdir(), "entryflow-pdf-")); const input = join(dir, "report.pdf"); const output = join(dir, "report.txt"); writeFileSync(input, pdf); const result = spawnSync("pdftotext", [input, output]); assert.match(pdf.toString("latin1"), /NotoSans-Bold/); assert.match(pdf.toString("latin1"), /NotoSans-Regular/); if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") { assert.match(pdf.toString("latin1"), /Unicode/); return; } assert.equal(result.status, 0); const text = readFileSync(output, "utf8"); for (const name of names) assert.match(text, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))); assert.match(text, /Página 2/);
-});
+const migration=readFileSync("supabase/migrations/20261103000000_reporting_final_pdf_workflow.sql","utf8");
+const money=(amount:number,currency="BOB")=>({amount,currency,complete:true,currencies:currency?[currency]:[]});
+const cat=(transactions:number,people:number,amount:number)=>({transactions,people,value:money(amount)});
+const fixture=(count=0)=>({metadata:{eventName:"Evento final Ágil — Ñandú",organizationName:"La Rota Carlota",venueName:"Bolívar 175",eventStartAt:"2026-01-01 21:00",generatedAt:"2026-01-01T00:00:00.000Z",eventStatus:"finished"},summary:{activeReservations:3,cancelledReservations:0,operationalPeople:count,historicalPeople:count,checkedInPeople:2,pendingPeople:Math.max(0,count-2),activeCourtesyPeople:1,presalePurchases:1,presaleAccessesSold:3,presalePeopleLoaded:3,presalePendingToLoad:0,activeExtraWristbands:1},commercial:{sold:{mesas:cat(1,5,400),presales:cat(1,3,210),courtesies:{transactions:1,people:1,value:{amount:0,currency:null,complete:true,currencies:[]}},extraWristbands:cat(1,2,140),total:money(750)},operational:{}},reservations:[{type:"Mesa",operationalPeople:5,checkedInPeople:1,pendingPeople:4,soldTotal:money(400)},{type:"Preventa",operationalPeople:3,checkedInPeople:1,pendingPeople:2,soldTotal:money(210)},{type:"Cortesía",operationalPeople:1,checkedInPeople:0,pendingPeople:1,soldTotal:{amount:0,currency:null,complete:true,currencies:[]}}],resources:[{resourceName:"Mesa 1",sectorName:"Patio A",physicalCapacity:5,capacityAssigned:5,checkedInPeople:1,operationalPeople:5}],attendees:Array.from({length:count},(_,i)=>({name:["José María Núñez","María José Quiroga","Álvaro Muñoz","Güido Peña","Óscar Ibáñez"][i%5],carnet:String(i),reservationCode:"R1",admissionStatus:"Pendiente",resourceName:null}))}) as never;
+test("finalization creates one immutable snapshot and one durable job",()=>{assert.match(migration,/unique\(event_id\)/g);assert.match(migration,/on conflict\(event_id\) do nothing/);assert.match(migration,/p_next_status='finished'/);});
+test("V2 is landscape, compact and excludes attendee PII",async()=>{const pdf=await renderFinalEventReportPdf(fixture(11));assert.match(pdf.subarray(0,8).toString(),/^%PDF-1\.[34]/);assert.doesNotMatch(pdf.toString(),/qr_|accessGrant|qrToken|José María Núñez/);const dir=mkdtempSync(join(tmpdir(),"entryflow-pdf-v2-")),input=join(dir,"report.pdf");writeFileSync(input,pdf);const info=spawnSync("python3",["-c","from pypdf import PdfReader; import sys; r=PdfReader(sys.argv[1]); print(len(r.pages)); print(r.pages[0].mediabox.width, r.pages[0].mediabox.height); print(\"\\n\".join((p.extract_text() or \"\") for p in r.pages))",input],{encoding:"utf8"});assert.equal(info.status,0);assert.match(info.stdout,/^3\n792 612/m);const text=info.stdout;assert.match(text,/BOB 750/);assert.match(text,/Distribución comercial/);assert.doesNotMatch(text,/José María Núñez/);rmSync(dir,{recursive:true,force:true});});
+test("V2 stays within four pages for 500 guests",async()=>{const pdf=await renderFinalEventReportPdf(fixture(500));const dir=mkdtempSync(join(tmpdir(),"entryflow-pdf-v2-many-")),input=join(dir,"report.pdf");writeFileSync(input,pdf);const info=spawnSync("python3",["-c","from pypdf import PdfReader; import sys; print(len(PdfReader(sys.argv[1]).pages))",input],{encoding:"utf8"});assert.equal(info.status,0);const pages=Number(info.stdout.trim());assert.ok(pages>=3&&pages<=4);rmSync(dir,{recursive:true,force:true});});
