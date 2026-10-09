@@ -89,6 +89,10 @@ test("extra-wristband corrective migration uses explicit authorization with secu
   assert.match(sql, /reservation\.edit/);
   assert.match(sql, /alter function public\.create_extra_wristband_sale[\s\S]*owner to postgres/i);
   assert.match(sql, /grant execute on function public\.create_extra_wristband_sale[\s\S]*authenticated/i);
+  assert.match(sql, /resource_belongs_to_event/);
+  assert.match(sql, /current_resource_ids/);
+  assert.match(sql, /r\.venue_id = v_event\.venue_id/);
+  assert.match(sql, /r\.id::text = v_reservation\.table_id/);
 });
 
 test("access-code migration allocates monotonic ordinals and protects event codes", async () => {
