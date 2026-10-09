@@ -27,14 +27,20 @@ test("reservation flow metrics reuse the canonical occupancy snapshot", () => {
   const totals = buildReservationFlowTotals({
     checkedInGuests: 13,
     pendingGuests: 12,
-    capacityRemaining: 34,
-    occupancyPercent: 39,
+    expectedGuests: 45,
+    eventCapacity: 200,
   });
 
-  assert.equal(totals.occupancyPercent, 39);
+  assert.equal(totals.occupancyPercent, 22.5);
   assert.equal(totals.checkedInGuests, 13);
   assert.equal(totals.pendingGuests, 12);
-  assert.equal(totals.capacityRemaining, 34);
+  assert.equal(totals.capacityRemaining, 155);
+});
+
+test("reservation flow uses zero-safe event capacity", () => {
+  const totals = buildReservationFlowTotals({ checkedInGuests: 0, pendingGuests: 2, expectedGuests: 2, eventCapacity: 0 });
+  assert.equal(totals.occupancyPercent, 0);
+  assert.equal(totals.capacityRemaining, 0);
 });
 
 test("reservation summaries hide cancelled guests operationally but retain them in timeline history", () => {

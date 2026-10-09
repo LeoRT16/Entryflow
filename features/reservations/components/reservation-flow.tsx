@@ -46,15 +46,17 @@ type CheckInStore = ReturnType<typeof useCheckInStore>;
 
 type ReservationFlowTotals = Pick<
   WorkspaceIntelligence["statistics"]["cards"],
-  "checkedInGuests" | "pendingGuests" | "capacityRemaining" | "occupancyPercent"
->;
+  "checkedInGuests" | "pendingGuests" | "expectedGuests"
+> & { eventCapacity?: number | null };
 
 export function buildReservationFlowTotals(totals: ReservationFlowTotals) {
+  const capacity = typeof totals.eventCapacity === "number" && Number.isFinite(totals.eventCapacity) && totals.eventCapacity > 0 ? totals.eventCapacity : 0;
+  const committedGuests = Math.max(0, totals.expectedGuests);
   return {
-    occupancyPercent: totals.occupancyPercent,
+    occupancyPercent: capacity > 0 ? Math.round((committedGuests / capacity) * 1000) / 10 : 0,
     checkedInGuests: totals.checkedInGuests,
     pendingGuests: totals.pendingGuests,
-    capacityRemaining: totals.capacityRemaining,
+    capacityRemaining: capacity > 0 ? Math.max(capacity - committedGuests, 0) : 0,
   };
 }
 
@@ -719,7 +721,7 @@ function ReservationFlowWorkspace({
   const pendingNumber = paymentDraft.pendingNumber;
   const completion = step / wizardSteps.length;
   const reservationTotals = workspaceIntelligence.statistics.cards;
-  const reservationFlowTotals = buildReservationFlowTotals(reservationTotals);
+  const reservationFlowTotals = buildReservationFlowTotals({ ...reservationTotals, eventCapacity: currentEvent.capacity });
   const openReservationWizard = useCallback(() => {
     if (isTerminalEvent) {
       return;

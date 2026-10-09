@@ -26,6 +26,32 @@ export type ExtraWristbandPerson = {
   whatsapp: string;
 };
 
+export class ExtraWristbandOperationError extends Error {
+  constructor(public readonly diagnosticCode: string | undefined, message: string) {
+    super(message);
+    this.name = "ExtraWristbandOperationError";
+  }
+}
+
+function errorField(error: unknown, field: "code" | "message" | "details" | "hint") {
+  if (!error || typeof error !== "object") return "";
+  const value = (error as Record<string, unknown>)[field];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function normalizeExtraWristbandError(error: unknown, fallback = "No se pudieron agregar las manillas extra.") {
+  const code = errorField(error, "code") || undefined;
+  const safeMessages: Record<string, string> = {
+    "42501": "No tienes permiso para agregar manillas extra.",
+    "22023": "Los datos de las manillas extra no son válidos.",
+    "23505": "Uno de los accesos ya existe.",
+    "23514": "La reserva contiene un acceso no válido.",
+    P0002: "La reserva ya no está disponible.",
+  };
+  const message = code && safeMessages[code] ? safeMessages[code] : fallback;
+  return new ExtraWristbandOperationError(code, message);
+}
+
 export type ExtraWristbandOperationResult = {
   saleId: string;
   guestIds: string[];
@@ -130,7 +156,7 @@ export async function createExtraWristbandSale(
     p_actor: input.actor,
   } as never);
 
-  if (error) throw error;
+  if (error) throw normalizeExtraWristbandError(error);
   return data as unknown as ExtraWristbandOperationResult;
 }
 

@@ -7,11 +7,25 @@ import {
   canCancelExtraWristbandSale,
   formatManillaLabel,
   getExtraWristbandCancellationErrorMessage,
+  normalizeExtraWristbandError,
   validateExtraWristbandSaleInput,
 } from "@/features/reservations/domain/extra-wristbands";
 import { getEventCommercialConfig } from "@/features/events/domain/commercial-config";
 
 const mesa = { reservationType: "Mesa" as const, eventId: "event-1", status: "Confirmed" as const };
+
+test("extra wristband RPC errors retain a safe diagnostic code", () => {
+  const error = normalizeExtraWristbandError({ code: "42501", message: "permission denied for table secrets", details: "private row", hint: "internal" });
+  assert.equal(error.diagnosticCode, "42501");
+  assert.equal(error.message, "No tienes permiso para agregar manillas extra.");
+  assert.doesNotMatch(error.message, /secret|private|internal/);
+});
+
+test("extra wristband error normalization handles native and unknown errors safely", () => {
+  assert.equal(normalizeExtraWristbandError(new Error("database password leaked")).message, "No se pudieron agregar las manillas extra.");
+  assert.equal(normalizeExtraWristbandError("network failure").message, "No se pudieron agregar las manillas extra.");
+  assert.equal(normalizeExtraWristbandError(null).diagnosticCode, undefined);
+});
 
 test("extra wristband validation allows a configured zero price and derives the total", () => {
   assert.equal(validateExtraWristbandSaleInput({ reservation: mesa, eventId: "event-1", price: 0, guests: [{ name: "Ana", carnet: "1", whatsapp: "2" }] }), null);
