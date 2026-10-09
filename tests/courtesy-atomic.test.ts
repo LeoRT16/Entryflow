@@ -17,6 +17,7 @@ test("courtesy atomic boundary treats WhatsApp as optional while requiring ident
   assert.match(sql, /guest_name.*carnet.*courtesy_guest_incomplete/);
   assert.doesNotMatch(sql, /guest_name.*carnet.*whatsapp.*courtesy_guest_incomplete/);
   assert.match(sql, /coalesce\(g->>'whatsapp',''\)/);
+  assert.doesNotMatch(sql, /guest_name.*carnet.*whatsapp.*courtesy_guest_incomplete/);
 });
 
 test("courtesy service routes creation and append through atomic boundaries", () => {
