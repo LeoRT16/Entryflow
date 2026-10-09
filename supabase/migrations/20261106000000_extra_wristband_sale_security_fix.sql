@@ -23,6 +23,7 @@ declare
   v_index integer := 0;
   v_actor text;
   v_currency text;
+  v_resource_id uuid;
 begin
   if auth.uid() is null then raise exception 'extra_wristband_unauthenticated' using errcode = '28000'; end if;
   select * into v_reservation
@@ -35,11 +36,21 @@ begin
   if not exists (select 1 from public.profiles p join public.roles ro on ro.id=p.role_id and ro.deleted_at is null where p.user_id=public.current_app_user_id() and p.organization_id=(select organization_id from public.events where id=v_reservation.event_id) and p.deleted_at is null and 'reservation.edit'=any(ro.permissions)) then raise exception 'Missing reservation.edit permission.' using errcode = '42501'; end if;
   if v_reservation.event_id <> p_event_id then raise exception 'Reservation does not belong to the event.' using errcode = '42501'; end if;
   if not (p_event_id = any(public.current_event_ids())) then raise exception 'Event is outside the active workspace.' using errcode = '42501'; end if;
-  if v_reservation.reservation_type <> 'Mesa' then raise exception 'Extra wristbands are only available for Mesa reservations.' using errcode = '22023'; end if;
-  if v_reservation.status in ('Cancelled', 'Completed', 'No Show') then raise exception 'Reservation is closed.' using errcode = '22023'; end if;
-
   select * into v_event from public.events where id = p_event_id and deleted_at is null;
   if not found then raise exception 'Event not found.' using errcode = 'P0002'; end if;
+  if v_reservation.reservation_type <> 'Mesa' then raise exception 'Extra wristbands are only available for Mesa reservations.' using errcode = '22023'; end if;
+
+  select r.id into v_resource_id
+  from public.resources r
+  where r.deleted_at is null
+    and r.venue_id = v_event.venue_id
+    and r.id = any(public.current_resource_ids())
+    and (r.id = v_reservation.resource_id or r.id::text = v_reservation.table_id)
+  limit 1;
+  if v_resource_id is null then raise exception 'Reservation resource is invalid for this event.' using errcode = '42501'; end if;
+  if not public.resource_belongs_to_event(v_resource_id, p_event_id) then raise exception 'Reservation resource is outside the event venue.' using errcode = '42501'; end if;
+  if v_reservation.status in ('Cancelled', 'Completed', 'No Show') then raise exception 'Reservation is closed.' using errcode = '22023'; end if;
+
   select coalesce(nullif(trim(u.display_name), ''), 'Operación') into v_actor
   from public.users u where u.id = public.current_app_user_id();
   v_actor := coalesce(v_actor, 'Operación');
