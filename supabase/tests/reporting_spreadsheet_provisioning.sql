@@ -13,7 +13,7 @@ insert into public.event_drive_locations(id,organization_id,event_id,drive_integ
 
 select ok((select column_default like '%service_account%' from information_schema.columns where table_schema='public' and table_name='reporting_destinations' and column_name='writer_mode'),'legacy destinations keep the Service Account writer default');
 select ok((select count(*)=0 from information_schema.columns where table_schema='public' and table_name='reporting_spreadsheet_provisioning' and column_name='spreadsheet_id'),'provisioning state has no duplicate definitive spreadsheet id');
-select ok(not has_function_privilege('authenticated','public.request_reporting_spreadsheet_provisioning(uuid)','execute'),'authenticated callers cannot invoke service-only provisioning RPC');
+select ok(not has_function_privilege('authenticated','public.request_reporting_spreadsheet_provisioning(uuid,text)','execute'),'authenticated callers cannot invoke service-only provisioning RPC');
 select ok(not has_function_privilege('anon','public.claim_reporting_spreadsheet_provisioning_jobs(text,integer)','execute'),'anon cannot claim provisioning work');
 select ok(has_function_privilege('service_role','public.claim_reporting_spreadsheet_provisioning_jobs(text,integer)','execute'),'service_role can claim provisioning work');
 select ok(not has_table_privilege('authenticated','public.reporting_destinations','update'),'authenticated cannot bypass destination identity RPCs');

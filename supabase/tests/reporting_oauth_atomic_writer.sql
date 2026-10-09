@@ -17,7 +17,7 @@ select ok(not has_function_privilege('anon','public.complete_reporting_oauth_syn
 select ok(not has_function_privilege('authenticated','public.complete_reporting_oauth_sync_failure(uuid,uuid,text,text,boolean,timestamp with time zone)','execute'),'authenticated cannot complete OAuth failures');
 select ok(not has_function_privilege('anon','public.complete_reporting_oauth_sync_failure(uuid,uuid,text,text,boolean,timestamp with time zone)','execute'),'anon cannot complete OAuth failures');
 select ok(has_function_privilege('service_role','public.complete_reporting_oauth_sync_failure(uuid,uuid,text,text,boolean,timestamp with time zone)','execute'),'service_role can complete OAuth failures');
-select ok(position('enabled=false' in lower(pg_get_functiondef('public.request_reporting_spreadsheet_provisioning(uuid)'::regprocedure)))>0,'OAuth provisioning leaves destinations disabled');
+select ok(position('enabled=false' in lower(pg_get_functiondef('public.request_reporting_spreadsheet_provisioning(uuid,text)'::regprocedure)))>0,'OAuth provisioning leaves destinations disabled');
 select ok(position('enabled=false' in lower(pg_get_functiondef('public.complete_reporting_spreadsheet_provisioning_job(uuid,uuid,bigint,bigint,text,text,text,boolean)'::regprocedure)))>0,'OAuth provisioning completion keeps destinations disabled');
 
 insert into auth.users(id,email) values('e6000000-0000-4000-8000-000000000010','oauth-writer@test.local');

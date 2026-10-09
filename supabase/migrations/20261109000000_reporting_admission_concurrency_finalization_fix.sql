@@ -12,7 +12,7 @@ begin
   update public.reporting_destinations set last_requested_sequence=next_sequence,last_error=null where id=d.id;
   insert into public.reporting_outbox(destination_id,organization_id,event_id,requested_sequence,status,available_at,attempts,last_error,locked_at,locked_by,processed_at,active_sync_run_id)
     values(d.id,d.organization_id,d.event_id,next_sequence,'pending',now(),0,null,null,null,null,null)
-  on conflict (destination_id) do update set
+  on conflict on constraint reporting_outbox_destination_id_key do update set
     requested_sequence=excluded.requested_sequence,
     status=case when public.reporting_outbox.status='processing' then public.reporting_outbox.status else 'pending' end,
     available_at=case when public.reporting_outbox.status='processing' then public.reporting_outbox.available_at else now() end,
@@ -22,7 +22,7 @@ begin
     locked_by=case when public.reporting_outbox.status='processing' then public.reporting_outbox.locked_by else null end,
     active_sync_run_id=case when public.reporting_outbox.status='processing' then public.reporting_outbox.active_sync_run_id else null end,
     processed_at=case when public.reporting_outbox.status='processing' then public.reporting_outbox.processed_at else null end;
-  select * into o from public.reporting_outbox where destination_id=d.id;
+  select * into o from public.reporting_outbox ob where ob.destination_id=d.id;
   return query select o.id,d.id,o.requested_sequence;
 end; $$;
 
@@ -45,8 +45,8 @@ begin
   update public.reporting_destinations set last_requested_sequence=next_sequence,last_error=null where id=d.id;
   insert into public.reporting_outbox(destination_id,organization_id,event_id,requested_sequence,status,available_at,attempts,last_error,locked_at,locked_by,processed_at,active_sync_run_id)
     values(d.id,d.organization_id,d.event_id,next_sequence,'pending',now(),0,null,null,null,null,null)
-  on conflict (destination_id) do update set requested_sequence=excluded.requested_sequence,status=case when public.reporting_outbox.status='processing' then public.reporting_outbox.status else 'pending' end,available_at=case when public.reporting_outbox.status='processing' then public.reporting_outbox.available_at else now() end,attempts=case when public.reporting_outbox.status='processing' then public.reporting_outbox.attempts else 0 end,last_error=null,locked_at=case when public.reporting_outbox.status='processing' then public.reporting_outbox.locked_at else null end,locked_by=case when public.reporting_outbox.status='processing' then public.reporting_outbox.locked_by else null end,active_sync_run_id=case when public.reporting_outbox.status='processing' then public.reporting_outbox.active_sync_run_id else null end,processed_at=case when public.reporting_outbox.status='processing' then public.reporting_outbox.processed_at else null end;
-  select * into o from public.reporting_outbox where destination_id=d.id;
+  on conflict on constraint reporting_outbox_destination_id_key do update set requested_sequence=excluded.requested_sequence,status=case when public.reporting_outbox.status='processing' then public.reporting_outbox.status else 'pending' end,available_at=case when public.reporting_outbox.status='processing' then public.reporting_outbox.available_at else now() end,attempts=case when public.reporting_outbox.status='processing' then public.reporting_outbox.attempts else 0 end,last_error=null,locked_at=case when public.reporting_outbox.status='processing' then public.reporting_outbox.locked_at else null end,locked_by=case when public.reporting_outbox.status='processing' then public.reporting_outbox.locked_by else null end,active_sync_run_id=case when public.reporting_outbox.status='processing' then public.reporting_outbox.active_sync_run_id else null end,processed_at=case when public.reporting_outbox.status='processing' then public.reporting_outbox.processed_at else null end;
+  select * into o from public.reporting_outbox ob where ob.destination_id=d.id;
   return query select o.id,d.id,o.requested_sequence;
 end; $$;
 
