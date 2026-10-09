@@ -30,6 +30,14 @@ test("presale server boundary validates quantity, commercial total, and guest ca
   assert.match(sql, /prepare_guest_access_atomic/);
 });
 
+test("presale atomic boundary treats WhatsApp as optional while requiring identity", () => {
+  const sql = readFileSync("supabase/migrations/20261110000000_presale_whatsapp_optional_atomic_fix.sql", "utf8");
+  assert.match(sql, /guest_name.*carnet.*presale_guest_incomplete/);
+  assert.doesNotMatch(sql, /guest_name.*carnet.*whatsapp.*presale_guest_incomplete/);
+  assert.match(sql, /coalesce\(g->>'whatsapp',''\)/);
+  assert.match(sql, /jsonb_build_object\('whatsapp',coalesce\(p_guest->>'whatsapp',''\)\)/);
+});
+
 test("presale guest boundary is separate from physical capacity and rejects incomplete identities", () => {
   const sql = readFileSync("supabase/migrations/20261016000001_presale_guest_atomic.sql", "utf8");
   assert.match(sql, /presale_guest_incomplete/);
