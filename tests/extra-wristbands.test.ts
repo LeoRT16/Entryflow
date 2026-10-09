@@ -80,6 +80,17 @@ test("migration defines atomic create and cancel RPC contracts", async () => {
   assert.match(sql, /current_app_user_id\(\)/);
 });
 
+test("extra-wristband corrective migration uses explicit authorization with security-definer writes", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const sql = await readFile(new URL("../supabase/migrations/20261106000000_extra_wristband_sale_security_fix.sql", import.meta.url), "utf8");
+  assert.match(sql, /security definer/i);
+  assert.match(sql, /auth\.uid\(\) is null/i);
+  assert.match(sql, /current_event_ids\(\)/i);
+  assert.match(sql, /reservation\.edit/);
+  assert.match(sql, /alter function public\.create_extra_wristband_sale[\s\S]*owner to postgres/i);
+  assert.match(sql, /grant execute on function public\.create_extra_wristband_sale[\s\S]*authenticated/i);
+});
+
 test("access-code migration allocates monotonic ordinals and protects event codes", async () => {
   const { readFile } = await import("node:fs/promises");
   const sql = await readFile(new URL("../supabase/migrations/20260902000002_guest_access_code_integrity.sql", import.meta.url), "utf8");
