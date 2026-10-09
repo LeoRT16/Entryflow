@@ -152,3 +152,15 @@ test("reservation board keeps extra wristband UI scoped to Mesa and the RPCs", a
   assert.match(source, /Manilla extra/);
   assert.match(source, /status === "active"/);
 });
+
+test("canonical extra-wristband migration restores ordinals and access artifacts", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const sql = await readFile(new URL("../supabase/migrations/20261107000000_extra_wristband_sale_canonical_access_fix.sql", import.meta.url), "utf8");
+  assert.match(sql, /next_guest_access_ordinal/);
+  assert.match(sql, /access_ordinal/);
+  assert.match(sql, /prepare_guest_access_atomic/);
+  assert.match(sql, /gen_random_bytes\(6\)/);
+  assert.match(sql, /gen_random_bytes\(24\)/);
+  assert.match(sql, /security definer/i);
+  assert.match(sql, /resource_belongs_to_event/);
+});
