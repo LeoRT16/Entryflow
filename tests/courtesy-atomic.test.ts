@@ -34,6 +34,18 @@ test("courtesy atomic fix keeps reservation insert expressions aligned with its 
   assert.match(sql, /prepare_guest_access_atomic\(gid,access_code,qr_token\)/);
 });
 
+test("deployed courtesy corrective migration preserves atomic multi-guest creation", () => {
+  const sql = readFileSync("supabase/migrations/20261021000000_courtesy_reservation_atomic_deployed_fix.sql", "utf8");
+  assert.match(sql, /create or replace function public\.create_courtesy_reservation_atomic\(p_reservation jsonb, p_guests jsonb\)/);
+  assert.match(sql, /holder_name,holder_document,holder_whatsapp,holder_email,reservation_type/);
+  assert.match(sql, /0,'','','','', 'Cortesía','Pendiente','0','0'/);
+  assert.match(sql, /for g in select \* from jsonb_array_elements\(coalesce\(p_guests,'\[\]'::jsonb\)\)/);
+  assert.match(sql, /prepare_guest_access_atomic\(gid,access_code,qr_token\)/);
+  assert.match(sql, /update reservations set guest_ids=array\(select x->>'id'/);
+  assert.match(sql, /jsonb_agg\(to_jsonb\(x\)\|\|jsonb_build_object\('access_grant_id'/);
+  assert.doesNotMatch(sql, /commit;|rollback;/i);
+});
+
 test("courtesy append timeline metadata is sourced from the persisted grant", () => {
   const sql = readFileSync("supabase/migrations/20261019000000_courtesy_append_timeline_metadata_fix.sql", "utf8");
   assert.match(sql, /select ag\.id,ag\.access_code,ag\.qr_token,guest_row\.invitation_code into grant_id,access_code,canonical_qr,canonical_code/);
