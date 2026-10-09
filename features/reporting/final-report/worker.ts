@@ -5,7 +5,7 @@ import { readDriveRefreshTokenSecret } from "../google-drive/oauth/token-store";
 import type { EventReport } from "../types";
 
 type Db = { rpc(name: string, args: Record<string, unknown>): Promise<{ data: any; error: any }>; from(table: string): any };
-export async function processFinalReportBatch(db: Db, workerId: string, loadReport: (eventId: string, organizationId: string, snapshot: unknown) => Promise<EventReport>, limit = 1) {
+export async function processFinalReportBatch(db: Db, workerId: string, limit = 1) {
   const claimed = await db.rpc("claim_reporting_final_report_jobs", { p_worker_id: workerId, p_limit: limit });
   if (claimed.error) throw claimed.error;
   let synced = 0;
@@ -15,11 +15,15 @@ export async function processFinalReportBatch(db: Db, workerId: string, loadRepo
       const location = await db.from("event_drive_locations").select("final_reports_folder_id").eq("event_id", job.event_id).is("deleted_at", null).single();
       const integration = await db.from("reporting_drive_integrations").select("oauth_secret_id").eq("organization_id", job.organization_id).is("deleted_at", null).single();
       if (snapshot.error || location.error || integration.error || !location.data?.final_reports_folder_id) throw new Error("drive_reports_folder_required");
-      const report = await loadReport(job.event_id, job.organization_id, snapshot.data?.report);
+      const report = snapshot.data?.report as EventReport;
+      if (!report?.metadata?.eventId || report.metadata.eventId !== job.event_id) throw new Error("final_report_snapshot_invalid");
       const transport = createAuthenticatedGoogleDriveTransport(await readDriveRefreshTokenSecret(integration.data.oauth_secret_id));
       if (!transport.uploadFile) throw new Error("drive_upload_unavailable");
-      const file = await transport.uploadFile(`${report.metadata.eventName} — informe final.pdf`, location.data.final_reports_folder_id, renderFinalEventReportPdf(report), "application/pdf");
-      const result = await db.rpc("complete_reporting_final_report_job", { p_job_id: job.job_id, p_claim_token: job.claim_token, p_report: report, p_drive_file_id: file.id, p_drive_file_url: file.webViewLink ?? null });
+      const deterministicName = `${report.metadata.eventName} — informe final [${job.event_id}].pdf`;
+      const existing = await transport.listChildren(location.data.final_reports_folder_id);
+      const prior = existing.find((candidate) => candidate.name === deterministicName && candidate.mimeType === "application/pdf");
+      const file = await transport.uploadFile(deterministicName, location.data.final_reports_folder_id, await renderFinalEventReportPdf(report), "application/pdf", prior?.id);
+      const result = await db.rpc("complete_reporting_final_report_job", { p_job_id: job.job_id, p_claim_token: job.claim_token, p_drive_file_id: file.id, p_drive_file_url: file.webViewLink ?? null });
       if (result.error) throw result.error;
       synced += 1;
     } catch (error) {

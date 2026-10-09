@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import StatusBadge from "@/components/status-badge";
 import { isTerminalEventStatus } from "@/features/events/domain";
@@ -375,6 +375,13 @@ function CompactAlertCenter({ alerts, alertCount }: { alerts: LiveDashboardAlert
 export default function EventCommandCenter() {
   const { currentOrganization, currentEvent, currentVenue, workspaceIntelligence, workspacePriority, status, setEventStatus } = useCheckInStore();
   const isTerminalEvent = isTerminalEventStatus(currentEvent.status);
+  const [finalReportJob, setFinalReportJob] = useState<{ status: string; drive_file_url?: string | null; last_error_code?: string | null } | null>(null);
+  useEffect(() => {
+    if (currentEvent.status !== "finished") return;
+    let cancelled = false;
+    void fetch(`/api/reporting/final-report?eventId=${encodeURIComponent(currentEvent.id)}`).then((response) => response.ok ? response.json() : null).then((payload) => { if (!cancelled) setFinalReportJob(payload?.job ?? null); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [currentEvent.id, currentEvent.status]);
 
   const model = useMemo(
     () =>
@@ -421,6 +428,7 @@ export default function EventCommandCenter() {
               <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">Evento cerrado</p>
                 <p className="mt-2 text-sm text-slate-300">La vista permanece en lectura.</p>
+                {finalReportJob ? <div className="mt-2 text-xs text-slate-400">Reporte final: {finalReportJob.status}{finalReportJob.drive_file_url ? <>{" · "}<a className="text-sky-300 underline" href={finalReportJob.drive_file_url} target="_blank" rel="noreferrer">Abrir PDF</a></> : null}{["retry", "dead", "needs_action"].includes(finalReportJob.status) ? <button type="button" className="ml-2 text-amber-300 underline" onClick={() => { void fetch("/api/reporting/final-report", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventId: currentEvent.id }) }).then(() => window.location.reload()); }}>Reintentar</button> : null}</div> : null}
               </div>
             )}
           </div>

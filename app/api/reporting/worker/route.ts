@@ -9,9 +9,9 @@ import { hasLegacyReportingRuntimeConfig, hasReportingRuntimeConfig } from "@/li
 import { createOAuthReportingWorkerDependencies, processOAuthReportingSyncBatch } from "@/features/reporting/google-sheets/oauth-worker";
 import { processDriveProvisioningBatch } from "@/features/reporting/google-drive/provisioning/worker";
 import { createReportingSpreadsheetProvisioningRepository, processReportingSpreadsheetProvisioningBatch } from "@/features/reporting/google-sheets/provisioning/worker";
-import { loadEventReportForWorker } from "@/features/reporting/server/event-report-worker-loader";
 import { reconcileReportingAutomaticDestinations } from "@/repositories/reporting-sync-repositories";
 import { processFinalReportBatch } from "@/features/reporting/final-report/worker";
+import { loadEventReportForWorker } from "@/features/reporting/server/event-report-worker-loader";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     try { stages.drive = await processDriveProvisioningBatch(client as never, workerId, 1); } catch { stages.drive = { error: "drive_worker_failed" }; }
     try { stages.spreadsheet = await processReportingSpreadsheetProvisioningBatch({ repository: createReportingSpreadsheetProvisioningRepository(client as never) }, workerId, 5); } catch { stages.spreadsheet = { error: "spreadsheet_worker_failed" }; }
     try { stages.activation = await reconcileReportingAutomaticDestinations(client, 100); } catch { stages.activation = { error: "automatic_activation_reconciliation_failed" }; }
-    try { stages.finalReport = await processFinalReportBatch(client as never, workerId, async (eventId, organizationId) => loadEventReportForWorker(client, { eventId, organizationId })); } catch { stages.finalReport = { error: "final_report_worker_failed" }; }
+    try { stages.finalReport = await processFinalReportBatch(client as never, workerId, 5); } catch { stages.finalReport = { error: "final_report_worker_failed" }; }
     try {
       let oauthResult = { claimed: 0, synced: 0, skipped: 0, failed: 0 };
       try { oauthResult = await processOAuthReportingSyncBatch(createOAuthReportingWorkerDependencies(client, (eventId, organizationId) => loadEventReportForWorker(client, { eventId, organizationId })), workerId, 5); } catch { stages.oauth = { error: "oauth_sync_failed" }; }

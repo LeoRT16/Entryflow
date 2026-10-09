@@ -1097,7 +1097,13 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
       },
       async setStatus(eventId: string, status: PlatformEvent["status"]) {
         if (!client) throw new Error("Supabase client is unavailable.");
-        const { error } = await client.rpc("transition_event_status" as never, { p_event_id: eventId, p_next_status: status } as never);
+        let error;
+        if (status === "finished") {
+          const response = await fetch("/api/reporting/final-report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventId }) });
+          if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error ?? "finalization_failed");
+        } else {
+          ({ error } = await client.rpc("transition_event_status" as never, { p_event_id: eventId, p_next_status: status } as never));
+        }
         if (error) throw error;
       },
       async activate(eventId: string) {

@@ -1,26 +1,43 @@
+import PDFDocument from "pdfkit";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { EventReport } from "@/features/reporting/types";
 
-function escapePdf(value: string) { return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)").replace(/[^\x20-\x7e]/g, "?"); }
+const FONT = join(process.cwd(), "assets/fonts/NotoSans.ttf");
+const BOLD_FONT = join(process.cwd(), "assets/fonts/NotoSans-Bold.woff");
+function wrap(value: string, width = 92) { const words = value.split(/\s+/); const out: string[] = []; let line = ""; for (const word of words) { if ((line ? line.length + 1 : 0) + word.length > width) { if (line) out.push(line); line = word; } else line = line ? `${line} ${word}` : word; } if (line) out.push(line); return out.length ? out : [""]; }
 
-/** Deterministic, dependency-free PDF text renderer. It deliberately exposes no QR or auth material. */
-export function renderFinalEventReportPdf(report: EventReport): Buffer {
+/** PDFKit embeds the OFL-licensed Noto Sans TrueType font with a Unicode ToUnicode map. */
+export async function renderFinalEventReportPdf(report: EventReport): Promise<Buffer> {
+  const attendees = report.attendees ?? [];
   const lines = [
-    "ENTRYFLOW — INFORME FINAL DEL EVENTO",
-    report.metadata.eventName,
-    `${report.metadata.organizationName} · ${report.metadata.venueName}`,
-    `Finalizado: ${report.metadata.generatedAt}`,
-    "",
-    `Reservas: ${report.summary.activeReservations} activas · ${report.summary.cancelledReservations} canceladas`,
-    `Accesos: ${report.summary.operationalPeople} operativos · ${report.summary.checkedInPeople} ingresaron · ${report.summary.pendingPeople} pendientes`,
-    `Preventas: ${report.summary.presalePurchases} · Cortesías: ${report.summary.activeCourtesyPeople} · Pulseras extra: ${report.summary.activeExtraWristbands}`,
-    "",
-    "ASISTENTES",
-    ...report.attendees.map((a) => `${a.name} | carnet ${a.carnet || "—"} | ${a.reservationCode} | ${a.admissionStatus} | ${a.resourceName ?? "—"}`),
-  ];
-  const stream = ["BT", "/F1 9 Tf", "50 780 Td", ...lines.flatMap((line, index) => [index ? "0 -14 Td" : "", `(${escapePdf(line)}) Tj`]).filter(Boolean), "ET"].join("\n");
-  const objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>", `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`];
-  let pdf = "%PDF-1.4\n"; const offsets: number[] = [0];
-  objects.forEach((object, index) => { offsets[index + 1] = Buffer.byteLength(pdf); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; });
-  const xref = Buffer.byteLength(pdf); pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n `).join("\n")}\ntrailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  return Buffer.from(pdf, "binary");
+    "ENTRYFLOW  |  INFORME FINAL DEL EVENTO", report.metadata.eventName,
+    `${report.metadata.organizationName}  |  ${report.metadata.venueName}`, `Finalizado: ${report.metadata.generatedAt}`, "",
+    "RESUMEN COMERCIAL Y OPERATIVO",
+    `Reservas activas: ${report.summary.activeReservations}   Canceladas: ${report.summary.cancelledReservations}`,
+    `Personas operativas: ${report.summary.operationalPeople}   Históricas: ${report.summary.historicalPeople}`,
+    `Ingresaron: ${report.summary.checkedInPeople}   Pendientes: ${report.summary.pendingPeople}`,
+    `Preventas: ${report.summary.presalePurchases}   Cortesías: ${report.summary.activeCourtesyPeople}   Pulseras extra: ${report.summary.activeExtraWristbands}`,
+    `Total comercial: ${report.commercial?.sold?.total?.amount ?? "—"} ${report.commercial?.sold?.total?.currency ?? ""}`, "",
+    "ASISTENTES", "Nombre | Carnet | Reserva | Estado | Zona/Recurso",
+    ...attendees.map((a) => `${a.name || "—"} | ${a.carnet || "—"} | ${a.reservationCode || "—"} | ${a.admissionStatus || "—"} | ${a.zoneName ?? "—"}/${a.resourceName ?? "—"}`),
+  ].flatMap(wrap);
+  const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true, autoFirstPage: true });
+  const chunks: Buffer[] = []; doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+  const font = readFileSync(FONT);
+  doc.registerFont("Noto", font);
+  doc.registerFont("NotoBold", readFileSync(BOLD_FONT));
+  doc.font("Noto").fontSize(9);
+  const pageLines = 49;
+  for (let i = 0; i < lines.length; i += pageLines) {
+    if (i) doc.addPage();
+    const page = lines.slice(i, i + pageLines);
+    page.forEach((line, offset) => {
+      const global = i + offset;
+      doc.font([0, 5, 10, 12, 13].includes(global) ? "NotoBold" : "Noto").text(line, { lineGap: 5 });
+    });
+  }
+  const totalPages = doc.bufferedPageRange().count;
+  for (let i = 0; i < totalPages; i++) { doc.switchToPage(i); doc.font("NotoBold").fontSize(8).text(`Página ${i + 1} de ${totalPages}`, 50, 805, { align: "left" }); }
+  return await new Promise<Buffer>((resolve) => { doc.on("end", () => resolve(Buffer.concat(chunks))); doc.end(); });
 }
