@@ -161,6 +161,7 @@ export function buildLiveDashboardModel({
 }: LiveDashboardInput): LiveDashboardModel {
   const totalCapacity = workspaceIntelligence.capacity.used + workspaceIntelligence.capacity.remaining;
   const occupancyPercent = workspaceIntelligence.capacity.occupancyPercent;
+  const tableAssignmentMetric = workspaceIntelligence.operations.metrics.find((metric) => metric.label === "Asignación de mesas");
   const recentCheckIns = workspaceIntelligence.operations.recentActivity.filter((event) => event.kind.startsWith("checkin.")).length;
   const blockedSignals =
     workspaceIntelligence.access.rejectedAttempts +
@@ -242,9 +243,9 @@ export function buildLiveDashboardModel({
       },
       {
         label: "Asignación de mesas",
-        value: `${occupancyPercent}%`,
-        detail: `${workspaceIntelligence.capacity.used}/${totalCapacity} personas asignadas`,
-        tone: occupancyPercent >= 90 || workspaceIntelligence.capacity.state === "blocked" ? "danger" : occupancyPercent >= 80 ? "warning" : "info",
+        value: tableAssignmentMetric?.value ?? `${occupancyPercent}%`,
+        detail: tableAssignmentMetric?.detail ?? `${workspaceIntelligence.capacity.used}/${totalCapacity} personas asignadas`,
+        tone: "info",
       },
       {
         label: "Check-ins/min",

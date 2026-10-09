@@ -38,6 +38,7 @@ import type {
   ReservationWhatsAppInvitationPlan,
 } from "@/features/access/domain/whatsapp-reservation-invitations";
 import { formatEventWallDateTime, formatTimestamp } from "@/lib/date-time";
+import { formatTimelineDisplayTime } from "@/features/timeline/domain/timeline-domain";
 import JSZip from "jszip";
 import { renderInvitationImageBlob, waitForInvitationImageNodeReady } from "@/features/access/domain/invitation-image-export";
 import { buildGuestInvitationDesign } from "@/features/access/domain/whatsapp-reservation-invitations";
@@ -1135,7 +1136,7 @@ export default function ReservationOperationsBoard({
 
           <div className="mt-4 space-y-3">
             {activeReservation.timeline.map((item) => (
-              <ReservationTimelineRow key={item.id} item={item} />
+              <ReservationTimelineRow key={item.id} item={item} timeZone={currentEvent.timezone} />
             ))}
           </div>
         </details>
@@ -1456,8 +1457,10 @@ function ReservationGuestOverflowMenu({ actions }: { actions: GuestOverflowActio
 
 function ReservationTimelineRow({
   item,
+  timeZone,
 }: {
   item: ReservationSummary["timeline"][number];
+  timeZone: string;
 }) {
   return (
     <div className="surface-elevated min-w-0 p-4">
@@ -1466,7 +1469,7 @@ function ReservationTimelineRow({
           <p className="break-words text-sm font-semibold text-white">{item.title}</p>
           <p className="mt-1 break-words text-sm leading-6 text-slate-400">{item.detail}</p>
         </div>
-        <p className="shrink-0 text-xs uppercase tracking-[0.22em] text-slate-500">{item.time}</p>
+        <p className="shrink-0 text-xs uppercase tracking-[0.22em] text-slate-500">{formatTimelineDisplayTime(item.time, timeZone)}</p>
       </div>
     </div>
   );

@@ -963,7 +963,9 @@ export function buildWorkspaceIntelligence({
   const eventReservationSummaries = reservationSummaries.filter((reservation) => eventReservations.some((item) => item.id === reservation.id));
   const eventGuests = guests.filter((guest) => guest.eventId === event.id);
   const operationalEventGuests = eventGuests.filter(isOperationalReservationGuest);
-  const eventTables = tableSummaries.filter((table) => table.reservationIds.some((reservationId) => eventReservations.some((item) => item.id === reservationId)));
+  // tableSummaries is already scoped to the selected event by workspace-service;
+  // retain unassigned resources so capacity and assignment denominators stay complete.
+  const eventTables = tableSummaries;
   const eventCheckIns = checkIns.filter((checkIn) => checkIn.eventId === event.id);
   const eventAccessGrants = eventGuests.map((guest) => {
     const reservation = eventReservations.find((item) => item.id === guest.reservationId) ?? null;
