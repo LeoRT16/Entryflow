@@ -154,6 +154,14 @@ test("reservation board keeps extra wristband UI scoped to Mesa and the RPCs", a
   assert.match(source, /status === "active"/);
 });
 
+test("extra wristband canonical boundary treats WhatsApp as optional", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const sql = await readFile(new URL("../supabase/migrations/20261111000000_commercial_guest_whatsapp_optional_fix.sql", import.meta.url), "utf8");
+  assert.match(sql, /Every person needs name and carnet/);
+  assert.doesNotMatch(sql, /Every person needs name, carnet and WhatsApp/);
+  assert.match(sql, /coalesce\(trim\(v_person->>'whatsapp'\), ''\)/);
+});
+
 test("canonical extra-wristband migration restores ordinals and access artifacts", async () => {
   const { readFile } = await import("node:fs/promises");
   const sql = await readFile(new URL("../supabase/migrations/20261107000000_extra_wristband_sale_canonical_access_fix.sql", import.meta.url), "utf8");

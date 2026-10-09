@@ -3355,8 +3355,8 @@ export function WorkspaceServiceProvider({
         }
       }
 
-      if (reservation.reservationType === "Cortesía" && guestInputs.some((guest) => !guest.guestName.trim() || !guest.carnet.trim() || !guest.whatsapp.trim())) {
-        throw new Error("Cada cortesía requiere nombre, carnet y WhatsApp.");
+      if (reservation.reservationType === "Cortesía" && guestInputs.some((guest) => !guest.guestName.trim() || !guest.carnet.trim())) {
+        throw new Error("Cada cortesía requiere nombre y carnet.");
       }
 
       const snapshot = captureSnapshot();
@@ -3517,8 +3517,8 @@ export function WorkspaceServiceProvider({
         return;
       }
 
-      if (reservation.reservationType === "Cortesía" && (!guestInput.guestName.trim() || !guestInput.carnet.trim() || !guestInput.whatsapp.trim())) {
-        throw new Error("Cada cortesía requiere nombre, carnet y WhatsApp.");
+      if (reservation.reservationType === "Cortesía" && (!guestInput.guestName.trim() || !guestInput.carnet.trim())) {
+        throw new Error("Cada cortesía requiere nombre y carnet.");
       }
 
       const snapshot = captureSnapshot();

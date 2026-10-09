@@ -12,11 +12,19 @@ test("courtesy creation is an additive atomic access boundary", () => {
   assert.match(sql, /create or replace function public\.add_courtesy_guest_atomic/);
 });
 
+test("courtesy atomic boundary treats WhatsApp as optional while requiring identity", () => {
+  const sql = readFileSync("supabase/migrations/20261111000000_commercial_guest_whatsapp_optional_fix.sql", "utf8");
+  assert.match(sql, /guest_name.*carnet.*courtesy_guest_incomplete/);
+  assert.doesNotMatch(sql, /guest_name.*carnet.*whatsapp.*courtesy_guest_incomplete/);
+  assert.match(sql, /coalesce\(g->>'whatsapp',''\)/);
+});
+
 test("courtesy service routes creation and append through atomic boundaries", () => {
   const source = readFileSync("services/workspace-service.tsx", "utf8");
   assert.match(source, /createCourtesyAtomic\(\{ reservation, guests: reservationGuestsWithAccess \}\)/);
   assert.match(source, /addCourtesyGuestAtomic\(\{ reservationId: reservation\.id, guest, accessEvent: timelineEntry \}\)/);
   assert.match(source, /addCourtesyGuestAtomic\(\{ reservationId, guest: nextGuestWithAccess, accessEvent: timelineEntry \}\)/);
+  assert.doesNotMatch(source, /Cada cortesía requiere nombre, carnet y WhatsApp/);
 });
 
 test("new reservation selector exposes only the three active creatable types", () => {
