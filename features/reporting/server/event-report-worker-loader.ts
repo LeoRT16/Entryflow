@@ -10,6 +10,9 @@ import type { EventReport } from "@/features/reporting/types";
 export class WorkerEventReportScopeError extends Error {
   constructor() { super("Reporting event scope unavailable."); this.name = "WorkerEventReportScopeError"; }
 }
+export class WorkerEventReportDataError extends Error {
+  constructor(dataset: string) { super(`Reporting dataset unavailable: ${dataset}.`); this.name = "WorkerEventReportDataError"; }
+}
 
 type Queryable = { select(columns: string): Queryable; eq(column: string, value: string): Queryable; is(column: string, value: null): Queryable; in(column: string, values: string[]): Queryable; maybeSingle(): Promise<{ data: unknown; error: Error | null }>; then<TResult>(onfulfilled?: (value: { data: unknown[] | null; error: Error | null }) => TResult): Promise<TResult>; };
 
@@ -34,11 +37,14 @@ export async function loadEventReportForWorker(client: SupabaseClient<Database>,
     db.from("tables").select("*").eq("event_id", input.eventId).is("deleted_at", null),
     db.from("checkins").select("*").eq("event_id", input.eventId).is("deleted_at", null),
     db.from("timeline_events").select("*").eq("event_id", input.eventId),
-    db.from("reservation_extra_wristband_sales").select("*").eq("event_id", input.eventId).is("deleted_at", null),
+    db.from("reservation_extra_wristband_sales").select("*").eq("event_id", input.eventId),
     db.from("event_layouts").select("*").eq("event_id", input.eventId).is("deleted_at", null),
     db.from("event_layout_sectors").select("*").is("deleted_at", null),
     db.from("event_layout_resources").select("*").is("deleted_at", null),
   ]);
+  const requiredDatasets = [["reservations", reservations], ["guests", guests], ["extra_wristband_sales", sales]] as const;
+  const failedDataset = requiredDatasets.find(([, result]) => result.error);
+  if (failedDataset) throw new WorkerEventReportDataError(failedDataset[0]);
   const rows = <T,>(result: { data: unknown[] | null; error: Error | null }) => result.error ? [] as T[] : (result.data ?? []) as T[];
   const event = mapEventRowToDomain(eventRow);
   const venue = event.venueId ? (rows<VenueRow>(venues).find((item) => item.id === event.venueId) ? mapVenueRowToDomain(rows<VenueRow>(venues).find((item) => item.id === event.venueId)!) : undefined) : undefined;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { loadEventReportForWorker, WorkerEventReportScopeError } from "../features/reporting/server/event-report-worker-loader";
+import { loadEventReportForWorker, WorkerEventReportDataError, WorkerEventReportScopeError } from "../features/reporting/server/event-report-worker-loader";
 import { buildEventReport, } from "../features/reporting/domain/event-report";
 import { buildEventReportFixtureInput, reportOrganization, reportVenue, reportEvent, reportSectors, reportResources, reportEventLayouts, reportEventLayoutSectors, reportEventLayoutResources, reportReservations, reportGuests, reportCheckIns, reportTimelineEvents, reportExtraWristbandSales } from "./fixtures/event-report-fixture";
 import { mapOrganizationToRow, mapVenueToRow, mapEventToRow, mapSectorToRow, mapResourceToRow, mapEventLayoutToRow, mapEventLayoutSectorToRow, mapEventLayoutResourceToRow, mapReservationToRow, mapGuestToRow, mapCheckInToRow, mapTimelineToRow } from "../lib/supabase/mappers";
@@ -10,7 +10,7 @@ function clientFor(event: unknown, organization: unknown) {
 }
 
 function row<T extends object>(value: T) { return { ...value, created_at: "2026-09-01T00:00:00.000Z", updated_at: "2026-09-01T00:00:00.000Z", deleted_at: null }; }
-function fixtureClient() {
+function fixtureClient(options: { errorTables?: string[] } = {}) {
   const input = buildEventReportFixtureInput();
   const datasets: Record<string, unknown[]> = {
     events: [row(mapEventToRow(reportEvent))], organizations: [row(mapOrganizationToRow(reportOrganization))], venues: [row(mapVenueToRow(reportVenue))],
@@ -30,9 +30,15 @@ function fixtureClient() {
   datasets.reservations.push({ ...(datasets.reservations[0] as Record<string, unknown>), id: "foreign-reservation", event_id: "foreign-event", name: "FOREIGN CONTAMINATION RESERVATION" });
   datasets.guests.push({ ...(datasets.guests[0] as Record<string, unknown>), id: "foreign-guest", event_id: "foreign-event", guest_name: "FOREIGN CONTAMINATION GUEST" });
   datasets.timeline_events.push({ ...(datasets.timeline_events[0] as Record<string, unknown>), id: "foreign-timeline", event_id: "foreign-event", title: "FOREIGN CONTAMINATION ACTIVITY" });
-  return { from(table: string) { return { select() { let data = datasets[table] ?? []; return { eq(column: string, value: string) { data = data.filter((item) => (item as Record<string, unknown>)[column] === value); return this; }, is(column: string, value: null) { data = data.filter((item) => (item as Record<string, unknown>)[column] === value); return this; }, maybeSingle: async () => ({ data: data[0] ?? null, error: null }), then: (resolve: (value: { data: unknown[]; error: null }) => unknown) => Promise.resolve(resolve({ data, error: null })) }; } }; } } as never;
+  return { from(table: string) { return { select() { let data = datasets[table] ?? []; const error = options.errorTables?.includes(table) ? new Error(`${table} unavailable`) : null; return { eq(column: string, value: string) { data = data.filter((item) => (item as Record<string, unknown>)[column] === value); return this; }, is(column: string, value: null) { data = data.filter((item) => (item as Record<string, unknown>)[column] === value); return this; }, maybeSingle: async () => ({ data: data[0] ?? null, error }), then: (resolve: (value: { data: unknown[]; error: Error | null }) => unknown) => Promise.resolve(resolve({ data, error })) }; } }; } } as never;
 }
 
+test("worker loader uses the real extra wristband schema and fails loudly on required dataset errors", async () => {
+  await assert.rejects(
+    () => loadEventReportForWorker(fixtureClient({ errorTables: ["reservation_extra_wristband_sales"] }), { eventId: reportEvent.id, organizationId: reportOrganization.id }),
+    (error: unknown) => error instanceof WorkerEventReportDataError && error.message === "Reporting dataset unavailable: extra_wristband_sales.",
+  );
+});
 test("worker loader returns a real EventReport for the deterministic fixture", async () => {
   const workerReport = await loadEventReportForWorker(fixtureClient(), { eventId: reportEvent.id, organizationId: reportOrganization.id, generatedAt: "2026-09-03T04:00:00.000Z" });
   assert.equal(workerReport.metadata.eventId, reportEvent.id); assert.equal(workerReport.metadata.organizationId, reportOrganization.id); assert.equal(workerReport.metadata.venueName, reportVenue.name);
