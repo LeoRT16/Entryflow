@@ -8,6 +8,9 @@ test("admission/reporting correction preserves processing leases and guards term
   assert.match(sql, /status=case when public\.reporting_outbox\.status='processing' then public\.reporting_outbox\.status else 'pending' end/);
   assert.match(sql, /locked_at=case when public\.reporting_outbox\.status='processing'/);
   assert.match(sql, /active_sync_run_id=case when public\.reporting_outbox\.status='processing'/);
+  assert.match(sql, /reporting_drive_integrations i where i\.organization_id=d\.organization_id[\s\S]*i\.oauth_secret_id is not null/);
+  assert.match(sql, /reporting_spreadsheet_provisioning p where p\.destination_id=d\.id and p\.status='ready'/);
+  assert.match(sql, /reporting_oauth_destination_not_ready/);
   assert.match(sql, /ev\.status in \('finished','cancelled'\)/);
   assert.match(sql, /create trigger guests_admission_event_open/);
   assert.match(sql, /function public\.enforce_admission_event_open\(\)/);

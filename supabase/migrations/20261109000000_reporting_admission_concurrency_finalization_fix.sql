@@ -37,6 +37,10 @@ begin
   if not found or d.writer_mode<>'oauth_user' or d.sheet_schema_version<>2 then raise exception 'reporting_oauth_destination_not_ready' using errcode='55000'; end if;
   if not (p_event_id=any(public.current_event_ids())) then raise exception 'reporting_forbidden' using errcode='42501'; end if;
   if not exists (select 1 from public.profiles p join public.roles r on r.id=p.role_id where p.user_id=public.current_app_user_id() and p.organization_id=d.organization_id and p.deleted_at is null and r.deleted_at is null and ('event.edit'=any(r.permissions) or 'organization.manage'=any(r.permissions))) then raise exception 'reporting_forbidden' using errcode='42501'; end if;
+  if not exists (select 1 from public.reporting_drive_integrations i where i.organization_id=d.organization_id and i.enabled and i.status='connected' and i.oauth_secret_id is not null and i.deleted_at is null)
+     or not exists (select 1 from public.reporting_spreadsheet_provisioning p where p.destination_id=d.id and p.status='ready') then
+    raise exception 'reporting_oauth_destination_not_ready' using errcode='55000';
+  end if;
   next_sequence:=d.last_requested_sequence+1;
   update public.reporting_destinations set last_requested_sequence=next_sequence,last_error=null where id=d.id;
   insert into public.reporting_outbox(destination_id,organization_id,event_id,requested_sequence,status,available_at,attempts,last_error,locked_at,locked_by,processed_at,active_sync_run_id)
