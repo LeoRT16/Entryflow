@@ -895,14 +895,14 @@ function ReservationFlowWorkspace({
     if (isCourtesy && step === 3) {
       const hasCompleteGuests = guestDrafts.length > 0 && guestDrafts.every(isCompleteGuestDraft);
       if (!hasCompleteGuests) {
-        setSubmissionError("Agrega al menos una persona completa con nombre, carnet y WhatsApp.");
+        setSubmissionError("Agrega al menos una persona completa con nombre y carnet.");
         return;
       }
     }
 
     if (isPresale && step === 2) {
       const holder = { holderName, holderLastName, documentValue, whatsapp };
-      if (holder.holderName.trim() && holder.holderLastName.trim() && holder.documentValue.trim() && holder.whatsapp.trim()) {
+      if (holder.holderName.trim() && holder.holderLastName.trim() && holder.documentValue.trim()) {
         const currentDrafts = guestDrafts.length ? guestDrafts : [createGuestDraft(0)];
         const nextDrafts = syncPresaleFirstGuestDraftWithHolder(currentDrafts, holder, presalePreloadedHolderRef.current);
         presalePreloadedHolderRef.current = holder;
@@ -917,7 +917,7 @@ function ReservationFlowWorkspace({
       const hasCompleteAccesses = guestDrafts.some(isCompleteGuestDraft);
       const hasPartialAccess = guestDrafts.some(isPartiallyCompleteGuestDraft);
       if (!hasCompleteAccesses || hasPartialAccess) {
-        setSubmissionError("Agrega al menos un acceso completo con nombre, carnet y WhatsApp.");
+        setSubmissionError("Agrega al menos un acceso completo con nombre y carnet.");
         return;
       }
     }
@@ -967,7 +967,7 @@ function ReservationFlowWorkspace({
         };
 
         if (isCourtesy && (input.guests.length < 1 || input.guests.some((guest) => !isCompleteGuestDraft(guest)))) {
-          setSubmissionError("Cada cortesía requiere nombre, carnet y WhatsApp.");
+          setSubmissionError("Cada cortesía requiere nombre y carnet.");
           return;
         }
 

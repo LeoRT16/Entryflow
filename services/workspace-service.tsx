@@ -4192,6 +4192,7 @@ export function WorkspaceServiceProvider({
           method,
           operator,
           timestampIso,
+          timeZone: currentEvent.timezone,
         });
         bundle.checkIn = {
           ...bundle.checkIn,

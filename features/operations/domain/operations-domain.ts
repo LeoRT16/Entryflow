@@ -65,6 +65,15 @@ function priorityRank(priority: WorkspacePriorityItem["priority"]) {
   return priority === "critical" ? 0 : priority === "high" ? 1 : priority === "medium" ? 2 : 3;
 }
 
+export function calculateTableAssignmentPercent(
+  eligibleTableCount: number,
+  assignedTableCount: number,
+) {
+  const eligible = Math.max(0, Math.floor(eligibleTableCount));
+  if (!eligible) return 0;
+  return Math.round((Math.min(Math.max(0, assignedTableCount), eligible) / eligible) * 100);
+}
+
 function incidentKey(item: WorkspacePriorityItem) {
   if (item.module === "Check-in" && (item.title === "Check-in detenido" || item.title === "Puerta congestionada")) {
     return "Check-in::Ingreso detenido";
@@ -212,7 +221,9 @@ export function buildOperationsSnapshot({
   const totalAssignedGuests = filteredTableSummaries.reduce((sum, table) => sum + table.metrics.assignedGuests, 0);
   const totalCapacity = filteredTableSummaries.reduce((sum, table) => sum + table.capacity, 0);
   const capacityRemaining = filteredTableSummaries.reduce((sum, table) => sum + table.metrics.capacityRemaining, 0);
-  const occupancyPercent = Math.round((totalAssignedGuests / Math.max(totalCapacity, 1)) * 100);
+  const eligibleTables = tableSummaries.filter((table) => table.status !== "Blocked" && table.status !== "Closed");
+  const assignedTableIds = new Set(filteredTableSummaries.filter((table) => table.reservationIds.length > 0).map((table) => table.id));
+  const tableAssignmentPercent = calculateTableAssignmentPercent(eligibleTables.length, assignedTableIds.size);
   const recentActivity = (timelineEvents?.length
     ? (eventId ? timelineEvents.filter((entry) => entry.eventId === eventId || !entry.eventId) : timelineEvents)
     : buildTimelineEvents({
@@ -375,7 +386,7 @@ export function buildOperationsSnapshot({
     buildMetric("Confirmados", `${confirmedGuests}`, "Invitados con reserva validada", "success"),
     buildMetric("Access", `${activeAccessGrants}`, "Grants activos para el evento", "info"),
     buildMetric("Check-in", `${checkedInGuests}`, "Ingresos ya registrados", "success"),
-    buildMetric("Asignación de mesas", `${occupancyPercent}%`, "Sobre capacidad física de mesas activas", "info"),
+    buildMetric("Asignación de mesas", `${tableAssignmentPercent}%`, `${assignedTableIds.size}/${eligibleTables.length} mesas elegibles asignadas`, "info"),
     buildMetric("Capacidad restante", `${capacityRemaining}`, "Asientos libres en mesas abiertas", "warning"),
   ],
   quickSummary: [

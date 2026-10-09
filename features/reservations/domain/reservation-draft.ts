@@ -36,11 +36,11 @@ export function buildGuestList(count: number) {
 }
 
 export function isCompleteGuestDraft(guest: GuestDraft) {
-  return Boolean(guest.name.trim() && guest.document.trim() && guest.whatsapp.trim());
+  return Boolean(guest.name.trim() && guest.document.trim());
 }
 
 export function isPartiallyCompleteGuestDraft(guest: GuestDraft) {
-  const fields = [guest.name, guest.document, guest.whatsapp].map((value) => value.trim());
+  const fields = [guest.name, guest.document].map((value) => value.trim());
   return fields.some(Boolean) && !fields.every(Boolean);
 }
 

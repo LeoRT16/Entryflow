@@ -19,14 +19,16 @@ function partsFor(value: string, timeZone: string) {
   }
 }
 
-export function formatTime(value: string, timeZone = "UTC") {
+export const ENTRYFLOW_TIMEZONE = "America/La_Paz";
+
+export function formatTime(value: string, timeZone = ENTRYFLOW_TIMEZONE) {
   const trimmed = value.trim();
   if (/^\d{2}:\d{2}(?::\d{2})?$/.test(trimmed)) return trimmed.slice(0, 5);
   const parts = partsFor(trimmed, timeZone);
   return parts?.hour && parts.minute ? `${parts.hour}:${parts.minute}` : "--:--";
 }
 
-export function formatTimestamp(value: string, timeZone = "UTC") {
+export function formatTimestamp(value: string, timeZone = ENTRYFLOW_TIMEZONE) {
   const parts = partsFor(value.trim(), timeZone);
   if (!parts?.year || !parts.month || !parts.day || !parts.hour || !parts.minute) return "—";
   return `${Number(parts.day)} ${MONTHS_ES[Number(parts.month) - 1] ?? parts.month} ${parts.year} · ${parts.hour}:${parts.minute}`;

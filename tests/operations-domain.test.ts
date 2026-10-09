@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildOperationsIncidents } from "../features/operations/domain/operations-domain";
+import { buildOperationsIncidents, calculateTableAssignmentPercent } from "../features/operations/domain/operations-domain";
 import type { WorkspacePriorityItem } from "../domain/workspace-priority";
 
 const item = (overrides: Partial<WorkspacePriorityItem> = {}) => ({
@@ -15,6 +15,14 @@ const item = (overrides: Partial<WorkspacePriorityItem> = {}) => ({
   blocking: false,
   ...overrides,
 }) as WorkspacePriorityItem;
+
+test("table assignment KPI counts eligible physical tables, not guest occupancy", () => {
+  assert.equal(calculateTableAssignmentPercent(3, 1), 33);
+  assert.equal(calculateTableAssignmentPercent(3, 0), 0);
+  assert.equal(calculateTableAssignmentPercent(3, 3), 100);
+  assert.equal(calculateTableAssignmentPercent(0, 1), 0);
+  assert.equal(calculateTableAssignmentPercent(3, 4), 100);
+});
 
 test("operations projection separates critical and attention incidents", () => {
   const result = buildOperationsIncidents({

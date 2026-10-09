@@ -6,6 +6,7 @@ import type { ReservationRecord, ReservationSummary } from "@/features/reservati
 import type { TableSummary } from "@/features/tables/types";
 import { buildTimelineSummary } from "@/features/timeline/domain/timeline-domain";
 import type { TimelineEvent } from "@/features/timeline/types";
+import { formatTime, ENTRYFLOW_TIMEZONE } from "@/lib/date-time";
 import type { CheckIn, CheckInAttempt, Guest } from "@/features/check-in/types";
 import { buildDashboardSnapshot } from "@/features/check-in/domain/check-in-domain";
 import { buildCommercialSummary, type CommercialSummary } from "@/features/reservations/domain/commercial-summary";
@@ -255,12 +256,12 @@ function countActiveOperators(events: TimelineEvent[], guests: Guest[], checkIns
   return Array.from(operators.values()).sort((a, b) => a.localeCompare(b));
 }
 
-function buildTimelineRates(checkIns: CheckIn[]) {
+function buildTimelineRates(checkIns: CheckIn[], timeZone = ENTRYFLOW_TIMEZONE) {
   const sorted = [...checkIns].sort((a, b) => compareTime(b.checkedInAt, a.checkedInAt));
   const perMinute = new Map<string, number>();
 
   for (const checkIn of sorted) {
-    const minute = checkIn.checkedInAt.slice(-5);
+    const minute = formatTime(checkIn.checkedInAt, timeZone);
     perMinute.set(minute, (perMinute.get(minute) ?? 0) + 1);
   }
 
@@ -998,7 +999,7 @@ export function buildWorkspaceIntelligence({
   const recentAccessEvents = eventTimeline.filter((entry) => entry.metadata?.entryType === "access.grant" || entry.kind.startsWith("checkin.")).length;
   const commercial = buildCommercialSummary({ eventId: event.id, reservations, guests, extraWristbandSales });
 
-  const rate = buildTimelineRates(eventCheckIns);
+  const rate = buildTimelineRates(eventCheckIns, event.timezone || ENTRYFLOW_TIMEZONE);
   const activeOperators = countActiveOperators(eventTimeline, eventGuests, eventCheckIns);
   const lastCheckInAt = latestTimestamp(eventCheckIns.map((item) => item.checkedInAt));
   const lastReservationAt = latestTimestamp(eventReservations.map((item) => item.updatedAt ?? item.createdAt));

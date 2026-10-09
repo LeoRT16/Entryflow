@@ -112,6 +112,8 @@ test("generated check-in id is a valid UUID", () => {
   assert.match(bundle.timelineEntry.id, uuidPattern);
   assert.equal(bundle.checkIn.createdAt, "2026-08-11T22:52:00.000Z");
   assert.equal(bundle.timelineEntry.createdAt, "2026-08-11T22:52:00.000Z");
+  assert.equal(bundle.checkIn.checkedInAt, "18:52");
+  assert.equal(bundle.nextGuest.checkInTime, "18:52");
   assert.equal(bundle.timelineEntry.guestName, "Leonardo Rodríguez");
   assert.equal(bundle.timelineEntry.target, "Leonardo Rodríguez");
   assert.equal(bundle.timelineEntry.reservationCode, "RES-E2E-01");

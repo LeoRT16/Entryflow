@@ -1,7 +1,7 @@
 import type { CheckIn, CheckInAttempt, Guest } from "@/features/check-in/types";
 import type { ReservationRecord, ReservationTimelineEntry } from "@/features/reservations/types";
 import type { TimelineEvent, TimelineIcon, TimelineKind, TimelineTone } from "@/features/timeline/types";
-import { formatTime as formatPresentationTime, formatTimestamp } from "@/lib/date-time";
+import { formatTime as formatPresentationTime, formatTimestamp, ENTRYFLOW_TIMEZONE } from "@/lib/date-time";
 
 function parseTimelineTimestamp(timestamp: string) {
   const trimmed = timestamp.trim();
@@ -79,7 +79,7 @@ export function compareTimelineEventsDescending(a: Pick<TimelineEvent, "createdA
   return b.id.localeCompare(a.id);
 }
 
-export function formatTimelineDisplayTime(timestamp: string, timeZone = "UTC") {
+export function formatTimelineDisplayTime(timestamp: string, timeZone = ENTRYFLOW_TIMEZONE) {
   const trimmed = timestamp.trim();
 
   if (!trimmed) {

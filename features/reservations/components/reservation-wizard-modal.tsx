@@ -980,7 +980,7 @@ function GuestsStep({
           </p>
           <p className="mt-2 text-sm text-slate-400">
             {isPresale
-              ? "Cada persona debe tener nombre, carnet y WhatsApp para generar su acceso individual."
+              ? "Cada persona debe tener nombre y carnet; WhatsApp es opcional hasta que envíes una invitación."
               : isCourtesy
                 ? "Lista individual de personas con acceso y estado operativo."
                 : "Lista interactiva simulada con edición individual y estado visual por invitado."}

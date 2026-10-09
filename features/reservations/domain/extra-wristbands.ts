@@ -106,7 +106,7 @@ export function validateExtraWristbandSaleInput({
   if (["Cancelled", "Completed", "No Show"].includes(reservation.status)) return "La reserva ya no admite manillas extra.";
   if (price === undefined || !Number.isFinite(price) || price < 0) return "Este evento no tiene precio de manilla extra configurado.";
   if (!guests.length) return "Agregá al menos una persona.";
-  if (guests.some((guest) => !guest.name.trim() || !guest.carnet.trim() || !guest.whatsapp.trim())) return "Cada persona necesita nombre, carnet y WhatsApp.";
+  if (guests.some((guest) => !guest.name.trim() || !guest.carnet.trim())) return "Cada persona necesita nombre y carnet.";
   return null;
 }
 

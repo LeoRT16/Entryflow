@@ -804,7 +804,7 @@ export default function ReservationOperationsBoard({
         </div>
       </div>
 
-      <section className={["surface-panel min-w-0 space-y-4 p-4 xl:p-5", !mobileDetail ? "hidden xl:block" : ""].join(" ")}>
+      <section className={["surface-panel min-w-0 space-y-4 p-4 xl:p-5 flex flex-col", !mobileDetail ? "hidden xl:block" : ""].join(" ")}>
         <div className="space-y-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="flex items-center gap-3">
@@ -880,14 +880,15 @@ export default function ReservationOperationsBoard({
         </div>
 
         {activeReservation.reservationType === "Cortesía" ? (
-          <section className="surface-elevated min-w-0 p-4">
+          <section className="surface-elevated min-w-0 p-4 order-1">
             <p className="kicker">Referencia</p>
             <p className="mt-3 break-words text-sm text-slate-300">{activeReservation.reference || "Sin referencia"}</p>
           </section>
         ) : null}
 
-        {activeReservation.reservationType !== "Cortesía" ? <section className="surface-elevated min-w-0 p-4">
-          <p className="kicker">Condiciones comerciales</p>
+        {activeReservation.reservationType !== "Cortesía" ? <details className="surface-elevated min-w-0 p-4 order-3" open={false}>
+          <summary className="cursor-pointer list-none"><p className="kicker">Condiciones comerciales</p></summary>
+          <div className="mt-4">
           {activeReservation.commercialSnapshot ? (
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <ReservationInfoRow
@@ -925,13 +926,15 @@ export default function ReservationOperationsBoard({
           ) : (
             <p className="mt-2 text-sm text-slate-400">Sin condiciones comerciales registradas.</p>
           )}
-        </section> : null}
+          </div>
+        </details> : null}
 
         {activeReservation.reservationType === "Mesa" ? (
-          <section className="surface-elevated min-w-0 p-4">
+          <details className="surface-elevated min-w-0 p-4 order-4" open={false}>
+            <summary className="cursor-pointer list-none"><p className="kicker">Operación comercial de Mesa</p></summary>
+            <div className="mt-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="kicker">Operación comercial de Mesa</p>
                 <h3 className="mt-2 text-lg font-semibold text-white">Manillas extra</h3>
                 <p className="mt-1 text-sm text-slate-400">
                   {extraWristbandPrice === undefined ? "Configura un precio en el evento para habilitar nuevas manillas." : `Precio vigente: ${formatCommercialCurrency(commercialConfig.currency)} ${formatCommercialAmount(extraWristbandPrice)} por manilla`}
@@ -967,10 +970,11 @@ export default function ReservationOperationsBoard({
                 ))}
               </div>
             ) : null}
-          </section>
+            </div>
+          </details>
         ) : null}
 
-        <section className="surface-elevated min-w-0 p-4">
+        <section className="surface-elevated min-w-0 p-4 order-2">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="kicker">{activeReservation.reservationType === "Cortesía" ? "Personas" : "Invitados"} ({activeReservation.guests.length})</p>
@@ -1077,7 +1081,7 @@ export default function ReservationOperationsBoard({
         </section>
 
         {lastBatchResult ? (
-          <section className="surface-elevated min-w-0 p-4">
+          <section className="surface-elevated min-w-0 p-4 order-5">
             <div className="flex min-w-0 items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="kicker">Último envío</p>
@@ -1118,7 +1122,7 @@ export default function ReservationOperationsBoard({
           </section>
         ) : null}
 
-        <details className="surface-elevated min-w-0 p-4">
+        <details className="surface-elevated min-w-0 p-4 order-6">
           <summary className="flex min-w-0 cursor-pointer list-none items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="kicker">Timeline</p>
@@ -1136,7 +1140,7 @@ export default function ReservationOperationsBoard({
           </div>
         </details>
 
-        <section className="surface-elevated min-w-0 p-4">
+        <section className="surface-elevated min-w-0 p-4 order-7">
           <p className="kicker">Observaciones</p>
           <p className="mt-3 break-words text-sm leading-6 text-slate-300">
             {activeReservation.notes || "Sin observaciones operativas."}

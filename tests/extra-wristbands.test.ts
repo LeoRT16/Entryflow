@@ -32,13 +32,14 @@ test("extra wristband validation allows a configured zero price and derives the 
   assert.equal(calculateExtraWristbandTotal(50, 3), 150);
 });
 
-test("extra wristband validation rejects missing, negative, non-Mesa, empty, and incomplete inputs", () => {
+test("extra wristband validation rejects missing, negative, non-Mesa, empty, and incomplete inputs while allowing optional WhatsApp", () => {
   const people = [{ name: "Ana", carnet: "1", whatsapp: "2" }];
   assert.match(validateExtraWristbandSaleInput({ reservation: mesa, eventId: "event-1", guests: people }) ?? "", /precio/);
   assert.match(validateExtraWristbandSaleInput({ reservation: mesa, eventId: "event-1", price: -1, guests: people }) ?? "", /precio/);
   assert.match(validateExtraWristbandSaleInput({ reservation: { ...mesa, reservationType: "Preventa" }, eventId: "event-1", price: 50, guests: people }) ?? "", /Mesa/);
   assert.match(validateExtraWristbandSaleInput({ reservation: mesa, eventId: "event-1", price: 50, guests: [] }) ?? "", /persona/);
-  assert.match(validateExtraWristbandSaleInput({ reservation: mesa, eventId: "event-1", price: 50, guests: [{ ...people[0], whatsapp: "" }] }) ?? "", /nombre, carnet y WhatsApp/);
+  assert.equal(validateExtraWristbandSaleInput({ reservation: mesa, eventId: "event-1", price: 50, guests: [{ ...people[0], whatsapp: "" }] }), null);
+  assert.match(validateExtraWristbandSaleInput({ reservation: mesa, eventId: "event-1", price: 50, guests: [{ name: "", carnet: "1", whatsapp: "" }] }) ?? "", /nombre y carnet/);
 });
 
 test("commercial totals include only active sales and preserve independent historical prices", () => {

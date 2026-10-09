@@ -2,6 +2,7 @@ import type { CheckInMethod, CheckIn, Guest } from "@/features/check-in/types";
 import { createAdmissionTimelineEntry, type AdmissionEngineOutput, type Ticket } from "@/features/access/domain/access-domain";
 import type { TimelineEvent } from "@/features/timeline/types";
 import { createUuid } from "@/lib/supabase/helpers";
+import { formatTime, ENTRYFLOW_TIMEZONE } from "@/lib/date-time";
 
 export type CheckInPersistenceRepositories = {
   checkIns: {
@@ -98,9 +99,10 @@ export function buildCompletedCheckInBundle(params: {
   method: CheckInMethod;
   operator: string;
   timestampIso: string;
+  timeZone?: string;
 }) {
-  const { guest, result, ticket, method, operator, timestampIso } = params;
-  const timestamp = timestampIso.slice(11, 16);
+  const { guest, result, ticket, method, operator, timestampIso, timeZone = ENTRYFLOW_TIMEZONE } = params;
+  const timestamp = formatTime(timestampIso, timeZone);
   const admissionMethod = method === "Manual" ? "manual" : "qr";
   const gate = method === "Manual" ? "Recepción" : guest.gate ?? "Principal";
   const timelineBase = createAdmissionTimelineEntry(result, ticket);
