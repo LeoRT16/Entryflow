@@ -49,6 +49,17 @@ function getAttemptTone(result: string) {
   return "danger" as const;
 }
 
+function ValidationField({ label, value }: { label: string; value?: string | null }) {
+  if (!value?.trim()) return null;
+
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</p>
+      <p className="mt-1 break-words text-sm font-medium text-slate-100">{value}</p>
+    </div>
+  );
+}
+
 function CompactGuestRow({ guest, onSelect }: { guest: Guest; onSelect: (guest: Guest) => void }) {
   const quickRead = buildGuestQuickReadSummary(guest);
   return (
@@ -418,15 +429,13 @@ function CheckInWorkspace() {
                   </div>
 
                   {attemptGuestQuickRead ? (
-                    <div className="mt-3 space-y-2 text-sm text-slate-300">
-                      <p className="font-medium text-white">{attemptGuestQuickRead.name}</p>
-                      <p>{formatGuestCarnetLabel(attemptGuestQuickRead.carnet)} · {attemptGuestQuickRead.reservation}</p>
-                      {attemptGuestQuickRead.space !== "Sin mesa" ? <p>{attemptGuestQuickRead.space}</p> : null}
-                      {historicalContext?.time || historicalContext?.operator ? (
-                        <p className="text-slate-200">
-                          {[historicalContext.time ? `Ingreso: ${historicalContext.time}` : null, historicalContext.operator ? `Operador: ${historicalContext.operator}` : null].filter(Boolean).join(" · ")}
-                        </p>
-                      ) : null}
+                    <div className="mt-3 grid min-w-0 gap-x-5 gap-y-3 sm:grid-cols-2">
+                      <ValidationField label="Carnet" value={attemptGuestQuickRead.carnet} />
+                      <ValidationField label="Reserva" value={attemptGuestQuickRead.reservationCode} />
+                      <ValidationField label="Titular" value={attemptGuestQuickRead.reservationHolder} />
+                      {attemptGuestQuickRead.spaceLabel ? <ValidationField label={attemptGuestQuickRead.spaceLabel} value={attemptGuestQuickRead.space} /> : null}
+                      {historicalContext?.time ? <ValidationField label="Hora de ingreso" value={historicalContext.time} /> : null}
+                      {historicalContext?.operator ? <ValidationField label="Registrado por" value={historicalContext.operator} /> : null}
                     </div>
                   ) : null}
 
@@ -453,12 +462,13 @@ function CheckInWorkspace() {
                       </div>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-300">
-                      <span>{selectedGuestQuickRead?.reservation ?? "Sin reserva"}</span>
-                      {selectedGuestQuickRead?.space && selectedGuestQuickRead.space !== "Sin mesa" ? <><span aria-hidden="true" className="text-slate-600">·</span><span>{selectedGuestQuickRead.space}</span></> : null}
-                      {operatorPresentation.state !== "entered" ? <><span aria-hidden="true" className="text-slate-600">·</span><span>{selectedGuestQuickRead?.accessStatus ?? "Sin estado"} · {selectedGuestQuickRead?.entryStatus ?? "Sin estado"}</span></> : null}
-                      {selectedHistoricalContext?.time ? <><span aria-hidden="true" className="text-slate-600">·</span><span>Ingreso: {selectedHistoricalContext.time}</span></> : null}
-                      {selectedHistoricalContext?.operator ? <><span aria-hidden="true" className="text-slate-600">·</span><span>Operador: {selectedHistoricalContext.operator}</span></> : null}
+                    <div className="mt-3 grid min-w-0 gap-x-5 gap-y-3 sm:grid-cols-2">
+                      <ValidationField label="Carnet" value={selectedGuestQuickRead?.carnet} />
+                      <ValidationField label="Reserva" value={selectedGuestQuickRead?.reservationCode} />
+                      <ValidationField label="Titular" value={selectedGuestQuickRead?.reservationHolder} />
+                      {selectedGuestQuickRead?.spaceLabel ? <ValidationField label={selectedGuestQuickRead.spaceLabel} value={selectedGuestQuickRead.space} /> : null}
+                      {selectedHistoricalContext?.time ? <ValidationField label="Hora de ingreso" value={selectedHistoricalContext.time} /> : null}
+                      {selectedHistoricalContext?.operator ? <ValidationField label="Registrado por" value={selectedHistoricalContext.operator} /> : null}
                     </div>
 
                     {operatorPresentation.state !== "ready" ? <div className="mt-4 rounded-[1.1rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-300">{operatorPresentation.description}</div> : null}

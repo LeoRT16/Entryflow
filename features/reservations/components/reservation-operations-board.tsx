@@ -880,102 +880,7 @@ export default function ReservationOperationsBoard({
           {activeReservation.reservationType === "Mesa" ? <CompactMetric label="Capacidad restante" value={activeReservation.metrics.capacityRemaining} /> : null}
         </div>
 
-        {activeReservation.reservationType === "Cortesía" ? (
-          <section className="surface-elevated min-w-0 p-4 order-1">
-            <p className="kicker">Referencia</p>
-            <p className="mt-3 break-words text-sm text-slate-300">{activeReservation.reference || "Sin referencia"}</p>
-          </section>
-        ) : null}
-
-        {activeReservation.reservationType !== "Cortesía" ? <details className="surface-elevated min-w-0 p-4 order-3" open={false}>
-          <summary className="cursor-pointer list-none"><p className="kicker">Condiciones comerciales</p></summary>
-          <div className="mt-4">
-          {activeReservation.commercialSnapshot ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <ReservationInfoRow
-                label={activeReservation.commercialSnapshot.saleType === "presale" ? "Precio por acceso" : "Precio vendido"}
-                value={`${formatCommercialCurrency(activeReservation.commercialSnapshot.currency)} ${formatCommercialAmount(getPresaleUnitPrice(activeReservation.commercialSnapshot))}`}
-              />
-              <ReservationInfoRow label="Moneda" value={activeReservation.commercialSnapshot.currency} />
-              <ReservationInfoRow
-                label={activeReservation.commercialSnapshot.saleType === "presale" ? "Preventas compradas" : activeReservation.reservationType === "Mesa" ? "Manillas incluidas" : "Accesos incluidos"}
-                value={`${getPresaleQuantity(activeReservation.commercialSnapshot)}`}
-              />
-              {activeReservation.commercialSnapshot.saleType === "presale" ? (
-                <ReservationInfoRow
-                  label="Total vendido"
-                  value={`${formatCommercialCurrency(activeReservation.commercialSnapshot.currency)} ${formatCommercialAmount(getPresaleTotal(activeReservation.commercialSnapshot))}`}
-                />
-              ) : null}
-              <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:col-span-3">
-                <p className="break-words text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                  Beneficios incluidos
-                </p>
-                {activeReservation.commercialSnapshot.benefits.length ? (
-                  <ul className="mt-2 space-y-1 text-sm font-medium text-white">
-                    {activeReservation.commercialSnapshot.benefits.map((benefit) => (
-                      <li key={benefit.id}>
-                        {benefit.label} ×{benefit.quantity}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-sm text-slate-400">Ninguno</p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-slate-400">Sin condiciones comerciales registradas.</p>
-          )}
-          </div>
-        </details> : null}
-
-        {activeReservation.reservationType === "Mesa" ? (
-          <details className="surface-elevated min-w-0 p-4 order-4" open={false}>
-            <summary className="cursor-pointer list-none"><p className="kicker">Operación comercial de Mesa</p></summary>
-            <div className="mt-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="mt-2 text-lg font-semibold text-white">Manillas extra</h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  {extraWristbandPrice === undefined ? "Configura un precio en el evento para habilitar nuevas manillas." : `Precio vigente: ${formatCommercialCurrency(commercialConfig.currency)} ${formatCommercialAmount(extraWristbandPrice)} por manilla`}
-                </p>
-              </div>
-              {extraWristbandPrice !== undefined && !isTerminalReservation ? (
-                <button type="button" onClick={openExtraWristbandModal} className="inline-flex h-10 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15">
-                  Agregar manillas extra
-                </button>
-              ) : null}
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <ReservationInfoRow label="Manillas incluidas" value={`${activeReservation.commercialSnapshot?.includedAccesses ?? 0}`} />
-              <ReservationInfoRow label="Manillas extra activas" value={`${activeExtraWristbandCount}`} />
-              <ReservationInfoRow label="Personas totales vinculadas" value={`${activeReservation.metrics.guestCount}`} />
-              <ReservationInfoRow label="Total comercial" value={`${formatCommercialCurrency(activeReservation.commercialSnapshot?.currency ?? commercialConfig.currency)} ${formatCommercialAmount(commercialTotal)}`} />
-            </div>
-            {activeExtraWristbandSales.length ? (
-              <div className="mt-4 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Histórico de ventas</p>
-                {activeExtraWristbandSales.map((sale) => (
-                  <div key={sale.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="break-words text-sm font-medium text-white">{formatManillaLabel(sale.quantity, true)} × {formatCommercialCurrency(sale.currency)} {formatCommercialAmount(sale.unitPrice)}</p>
-                      <p className="mt-1 text-xs text-slate-400">{formatCommercialCurrency(sale.currency)} {formatCommercialAmount(sale.totalPrice)} · {formatSaleDate(sale.createdAt, currentEvent.timezone)}{sale.createdBy ? ` · ${sale.createdBy}` : ""}</p>
-                      {sale.status === "cancelled" && sale.cancellationReason ? <p className="mt-1 break-words text-xs text-amber-200">Motivo: {sale.cancellationReason}</p> : null}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge variant={sale.status === "active" ? "success" : "danger"}>{sale.status === "active" ? "Activa" : "Anulada"}</StatusBadge>
-                      {sale.status === "active" && !isTerminalReservation ? <button type="button" onClick={() => { setCancellationSale(sale); setCancellationReason(""); setCancellationError(null); }} className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-50 transition hover:bg-rose-400/15">Anular venta</button> : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            </div>
-          </details>
-        ) : null}
-
-        <section className="surface-elevated min-w-0 p-4 order-2">
+        <section className="surface-elevated min-w-0 p-4">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="kicker">{activeReservation.reservationType === "Cortesía" ? "Personas" : "Invitados"} ({activeReservation.guests.length})</p>
@@ -1080,6 +985,103 @@ export default function ReservationOperationsBoard({
             </div>
           ) : null}
         </section>
+
+        {activeReservation.reservationType === "Cortesía" ? (
+          <section className="surface-elevated min-w-0 p-4 order-1">
+            <p className="kicker">Referencia</p>
+            <p className="mt-3 break-words text-sm text-slate-300">{activeReservation.reference || "Sin referencia"}</p>
+          </section>
+        ) : null}
+
+        {activeReservation.reservationType !== "Cortesía" ? <details className="surface-elevated min-w-0 p-4" open={false}>
+          <summary className="cursor-pointer list-none"><p className="kicker">Condiciones comerciales</p></summary>
+          <div className="mt-4">
+          {activeReservation.commercialSnapshot ? (
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <ReservationInfoRow
+                label={activeReservation.commercialSnapshot.saleType === "presale" ? "Precio por acceso" : "Precio vendido"}
+                value={`${formatCommercialCurrency(activeReservation.commercialSnapshot.currency)} ${formatCommercialAmount(getPresaleUnitPrice(activeReservation.commercialSnapshot))}`}
+              />
+              <ReservationInfoRow label="Moneda" value={activeReservation.commercialSnapshot.currency} />
+              <ReservationInfoRow
+                label={activeReservation.commercialSnapshot.saleType === "presale" ? "Preventas compradas" : activeReservation.reservationType === "Mesa" ? "Manillas incluidas" : "Accesos incluidos"}
+                value={`${getPresaleQuantity(activeReservation.commercialSnapshot)}`}
+              />
+              {activeReservation.commercialSnapshot.saleType === "presale" ? (
+                <ReservationInfoRow
+                  label="Total vendido"
+                  value={`${formatCommercialCurrency(activeReservation.commercialSnapshot.currency)} ${formatCommercialAmount(getPresaleTotal(activeReservation.commercialSnapshot))}`}
+                />
+              ) : null}
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 sm:col-span-3">
+                <p className="break-words text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  Beneficios incluidos
+                </p>
+                {activeReservation.commercialSnapshot.benefits.length ? (
+                  <ul className="mt-2 space-y-1 text-sm font-medium text-white">
+                    {activeReservation.commercialSnapshot.benefits.map((benefit) => (
+                      <li key={benefit.id}>
+                        {benefit.label} ×{benefit.quantity}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-400">Ninguno</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-slate-400">Sin condiciones comerciales registradas.</p>
+          )}
+          </div>
+        </details> : null}
+
+        {activeReservation.reservationType === "Mesa" ? (
+          <details className="surface-elevated min-w-0 p-4" open={false}>
+            <summary className="cursor-pointer list-none"><p className="kicker">Operación comercial de Mesa</p></summary>
+            <div className="mt-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="mt-2 text-lg font-semibold text-white">Manillas extra</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  {extraWristbandPrice === undefined ? "Configura un precio en el evento para habilitar nuevas manillas." : `Precio vigente: ${formatCommercialCurrency(commercialConfig.currency)} ${formatCommercialAmount(extraWristbandPrice)} por manilla`}
+                </p>
+              </div>
+              {extraWristbandPrice !== undefined && !isTerminalReservation ? (
+                <button type="button" onClick={openExtraWristbandModal} className="inline-flex h-10 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-400/10 px-4 text-sm font-medium text-cyan-50 transition hover:bg-cyan-400/15">
+                  Agregar manillas extra
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <ReservationInfoRow label="Manillas incluidas" value={`${activeReservation.commercialSnapshot?.includedAccesses ?? 0}`} />
+              <ReservationInfoRow label="Manillas extra activas" value={`${activeExtraWristbandCount}`} />
+              <ReservationInfoRow label="Personas totales vinculadas" value={`${activeReservation.metrics.guestCount}`} />
+              <ReservationInfoRow label="Total comercial" value={`${formatCommercialCurrency(activeReservation.commercialSnapshot?.currency ?? commercialConfig.currency)} ${formatCommercialAmount(commercialTotal)}`} />
+            </div>
+            {activeExtraWristbandSales.length ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Histórico de ventas</p>
+                {activeExtraWristbandSales.map((sale) => (
+                  <div key={sale.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-medium text-white">{formatManillaLabel(sale.quantity, true)} × {formatCommercialCurrency(sale.currency)} {formatCommercialAmount(sale.unitPrice)}</p>
+                      <p className="mt-1 text-xs text-slate-400">{formatCommercialCurrency(sale.currency)} {formatCommercialAmount(sale.totalPrice)} · {formatSaleDate(sale.createdAt, currentEvent.timezone)}{sale.createdBy ? ` · ${sale.createdBy}` : ""}</p>
+                      {sale.status === "cancelled" && sale.cancellationReason ? <p className="mt-1 break-words text-xs text-amber-200">Motivo: {sale.cancellationReason}</p> : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge variant={sale.status === "active" ? "success" : "danger"}>{sale.status === "active" ? "Activa" : "Anulada"}</StatusBadge>
+                      {sale.status === "active" && !isTerminalReservation ? <button type="button" onClick={() => { setCancellationSale(sale); setCancellationReason(""); setCancellationError(null); }} className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-50 transition hover:bg-rose-400/15">Anular venta</button> : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            </div>
+          </details>
+        ) : null}
+
+
 
         {lastBatchResult ? (
           <section className="surface-elevated min-w-0 p-4 order-5">

@@ -138,13 +138,17 @@ type GuestQuickReadSource = {
 export function buildGuestQuickReadSummary(guest: GuestQuickReadSource, historicalCheckIn?: Pick<CheckIn, "checkedInAt" | "gate" | "operator" | "status">) {
   const source = { ...guest, historicalCheckIn };
   const space = source.tableName ?? source.seat ?? "Sin mesa";
+  const spaceLabel = source.tableName ? "Mesa" : source.seat ? "Asiento" : "";
   const visibleCode = source.accessCode ?? source.invitationCode;
 
   return {
     name: source.guestName,
     carnet: source.carnet,
     reservation: `${source.reservationCode} · ${source.reservationName}`,
+    reservationCode: source.reservationCode,
+    reservationHolder: source.reservationName,
     space,
+    spaceLabel,
     entryStatus: source.admissionStatus,
     accessStatus:
       source.qrStatus ??
