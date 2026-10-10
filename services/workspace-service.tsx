@@ -3046,6 +3046,10 @@ export function WorkspaceServiceProvider({
 
       const selectedResource = input.selectedResource ?? input.selectedTable;
 
+      if (input.guests.some((guest) => !isCompleteGuestDraft(guest))) {
+        throw new Error("Cada invitado requiere nombre y carnet.");
+      }
+
       if (!selectedResource) {
         throw new Error("A resource is required to update a reservation.");
       }
@@ -3082,7 +3086,7 @@ export function WorkspaceServiceProvider({
           if (currentGuest) {
             return {
               ...currentGuest,
-              guestName: guestDraft.name.trim() || currentGuest.guestName || `Invitado ${index + 1}`,
+              guestName: guestDraft.name.trim(),
               reservationName: nextName,
               reservationCode: reservation.code,
               reservationId: reservation.id,
@@ -3105,7 +3109,7 @@ export function WorkspaceServiceProvider({
 
           return {
             id: createUuid(),
-            guestName: guestDraft.name.trim() || `Invitado ${index + 1}`,
+            guestName: guestDraft.name.trim(),
             reservationName: nextName,
             reservationCode: reservation.code,
             reservationId: reservation.id,
@@ -3116,7 +3120,7 @@ export function WorkspaceServiceProvider({
             eventStatus: currentEvent.status === "live" ? "En curso" : "Próximo",
             invitationSequence,
             invitationCode,
-            carnet: guestDraft.document || `Pendiente ${index + 1}`,
+            carnet: guestDraft.document.trim(),
             whatsapp: guestDraft.whatsapp || input.whatsapp,
             deliveryStatus: "Enviada",
             admissionStatus: "Pendiente",
@@ -3359,6 +3363,10 @@ export function WorkspaceServiceProvider({
         throw new Error("Cada cortesía requiere nombre y carnet.");
       }
 
+      if (guestInputs.some((guest) => !guest.guestName.trim() || !guest.carnet.trim())) {
+        throw new Error("Cada invitado requiere nombre y carnet.");
+      }
+
       const snapshot = captureSnapshot();
 
       try {
@@ -3519,6 +3527,10 @@ export function WorkspaceServiceProvider({
 
       if (reservation.reservationType === "Cortesía" && (!guestInput.guestName.trim() || !guestInput.carnet.trim())) {
         throw new Error("Cada cortesía requiere nombre y carnet.");
+      }
+
+      if (!guestInput.guestName.trim() || !guestInput.carnet.trim()) {
+        throw new Error("Cada invitado requiere nombre y carnet.");
       }
 
       const snapshot = captureSnapshot();

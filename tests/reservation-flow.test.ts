@@ -134,6 +134,14 @@ test("reservation editing preserves historical commercial snapshots and clears t
   assert.match(updateBlock, /commercialSnapshot:\s*input\.reservationType === "Cortesía" \? undefined : reservation\.commercialSnapshot/);
 });
 
+test("reservation append and edit reject incomplete identities instead of inventing placeholders", () => {
+  const source = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
+  const flowSource = readFileSync(new URL("../features/reservations/components/reservation-flow.tsx", import.meta.url), "utf8");
+  assert.match(source, /guestInputs\.some\(\(guest\) => !guest\.guestName\.trim\(\) \|\| !guest\.carnet\.trim\(\)\)/);
+  assert.match(source, /if \(!guestInput\.guestName\.trim\(\) \|\| !guestInput\.carnet\.trim\(\)\)/);
+  assert.doesNotMatch(flowSource, /guestName: guest\.name\.trim\(\) \|\| "Invitado"/);
+});
+
 test("reservation persistence resolves the selected resource through the current event table context", () => {
   const source = readFileSync(new URL("../services/workspace-service.tsx", import.meta.url), "utf8");
   const createReservationBlock = extractBlock(source, "const createReservation = useCallback(", "  const updateGuestWhatsApp = useCallback(");

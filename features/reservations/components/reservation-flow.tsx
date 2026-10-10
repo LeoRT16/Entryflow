@@ -1065,6 +1065,10 @@ function ReservationFlowWorkspace({
           eventName: currentEvent.name,
         };
         const selectedResource = payload.selectedResource ?? payload.selectedTable ?? selectedResourceContext.resource;
+        if (payload.guests.some((guest) => !guest.name.trim() || !guest.document.trim())) {
+          setSubmissionError("Cada invitado requiere nombre y carnet.");
+          return;
+        }
         const capacityViolation = resolveReservationCapacityViolation({
           resourceCapacity: selectedResource?.capacity,
           guestCount: payload.guests.length,
@@ -1080,8 +1084,8 @@ function ReservationFlowWorkspace({
         const reservation = await appendReservationGuests(
           selectedActiveReservation.id,
           payload.guests.map((guest) => ({
-            guestName: guest.name.trim() || "Invitado",
-            carnet: guest.document,
+            guestName: guest.name.trim(),
+            carnet: guest.document.trim(),
             whatsapp: guest.whatsapp,
           })),
         );

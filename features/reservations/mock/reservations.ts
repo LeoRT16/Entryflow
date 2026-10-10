@@ -6,7 +6,7 @@ export const reservationEventOptions = ["Noche Carlota", "Viernes Retro", "Fiest
 
 export const reservationGuestPresets: Array<Partial<GuestDraft>> = [
   {
-    name: "Leonardo Rodríguez",
+    name: "Persona de ejemplo 1",
     whatsapp: "+591 70000001",
     document: "1234567",
     invitationState: "Enviada",
@@ -14,7 +14,7 @@ export const reservationGuestPresets: Array<Partial<GuestDraft>> = [
     transferBadge: "VIP",
   },
   {
-    name: "Andrea Pérez",
+    name: "Persona de ejemplo 2",
     whatsapp: "+591 70000002",
     document: "7654321",
     invitationState: "Transferida",
@@ -22,7 +22,7 @@ export const reservationGuestPresets: Array<Partial<GuestDraft>> = [
     transferBadge: "Transferible",
   },
   {
-    name: "Carlos Méndez",
+    name: "Persona de ejemplo 3",
     whatsapp: "+591 70000003",
     document: "9988776",
     invitationState: "Lista",
