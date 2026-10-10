@@ -277,6 +277,7 @@ export function buildOperationsSnapshot({
   filteredReservationSummaries
     .filter(
       (reservation) =>
+        reservation.reservationType === "Mesa" &&
         (!reservation.tableName || reservation.tableName === "Sin mesa") &&
         normalizeReservationStatus(reservation.status) !== "Cancelled" &&
         normalizeReservationStatus(reservation.status) !== "No Show",

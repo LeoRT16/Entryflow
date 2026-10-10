@@ -20,6 +20,7 @@ import { buildGuestInvitationDesign } from "@/features/access/domain/whatsapp-re
 import {
   getWhatsAppDeliveryStatusLabel,
   getWhatsAppDeliveryStatusTone,
+  resolveGuestDeliveryStatus,
   type WhatsAppDeliveryState,
 } from "@/features/access/domain/whatsapp-delivery-tracking";
 import StatusBadge from "@/components/status-badge";
@@ -718,7 +719,7 @@ function getGuestDeliveryStatusLabel(guest: GuestRecord) {
     return getWhatsAppDeliveryStatusLabel(deliveryState.currentStatus);
   }
 
-  return guest.deliveryStatus;
+  return resolveGuestDeliveryStatus(guest);
 }
 
 function getGuestDeliveryStatusTone(guest: GuestRecord) {
@@ -728,7 +729,7 @@ function getGuestDeliveryStatusTone(guest: GuestRecord) {
     return getWhatsAppDeliveryStatusTone(deliveryState.currentStatus);
   }
 
-  return statusTone(guest.deliveryStatus);
+  return statusTone(resolveGuestDeliveryStatus(guest));
 }
 
 function getDeliveryPresentationLabel(guest: GuestRecord) {

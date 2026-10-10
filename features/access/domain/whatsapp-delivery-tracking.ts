@@ -11,6 +11,34 @@ export type WhatsAppDeliveryHistoryEntry = {
 
 export type WhatsAppLegacyDeliveryStatus = "Pendiente de envío" | "Enviada" | "Reenviada" | "Vista" | "Fallida";
 
+/**
+ * QR/access issuance is independent from WhatsApp delivery. A legacy row can
+ * still contain `Enviada` because older RPCs used that value when creating an
+ * access. Treat that value as pending when there is no recipient and no
+ * provider evidence, while preserving real historical delivery outcomes.
+ */
+export function resolveGuestDeliveryStatus(input: {
+  whatsapp?: string | null;
+  deliveryStatus?: string | null;
+  deliveryHistory?: Array<{ title?: string; detail?: string }>;
+}): WhatsAppLegacyDeliveryStatus {
+  const status = input.deliveryStatus as WhatsAppLegacyDeliveryStatus | undefined;
+  const history = input.deliveryHistory ?? [];
+  const hasProviderEvidence = history.some((entry) => {
+    const title = entry.title ?? "";
+    if (["Aceptado", "Enviado", "Entregado", "Vista", "Leída", "Leido", "Falló", "Fallida"].includes(title)) return true;
+    return ["Enviada", "Reenviada"].includes(title) && /whatsapp|proveedor|meta|entreg/i.test(entry.detail ?? "");
+  });
+
+  if (!input.whatsapp?.trim() && !hasProviderEvidence && (status === "Enviada" || status === "Reenviada")) {
+    return "Pendiente de envío";
+  }
+
+  return status && ["Pendiente de envío", "Enviada", "Reenviada", "Vista", "Fallida"].includes(status)
+    ? status
+    : "Pendiente de envío";
+}
+
 export type WhatsAppDeliveryState = {
   messageId: string;
   attemptNumber: number;

@@ -1,5 +1,6 @@
 import type { GuestDraft } from "@/features/reservations/types";
 import type { Guest } from "@/features/check-in/types";
+import { resolveGuestDeliveryStatus } from "@/features/access/domain/whatsapp-delivery-tracking";
 
 function normalizeText(value: string) {
   return value
@@ -99,11 +100,11 @@ export function buildGuestDraftsFromGuests(guests: Guest[]) {
     whatsapp: guest.whatsapp ?? "",
     document: guest.carnet ?? "",
     invitationState:
-      guest.deliveryStatus === "Enviada"
+      resolveGuestDeliveryStatus(guest) === "Enviada"
         ? "Enviada"
-        : guest.deliveryStatus === "Reenviada"
+        : resolveGuestDeliveryStatus(guest) === "Reenviada"
           ? "Enviada"
-        : guest.deliveryStatus === "Vista"
+        : resolveGuestDeliveryStatus(guest) === "Vista"
           ? "Lista"
           : "Pendiente",
     vip: isVipTaggedGuest(guest),

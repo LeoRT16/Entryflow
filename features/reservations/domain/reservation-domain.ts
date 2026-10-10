@@ -13,6 +13,7 @@ import type {
 } from "@/features/reservations/types";
 import { isCompleteGuestDraft } from "@/features/reservations/domain/reservation-draft";
 import { createUuid } from "@/lib/supabase/helpers";
+import { resolveGuestDeliveryStatus } from "@/features/access/domain/whatsapp-delivery-tracking";
 
 function createTimeStamp() {
   return new Date().toLocaleTimeString("es-BO", {
@@ -230,7 +231,7 @@ function getGuestReservationSummary(guest: Guest): ReservationGuestSummary {
     invitationSequence: guest.invitationSequence,
     admissionStatus: guest.admissionStatus,
     reservationStatus: status,
-    deliveryStatus: guest.deliveryStatus,
+    deliveryStatus: resolveGuestDeliveryStatus(guest),
     checkInTime: guest.checkInTime,
     checkInMethod: guest.checkInMethod,
     gate: guest.gate,
@@ -461,7 +462,7 @@ export function buildReservationTimeline(
       );
     }
 
-    if (normalizeReservationStatus(guest.reservationStatus) === "Confirmed" && guest.deliveryStatus === "Enviada") {
+    if (normalizeReservationStatus(guest.reservationStatus) === "Confirmed" && resolveGuestDeliveryStatus(guest) === "Enviada") {
       const latestDelivery = guest.deliveryHistory.at(-1);
       items.push(
         buildTimelineEntry(

@@ -14,7 +14,7 @@ import {
   getWhatsAppDeliveryAttemptNumber,
   getWhatsAppDeliveryTimestampLabel,
 } from "@/features/access/domain/whatsapp-reservation-invitations";
-import { getLegacyWhatsAppDeliveryStatus } from "@/features/access/domain/whatsapp-delivery-tracking";
+import { getLegacyWhatsAppDeliveryStatus, resolveGuestDeliveryStatus } from "@/features/access/domain/whatsapp-delivery-tracking";
 import {
   describeReservationSubmissionError,
   formatReservationStatus,
@@ -264,8 +264,8 @@ export default function ReservationOperationsBoard({
       ? `${whatsappCandidateCount} invitaciones listas · ${whatsappRetryableCount} fallidas para reintentar`
         : `${whatsappCandidateCount} invitaciones listas`
       : whatsappAlreadySentCount > 0
-        ? `${whatsappAlreadySentCount} aceptadas por WhatsApp${whatsappMissingCount ? ` · ${whatsappMissingCount} sin datos válidos` : ""}`
-        : `${whatsappMissingCount} sin datos válidos`
+        ? `${whatsappAlreadySentCount} aceptadas por WhatsApp${whatsappMissingCount ? ` · ${whatsappMissingCount} sin WhatsApp o acceso listo` : ""}`
+        : `${whatsappMissingCount} sin WhatsApp o acceso listo`
     : null;
   const isTerminalReservation = activeReservation
     ? isTerminalEvent || isTerminalReservationStatus(activeReservation.status)
@@ -547,8 +547,8 @@ export default function ReservationOperationsBoard({
     if (whatsappCandidateCount > 0) {
       const confirmMessage =
         whatsappRetryableCount > 0
-          ? `Se enviarán ${whatsappCandidateCount} invitaciones y se reintentarán ${whatsappRetryableCount} fallidas. Se omitirán ${whatsappAlreadySentCount} ya aceptadas por WhatsApp y ${whatsappMissingCount} sin datos válidos.`
-          : `Se enviarán ${whatsappCandidateCount} invitaciones listas. Se omitirán ${whatsappAlreadySentCount} ya aceptadas por WhatsApp y ${whatsappMissingCount} sin datos válidos.`;
+          ? `Se enviarán ${whatsappCandidateCount} invitaciones y se reintentarán ${whatsappRetryableCount} fallidas. Se omitirán ${whatsappAlreadySentCount} ya aceptadas por WhatsApp y ${whatsappMissingCount} sin WhatsApp o acceso listo.`
+          : `Se enviarán ${whatsappCandidateCount} invitaciones listas. Se omitirán ${whatsappAlreadySentCount} ya aceptadas por WhatsApp y ${whatsappMissingCount} sin WhatsApp o acceso listo.`;
 
       confirm({
         title: "Enviar invitaciones",
@@ -1318,7 +1318,7 @@ function ReservationGuestRow({
             >
               {formatReservationStatus(guest.reservationStatus)}
             </StatusBadge>
-            <StatusBadge variant="info">{guest.deliveryStatus}</StatusBadge>
+            <StatusBadge variant="info">{resolveGuestDeliveryStatus(guest)}</StatusBadge>
             {guest.extraWristbandSaleId ? <StatusBadge variant="info">Manilla extra</StatusBadge> : null}
           </div>
         </div>

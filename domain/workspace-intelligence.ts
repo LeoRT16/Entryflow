@@ -438,6 +438,7 @@ function buildWorkspaceSignals({
   noShows,
   reservationSummaries,
   pendingGuests,
+  tablePendingGuests = pendingGuests,
   blockedGuests,
   activeTables,
   freeTables,
@@ -464,6 +465,7 @@ function buildWorkspaceSignals({
   noShows: number;
   reservationSummaries: ReservationSummary[];
   pendingGuests: number;
+  tablePendingGuests?: number;
   blockedGuests: number;
   activeTables: number;
   freeTables: number;
@@ -648,13 +650,13 @@ function buildWorkspaceSignals({
     });
   }
 
-  if (freeTables > 0 && pendingGuests > 0) {
+  if (freeTables > 0 && tablePendingGuests > 0) {
     pushRecommendation({
       id: "tables-nearby-available",
       priority: "medium",
       type: "optimization",
       title: "Mesa disponible cercana",
-      description: `Hay ${freeTables} mesas libres para ${pendingGuests} invitados pendientes.`,
+      description: `Hay ${freeTables} mesas libres para ${tablePendingGuests} invitados de mesa pendientes.`,
       suggestedAction: "Redistribuir invitados pendientes hacia mesas disponibles.",
       module: "Tables",
       timestamp: lastActivity,
@@ -975,6 +977,10 @@ export function buildWorkspaceIntelligence({
 
   const checkedInGuests = operationalEventGuests.filter((guest) => guest.admissionStatus === "Ingresó").length;
   const pendingGuests = operationalEventGuests.filter((guest) => guest.admissionStatus === "Pendiente").length;
+  const tablePendingGuests = operationalEventGuests.filter((guest) => {
+    const reservation = eventReservationSummaries.find((item) => item.id === guest.reservationId);
+    return reservation?.reservationType === "Mesa" && guest.admissionStatus === "Pendiente";
+  }).length;
   const expectedGuests = operationalEventGuests.length;
   const reservationsActive = eventReservationSummaries.filter((reservation) => normalizeReservationStatus(reservation.status) === "Confirmed" || normalizeReservationStatus(reservation.status) === "Checked In" || normalizeReservationStatus(reservation.status) === "Completed").length;
   const reservationsCancelled = eventReservationSummaries.filter((reservation) => normalizeReservationStatus(reservation.status) === "Cancelled").length;
@@ -1131,6 +1137,7 @@ export function buildWorkspaceIntelligence({
     noShows,
     reservationSummaries: eventReservationSummaries,
     pendingGuests,
+    tablePendingGuests,
     blockedGuests: customers.blockedGuests,
     activeTables,
     freeTables,
