@@ -41,9 +41,14 @@ export type WorkbookProjection = {
 export type WorkbookProjectionOptions = { snapshotTimestamp?: string | null };
 
 const makeColumns = (items: Array<[string, string, SheetColumnType, number, ("visible" | "hidden")?, string?]>): readonly SheetColumn[] => items.map(([key, header, type, widthPx, visibility = "visible", numberFormat]) => ({ key, header, type, widthPx, visibility, ...(numberFormat ? { numberFormat } : {}) }));
-const summaryColumns = makeColumns([
+const summaryColumnDefinitions: Array<[string, string, SheetColumnType, number, ("visible" | "hidden")?, string?]> = [
   ["section", "Sección", "text", 145], ["metric", "Indicador", "text", 230], ["value", "Valor", "mixed", 150], ["currency", "Moneda", "text", 115], ["summary_key", "Clave interna", "text", 0, "hidden"],
-]);
+];
+function summaryColumns(rows: ReadonlyArray<Record<string, SheetCellValue>>): readonly SheetColumn[] {
+  const valueLength = Math.max(4, ...rows.map((row) => String(row.value ?? "").length));
+  const valueWidth = Math.min(420, Math.max(150, valueLength * 7 + 30));
+  return makeColumns(summaryColumnDefinitions.map((column) => column[0] === "value" ? [column[0], column[1], column[2], valueWidth, column[4], column[5]] : column));
+}
 const reservationColumns = makeColumns([
   ["code", "Código", "text", 125], ["type", "Tipo", "text", 110], ["status", "Estado", "text", 115], ["holder", "Titular", "text", 220], ["zone", "Zona", "text", 150], ["resource_name", "Mesa/Recurso", "text", 165], ["access_quantity", "Accesos incluidos/comprados", "integer", 175, "visible", "0"], ["registered_people", "Personas registradas", "integer", 145, "visible", "0"], ["checked_in", "Ingresados", "integer", 100, "visible", "0"], ["pending", "Pendientes", "integer", 100, "visible", "0"], ["extra_wristbands", "Manillas extra", "integer", 115, "visible", "0"], ["benefits", "Beneficios", "text", 240], ["holder_carnet", "Carnet titular", "text", 135], ["holder_whatsapp", "WhatsApp titular", "text", 145], ["currency", "Moneda", "text", 105], ["price", "Precio", "money", 125, "visible", "#,##0.00"], ["price_unit", "Unidad de precio", "text", 125], ["base_value", "Valor base", "money", 125, "visible", "#,##0.00"], ["extra_value", "Valor extras", "money", 125, "visible", "#,##0.00"], ["total", "Total", "money", 125, "visible", "#,##0.00"],
   ["reservation_id", "ID reserva", "text", 0, "hidden"], ["resource_id", "ID recurso", "text", 0, "hidden"], ["sector_id", "ID zona", "text", 0, "hidden"],
@@ -265,7 +270,7 @@ export function buildGoogleSheetsProjection(report: EventReport, options: Workbo
     const key = String(row.summary_key);
     return [[key, ["tables", "presales", "extras", "total"].includes(key) ? "#,##0.00" : key === "capacity_utilization" ? "0%" : "0"]];
   }));
-  const summary: SheetProjection = { title: "Resumen", columns: summaryColumns, rowIdentity: "summary_key", ordering: "fixed EntryFlow summary block order", rows: summaryRows, filterRange: null, frozenRows: 1, frozenColumns: 2, rowNumberFormats: { ...summaryNumberFormats, capacity_utilization: "0%" } };
+  const summary: SheetProjection = { title: "Resumen", columns: summaryColumns(summaryRows), rowIdentity: "summary_key", ordering: "fixed EntryFlow summary block order", rows: summaryRows, filterRange: null, frozenRows: 1, frozenColumns: 2, rowNumberFormats: { ...summaryNumberFormats, capacity_utilization: "0%" } };
   const reservationSheet: SheetProjection = { title: "Reservas", columns: reservationColumns, rowIdentity: "reservation_id", ordering: "zone, resource, type, code, reservation_id tie-breaker; nulls last", rows: reservations, filterRange: filterRange(reservationColumns, reservations.length), frozenRows: 1, frozenColumns: 3 };
   const attendeeSheet: SheetProjection = { title: "Invitados", columns: attendeeColumns, rowIdentity: "guest_id", ordering: "name, carnet, access_code, guest_id tie-breaker; case-insensitive Spanish collation", rows: attendees, filterRange: filterRange(attendeeColumns, attendees.length), frozenRows: 1, frozenColumns: 2 };
   const projection = {

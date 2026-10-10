@@ -17,6 +17,7 @@ export type AtomicSheetMetadata = {
   ownershipMarkerCount?: number;
   hasMeaningfulContent?: boolean;
   hasUnsupportedObjects?: boolean;
+  columnWidths?: Record<number, number>;
 };
 export type AtomicWorkbookMetadata = { spreadsheetId: string; title: string; sheets: AtomicSheetMetadata[] };
 export type AtomicGoogleSheetsTransport = {
@@ -74,7 +75,7 @@ export function createAtomicGoogleSheetsTransportFromAuth(auth: Auth.OAuth2Clien
   return {
     async getWorkbookMetadata(spreadsheetId) {
       try {
-        const response = await api.spreadsheets.get({ spreadsheetId, includeGridData: true, fields: "spreadsheetId,properties(title),sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)),developerMetadata(metadataKey,metadataValue,location(sheetId)),charts,bandedRanges,data(rowData(values(userEnteredValue,effectiveValue,note))))" });
+        const response = await api.spreadsheets.get({ spreadsheetId, includeGridData: true, fields: "spreadsheetId,properties(title),sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)),developerMetadata(metadataKey,metadataValue,location(sheetId)),charts,bandedRanges,data(columnMetadata(pixelSize),rowData(values(userEnteredValue,effectiveValue,note))))" });
         return { spreadsheetId: response.data.spreadsheetId ?? spreadsheetId, title: response.data.properties?.title ?? "", sheets: (response.data.sheets ?? []).flatMap((sheet) => {
           const properties = sheet.properties;
           if (typeof properties?.sheetId !== "number" || typeof properties.title !== "string") return [];
@@ -82,7 +83,8 @@ export function createAtomicGoogleSheetsTransportFromAuth(auth: Auth.OAuth2Clien
           const marker = markers[0]?.metadataValue;
           const hasMeaningfulContent = (sheet.data ?? []).some((data) => (data.rowData ?? []).some((row) => (row.values ?? []).some((cell) => Boolean(cell.userEnteredValue || cell.effectiveValue || cell.note))));
           const hasUnsupportedObjects = Boolean((sheet.charts ?? []).length || (sheet.bandedRanges ?? []).length);
-          return [{ sheetId: properties.sheetId, title: properties.title, rowCount: properties.gridProperties?.rowCount ?? 1000, columnCount: properties.gridProperties?.columnCount ?? 26, ...(marker ? { ownershipMarker: marker } : {}), ownershipMarkerCount: markers.length, hasMeaningfulContent, hasUnsupportedObjects }];
+          const columnWidths = Object.fromEntries((sheet.data ?? []).flatMap((data) => (data.columnMetadata ?? []).map((column, index) => typeof column.pixelSize === "number" ? [index, column.pixelSize] as const : [])));
+          return [{ sheetId: properties.sheetId, title: properties.title, rowCount: properties.gridProperties?.rowCount ?? 1000, columnCount: properties.gridProperties?.columnCount ?? 26, ...(marker ? { ownershipMarker: marker } : {}), ownershipMarkerCount: markers.length, hasMeaningfulContent, hasUnsupportedObjects, columnWidths }];
         }) };
       } catch (error) { throw classifyAtomicGoogleSheetsError(error); }
     },
@@ -254,6 +256,9 @@ export async function updateAtomicWorkbookSyncTimestamp(transport: AtomicGoogleS
   }
   const cell = summaryTimestampCell(projection, snapshotTimestamp);
   const meta = sheets.get(cell.sheet.title)!;
-  await transport.batchUpdate(spreadsheetId, { requests: [makeRequest({ updateCells: { start: { sheetId: meta.sheetId, rowIndex: cell.rowIndex, columnIndex: cell.columnIndex }, rows: [{ values: [cellData(cell.value)] }], fields: "userEnteredValue" } })] });
+  const desiredWidth = cell.sheet.columns[cell.columnIndex]?.widthPx;
+  const requests: sheets_v4.Schema$Request[] = [makeRequest({ updateCells: { start: { sheetId: meta.sheetId, rowIndex: cell.rowIndex, columnIndex: cell.columnIndex }, rows: [{ values: [cellData(cell.value)] }], fields: "userEnteredValue" } })];
+  if (desiredWidth !== undefined && meta.columnWidths?.[cell.columnIndex] !== desiredWidth) requests.push(makeRequest({ updateDimensionProperties: { range: { sheetId: meta.sheetId, dimension: "COLUMNS", startIndex: cell.columnIndex, endIndex: cell.columnIndex + 1 }, properties: { pixelSize: desiredWidth }, fields: "pixelSize" } }));
+  await transport.batchUpdate(spreadsheetId, { requests });
   return { snapshotWritten: false };
 }

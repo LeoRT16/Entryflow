@@ -15,7 +15,7 @@ class StatefulSheetsFake implements AtomicGoogleSheetsTransport {
   batches: sheets_v4.Schema$BatchUpdateSpreadsheetRequest[] = [];
   failNextBatch = false;
   constructor(initial: FakeSheet[]) { initial.forEach((item) => this.sheets.set(item.sheetId, item)); }
-  async getWorkbookMetadata(spreadsheetId: string) { return { spreadsheetId, title: "Test workbook", sheets: [...this.sheets.values()].map((item) => ({ sheetId: item.sheetId, title: item.title, rowCount: item.rowCount, columnCount: item.columnCount, hasMeaningfulContent: item.hasMeaningfulContent, hasUnsupportedObjects: item.hasUnsupportedObjects, ownershipMarkerCount: item.ownershipMarkerCount ?? (item.ownershipMarker ? 1 : 0), ...(item.ownershipMarker ? { ownershipMarker: item.ownershipMarker } : {}) })) }; }
+  async getWorkbookMetadata(spreadsheetId: string) { return { spreadsheetId, title: "Test workbook", sheets: [...this.sheets.values()].map((item) => ({ sheetId: item.sheetId, title: item.title, rowCount: item.rowCount, columnCount: item.columnCount, hasMeaningfulContent: item.hasMeaningfulContent, hasUnsupportedObjects: item.hasUnsupportedObjects, ownershipMarkerCount: item.ownershipMarkerCount ?? (item.ownershipMarker ? 1 : 0), ...(item.ownershipMarker ? { ownershipMarker: item.ownershipMarker } : {}), columnWidths: Object.fromEntries(item.widths) })) }; }
   async batchUpdate(_spreadsheetId: string, request: sheets_v4.Schema$BatchUpdateSpreadsheetRequest) {
     this.batches.push(structuredClone(request));
     if (this.failNextBatch) { this.failNextBatch = false; throw new AtomicWorkbookWriterError("google_temporarily_unavailable", "safe", true); }
@@ -58,6 +58,13 @@ test("V2 projection owns exactly Resumen, Reservas, Invitados and human headers"
   assert.deepEqual(p.sheets.reservations.columns.filter((col) => col.visibility !== "hidden").map((col) => col.header), reservationHeaders);
   assert.deepEqual(p.sheets.attendees.columns.filter((col) => col.visibility !== "hidden").map((col) => col.header), attendeeHeaders);
   assert.equal(p.sheets.summary.rows.find((row) => row.summary_key === "last_sync")?.metric, "Última sincronización");
+});
+test("Resumen value column grows with long event names and keeps padding", () => {
+  const short = projection().sheets.summary.columns.find((column) => column.key === "value")!.widthPx;
+  const longReport = { ...eventReport, metadata: { ...eventReport.metadata, eventName: "EntryFlow — PDF V2 E2E — NO OPERAR · Evento demostrativo de validación extendida" } };
+  const long = buildGoogleSheetsProjection(longReport, { snapshotTimestamp: at }).sheets.summary.columns.find((column) => column.key === "value")!.widthPx;
+  assert.ok(long > short);
+  assert.ok(long >= longReport.metadata.eventName.length * 7 + 30 || long === 420);
 });
 
 test("pristine initialization reuses the single empty default sheet as Resumen", async () => {
@@ -147,10 +154,22 @@ test("snapshot failure leaves the prior workbook unchanged and retry is idempote
 
 test("unchanged content can update only the sync timestamp cell", async () => {
   const fake = initializedFake(); await updateAtomicWorkbookSyncTimestamp(fake, "s1", projection(), at);
-  assert.equal(fake.batches.length, 1); assert.deepEqual(reqNames(fake.batches[0]!), ["updateCells"]);
+  assert.equal(fake.batches.length, 1); assert.deepEqual(reqNames(fake.batches[0]!), ["updateCells", "updateDimensionProperties"]);
   const summary = [...fake.sheets.values()].find((item) => item.title === "Resumen")!;
   const timestampRow = projection().sheets.summary.rows.findIndex((row) => row.summary_key === "last_sync") + 1;
   assert.equal((summary.cells.get(`${timestampRow}:2`) as { stringValue?: string })?.stringValue, projection().sheets.summary.rows[timestampRow - 1]?.value);
+});
+test("subsequent sync updates Resumen column C only when its calculated width changes", async () => {
+  const fake = initializedFake();
+  await writeAtomicWorkbookSnapshot(fake, "s1", projection(), at);
+  const before = fake.batches.length;
+  await updateAtomicWorkbookSyncTimestamp(fake, "s1", projection(), at);
+  assert.equal(fake.batches.length, before + 1);
+  assert.deepEqual(reqNames(fake.batches.at(-1)!), ["updateCells"]);
+  const longReport = { ...eventReport, metadata: { ...eventReport.metadata, eventName: "EntryFlow — PDF V2 E2E — NO OPERAR · Evento demostrativo de validación extendida" } };
+  const longProjection = buildGoogleSheetsProjection(longReport, { snapshotTimestamp: at });
+  await updateAtomicWorkbookSyncTimestamp(fake, "s1", longProjection, at);
+  assert.ok(reqNames(fake.batches.at(-1)!).includes("updateDimensionProperties"));
 });
 
 test("hash-skip performs a full snapshot when it had to recreate a missing managed tab", async () => {

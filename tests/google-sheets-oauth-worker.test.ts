@@ -37,7 +37,7 @@ test("unchanged business hash updates only the timestamp cell and still records 
   const hash = hashWorkbookDataset(buildWorkbookDatasetHashInput(projection));
   const { deps, calls, completions } = make({ repository: { claim: async () => [work], lastSuccessfulHash: async () => ({ datasetHash: hash, spreadsheetId: "sheet", sheetSchemaVersion: 2 }), completeSuccess: async (...args) => { completions.push(["success", ...args]); }, completeFailure: async (...args) => { completions.push(["failure", ...args]); } } });
   const result = await processOAuthReportingSyncBatch(deps, "oauth-worker");
-  assert.deepEqual(result, { claimed: 1, synced: 0, skipped: 1, failed: 0 }); assert.deepEqual(calls[0]?.requests?.map((request) => Object.keys(request as object)[0]), ["updateCells"]);
+  assert.deepEqual(result, { claimed: 1, synced: 0, skipped: 1, failed: 0 }); assert.deepEqual(calls[0]?.requests?.map((request) => Object.keys(request as object)[0]), ["updateCells", "updateDimensionProperties"]);
   assert.equal(completions[0]?.[3], "2026-09-18T17:45:00.000Z");
 });
 
