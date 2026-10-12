@@ -64,6 +64,10 @@ test("permanent deletion is restricted to archived events and owner/root", () =>
   assert.match(permanent, /permanently_delete_archived_event/);
   assert.match(permanent, /createSupabaseAuthServerClient/);
   assert.doesNotMatch(permanent, /getSupabaseServerClient/);
+  assert.match(permanent, /randomUUID/);
+  assert.match(permanent, /diagnosticId/);
+  assert.match(permanent, /postgresCode/);
+  assert.match(permanent, /console\.error/);
   assert.match(library, /ELIMINAR/);
   assert.match(library, /\/permanent/);
 });
