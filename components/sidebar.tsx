@@ -210,7 +210,7 @@ export default function Sidebar({
         />
       ) : null}
 
-      <aside className="fixed inset-y-0 left-0 z-40 hidden h-dvh w-72 flex-col overflow-hidden border-r border-white/10 bg-[#0d1117] md:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden h-dvh w-72 flex-col overflow-visible border-r border-white/10 bg-[#0d1117] md:flex">
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="border-b border-white/10 px-5 py-5">
             <p className="kicker">Contexto operativo</p>
@@ -255,7 +255,7 @@ export default function Sidebar({
 
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-40 h-dvh w-80 max-w-[85vw] flex-col overflow-hidden border-r border-white/10 bg-[#0d1117] transition-transform duration-200 ease-out md:hidden",
+          "fixed inset-y-0 left-0 z-40 h-dvh w-80 max-w-[85vw] flex-col overflow-visible border-r border-white/10 bg-[#0d1117] transition-transform duration-200 ease-out md:hidden",
           mobileNavOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
         aria-hidden={!mobileNavOpen}
