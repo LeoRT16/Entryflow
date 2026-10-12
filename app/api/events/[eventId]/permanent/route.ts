@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 
-import { getSupabaseAuthUser } from "@/lib/supabase/auth";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAuthServerClient, getSupabaseAuthUser } from "@/lib/supabase/auth";
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ eventId: string }> }) {
   const user = await getSupabaseAuthUser();
   if (!user) return NextResponse.json({ ok: false, error: { code: "unauthenticated" } }, { status: 401 });
   const { eventId } = await params;
   if (!eventId) return NextResponse.json({ ok: false, error: { code: "event_not_found" } }, { status: 404 });
-  const supabase = await getSupabaseServerClient();
+  // Use the cookie-backed authenticated client so auth.uid() reaches the
+  // SECURITY DEFINER function. The service-role client would authenticate
+  // the RPC as service_role and produce event_delete_unauthenticated.
+  const supabase = await createSupabaseAuthServerClient();
+  if (!supabase) return NextResponse.json({ ok: false, error: { code: "auth_configuration" } }, { status: 500 });
   const { data, error } = await (supabase as unknown as { rpc: (name: string, args: Record<string, string>) => Promise<{ data: unknown; error: { message: string } | null }> }).rpc("permanently_delete_archived_event", { p_event_id: eventId });
   if (error) {
     const code = error.message.match(/event_(?:not_found|not_archived|permanent_delete_forbidden|delete_blocked|delete_unauthenticated)/)?.[0] ?? "permanent_delete_failed";
