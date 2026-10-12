@@ -54,6 +54,7 @@ export default function EventLibrary() {
     activateEvent,
     archiveEvent,
     can,
+    currentAccount,
     venues,
   } = useCheckInStore();
   const { confirm, notify } = useFeedback();
@@ -67,6 +68,10 @@ export default function EventLibrary() {
   const [archiveLoading, setArchiveLoading] = useState(true);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [restoringEventId, setRestoringEventId] = useState<string | null>(null);
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<ArchivedEvent | null>(null);
+  const [permanentDeletePhrase, setPermanentDeletePhrase] = useState("");
+  const [permanentDeleteLoading, setPermanentDeleteLoading] = useState(false);
+  const [permanentDeleteError, setPermanentDeleteError] = useState<string | null>(null);
   const loadArchivedEvents = useCallback(async (signal?: AbortSignal) => {
     const organizationId = currentOrganization.id;
     setArchiveLoading(true);
@@ -149,6 +154,20 @@ export default function EventLibrary() {
     [groupedEvents],
   );
   const filteredArchivedEvents = useMemo(() => archivedEvents.filter((event) => event.name.toLowerCase().includes(archiveSearch.trim().toLowerCase()) && (!archiveDate || event.startAt.slice(0, 10) === archiveDate)), [archiveDate, archiveSearch, archivedEvents]);
+  const canPermanentlyDelete = Boolean(currentAccount.isPlatformRoot || currentAccount.roleSlug === "owner");
+  const requestPermanentDelete = (event: ArchivedEvent) => { setPermanentDeleteTarget(event); setPermanentDeletePhrase(""); setPermanentDeleteError(null); };
+  const permanentlyDelete = async () => {
+    if (!permanentDeleteTarget || permanentDeletePhrase !== "ELIMINAR" || permanentDeleteLoading) return;
+    setPermanentDeleteLoading(true); setPermanentDeleteError(null);
+    try {
+      const response = await fetch(`/api/events/${encodeURIComponent(permanentDeleteTarget.id)}/permanent`, { method: "DELETE" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; error?: { code?: string } } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error?.code === "event_delete_blocked" ? "El evento tiene procesos externos pendientes." : "No se pudo eliminar permanentemente el evento.");
+      setArchivedEvents((current) => current.filter((event) => event.id !== permanentDeleteTarget.id));
+      setPermanentDeleteTarget(null); notify({ title: "Evento eliminado", description: "El evento archivado y sus datos exclusivos fueron eliminados.", tone: "success", icon: "check" });
+    } catch (error) { const message = error instanceof Error ? error.message : "La operación no pudo completarse."; setPermanentDeleteError(message); notify({ title: "No se pudo eliminar el evento", description: message, tone: "danger", icon: "alert" }); }
+    finally { setPermanentDeleteLoading(false); }
+  };
 
   const openEventWizard = (organizationId: string = currentOrganization.id) => {
     setWizardOrganizationId(organizationId);
@@ -254,8 +273,10 @@ export default function EventLibrary() {
           <div><p className="kicker">Archivados</p><p className="mt-1 text-sm text-slate-400">Consulta histórica y restauración, sin volverlos operativos.</p></div>
           <div className="flex flex-wrap gap-2"><input value={archiveSearch} onChange={(event) => setArchiveSearch(event.target.value)} placeholder="Buscar por nombre" className="h-9 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white" /><input type="date" value={archiveDate} onChange={(event) => setArchiveDate(event.target.value)} className="h-9 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white" /></div>
         </div>
-        {archiveLoading ? <p className="mt-4 text-sm text-slate-400">Cargando histórico…</p> : archiveError ? <p className="mt-4 text-sm text-rose-300">{archiveError}</p> : filteredArchivedEvents.length ? <div className="mt-3 grid gap-2.5 xl:grid-cols-2">{filteredArchivedEvents.map((event) => <ArchivedEventCard key={event.id} event={event} canRestore={can("event.delete")} restoring={restoringEventId === event.id} onRestore={() => confirm({ title: "Restaurar evento", description: "El evento volverá a aparecer en la categoría correspondiente a su estado actual. Su información histórica se conservará.", confirmLabel: "Restaurar evento", cancelLabel: "Cancelar", tone: "info", onConfirm: () => { setRestoringEventId(event.id); void archiveEvent(event.id, false).then(() => loadArchivedEvents()).catch((error) => notify({ title: "No se pudo restaurar el evento", description: error instanceof Error ? error.message : "Intenta nuevamente.", tone: "danger", icon: "alert" })).finally(() => setRestoringEventId(null)); } })} />)}</div> : <p className="mt-4 text-sm text-slate-400">No hay eventos archivados.</p>}
+        {archiveLoading ? <p className="mt-4 text-sm text-slate-400">Cargando histórico…</p> : archiveError ? <p className="mt-4 text-sm text-rose-300">{archiveError}</p> : filteredArchivedEvents.length ? <div className="mt-3 grid gap-2.5 xl:grid-cols-2">{filteredArchivedEvents.map((event) => <ArchivedEventCard key={event.id} event={event} canRestore={can("event.delete")} canPermanentlyDelete={canPermanentlyDelete} restoring={restoringEventId === event.id} onRestore={() => confirm({ title: "Restaurar evento", description: "El evento volverá a aparecer en la categoría correspondiente a su estado actual. Su información histórica se conservará.", confirmLabel: "Restaurar evento", cancelLabel: "Cancelar", tone: "info", onConfirm: () => { setRestoringEventId(event.id); void archiveEvent(event.id, false).then(() => loadArchivedEvents()).catch((error) => notify({ title: "No se pudo restaurar el evento", description: error instanceof Error ? error.message : "Intenta nuevamente.", tone: "danger", icon: "alert" })).finally(() => setRestoringEventId(null)); } })} onPermanentDelete={() => requestPermanentDelete(event)} />)}</div> : <p className="mt-4 text-sm text-slate-400">No hay eventos archivados.</p>}
       </section>
+
+      {permanentDeleteTarget ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4" role="dialog" aria-modal="true" aria-labelledby="permanent-delete-title"><div className="surface-panel w-full max-w-lg p-5"><h2 id="permanent-delete-title" className="text-lg font-semibold text-white">Eliminar evento permanentemente</h2><p className="mt-2 text-sm leading-6 text-slate-300">Esta acción no se puede deshacer. Se eliminarán los datos exclusivos de “{permanentDeleteTarget.name}”. Los archivos externos no se borrarán.</p><label className="mt-4 block text-sm text-slate-300" htmlFor="permanent-delete-phrase">Escribe <strong className="text-white">ELIMINAR</strong> para confirmar</label><input id="permanent-delete-phrase" value={permanentDeletePhrase} onChange={(event) => setPermanentDeletePhrase(event.target.value)} className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-white" autoComplete="off" />{permanentDeleteError ? <p className="mt-2 text-sm text-rose-300">{permanentDeleteError}</p> : null}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setPermanentDeleteTarget(null)} disabled={permanentDeleteLoading} className="inline-flex h-10 items-center rounded-xl border border-white/10 px-3 text-sm text-white disabled:opacity-60">Cancelar</button><button type="button" onClick={() => void permanentlyDelete()} disabled={permanentDeletePhrase !== "ELIMINAR" || permanentDeleteLoading} className="inline-flex h-10 items-center rounded-xl bg-rose-500 px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{permanentDeleteLoading ? "Eliminando…" : "Eliminar permanentemente"}</button></div></div></div> : null}
 
       {wizardOpen ? (
         <EventCreationWizard
@@ -288,8 +309,8 @@ export default function EventLibrary() {
   );
 }
 
-function ArchivedEventCard({ event, canRestore, restoring, onRestore }: { event: ArchivedEvent; canRestore: boolean; restoring: boolean; onRestore: () => void }) {
-  return <article className="surface-elevated flex flex-col gap-3 p-3 sm:p-4"><div className="flex items-start justify-between gap-3"><div><StatusBadge variant="warning">Archivado · {formatEventStatusLabel(event.status)}</StatusBadge><h3 className="mt-2 break-words text-lg font-semibold text-white">{event.name}</h3><p className="text-sm text-slate-400">{new Intl.DateTimeFormat("es-BO", { dateStyle: "medium", timeZone: event.timezone }).format(new Date(event.startAt))} · {event.venue}</p></div><div className="flex flex-wrap justify-end gap-2"><Link href={`/events/history/${event.id}`} className="inline-flex h-9 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white">Ver historial</Link>{canRestore ? <button type="button" disabled={restoring} onClick={onRestore} className="inline-flex h-9 items-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 text-sm text-cyan-50 disabled:opacity-60">{restoring ? "Restaurando…" : "Restaurar evento"}</button> : null}</div></div><p className="text-xs text-slate-500">Los datos históricos, reportes y operaciones se conservan.</p></article>;
+function ArchivedEventCard({ event, canRestore, canPermanentlyDelete, restoring, onRestore, onPermanentDelete }: { event: ArchivedEvent; canRestore: boolean; canPermanentlyDelete: boolean; restoring: boolean; onRestore: () => void; onPermanentDelete: () => void }) {
+  return <article className="surface-elevated flex flex-col gap-3 p-3 sm:p-4"><div className="flex items-start justify-between gap-3"><div><StatusBadge variant="warning">Archivado · {formatEventStatusLabel(event.status)}</StatusBadge><h3 className="mt-2 break-words text-lg font-semibold text-white">{event.name}</h3><p className="text-sm text-slate-400">{new Intl.DateTimeFormat("es-BO", { dateStyle: "medium", timeZone: event.timezone }).format(new Date(event.startAt))} · {event.venue}</p></div><div className="flex flex-wrap justify-end gap-2"><Link href={`/events/history/${event.id}`} className="inline-flex h-9 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white">Ver historial</Link>{canRestore ? <button type="button" disabled={restoring} onClick={onRestore} className="inline-flex h-9 items-center rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 text-sm text-cyan-50 disabled:opacity-60">{restoring ? "Restaurando…" : "Restaurar evento"}</button> : null}{canPermanentlyDelete ? <button type="button" onClick={onPermanentDelete} className="inline-flex h-9 items-center rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 text-sm text-rose-100">Eliminar permanentemente</button> : null}</div></div><p className="text-xs text-slate-500">Los datos históricos, reportes y operaciones se conservan.</p></article>;
 }
 
 function LibrarySection({
