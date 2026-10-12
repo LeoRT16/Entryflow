@@ -19,7 +19,8 @@ export async function GET(_request: Request, context: { params: Promise<{ eventI
   const permissions = resolveAccountPermissions({permissions:profile?.metadata?.permissions,rolePermissions:role.permissions,roleMetadata:role.metadata,accountMetadata:profile?.metadata});
   if (!permissions.includes("event.view")) return NextResponse.json({ok:false,error:{code:"event_history_forbidden"}},{status:403});
   const client = (await getSupabaseServerClient()) as unknown as Client;
-  const eventResult = await client.from("events").select("*").eq("id",(await context.params).eventId).eq("organization_id",workspace.currentOrganizationId).maybeSingle();
+  const eventLookup = client.from("events").select("*").eq("id",(await context.params).eventId);
+  const eventResult = await (workspace.isPlatformRoot ? eventLookup : eventLookup.eq("organization_id",workspace.currentOrganizationId)).maybeSingle();
   const event = eventResult.data as Row | null;
   if (eventResult.error || !event) return NextResponse.json({ok:false,error:{code:"event_not_found"}},{status:404});
   if (event.deleted_at === null || event.deleted_at === undefined) return NextResponse.json({ok:false,error:{code:"event_not_archived"}},{status:409});

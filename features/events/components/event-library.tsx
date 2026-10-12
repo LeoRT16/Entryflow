@@ -69,7 +69,7 @@ export default function EventLibrary() {
   const loadArchivedEvents = useCallback(async () => {
     setArchiveLoading(true);
     try {
-      const response = await fetch("/api/events/archived");
+      const response = await fetch(`/api/events/archived?organizationId=${encodeURIComponent(currentOrganization.id)}`);
       const payload = (await response.json().catch(() => null)) as { ok?: boolean; events?: Array<Record<string, unknown>> } | null;
       if (!response.ok || !payload?.ok) throw new Error("No se pudieron cargar los eventos archivados.");
       setArchivedEvents((payload.events ?? []).map((event) => ({
@@ -78,7 +78,7 @@ export default function EventLibrary() {
       })));
     } catch (error) { notify({ title: "No se pudieron cargar los archivados", description: error instanceof Error ? error.message : "Intenta nuevamente.", tone: "danger", icon: "alert" }); }
     finally { setArchiveLoading(false); }
-  }, [notify]);
+  }, [currentOrganization.id, notify]);
   // The archive list is an authenticated server projection and must refresh when the organization changes.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadArchivedEvents(); }, [loadArchivedEvents]);

@@ -14,6 +14,14 @@ test("archive and restore are organization-scoped and permission-checked", () =>
   assert.match(archive, /event_must_be_finished/);
   assert.match(archive, /deleted_at/);
   assert.match(archive, /workspace\.isPlatformRoot \? lookup : lookup\.eq\("organization_id",workspace\.currentOrganizationId\)/);
+  assert.match(history, /workspace\.isPlatformRoot \? eventLookup : eventLookup\.eq\("organization_id",workspace\.currentOrganizationId\)/);
+});
+
+test("archived events use the selected organization scope", () => {
+  const archived = readFileSync("app/api/events/archived/route.ts", "utf8");
+  assert.match(archived, /organizationId/);
+  assert.match(archived, /workspace\.organizations\.some/);
+  assert.match(archived, /event_history_forbidden/);
 });
 
 test("historical access requires event.view and excludes live workspace scope", () => {
