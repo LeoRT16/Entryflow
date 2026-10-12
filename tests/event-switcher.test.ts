@@ -24,6 +24,7 @@ import {
 } from "../services/workspace-service";
 import type { WorkspaceBootstrap } from "../services/workspace-loader";
 import type { Event } from "../features/domain/types";
+import { readFileSync } from "node:fs";
 
 function buildWorkspace(overrides: Partial<WorkspaceBootstrap> = {}): WorkspaceBootstrap {
   return {
@@ -156,6 +157,14 @@ test("event switcher empty states are concise and scope-aware", () => {
   assert.equal(getEventSwitcherEmptyPanelMessage("rotita"), "No encontramos eventos para “rotita”.");
   assert.equal(getEventSwitcherSectionEmptyMessage("Historial", ""), "No hay eventos históricos.");
   assert.equal(getEventSwitcherSectionEmptyMessage("Historial", "sabado"), "No encontramos eventos para “sabado”.");
+});
+
+test("event switcher keeps a wide responsive panel and readable event cards", () => {
+  const source = readFileSync("components/event-switcher.tsx", "utf8");
+  assert.match(source, /w-\[min\(92vw,32rem\)\]/);
+  assert.match(source, /max-w-\[calc\(100vw-1rem\)\]/);
+  assert.match(source, /line-clamp-2/);
+  assert.match(source, /whitespace-nowrap.*formatEventWallDateTime/);
 });
 
 test("terminal event status remains visually distinct from draft and live states", () => {

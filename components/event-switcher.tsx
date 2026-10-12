@@ -234,8 +234,8 @@ export default function EventSwitcher({ compact = false }: { compact?: boolean }
       {open ? (
         <div
           className={[
-            "absolute top-[calc(100%+0.75rem)] z-50 overflow-hidden surface-panel bg-[#08111f]",
-            compact ? "left-0 right-0" : "right-0 w-[min(90vw,34rem)]",
+            "absolute top-[calc(100%+0.75rem)] z-50 w-[min(92vw,32rem)] max-w-[calc(100vw-1rem)] overflow-hidden surface-panel bg-[#08111f]",
+            compact ? "left-0" : "right-0",
           ].join(" ")}
         >
           <div className="border-b border-white/10 p-4">
@@ -353,10 +353,10 @@ function EventSection({
                   : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]",
               ].join(" ")}
             >
-              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-white">{event.name}</p>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="line-clamp-2 text-sm font-medium leading-5 text-white">{event.name}</p>
+                  <p className="mt-1 truncate text-xs text-slate-400">
                     {getEventTypeLabel(event.eventType)} · {event.venue}
                   </p>
                   {isCurrent ? (
@@ -365,9 +365,9 @@ function EventSection({
                     </span>
                   ) : null}
                 </div>
-                <div className="flex flex-col items-end gap-1 text-[10px] uppercase tracking-[0.22em] text-slate-500">
-                  <span>{formatEventStatusLabel(event.status)}</span>
-                  <span>{formatEventWallDateTime(event.startAt)}</span>
+                <div className="flex shrink-0 flex-col items-end gap-1 text-right text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                  <span className="whitespace-nowrap">{formatEventStatusLabel(event.status)}</span>
+                  <span className="whitespace-nowrap normal-case tracking-normal">{formatEventWallDateTime(event.startAt)}</span>
                 </div>
               </div>
             </button>
