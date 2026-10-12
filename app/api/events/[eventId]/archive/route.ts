@@ -16,7 +16,7 @@ async function authorize(eventId:string) {
   const profile = workspace.profiles.find((item)=>item.id===workspace.currentProfileId && !item.deletedAt);
   const role = workspace.roles.find((item)=>item.id===profile?.roleId) ?? getRolePresetBySlug("administrator");
   const permissions = resolveAccountPermissions({permissions:profile?.metadata?.permissions,rolePermissions:role.permissions,roleMetadata:role.metadata,accountMetadata:profile?.metadata});
-  if (!permissions.includes("event.delete")) return {response:NextResponse.json({ok:false,error:{code:"event_archive_forbidden"}},{status:403})} as const;
+  if (!workspace.isPlatformRoot && !permissions.includes("event.delete")) return {response:NextResponse.json({ok:false,error:{code:"event_archive_forbidden"}},{status:403})} as const;
   const client = await getSupabaseServerClient();
   const table = (client as unknown as {from(name:string):Table}).from("events");
   const found = await table.select("id,organization_id,status,deleted_at").eq("id",eventId).eq("organization_id",workspace.currentOrganizationId).maybeSingle();

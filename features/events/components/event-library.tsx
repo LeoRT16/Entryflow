@@ -222,7 +222,7 @@ export default function EventLibrary() {
               onEditEvent={openEventEditor}
               onActivateEvent={requestActivation}
               onCancelEvent={cancelEvent}
-              onArchiveEvent={(event) => confirm({ title: "Archivar evento", description: "Este evento dejará de aparecer en las listas habituales y se moverá a Archivados. Sus reservas, invitados y reportes se conservarán.", confirmLabel: "Archivar evento", cancelLabel: "Cancelar", tone: "info", onConfirm: () => void archiveEvent(event.id, true).then(loadArchivedEvents) })}
+              onArchiveEvent={(event) => confirm({ title: "Archivar evento", description: "Este evento dejará de aparecer en las listas habituales y se moverá a Archivados. Sus reservas, invitados y reportes se conservarán.", confirmLabel: "Archivar evento", cancelLabel: "Cancelar", tone: "info", onConfirm: () => { void archiveEvent(event.id, true).then(async () => { await loadArchivedEvents(); notify({ title: "Evento archivado", description: "El evento se movió a Archivados y sus datos se conservaron.", tone: "success", icon: "check" }); }).catch((error) => notify({ title: "No se pudo archivar el evento", description: error instanceof Error ? error.message : "La operación no pudo completarse.", tone: "danger", icon: "alert" })); } })}
               canActivate={can("event.edit")}
               canEdit={can("event.edit")}
               canArchive={can("event.delete")}
