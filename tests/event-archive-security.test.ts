@@ -13,6 +13,7 @@ test("archive and restore are organization-scoped and permission-checked", () =>
   assert.match(archive, /organization_id/);
   assert.match(archive, /event_must_be_finished/);
   assert.match(archive, /deleted_at/);
+  assert.match(archive, /workspace\.isPlatformRoot \? lookup : lookup\.eq\("organization_id",workspace\.currentOrganizationId\)/);
 });
 
 test("historical access requires event.view and excludes live workspace scope", () => {

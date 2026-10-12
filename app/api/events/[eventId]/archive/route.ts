@@ -19,7 +19,8 @@ async function authorize(eventId:string) {
   if (!workspace.isPlatformRoot && !permissions.includes("event.delete")) return {response:NextResponse.json({ok:false,error:{code:"event_archive_forbidden"}},{status:403})} as const;
   const client = await getSupabaseServerClient();
   const table = (client as unknown as {from(name:string):Table}).from("events");
-  const found = await table.select("id,organization_id,status,deleted_at").eq("id",eventId).eq("organization_id",workspace.currentOrganizationId).maybeSingle();
+  const lookup = table.select("id,organization_id,status,deleted_at").eq("id",eventId);
+  const found = await (workspace.isPlatformRoot ? lookup : lookup.eq("organization_id",workspace.currentOrganizationId)).maybeSingle();
   if (found.error || !found.data) return {response:NextResponse.json({ok:false,error:{code:"event_not_found"}},{status:404})} as const;
   return {table,event:found.data} as const;
 }
