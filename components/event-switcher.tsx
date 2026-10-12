@@ -83,10 +83,6 @@ export function buildEventSwitcherSections(
       title: "Próximos eventos",
       events: filteredEvents.filter((event) => event.status === "published" || event.status === "draft"),
     },
-    {
-      title: "Historial",
-      events: filteredEvents.filter((event) => event.status === "finished" || event.status === "cancelled"),
-    },
   ].filter((section) => section.events.length > 0 || normalizedQuery.length > 0);
 }
 

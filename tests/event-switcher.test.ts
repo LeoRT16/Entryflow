@@ -117,7 +117,7 @@ test("reception and door do not see the event switcher", () => {
   assert.equal(canSwitchEventContext(door), false);
 });
 
-test("sidebar selector groups current organization events including historical events", () => {
+test("sidebar selector shows only operational events from the current organization", () => {
   const sections = buildEventSwitcherSections(
     [
       { id: "live-1", organizationId: "org-1", name: "Evento live", eventType: "custom", status: "live", venue: "Venue", startAt: "2026-08-14 20:00" },
@@ -128,7 +128,7 @@ test("sidebar selector groups current organization events including historical e
     "org-1",
   );
 
-  assert.equal(sections.some((section) => section.title === "Historial" && section.events.some((event) => event.id === "finished-1")), true);
+  assert.equal(sections.some((section) => section.events.some((event) => event.id === "finished-1")), false);
   assert.equal(sections.some((section) => section.events.some((event) => event.id === "other-org")), false);
 });
 

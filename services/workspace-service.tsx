@@ -373,6 +373,7 @@ type WorkspaceServiceValue = {
   cancelExtraWristbandSale: (input: { saleId: string; reason: string }) => Promise<void>;
   setEventStatus: (eventId: string, status: PlatformEvent["status"]) => void;
   activateEvent: (eventId: string) => Promise<void>;
+  archiveEvent: (eventId: string, archived: boolean) => Promise<void>;
   setOrganizationsState: Dispatch<SetStateAction<Organization[]>>;
   setVenuesState: Dispatch<SetStateAction<Venue[]>>;
   setSectorsState: Dispatch<SetStateAction<Sector[]>>;
@@ -418,7 +419,7 @@ export function getEventSelection(events: PlatformEvent[], organizationId: strin
     : "";
   const operationalEventId = roleSlug === "reception" || roleSlug === "door"
     ? resolveOperationalEventId(events, organizationId, roleSlug, requested)
-    : requested || events.find((event) => event.organizationId === organizationId && event.status === "live")?.id || events.find((event) => event.organizationId === organizationId)?.id || "";
+    : requested || resolveOperationalEventId(events, organizationId, roleSlug, "");
   const current = events.find((event) => event.id === operationalEventId && (!organizationId || event.organizationId === organizationId));
 
   return current ?? {
@@ -2565,6 +2566,14 @@ export function WorkspaceServiceProvider({
     [captureSnapshot, events, notify, repositories.events, requestReportingAfterSuccess, requirePermission, restoreSnapshot],
   );
 
+  const archiveEvent = useCallback(async (eventId: string, archived: boolean) => {
+    const response = await fetch(`/api/events/${eventId}/archive`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ archived }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error?.code === "event_must_be_finished" ? "Solo se pueden archivar eventos finalizados." : "No se pudo actualizar el archivado del evento.");
+    if (archived) setEvents((current) => current.filter((event) => event.id !== eventId));
+    else await reloadWorkspace();
+  }, [reloadWorkspace]);
+
   const activateEvent = useCallback(async (eventId: string) => {
     requirePermission("event.edit");
     const target = events.find((event) => event.id === eventId);
@@ -4469,6 +4478,7 @@ export function WorkspaceServiceProvider({
       createExtraWristbandSale: createExtraWristbandSaleMutation,
       cancelExtraWristbandSale: cancelExtraWristbandSaleMutation,
       setEventStatus,
+      archiveEvent,
       activateEvent,
       setOrganizationsState: setOrganizations,
       setVenuesState: setVenues,
@@ -4572,6 +4582,7 @@ export function WorkspaceServiceProvider({
       repositories,
       searchGuestList,
       setEventStatus,
+      archiveEvent,
       activateEvent,
       setCurrentEventId,
       setCurrentOrganizationId,
