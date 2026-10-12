@@ -19,9 +19,13 @@ test("archive and restore are organization-scoped and permission-checked", () =>
 
 test("archived events use the selected organization scope", () => {
   const archived = readFileSync("app/api/events/archived/route.ts", "utf8");
+  const library = readFileSync("features/events/components/event-library.tsx", "utf8");
   assert.match(archived, /organizationId/);
   assert.match(archived, /workspace\.organizations\.some/);
   assert.match(archived, /event_history_forbidden/);
+  assert.match(library, /AbortController/);
+  assert.match(library, /archiveError/);
+  assert.match(library, /organizationId=\$\{encodeURIComponent\(organizationId\)\}/);
 });
 
 test("historical access requires event.view and excludes live workspace scope", () => {

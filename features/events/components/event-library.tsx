@@ -65,23 +65,36 @@ export default function EventLibrary() {
   const [archiveSearch, setArchiveSearch] = useState("");
   const [archiveDate, setArchiveDate] = useState("");
   const [archiveLoading, setArchiveLoading] = useState(true);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const [restoringEventId, setRestoringEventId] = useState<string | null>(null);
-  const loadArchivedEvents = useCallback(async () => {
+  const loadArchivedEvents = useCallback(async (signal?: AbortSignal) => {
+    const organizationId = currentOrganization.id;
     setArchiveLoading(true);
+    setArchiveError(null);
     try {
-      const response = await fetch(`/api/events/archived?organizationId=${encodeURIComponent(currentOrganization.id)}`);
+      const response = await fetch(`/api/events/archived?organizationId=${encodeURIComponent(organizationId)}`, { signal });
       const payload = (await response.json().catch(() => null)) as { ok?: boolean; events?: Array<Record<string, unknown>> } | null;
       if (!response.ok || !payload?.ok) throw new Error("No se pudieron cargar los eventos archivados.");
       setArchivedEvents((payload.events ?? []).map((event) => ({
         id: String(event.id), organizationId: String(event.organization_id), name: String(event.name), description: typeof event.description === "string" ? event.description : undefined,
         status: event.status as Event["status"], startAt: String(event.start_at), timezone: String(event.timezone ?? "UTC"), venue: typeof event.venue === "string" ? event.venue : "Venue no definido", deletedAt: String(event.deleted_at),
       })));
-    } catch (error) { notify({ title: "No se pudieron cargar los archivados", description: error instanceof Error ? error.message : "Intenta nuevamente.", tone: "danger", icon: "alert" }); }
-    finally { setArchiveLoading(false); }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      const message = error instanceof Error ? error.message : "Intenta nuevamente.";
+      setArchiveError(message);
+      notify({ title: "No se pudieron cargar los archivados", description: message, tone: "danger", icon: "alert" });
+    } finally {
+      if (!(signal?.aborted)) setArchiveLoading(false);
+    }
   }, [currentOrganization.id, notify]);
   // The archive list is an authenticated server projection and must refresh when the organization changes.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadArchivedEvents(); }, [loadArchivedEvents]);
+  useEffect(() => {
+    const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadArchivedEvents(controller.signal);
+    return () => controller.abort();
+  }, [loadArchivedEvents]);
   const organizationEvents = useMemo(() => getEventsForOrganization(currentOrganization.id, events), [currentOrganization.id, events]);
 
 
@@ -241,7 +254,7 @@ export default function EventLibrary() {
           <div><p className="kicker">Archivados</p><p className="mt-1 text-sm text-slate-400">Consulta histórica y restauración, sin volverlos operativos.</p></div>
           <div className="flex flex-wrap gap-2"><input value={archiveSearch} onChange={(event) => setArchiveSearch(event.target.value)} placeholder="Buscar por nombre" className="h-9 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white" /><input type="date" value={archiveDate} onChange={(event) => setArchiveDate(event.target.value)} className="h-9 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white" /></div>
         </div>
-        {archiveLoading ? <p className="mt-4 text-sm text-slate-400">Cargando histórico…</p> : filteredArchivedEvents.length ? <div className="mt-3 grid gap-2.5 xl:grid-cols-2">{filteredArchivedEvents.map((event) => <ArchivedEventCard key={event.id} event={event} canRestore={can("event.delete")} restoring={restoringEventId === event.id} onRestore={() => confirm({ title: "Restaurar evento", description: "El evento volverá a aparecer en la categoría correspondiente a su estado actual. Su información histórica se conservará.", confirmLabel: "Restaurar evento", cancelLabel: "Cancelar", tone: "info", onConfirm: () => { setRestoringEventId(event.id); void archiveEvent(event.id, false).then(loadArchivedEvents).catch((error) => notify({ title: "No se pudo restaurar el evento", description: error instanceof Error ? error.message : "Intenta nuevamente.", tone: "danger", icon: "alert" })).finally(() => setRestoringEventId(null)); } })} />)}</div> : <p className="mt-4 text-sm text-slate-400">No hay eventos archivados.</p>}
+        {archiveLoading ? <p className="mt-4 text-sm text-slate-400">Cargando histórico…</p> : archiveError ? <p className="mt-4 text-sm text-rose-300">{archiveError}</p> : filteredArchivedEvents.length ? <div className="mt-3 grid gap-2.5 xl:grid-cols-2">{filteredArchivedEvents.map((event) => <ArchivedEventCard key={event.id} event={event} canRestore={can("event.delete")} restoring={restoringEventId === event.id} onRestore={() => confirm({ title: "Restaurar evento", description: "El evento volverá a aparecer en la categoría correspondiente a su estado actual. Su información histórica se conservará.", confirmLabel: "Restaurar evento", cancelLabel: "Cancelar", tone: "info", onConfirm: () => { setRestoringEventId(event.id); void archiveEvent(event.id, false).then(() => loadArchivedEvents()).catch((error) => notify({ title: "No se pudo restaurar el evento", description: error instanceof Error ? error.message : "Intenta nuevamente.", tone: "danger", icon: "alert" })).finally(() => setRestoringEventId(null)); } })} />)}</div> : <p className="mt-4 text-sm text-slate-400">No hay eventos archivados.</p>}
       </section>
 
       {wizardOpen ? (
