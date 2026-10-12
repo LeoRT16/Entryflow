@@ -49,7 +49,7 @@ test("reporting retry resolves event ownership before invoking the RPC", () => {
 });
 
 test("permanent deletion is restricted to archived events and owner/root", () => {
-  const migration = readFileSync("supabase/migrations/20261113000000_permanent_event_deletion.sql", "utf8");
+  const migration = readFileSync("supabase/migrations/20261113000000_permanent_event_deletion.sql", "utf8") + readFileSync("supabase/migrations/20261114000000_permanent_event_deletion_dependency_fix.sql", "utf8");
   const permanent = readFileSync("app/api/events/[eventId]/permanent/route.ts", "utf8");
   const library = readFileSync("features/events/components/event-library.tsx", "utf8");
   assert.match(migration, /security definer/);
@@ -59,6 +59,7 @@ test("permanent deletion is restricted to archived events and owner/root", () =>
   assert.match(migration, /is_platform_root/);
   assert.match(migration, /revoke all on function/);
   assert.match(migration, /grant execute on function.*authenticated/);
+  assert.match(migration, /reporting_retry_audit/);
   assert.match(permanent, /export async function DELETE/);
   assert.match(permanent, /permanently_delete_archived_event/);
   assert.match(permanent, /createSupabaseAuthServerClient/);
