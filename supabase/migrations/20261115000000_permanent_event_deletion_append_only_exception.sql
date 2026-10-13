@@ -9,6 +9,7 @@ end $$;
 
 grant event_deleter to postgres;
 grant usage on schema public to event_deleter;
+grant create on schema public to event_deleter;
 
 create or replace function public.accreditation_checkin_is_immutable()
 returns trigger
