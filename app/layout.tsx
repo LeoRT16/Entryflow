@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import {
   Anton,
   Archivo_Narrow,
@@ -13,6 +14,8 @@ import "./globals.css";
 import AppShell from "@/components/app-shell";
 import { loadWorkspaceBootstrap } from "@/services/workspace-loader";
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
+
+type LayoutProps = { children: ReactNode };
 
 const invitationInter = Inter({
   subsets: ["latin"],
@@ -71,7 +74,7 @@ export const metadata: Metadata = {
     "Reservas, ingresos y operaciones para restaurantes, clubes y eventos.",
 };
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps) {
   const authUser = await getSupabaseAuthUser();
   const initialWorkspace = await loadWorkspaceBootstrap(authUser ? { id: authUser.id, email: authUser.email } : undefined);
 

@@ -37,6 +37,13 @@ test("membership authority does not persist temporary passwords", () => {
   assert.doesNotMatch(migration, /password|tempPassword|temporary/i);
 });
 
+test("membership reactivation clears the stale removed marker without replacing metadata", () => {
+  const correction = readFileSync("supabase/migrations/20261127000000_team_membership_reactivation_removed_flag_fix.sql", "utf8");
+  assert.match(correction, /'\{removed\}','false'::jsonb,true/);
+  assert.match(correction, /\{membershipResult\}/);
+  assert.match(correction, /deleted_at=null/);
+});
+
 test("invite membership RPC diagnostics stay server-side and sanitized", () => {
   const inviteRoute = readFileSync("app/api/accounts/invite/route.ts", "utf8");
   assert.match(inviteRoute, /\[accounts\/invite:membership-rpc-error\]/);
