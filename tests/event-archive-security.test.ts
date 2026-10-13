@@ -85,3 +85,9 @@ test("permanent deletion uses the existing authenticated identity helper", () =>
   assert.match(migration, /current_app_user_id\(\) is null/);
   assert.doesNotMatch(migration, /if auth\.uid\(\) is null/);
 });
+
+test("deletion role receives only authorization lookup reads", () => {
+  const migration = readFileSync("supabase/migrations/20261118000000_permanent_event_deletion_role_select_privileges.sql", "utf8");
+  assert.match(migration, /grant select on public\.profiles, public\.roles to event_deleter/);
+  assert.doesNotMatch(migration, /grant all|auth\.users|superuser|bypassrls/i);
+});
