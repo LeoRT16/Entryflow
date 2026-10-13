@@ -60,6 +60,11 @@ test("permanent deletion is restricted to archived events and owner/root", () =>
   assert.match(migration, /revoke all on function/);
   assert.match(migration, /grant execute on function.*authenticated/);
   assert.match(migration, /reporting_retry_audit/);
+  const exception = readFileSync("supabase/migrations/20261115000000_permanent_event_deletion_append_only_exception.sql", "utf8");
+  assert.match(exception, /create role event_deleter nologin noinherit/);
+  assert.match(exception, /current_user = 'event_deleter'/);
+  assert.match(exception, /alter function public\.permanently_delete_archived_event\(uuid\) owner to event_deleter/);
+  assert.doesNotMatch(exception, /DISABLE TRIGGER|session_replication_role/);
   assert.match(permanent, /export async function DELETE/);
   assert.match(permanent, /permanently_delete_archived_event/);
   assert.match(permanent, /createSupabaseAuthServerClient/);
