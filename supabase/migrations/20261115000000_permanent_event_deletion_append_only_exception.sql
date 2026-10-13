@@ -7,6 +7,8 @@ begin
   end if;
 end $$;
 
+grant event_deleter to postgres;
+
 create or replace function public.accreditation_checkin_is_immutable()
 returns trigger
 language plpgsql
