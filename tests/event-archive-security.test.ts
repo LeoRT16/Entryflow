@@ -79,3 +79,9 @@ test("permanent deletion is restricted to archived events and owner/root", () =>
   assert.match(library, /ELIMINAR/);
   assert.match(library, /\/permanent/);
 });
+
+test("permanent deletion uses the existing authenticated identity helper", () => {
+  const migration = readFileSync("supabase/migrations/20261117000000_permanent_event_deletion_auth_helper_fix.sql", "utf8");
+  assert.match(migration, /current_app_user_id\(\) is null/);
+  assert.doesNotMatch(migration, /if auth\.uid\(\) is null/);
+});
