@@ -91,3 +91,9 @@ test("deletion role receives only authorization lookup reads", () => {
   assert.match(migration, /grant select on public\.profiles, public\.roles to event_deleter/);
   assert.doesNotMatch(migration, /grant all|auth\.users|superuser|bypassrls/i);
 });
+
+test("deletion role can call only the existing root authorization helper", () => {
+  const migration = readFileSync("supabase/migrations/20261119000000_permanent_event_deletion_root_check_privilege.sql", "utf8");
+  assert.match(migration, /grant execute on function public\.is_platform_root\(\) to event_deleter/);
+  assert.doesNotMatch(migration, /grant all|platform_principals|auth\.users/i);
+});
