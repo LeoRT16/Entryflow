@@ -94,6 +94,29 @@ import type { GuestMoveAtomicResult } from "@/repositories/workspace-repositorie
 
 type AnyTable = keyof Database["public"]["Tables"];
 
+type FinalReportFailurePayload = {
+  error?: {
+    code?: unknown;
+    message?: unknown;
+    phase?: unknown;
+  } | string;
+};
+
+export class FinalReportFinalizationError extends Error {
+  readonly code: string;
+  readonly phase: string | null;
+
+  constructor(payload: FinalReportFailurePayload, fallbackStatus: number) {
+    const details = typeof payload.error === "object" && payload.error ? payload.error : {};
+    const code = typeof details.code === "string" ? details.code : typeof payload.error === "string" ? payload.error : `finalization_http_${fallbackStatus}`;
+    const message = typeof details.message === "string" ? details.message : "No se pudo finalizar el evento.";
+    super(message);
+    this.name = "FinalReportFinalizationError";
+    this.code = code;
+    this.phase = typeof details.phase === "string" ? details.phase : null;
+  }
+}
+
 type SupabaseCrudRepository<TEntity> = {
   list(): Promise<TEntity[]>;
   findById(id: string): Promise<TEntity | undefined>;
@@ -1100,7 +1123,7 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
         let error;
         if (status === "finished") {
           const response = await fetch("/api/reporting/final-report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventId }) });
-          if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error ?? "finalization_failed");
+          if (!response.ok) throw new FinalReportFinalizationError(await response.json().catch(() => ({})), response.status);
         } else {
           ({ error } = await client.rpc("transition_event_status" as never, { p_event_id: eventId, p_next_status: status } as never));
         }

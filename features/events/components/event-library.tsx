@@ -195,7 +195,7 @@ export default function EventLibrary() {
         : currentEvent.status === "live" ? {
             label: "Cerrar evento",
             tone: "warning",
-            onClick: () => setEventStatus(currentEvent.id, "finished"),
+            onClick: () => { void setEventStatus(currentEvent.id, "finished").catch(() => undefined); },
         } : null;
 
   const cancelEvent = (event: Event) => confirm({ title: "¿Cancelar este evento?", description: "Dejará de aceptar operación nueva. El historial se conservará y la acción es irreversible.", confirmLabel: "Cancelar evento", cancelLabel: "Volver", tone: "danger", onConfirm: () => void setEventStatus(event.id, "cancelled") });

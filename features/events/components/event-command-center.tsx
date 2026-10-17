@@ -419,7 +419,7 @@ export default function EventCommandCenter() {
             {!isTerminalEvent ? (
               <button
                 type="button"
-                onClick={() => setEventStatus(currentEvent.id, "finished")}
+                onClick={() => { void setEventStatus(currentEvent.id, "finished").catch(() => undefined); }}
                 className="inline-flex h-10 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-amber-100 transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
               >
                 Cerrar evento

@@ -119,7 +119,7 @@ import type { EventReport } from "@/features/reporting/types";
 import { clearInvalidSupabaseBrowserSession, getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/helpers";
 import { createUuid, nowIso } from "@/lib/supabase/helpers";
-import { createSupabaseWorkspaceRepositories, type SupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
+import { createSupabaseWorkspaceRepositories, FinalReportFinalizationError, type SupabaseWorkspaceRepositories } from "@/repositories/supabase-workspace-repositories";
 import type { WorkspaceBootstrap } from "@/services/workspace-loader";
 import {
   resolveCurrentEventLayout,
@@ -371,7 +371,7 @@ type WorkspaceServiceValue = {
   prepareEventPhysicalLayout: (eventId: string) => Promise<import('@/repositories/supabase-workspace-repositories').EventLayoutMaterializationResult>;
   createExtraWristbandSale: (input: { reservationId: string; eventId: string; people: ExtraWristbandPerson[] }) => Promise<void>;
   cancelExtraWristbandSale: (input: { saleId: string; reason: string }) => Promise<void>;
-  setEventStatus: (eventId: string, status: PlatformEvent["status"]) => void;
+  setEventStatus: (eventId: string, status: PlatformEvent["status"]) => Promise<void>;
   activateEvent: (eventId: string) => Promise<void>;
   archiveEvent: (eventId: string, archived: boolean) => Promise<void>;
   setOrganizationsState: Dispatch<SetStateAction<Organization[]>>;
@@ -2543,7 +2543,24 @@ export function WorkspaceServiceProvider({
 
       const snapshot = captureSnapshot();
       setEvents((current) => current.map((event) => (event.id === eventId ? { ...event, status } : event)));
-      try { await repositories.events.setStatus(eventId, status); } catch (error) { restoreSnapshot(snapshot); throw error; }
+      try {
+        await repositories.events.setStatus(eventId, status);
+      } catch (error) {
+        restoreSnapshot(snapshot);
+        try {
+          await reloadWorkspace();
+        } catch {
+          // The optimistic snapshot is already restored; keep the original finalization error visible.
+        }
+        if (status === "finished") {
+          const finalizationError = error instanceof FinalReportFinalizationError ? error : null;
+          const diagnostic = finalizationError
+            ? `${finalizationError.phase ? `${finalizationError.phase} · ` : ""}${finalizationError.code}: ${finalizationError.message}`
+            : error instanceof Error ? error.message : "No se pudo confirmar el cierre.";
+          notify({ title: "No se pudo cerrar el evento", description: diagnostic, tone: "danger", icon: "alert", href: "/events" });
+        }
+        throw error;
+      }
       await requestReportingAfterSuccess(eventId);
       notify({
         title: status === "published" ? "Evento publicado" : status === "finished" ? "Evento cerrado" : "Evento actualizado",
@@ -2563,7 +2580,7 @@ export function WorkspaceServiceProvider({
         },
       });
     },
-    [captureSnapshot, events, notify, repositories.events, requestReportingAfterSuccess, requirePermission, restoreSnapshot],
+    [captureSnapshot, events, notify, reloadWorkspace, repositories.events, requestReportingAfterSuccess, requirePermission, restoreSnapshot],
   );
 
   const archiveEvent = useCallback(async (eventId: string, archived: boolean) => {
