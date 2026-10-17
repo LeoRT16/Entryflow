@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getRolePresetBySlug, resolveAccountPermissions } from "@/features/accounts/domain/accounts-domain";
 import { getSupabaseAuthUser } from "@/lib/supabase/auth";
 import { createSupabaseAuthServerClient } from "@/lib/supabase/auth";
+import { authorizeFinalReportEvent } from "@/lib/reporting/final-report-authorization";
 import { finalReportFailure, logFinalReportFailure, type FinalReportFailure } from "@/lib/reporting/final-report-diagnostics";
 import { loadWorkspaceBootstrap } from "@/services/workspace-loader";
 import { WorkerEventReportDataError, WorkerEventReportScopeError, loadEventReportForWorker } from "@/features/reporting/server/event-report-worker-loader";
@@ -18,13 +18,9 @@ async function authorizeEvent(eventId:string, permission:"event.view"|"event.edi
   const user=await getSupabaseAuthUser();
   if (!user) return { response: NextResponse.json({error:"unauthorized"},{status:401}) } as const;
   const workspace=await loadWorkspaceBootstrap({id:user.id,email:user.email});
-  if (workspace.authState.status!=="ready") return { response: NextResponse.json({error:"forbidden"},{status:403}) } as const;
-  const event=workspace.events.find((candidate)=>candidate.id===eventId && candidate.organizationId===workspace.currentOrganizationId);
-  const profile=workspace.profiles.find((candidate)=>candidate.id===workspace.currentProfileId && candidate.organizationId===workspace.currentOrganizationId && !candidate.deletedAt);
-  const role=workspace.roles.find((candidate)=>candidate.id===profile?.roleId) ?? getRolePresetBySlug("administrator");
-  const permissions=resolveAccountPermissions({permissions:profile?.metadata?.permissions,rolePermissions:role.permissions,roleMetadata:role.metadata,accountMetadata:profile?.metadata});
-  if (!event || !permissions.includes(permission)) return { response: NextResponse.json({error:"forbidden"},{status:403}) } as const;
-  return { event } as const;
+  const authorization = authorizeFinalReportEvent(workspace, eventId, permission);
+  if ("code" in authorization) return { response: NextResponse.json({error:authorization.code},{status:authorization.code === "unauthorized" ? 401 : 403}) } as const;
+  return { event: authorization.event } as const;
 }
 function eventIdFrom(request:Request) { return new URL(request.url).searchParams.get("eventId") ?? ""; }
 export async function GET(request:Request) {
