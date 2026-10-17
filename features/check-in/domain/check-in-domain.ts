@@ -116,6 +116,22 @@ export function searchGuests(guests: Guest[], query: string) {
   return guests.filter((guest) => buildGuestSearchIndex(guest).includes(normalizedQuery));
 }
 
+/**
+ * A manual operator has already selected a concrete search result. Preserve
+ * that identity instead of resolving the free-text query a second time.
+ * Keeping the event boundary here prevents a stale or cross-event selection
+ * from being used as an admission target.
+ */
+export function resolveManualCheckInGuest(params: {
+  guestId: string | undefined;
+  eventId: string;
+  guests: Guest[];
+}) {
+  if (!params.guestId) return null;
+
+  return params.guests.find((guest) => guest.id === params.guestId && guest.eventId === params.eventId) ?? null;
+}
+
 type GuestQuickReadSource = {
   guestName: string;
   carnet: string;

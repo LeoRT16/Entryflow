@@ -18,7 +18,7 @@ import {
   buildGuestWhatsAppUpdate,
   validateGuestProfileUpdateInput,
 } from "@/features/customers/domain/customer-directory";
-import { getOperatorSafeCheckInError, searchGuests } from "@/features/check-in/domain/check-in-domain";
+import { getOperatorSafeCheckInError, resolveManualCheckInGuest, searchGuests } from "@/features/check-in/domain/check-in-domain";
 import { requestReportingSyncAfterSuccess } from "@/features/reporting/sync/request-after-success";
 import { runAssignReservationTable, runReleaseReservationTable, runCloseTable } from "@/features/tables/application/atomic-table-operations";
 import { runMoveGuestToResource } from "@/features/tables/application/guest-move-operations";
@@ -333,6 +333,7 @@ type WorkspaceServiceValue = {
     query: string;
     method: CheckInMethod;
     operator?: string;
+    selectedGuestId?: string;
     manual?: boolean;
   }) => Promise<{
     result: CheckInAttempt["result"];
@@ -4035,7 +4036,7 @@ export function WorkspaceServiceProvider({
   }, [currentEvent, currentVenue, requestReportingAfterSuccess, repositories.tables, requirePermission, setTables, tables]);
 
   const registerCheckIn = useCallback(
-    async ({ query, method, operator = method === "Manual" ? "Recepción" : "Escáner" }: { query: string; method: CheckInMethod; operator?: string; manual?: boolean }) => {
+    async ({ query, method, operator = method === "Manual" ? "Recepción" : "Escáner", selectedGuestId }: { query: string; method: CheckInMethod; operator?: string; selectedGuestId?: string; manual?: boolean }) => {
       requirePermission("checkin.perform");
       if (isTerminalEventStatus(currentEvent.status)) {
         const note = "Este evento está cerrado y no admite nuevos ingresos.";
@@ -4079,7 +4080,16 @@ export function WorkspaceServiceProvider({
           reservations: currentEventReservations,
           event: currentEvent,
         });
-        let guest = resolution.status === "found" ? resolution.guest : resolution.status === "ambiguous" ? null : findGuestByQuery(query);
+        const manuallySelectedGuest = method === "Manual" && selectedGuestId
+          ? resolveManualCheckInGuest({ guestId: selectedGuestId, eventId: currentEvent.id, guests: currentEventGuests })
+          : undefined;
+        let guest = manuallySelectedGuest === undefined
+          ? resolution.status === "found"
+            ? resolution.guest
+            : resolution.status === "ambiguous"
+              ? null
+              : findGuestByQuery(query)
+          : manuallySelectedGuest;
         if (guest && repositories.guests.prepareAuthoritativeAccess) {
           guest = await repositories.guests.prepareAuthoritativeAccess(guest);
           setGuests((current) => current.map((candidate) => candidate.id === guest?.id ? guest : candidate));

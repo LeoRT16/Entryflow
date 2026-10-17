@@ -255,6 +255,7 @@ function CheckInWorkspace() {
         query: queryValue,
         method,
         operator: method === "Manual" ? "Recepción" : "Escáner",
+        selectedGuestId: method === "Manual" ? guest.id : undefined,
       });
 
       const tone = getAttemptTone(result.result);

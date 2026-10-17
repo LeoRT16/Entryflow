@@ -92,7 +92,7 @@ test("check-in flow prioritizes scanner usage before manual lookup", () => {
   assert.doesNotMatch(timelineSource, /event\.reservationCode \? <StatusBadge variant="info">\{event\.reservationCode\}<\/StatusBadge> : null;/);
 });
 
-test("check-in flow preserves the presented credential when registering a selected guest", () => {
+test("check-in flow preserves the selected guest identity for manual admission", () => {
   const source = readFileSync(new URL("../features/check-in/components/check-in-flow.tsx", import.meta.url), "utf8");
   const start = source.indexOf("const handleRegister = async () => {");
   const end = source.indexOf("const resetAdmissionState", start);
@@ -101,6 +101,7 @@ test("check-in flow preserves the presented credential when registering a select
   assert.match(block, /const presentedCredential = query;/);
   assert.match(block, /submitCheckIn\(selectedGuest, presentedCredential, isCredentialMatch \? "QR" : validationMethod\)/);
   assert.doesNotMatch(block, /buildGuestSearchIndex\(selectedGuest\)/);
+  assert.match(source, /selectedGuestId: method === "Manual" \? guest\.id : undefined/);
   assert.match(source, /void submitCheckIn\(match, value, "QR"\)/);
 });
 
