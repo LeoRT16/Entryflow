@@ -1131,9 +1131,10 @@ export function createSupabaseWorkspaceRepositories(client: SupabaseClient<Datab
       },
       async activate(eventId: string) {
         if (!client) throw new Error("Supabase client is unavailable.");
-        const { data, error } = await client.rpc("activate_event" as never, { p_event_id: eventId } as never);
-        if (error) throw error;
-        return data as import("./workspace-repositories").EventActivationResult;
+        const response = await fetch("/api/events/activate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ eventId }) });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.error ?? "event_activation_failed");
+        return payload as import("./workspace-repositories").EventActivationResult;
       },
       async setVenueAtomic(eventId: string, venueId: string | null) {
         if (!client) throw new Error("Supabase client is unavailable.");
