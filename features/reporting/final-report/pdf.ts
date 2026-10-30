@@ -50,6 +50,20 @@ function addOperationsPage(document: PDFKit.PDFDocument, report: EventReport, re
   resources.forEach((resource, index) => row(document, resourcesY + 58 + index * 21, [[safe(resource.resourceName), 170], [safe(resource.sectorName), 150], [String(resource.physicalCapacity), 90], [String(resource.capacityAssigned), 90], [`${resource.checkedInPeople}/${resource.operationalPeople}`, 100]], index % 2 === 0));
 }
 
+function compactResources(resources: ResourceReport[]) {
+  const visible = resources.slice(0, 9);
+  const remaining = resources.slice(9);
+  if (!remaining.length) return visible;
+  return [...visible, {
+    resourceName: `Otros recursos (${remaining.length})`,
+    sectorName: "Resumen agrupado",
+    physicalCapacity: remaining.reduce((total, resource) => total + resource.physicalCapacity, 0),
+    capacityAssigned: remaining.reduce((total, resource) => total + resource.capacityAssigned, 0),
+    checkedInPeople: remaining.reduce((total, resource) => total + resource.checkedInPeople, 0),
+    operationalPeople: remaining.reduce((total, resource) => total + resource.operationalPeople, 0),
+  } as ResourceReport];
+}
+
 /** Executive/admin PDF. It deliberately omits attendee-level PII; Sheets remains the operational detail surface. */
 export async function renderFinalEventReportPdf(report: EventReport): Promise<Buffer> {
   const document = new PDFDocument({ size: "LETTER", layout: "landscape", margin: 42, bufferPages: true, autoFirstPage: true });
@@ -82,11 +96,9 @@ export async function renderFinalEventReportPdf(report: EventReport): Promise<Bu
   const extraAttendees = report.attendees.filter((attendee) => attendee.extraWristband || attendee.accessType === "extra_wristband");
   const operationalRows = [...report.reservations];
   if (extraAttendees.length > 0) operationalRows.push({ type: "Manillas extra", operationalPeople: extraAttendees.length, checkedInPeople: extraAttendees.filter((attendee) => attendee.checkedIn).length, pendingPeople: extraAttendees.filter((attendee) => !attendee.checkedIn).length, soldTotal: commercial.extraWristbands.value } as never);
-  const pageSize = 8;
   const globalCapacity = report.resources.reduce((total, resource) => total + resource.physicalCapacity, 0);
   const globalAssigned = report.resources.reduce((total, resource) => total + resource.capacityAssigned, 0);
-  const resourcePages = Math.max(1, Math.ceil(report.resources.length / pageSize));
-  for (let page = 0; page < resourcePages; page += 1) addOperationsPage(document, { ...report, reservations: operationalRows } as EventReport, report.resources.slice(page * pageSize, (page + 1) * pageSize), globalCapacity, globalAssigned, page === 0, resourcePages === 1 ? "Operaciones y recursos" : `Operaciones y recursos · ${page + 1}`);
+  addOperationsPage(document, { ...report, reservations: operationalRows } as EventReport, compactResources(report.resources), globalCapacity, globalAssigned, true);
   const range = document.bufferedPageRange();
   for (let index = 0; index < range.count; index += 1) { document.switchToPage(index); document.fillColor(MUTED).font("Noto").fontSize(7).text(`ENTRYFLOW  ·  ${safe(report.metadata.eventName)}  ·  Generado ${formatTimestamp(safe(report.metadata.generatedAt), report.metadata.timezone)}  ·  Página ${index + 1} de ${range.count}`, LEFT, 558, { width: CONTENT_WIDTH, align: "center" }); }
   return await new Promise<Buffer>((resolve) => { document.on("end", () => resolve(Buffer.concat(chunks))); document.end(); });
