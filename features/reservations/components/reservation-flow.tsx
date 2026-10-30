@@ -924,13 +924,20 @@ function ReservationFlowWorkspace({
 
     setSubmissionError(null);
     setStep((currentStep) => {
+      if (!isPresale && !isCourtesy && currentStep === 1) return 3;
       if (isCourtesy && currentStep === 3) return 6;
       if (isPresale && currentStep === 3) return 5;
       return Math.min(6, currentStep + 1) as WizardStep;
     });
   };
   const goPrevious = () =>
-    setStep((currentStep) => (isPresale && currentStep === 5 ? 3 : Math.max(1, currentStep - 1)) as WizardStep);
+    setStep((currentStep) => (
+      !isPresale && !isCourtesy && currentStep === 3
+        ? 1
+        : isPresale && currentStep === 5
+          ? 3
+          : Math.max(1, currentStep - 1)
+    ) as WizardStep);
 
   const runReservationSubmit = useCallback(
     async (submissionLabel: string, task: () => Promise<void>) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import StatusBadge from "@/components/status-badge";
 import { formatEventWallDateTime } from "@/lib/date-time";
@@ -60,13 +60,17 @@ function ValidationField({ label, value }: { label: string; value?: string | nul
   );
 }
 
-function CompactGuestRow({ guest, onSelect }: { guest: Guest; onSelect: (guest: Guest) => void }) {
+function CompactGuestRow({ guest, active, onSelect }: { guest: Guest; active: boolean; onSelect: (guest: Guest) => void }) {
   const quickRead = buildGuestQuickReadSummary(guest);
   return (
     <button
       type="button"
       onClick={() => onSelect(guest)}
-      className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-left transition hover:border-cyan-400/30 hover:bg-slate-950/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+      data-active={active || undefined}
+      className={[
+        "w-full rounded-2xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40",
+        active ? "border-cyan-400/50 bg-cyan-400/10" : "border-white/10 bg-slate-950/70 hover:border-cyan-400/30 hover:bg-slate-950/90",
+      ].join(" ")}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <p className="min-w-0 flex-1 break-words text-sm font-semibold text-white">{quickRead.name}</p>
@@ -111,6 +115,12 @@ function CheckInWorkspace() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attemptState, setAttemptState] = useState<CheckInAttemptState>({ kind: "idle" });
   const [scannerCycle, setScannerCycle] = useState(0);
+  const [operatorMode, setOperatorMode] = useState<"manual" | "qr">(() => {
+    if (typeof window === "undefined") return "manual";
+    const savedMode = window.localStorage.getItem("entryflow-checkin-mode");
+    return savedMode === "qr" || savedMode === "manual" ? savedMode : "manual";
+  });
+  const [highlightedResultIndex, setHighlightedResultIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const validationRef = useRef<HTMLElement | null>(null);
 
@@ -118,10 +128,16 @@ function CheckInWorkspace() {
   const normalizedQuery = deferredQuery.trim();
   const shouldShowResults = normalizedQuery.length >= 2;
 
-  const searchResults = useMemo(
-    () => (shouldShowResults ? searchGuestList(normalizedQuery).filter((guest) => guest.eventId === currentEvent.id).slice(0, 6) : []),
+  const allSearchResults = useMemo(
+    () => (shouldShowResults ? searchGuestList(normalizedQuery).filter((guest) => guest.eventId === currentEvent.id) : []),
     [currentEvent.id, normalizedQuery, searchGuestList, shouldShowResults],
   );
+  const searchResults = useMemo(() => allSearchResults.slice(0, 6), [allSearchResults]);
+
+  const setPreferredMode = (mode: "manual" | "qr") => {
+    setOperatorMode(mode);
+    window.localStorage.setItem("entryflow-checkin-mode", mode);
+  };
 
   const resolvedGuest = useMemo(
     () =>
@@ -180,6 +196,7 @@ function CheckInWorkspace() {
     setSelectedGuestId(null);
     setValidationMethod("Manual");
     setAttemptState({ kind: "idle" });
+    setHighlightedResultIndex(-1);
   };
 
   const handleDetected = (value: string) => {
@@ -213,6 +230,40 @@ function CheckInWorkspace() {
     setSelectedGuestId(guest.id);
     setValidationMethod("Manual");
     setAttemptState({ kind: "idle" });
+    setHighlightedResultIndex(searchResults.findIndex((candidate) => candidate.id === guest.id));
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" && searchResults.length) {
+      event.preventDefault();
+      setHighlightedResultIndex((index) => Math.min(index + 1, searchResults.length - 1));
+      return;
+    }
+    if (event.key === "ArrowUp" && searchResults.length) {
+      event.preventDefault();
+      setHighlightedResultIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+    if (event.key === "Escape") {
+      setSelectedGuestId(null);
+      setHighlightedResultIndex(-1);
+      setAttemptState({ kind: "idle" });
+      return;
+    }
+    if (event.key !== "Enter") return;
+
+    if (!selectedGuestId) {
+      const candidate = searchResults[highlightedResultIndex] ?? (searchResults.length === 1 ? searchResults[0] : null);
+      if (candidate) {
+        event.preventDefault();
+        handleSelectGuest(candidate);
+      }
+      return;
+    }
+    if (canRegister) {
+      event.preventDefault();
+      void handleRegister();
+    }
   };
 
   const handleRegister = async () => {
@@ -323,14 +374,16 @@ function CheckInWorkspace() {
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-4">
-            <QrCameraScanner key={scannerCycle} eventName={currentEvent.name} onDetected={handleDetected} onRestart={resetAdmissionState} />
+            <section className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-2" aria-label="Modo de ingreso">
+              <button type="button" onClick={() => setPreferredMode("manual")} aria-pressed={operatorMode === "manual"} className={operatorMode === "manual" ? "h-10 rounded-xl bg-cyan-400/10 px-4 text-sm font-semibold text-cyan-50" : "h-10 rounded-xl px-4 text-sm font-medium text-slate-400 hover:bg-white/[0.05] hover:text-white"}>Búsqueda manual</button>
+              <button type="button" onClick={() => setPreferredMode("qr")} aria-pressed={operatorMode === "qr"} className={operatorMode === "qr" ? "h-10 rounded-xl bg-cyan-400/10 px-4 text-sm font-semibold text-cyan-50" : "h-10 rounded-xl px-4 text-sm font-medium text-slate-400 hover:bg-white/[0.05] hover:text-white"}>Escanear QR</button>
+            </section>
+
+            {operatorMode === "qr" ? <QrCameraScanner key={scannerCycle} eventName={currentEvent.name} onDetected={handleDetected} onRestart={resetAdmissionState} /> : null}
 
             <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                    Búsqueda manual
-                  </p>
                   <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">
                     Búsqueda manual
                   </h2>
@@ -346,15 +399,7 @@ function CheckInWorkspace() {
                   ref={searchInputRef}
                   value={query}
                   onChange={(event) => handleQueryChange(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape") {
-                      setSelectedGuestId(null);
-                      setAttemptState({ kind: "idle" });
-                    } else if (event.key === "Enter" && selectedGuestId && canRegister) {
-                      event.preventDefault();
-                      void handleRegister();
-                    }
-                  }}
+                  onKeyDown={handleSearchKeyDown}
                   placeholder="Nombre, carnet, código de invitación o reserva"
                   className="mt-1 w-full rounded-[1.25rem] border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40 focus:ring-2 focus:ring-cyan-400/20"
                 />
@@ -367,16 +412,17 @@ function CheckInWorkspace() {
                       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
                         Coincidencias
                       </p>
-                      <p className="text-xs text-slate-400">{searchResults.length} resultados</p>
+                      <p className="text-xs text-slate-400">{allSearchResults.length} resultado{allSearchResults.length === 1 ? "" : "s"}</p>
                     </div>
 
                     <div className="grid gap-3">
-                      {searchResults.map((guest) => <CompactGuestRow key={guest.id} guest={guest} onSelect={handleSelectGuest} />)}
+                      {searchResults.map((guest, index) => <CompactGuestRow key={guest.id} guest={guest} active={index === highlightedResultIndex} onSelect={handleSelectGuest} />)}
                     </div>
+                    {allSearchResults.length > searchResults.length ? <p className="text-xs leading-5 text-slate-400">Mostramos los primeros {searchResults.length}. Refiná la búsqueda por carnet, código o nombre para ubicar más rápido al invitado.</p> : null}
                   </div>
                 ) : searchResults.length === 1 ? (
                   <div className="mt-4 rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3 text-sm text-slate-300">
-                    Una coincidencia encontrada. Revisa la validación antes de registrar.
+                    Una coincidencia encontrada. Presioná Enter para seleccionarla y una segunda vez para registrar el ingreso.
                   </div>
                 ) : (
                   <div className="mt-4 rounded-[1.3rem] border border-white/10 bg-black/15 px-4 py-3 text-sm text-slate-300">
@@ -480,7 +526,7 @@ function CheckInWorkspace() {
                     onClick={canRegister ? () => void handleRegister() : resetAttempt}
                     disabled={canRegister ? isSubmitting : false}
                     className={[
-                      "inline-flex h-11 w-full items-center justify-center rounded-2xl border px-4 text-sm font-semibold transition",
+                      "sticky bottom-3 z-10 inline-flex h-11 w-full items-center justify-center rounded-2xl border px-4 text-sm font-semibold transition lg:static",
                       canRegister
                         ? "border-cyan-400/25 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50"
                         : "border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]",

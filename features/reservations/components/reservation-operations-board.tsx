@@ -175,6 +175,8 @@ export default function ReservationOperationsBoard({
   const { showToast, confirm } = useFeedback();
   const [query, setQuery] = useState("");
   const [reservationFilter, setReservationFilter] = useState<"all" | "tables" | "presale" | "courtesy">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ReservationSummary["status"]>("all");
+  const [admissionFilter, setAdmissionFilter] = useState<"all" | "none" | "partial" | "complete">("all");
   const [isAddGuestFormOpen, setIsAddGuestFormOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
@@ -199,6 +201,18 @@ export default function ReservationOperationsBoard({
 
   const normalizedQuery = query.trim().toLowerCase();
 
+  const reservationStatuses = useMemo(
+    () => Array.from(new Set(reservations.map((reservation) => reservation.status))),
+    [reservations],
+  );
+
+  const getAdmissionState = useCallback((reservation: ReservationSummary): "none" | "partial" | "complete" => {
+    const guestCount = reservation.metrics.guestCount;
+    const checkedIn = reservation.metrics.checkedInGuests;
+    if (guestCount <= 0 || checkedIn <= 0) return "none";
+    return checkedIn >= guestCount ? "complete" : "partial";
+  }, []);
+
   const visibleReservations = useMemo(() => {
     const filteredReservations = reservationFilter === "presale"
       ? reservations.filter((reservation) => reservation.reservationType === "Preventa")
@@ -208,15 +222,34 @@ export default function ReservationOperationsBoard({
           ? reservations.filter((reservation) => reservation.reservationType !== "Preventa" && reservation.reservationType !== "Cortesía")
           : reservations;
 
-    if (!normalizedQuery) return filteredReservations;
+    const operationallyFiltered = filteredReservations.filter((reservation) =>
+      (statusFilter === "all" || reservation.status === statusFilter) &&
+      (admissionFilter === "all" || getAdmissionState(reservation) === admissionFilter),
+    );
 
-    return filteredReservations.filter((reservation) =>
+    if (!normalizedQuery) return operationallyFiltered;
+
+    return operationallyFiltered.filter((reservation) =>
       [reservation.name, reservation.code, reservation.eventName, reservation.tableName]
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery),
     );
-  }, [normalizedQuery, reservationFilter, reservations]);
+  }, [admissionFilter, getAdmissionState, normalizedQuery, reservationFilter, reservations, statusFilter]);
+
+  useEffect(() => {
+    if (visibleReservations.length && !visibleReservations.some((reservation) => reservation.id === activeReservationId)) {
+      onSelectReservation(visibleReservations[0].id);
+    }
+  }, [activeReservationId, onSelectReservation, visibleReservations]);
+
+  const hasActiveFilters = Boolean(query || reservationFilter !== "all" || statusFilter !== "all" || admissionFilter !== "all");
+  const clearFilters = () => {
+    setQuery("");
+    setReservationFilter("all");
+    setStatusFilter("all");
+    setAdmissionFilter("all");
+  };
 
   const activeReservation =
     visibleReservations.find((reservation) => reservation.id === activeReservationId) ??
@@ -693,7 +726,6 @@ export default function ReservationOperationsBoard({
   }
 
   const canConfirmReservation = activeReservation.status === "Draft" || activeReservation.status === "Pending";
-  const canMutateReservation = !isTerminalReservation && (canEditReservation || canDeleteReservation);
 
   return (
     <section className="grid min-w-0 gap-6 xl:grid-cols-[0.92fr_1.08fr]">
@@ -739,6 +771,35 @@ export default function ReservationOperationsBoard({
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Filtrar por estado">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Estado</span>
+          <select
+            aria-label="Estado de reserva"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as "all" | ReservationSummary["status"])}
+            className="h-9 min-w-0 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-slate-200 outline-none focus:border-cyan-400/50"
+          >
+            <option value="all">Todos</option>
+            {reservationStatuses.map((status) => <option key={status} value={status}>{formatReservationStatus(status)}</option>)}
+          </select>
+          <select
+            aria-label="Estado de admisión"
+            value={admissionFilter}
+            onChange={(event) => setAdmissionFilter(event.target.value as "all" | "none" | "partial" | "complete")}
+            className="h-9 min-w-0 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-slate-200 outline-none focus:border-cyan-400/50"
+          >
+            <option value="all">Toda admisión</option>
+            <option value="none">Sin ingresos</option>
+            <option value="partial">Ingreso parcial</option>
+            <option value="complete">Ingreso completo</option>
+          </select>
+          {hasActiveFilters ? (
+            <button type="button" onClick={clearFilters} className="h-9 rounded-xl px-2 text-xs font-medium text-slate-400 transition hover:bg-white/[0.06] hover:text-white">
+              Limpiar
+            </button>
+          ) : null}
         </div>
 
         <p className="mt-3 text-xs uppercase tracking-[0.22em] text-slate-500">
@@ -830,9 +891,14 @@ export default function ReservationOperationsBoard({
                   Reserva terminal
                 </span>
               ) : null}
-              {canMutateReservation ? (
-                <>
-                </>
+              {canEditReservation && !isTerminalReservation ? (
+                <button
+                  type="button"
+                  onClick={() => onEditReservation(activeReservation.id)}
+                  className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                >
+                  Editar
+                </button>
               ) : null}
               <ReservationActionMenu items={[
                 ...(canIssueWhatsAppInvitations && hasReservationGuests ? [{ id: "send", label: isSendingReservationInvitations && bulkProgress ? `Enviando ${bulkProgress.current}/${bulkProgress.total}` : "Enviar invitaciones", onSelect: () => void handleBulkSendReservations }] : []),

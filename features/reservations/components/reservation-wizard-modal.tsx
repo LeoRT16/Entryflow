@@ -261,7 +261,7 @@ export default function ReservationWizardModal({
             <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
               <main className="min-w-0 border-b border-white/10 px-5 py-5 sm:px-6 lg:border-b-0 lg:border-r lg:border-white/10 lg:px-8 lg:py-6">
                 <div className="space-y-5">
-                  <WizardProgress step={step} completion={completion} isNonPhysical={isNonPhysical} isCourtesy={isCourtesy} />
+                  <WizardProgress step={step} completion={completion} isNonPhysical={isNonPhysical} isCourtesy={isCourtesy} isMesa={isMesa} />
 
                   <div
                     key={step}
@@ -314,7 +314,24 @@ export default function ReservationWizardModal({
                     ) : null}
 
                     {step === 3 ? (
-                      <GuestsStep
+                      <>
+                        {isMesa ? <HolderStep
+                          holderName={holderName}
+                          setHolderName={setHolderName}
+                          holderLastName={holderLastName}
+                          setHolderLastName={setHolderLastName}
+                          documentValue={documentValue}
+                          setDocumentValue={setDocumentValue}
+                          whatsapp={whatsapp}
+                          setWhatsapp={setWhatsapp}
+                          email={email}
+                          setEmail={setEmail}
+                          preferences={preferences}
+                          setPreferences={setPreferences}
+                          notes={notes}
+                          setNotes={setNotes}
+                        /> : null}
+                        <GuestsStep
                         wizardMode={wizardMode}
                         guests={guests}
                         isPresale={isPresale}
@@ -326,7 +343,8 @@ export default function ReservationWizardModal({
                         addGuest={addGuest}
                         removeGuest={removeGuest}
                         updateGuest={updateGuest}
-                      />
+                        />
+                      </>
                     ) : null}
 
                     {step === 4 && !isNonPhysical ? (
@@ -520,7 +538,7 @@ export default function ReservationWizardModal({
                         />
                       </div>
                       <div className="grid gap-3">
-                      {wizardSteps.filter((item) => (!isNonPhysical || item.step !== 4) && (!isCourtesy || item.step !== 5)).map((item) => (
+                      {wizardSteps.filter((item) => (!isNonPhysical || item.step !== 4) && (!isCourtesy || item.step !== 5) && (!isMesa || item.step !== 2)).map((item) => (
                           <WizardStepChip
                             key={item.step}
                             step={item.step}
@@ -586,11 +604,13 @@ function WizardProgress({
   completion,
   isNonPhysical,
   isCourtesy,
+  isMesa,
 }: {
   step: WizardStep;
   completion: number;
   isNonPhysical: boolean;
   isCourtesy: boolean;
+  isMesa: boolean;
 }) {
   return (
     <section className="surface-panel p-4 sm:p-5">
@@ -600,7 +620,7 @@ function WizardProgress({
             Progreso
           </p>
           <p className="mt-2 text-sm text-slate-400">
-            Flujo visual con seis etapas de captura.
+            Flujo adaptado al tipo de reserva.
           </p>
         </div>
         <StatusBadge variant="info">{Math.round(completion * 100)}%</StatusBadge>
@@ -614,7 +634,7 @@ function WizardProgress({
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        {wizardSteps.filter((item) => (!isNonPhysical || item.step !== 4) && (!isCourtesy || item.step !== 5)).map((item) => (
+        {wizardSteps.filter((item) => (!isNonPhysical || item.step !== 4) && (!isCourtesy || item.step !== 5) && (!isMesa || item.step !== 2)).map((item) => (
           <WizardStepChip
             key={item.step}
             step={item.step}
@@ -983,7 +1003,7 @@ function GuestsStep({
               ? "Cada persona debe tener nombre y carnet; WhatsApp es opcional hasta que envíes una invitación."
               : isCourtesy
                 ? "Lista individual de personas con acceso y estado operativo."
-                : "Lista interactiva simulada con edición individual y estado visual por invitado."}
+                : "El titular ocupa el Invitado 1; completa los demás accesos."}
           </p>
         </div>
 
@@ -1006,11 +1026,11 @@ function GuestsStep({
         {guests.map((guest, index) => (
           <article
             key={guest.id}
-            className="rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4"
+            className={index === 0 ? "rounded-[1.5rem] border border-white/10 bg-slate-950/40 p-4" : "rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3"}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-lg font-semibold tracking-tight text-white">
+                <p className={index === 0 ? "text-lg font-semibold tracking-tight text-white" : "text-sm font-semibold text-white"}>
                   {isCourtesy ? `Persona ${index + 1}` : index === 0 ? "Titular" : `Invitado ${index + 1}`}
                 </p>
                 <p className="mt-1 text-sm text-slate-400">
@@ -1036,7 +1056,7 @@ function GuestsStep({
               </div>
             </div>
 
-            <div className="mt-4 grid gap-4 xl:grid-cols-4">
+            <div className={index === 0 ? "mt-4 grid gap-4 xl:grid-cols-4" : "mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]"}>
                   <Field label="Nombre">
                 <input
                   value={guest.name}
