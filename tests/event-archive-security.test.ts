@@ -38,7 +38,7 @@ test("historical access requires event.view and excludes live workspace scope", 
 test("final report API protects reads and mutations", () => {
   assert.match(finalReport, /event\.view/);
   assert.match(finalReport, /event\.edit/);
-  assert.match(finalReport, /workspace\.events/);
+  assert.match(finalReport, /authorizeFinalReportEvent/);
   assert.match(finalReport, /organizationId/);
 });
 

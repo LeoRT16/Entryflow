@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFeedback } from "@/components/premium-feedback";
 import PermissionGuard from "@/components/permission-guard";
 import OrganizationCreationModal from "@/features/events/components/organization-creation-modal";
+import OrganizationOnboardingPanel from "@/features/settings/components/organization-onboarding-panel";
 import TimezoneSelect from "@/components/timezone-select";
 import Topbar from "@/components/topbar";
 import { useCheckInStore } from "@/services/workspace-service";
@@ -104,6 +105,8 @@ export default function SettingsPage() {
             </div>
             <OrganizationSettingsCard key={currentOrganization.id} canManage={canManageOrganization} />
           </section>
+
+          <OrganizationOnboardingPanel />
 
           <section aria-labelledby="integration-settings-title" className="space-y-3">
             <div>
@@ -229,6 +232,9 @@ function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
   } = useCheckInStore();
   const [organizationName, setOrganizationName] = useState(currentOrganization.name);
   const [organizationTimezone, setOrganizationTimezone] = useState(() => getDefaultTimezone(currentOrganization.timezone));
+  const [organizationLogoUrl, setOrganizationLogoUrl] = useState(currentOrganization.branding.logoUrl ?? "");
+  const [organizationPrimaryColor, setOrganizationPrimaryColor] = useState(currentOrganization.branding.primaryColor ?? "");
+  const [organizationCurrency, setOrganizationCurrency] = useState(currentOrganization.settings.currency ?? "BOB");
   const [isSaving, setIsSaving] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
@@ -258,6 +264,8 @@ function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
       name: trimmedName,
       slug: currentOrganization.slug || buildSlugFromName(organizationName),
       timezone: organizationTimezone.trim() || currentOrganization.timezone,
+      branding: { ...currentOrganization.branding, logoUrl: organizationLogoUrl.trim() || undefined, primaryColor: organizationPrimaryColor.trim() || undefined },
+      settings: { ...currentOrganization.settings, timezone: organizationTimezone.trim() || currentOrganization.timezone, currency: organizationCurrency.trim().toUpperCase() || "BOB" },
     };
 
     try {
@@ -330,6 +338,11 @@ function OrganizationSettingsCard({ canManage }: { canManage: boolean }) {
                 preferredTimezone={currentOrganization.timezone}
                 helperText="Se usará como zona horaria predeterminada para nuevos eventos."
               />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input label="Logo (URL, opcional)" value={organizationLogoUrl} onChange={setOrganizationLogoUrl} placeholder="https://…" />
+                <Input label="Color principal (opcional)" value={organizationPrimaryColor} onChange={setOrganizationPrimaryColor} placeholder="#0ea5e9" maxLength={32} />
+                <Input label="Moneda predeterminada" value={organizationCurrency} onChange={setOrganizationCurrency} placeholder="BOB" maxLength={8} />
+              </div>
             </>
           ) : (
             <>
