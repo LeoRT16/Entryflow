@@ -13,6 +13,7 @@ import { useCheckInStore } from "@/services/workspace-service";
 import { useFeedback } from "@/components/premium-feedback";
 
 type EventStatusGroup = "live" | "upcoming" | "finished";
+type EventListFilter = "all" | "live" | "published" | "finished";
 type ArchivedEvent = Pick<Event, "id" | "organizationId" | "name" | "description" | "status" | "startAt" | "timezone" | "venue"> & { deletedAt: string };
 
 type EventAction = {
@@ -72,6 +73,8 @@ export default function EventLibrary() {
   const [permanentDeletePhrase, setPermanentDeletePhrase] = useState("");
   const [permanentDeleteLoading, setPermanentDeleteLoading] = useState(false);
   const [permanentDeleteError, setPermanentDeleteError] = useState<string | null>(null);
+  const [eventSearch, setEventSearch] = useState("");
+  const [eventFilter, setEventFilter] = useState<EventListFilter>("all");
   const loadArchivedEvents = useCallback(async (signal?: AbortSignal) => {
     const organizationId = currentOrganization.id;
     setArchiveLoading(true);
@@ -105,6 +108,13 @@ export default function EventLibrary() {
 
   const organizationVenues = useMemo(() => getVenuesForOrganization(currentOrganization.id, venues), [currentOrganization.id, venues]);
 
+  const filteredEvents = useMemo(() => organizationEvents.filter((event) => {
+    const search = eventSearch.trim().toLowerCase();
+    const matchesSearch = !search || [event.name, event.description, event.venue].filter(Boolean).join(" ").toLowerCase().includes(search);
+    const matchesFilter = eventFilter === "all" || event.status === eventFilter || (eventFilter === "finished" && event.status === "cancelled");
+    return matchesSearch && matchesFilter;
+  }), [eventFilter, eventSearch, organizationEvents]);
+
   const groupedEvents = useMemo(() => {
     const groups: Record<EventStatusGroup, Event[]> = {
       live: [],
@@ -112,7 +122,7 @@ export default function EventLibrary() {
       finished: [],
     };
 
-    organizationEvents.forEach((event) => {
+    filteredEvents.forEach((event) => {
       if (event.status === "live") {
         groups.live.push(event);
         return;
@@ -127,7 +137,7 @@ export default function EventLibrary() {
     });
 
     return groups;
-  }, [organizationEvents]);
+  }, [filteredEvents]);
 
   const visibleSections = useMemo(
     () =>
@@ -241,6 +251,12 @@ export default function EventLibrary() {
       </header>
 
       <section className="space-y-5">
+        <div className="surface-panel flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+          <input value={eventSearch} onChange={(event) => setEventSearch(event.target.value)} placeholder="Buscar por evento o venue" aria-label="Buscar eventos" className="h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-cyan-400/50" />
+          <div className="flex flex-wrap gap-1.5" aria-label="Filtrar eventos">
+            {(["all", "live", "published", "finished"] as const).map((filter) => <button key={filter} type="button" onClick={() => setEventFilter(filter)} aria-pressed={eventFilter === filter} className={eventFilter === filter ? "h-9 rounded-xl bg-cyan-400/10 px-3 text-xs font-semibold text-cyan-50" : "h-9 rounded-xl px-3 text-xs font-medium text-slate-400 hover:bg-white/[0.05] hover:text-white"}>{filter === "all" ? "Todos" : filter === "live" ? "Activos" : filter === "published" ? "Publicados" : "Finalizados"}</button>)}
+          </div>
+        </div>
         {visibleSections.length ? (
           visibleSections.map((section) => (
             <LibrarySection
@@ -263,7 +279,7 @@ export default function EventLibrary() {
           ))
         ) : (
           <section className="surface-panel p-4 sm:p-5">
-            <p className="text-sm text-slate-400">No hay eventos para mostrar.</p>
+            <p className="text-sm text-slate-400">No hay eventos que coincidan con los filtros actuales.</p>
           </section>
         )}
       </section>
@@ -404,6 +420,7 @@ function EventCard({
   canArchive: boolean;
 }) {
   const venueLabel = event.venue?.trim() || "Venue no definido";
+  const dateLabel = new Intl.DateTimeFormat("es-BO", { dateStyle: "medium", timeStyle: "short", timeZone: event.timezone }).format(new Date(event.startAt));
 
   return (
     <article
@@ -428,7 +445,7 @@ function EventCard({
       </div>
 
       <div className="min-w-0 text-sm text-slate-300">
-        <span className="text-slate-500">Venue</span>{" "}{venueLabel}
+        <span className="text-slate-500">{dateLabel}</span><span className="mx-1 text-slate-600">·</span>{venueLabel}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -442,7 +459,7 @@ function EventCard({
               Seleccionar
             </button>
           )}
-          {canEdit ? (
+          {canEdit && !isTerminalEventStatus(event.status) ? (
             <button
               type="button"
               onClick={onEditEvent}
@@ -451,6 +468,7 @@ function EventCard({
               Editar
             </button>
           ) : null}
+          {isTerminalEventStatus(event.status) ? <span className="inline-flex h-9 items-center rounded-xl border border-amber-400/15 bg-amber-400/5 px-3 text-sm text-amber-100">Histórico · solo lectura</span> : null}
           {(event.status === "draft" || event.status === "published") && canEdit ? <button type="button" onClick={() => onCancelEvent(event)} className="inline-flex h-9 items-center justify-center rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 text-sm font-medium text-rose-50">Cancelar evento</button> : null}
           {event.status === "finished" && canArchive ? <button type="button" onClick={() => onArchiveEvent(event)} className="inline-flex h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-slate-200">Archivar evento</button> : null}
           {event.status === "published" && canActivate ? (
