@@ -79,6 +79,10 @@ export function compareTimelineEventsDescending(a: Pick<TimelineEvent, "createdA
   return b.id.localeCompare(a.id);
 }
 
+export function formatManualCheckInDescription(guestName: string, operatorName: string) {
+  return `${guestName} fue ingresado manualmente por ${operatorName}.`;
+}
+
 export function formatTimelineDisplayTime(timestamp: string, timeZone = ENTRYFLOW_TIMEZONE) {
   const trimmed = timestamp.trim();
 
@@ -295,10 +299,9 @@ function checkInToEvent(guest: Guest, checkIn: CheckIn): TimelineEvent {
                   ? "Check-in manual"
                   : "Check-in exitoso",
     description:
-      checkIn.notes ??
-      (checkIn.method === "Manual"
-        ? `${guest.guestName} ingresó manualmente en ${checkIn.operator}.`
-        : `${guest.guestName} validó su ingreso con QR.`),
+      checkIn.method === "Manual"
+        ? formatManualCheckInDescription(guest.guestName, checkIn.operator)
+        : checkIn.notes ?? `${guest.guestName} validó su ingreso con QR.`,
     reservationId: guest.reservationId,
     reservationCode: guest.reservationCode,
     reservationName: guest.reservationName,

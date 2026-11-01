@@ -57,7 +57,7 @@ import {
   pickCurrentEventCandidate,
   validateEventForPersistence,
 } from "@/features/events/domain";
-import { compareTimelineEventsDescending, mergeTimelineEvents } from "@/features/timeline/domain/timeline-domain";
+import { compareTimelineEventsDescending, formatManualCheckInDescription, mergeTimelineEvents } from "@/features/timeline/domain/timeline-domain";
 import {
   buildReservationSummaries,
   createReservationBundle,
@@ -1864,7 +1864,7 @@ export function WorkspaceServiceProvider({
             title: checkIn.method === "Manual" ? "Check-in manual" : "Check-in exitoso",
             description:
               checkIn.method === "Manual"
-                ? `${guest?.guestName ?? "El invitado"} ingresó manualmente en ${checkIn.operator}.`
+                ? formatManualCheckInDescription(guest?.guestName ?? "El invitado", checkIn.operator)
                 : `${guest?.guestName ?? "El invitado"} validó su ingreso con QR.`,
             reservationId: checkIn.reservationId,
             reservationCode: guest?.reservationCode,

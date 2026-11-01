@@ -5,6 +5,7 @@ import {
   buildCheckInAttemptTimelineEvent,
   buildTimelineEvents,
   buildTimelineQuickReadSummary,
+  formatManualCheckInDescription,
   formatTimelineDisplayTime,
   getSecondaryTimelineSectionGridClass,
   getTimelineDisplayTimestamp,
@@ -117,6 +118,15 @@ test("blocked attempt timeline events keep the blocked trace contract", () => {
   assert.equal(event?.guestId, guest.id);
   assert.equal(event?.description, attempt.note);
   assert.equal(event?.metadata?.result, "Usado");
+});
+
+test("manual check-in activity identifies the guest and the operator in the correct order", () => {
+  const guest = buildGuest({ guestName: "Diego Fernández" });
+  const manualCheckIn = buildActiveCheckIn({ method: "Manual", operator: "Leo Rodriguez", notes: "" });
+  const timeline = buildTimelineEvents({ eventId: guest.eventId, reservations: [buildReservation()], guests: [guest], checkIns: [manualCheckIn], attempts: [] });
+
+  assert.equal(formatManualCheckInDescription(guest.guestName, manualCheckIn.operator), "Diego Fernández fue ingresado manualmente por Leo Rodriguez.");
+  assert.equal(timeline.find((event) => event.kind === "checkin.manual")?.description, "Diego Fernández fue ingresado manualmente por Leo Rodriguez.");
 });
 
 test("first use yields one success and blocked retries each add their own blocked trace", () => {
